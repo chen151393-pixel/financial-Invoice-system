@@ -13,6 +13,9 @@
 # testing
 /coverage
 
+# NS：本地独立脚本及依赖它的专用测试
+/SuiteScripts
+/tests/ns-pl-lookup.test.mjs
 # next.js
 /.next/
 /.vinext/

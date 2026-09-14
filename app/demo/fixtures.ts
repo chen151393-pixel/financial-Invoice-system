@@ -6,6 +6,7 @@ export const viewMeta: Record<View, { title: string; subtitle: string }> = {
   match: { title: "发票自动匹配", subtitle: "支持一票多单、一单多票及子采购单级关联" },
   exceptions: { title: "异常处理", subtitle: "集中处理差异、缺失、重复票与回写失败" },
   sync: { title: "数据同步中心", subtitle: "监控 NetSuite 与柠檬云的数据新鲜度、批次和失败任务" },
+  pl: { title: "PL 采购报关核对", subtitle: "按 PL＋公司抬头归组，上下核对报关与子采购订单，导出对照表" },
   reconcile: { title: "系统对账", subtitle: "按主体、期间核对业务应付、进项发票与 NetSuite 应付账" },
   writeback: { title: "回写 NetSuite", subtitle: "审批匹配结果并跟踪回写队列、结果与审计记录" },
 };

@@ -10,15 +10,7 @@ from .dto import Login
 def create_router(service, settings):
     router = APIRouter(prefix="/api/session", tags=["身份"])
 
-    @router.post("")
-    def login(request: Request, response: Response, body: Login):
-        token = service.login(
-            body.username,
-            body.password,
-            origin=request.headers.get("origin"),
-            ip=request.client.host if request.client else "unknown",
-            session_token=request.cookies.get("ns_session"),
-        )
+    def set_session_cookie(response, token):
         response.set_cookie(
             "ns_session",
             token,
@@ -28,6 +20,28 @@ def create_router(service, settings):
             samesite="strict",
             path="/",
         )
+
+    @router.post("/local")
+    def local_session(request: Request, response: Response):
+        token = service.open_local_session(
+            origin=request.headers.get("origin"),
+            host=request.headers.get("host", ""),
+            ip=request.client.host if request.client else "unknown",
+            session_token=request.cookies.get("ns_session"),
+        )
+        set_session_cookie(response, token)
+        return {"authenticated": True}
+
+    @router.post("")
+    def login(request: Request, response: Response, body: Login):
+        token = service.login(
+            body.username,
+            body.password,
+            origin=request.headers.get("origin"),
+            ip=request.client.host if request.client else "unknown",
+            session_token=request.cookies.get("ns_session"),
+        )
+        set_session_cookie(response, token)
         return {"authenticated": True}
 
     @router.delete("")

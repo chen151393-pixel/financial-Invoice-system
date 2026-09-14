@@ -1,7 +1,7 @@
-# 登录表单与会话API
+# 本机工作台会话
 
-`api.ts`维护该功能的请求与响应类型；`components/`负责渲染和收集输入。组合页面位于 `web/app/WorkspacePage.tsx`，公共Button、Panel、JsonView和请求封装来自shared。
+`api.ts`只提供openLocalSession，调用后端 `POST /api/session/local`。PL 核对页提交查询时建立会话；失败显示中文原因和重试入口。
 
-校验、JSON输入解析和是否可执行均交给Python后端；Hook只管理UI/请求状态。复用现有控件，不复制业务算法或样式。当前接口类型人工维护，尚未从OpenAPI生成。
+已移除LoginForm、密码输入及退出按钮。前端不包含后台密码或服务密钥，后端仍负责本机来源校验、身份和权限。原密码登录／退出API留作兼容接口，当前前端不再调用。
 
-验证：`npm.cmd run typecheck`、`npm.cmd run lint`、`npm.cmd run build`。涉及组件外观时检查正式入口与较窄窗口，不能只凭构建结果认定视觉通过。
+验证：构建、类型、变更文件lint，以及浏览器刷新后自动进入工作台、加载和失败状态。

@@ -18,6 +18,7 @@
     "test:api": "node scripts/python.mjs -m pytest backend/tests",
     "db:upgrade": "node scripts/python.mjs -m backend.manage upgrade",
     "db:sql:mysql": "node scripts/python.mjs -m backend.manage mysql-sql",
+    "db:business:check": "node scripts/python.mjs -m backend.manage business-check",
     "lint:api": "node scripts/python.mjs -m ruff check backend",
     "typecheck": "tsc -p web/tsconfig.json",
     "check:architecture": "node scripts/check-web-architecture.mjs && node scripts/python.mjs -m pytest backend/tests/test_architecture.py",

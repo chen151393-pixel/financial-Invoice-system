@@ -1,5 +1,7 @@
 # Python 后端与 MySQL 8.0
 
+> 当前前端：旧“记录校对与写回”和“PL 单联查”页面已移除，下文涉及这些页面的操作仅为历史说明。后端接口与配置继续保留；当前页面 `/pl-reconciliation` 只提供实时查询和导出。
+
 ## 技术与启动关系
 
 | 部分 | 当前实现 |
@@ -34,11 +36,13 @@ HOST=127.0.0.1
 PORT=3000
 DATABASE_URL=sqlite:///./data/ns-python.sqlite
 ADMIN_USERNAME=admin
-ADMIN_PASSWORD=请替换为实际后台密码
+LOCAL_BROWSER_ACCESS=true
+# 原密码登录API需要此项；本机自动进入不使用该密码。
+ADMIN_PASSWORD=
 NETSUITE_WRITE_ENABLED=false
 ```
 
-上述密码只是占位说明，不是预置账号密码。`ADMIN_PASSWORD` 必须填写非空值，不设最短字符数限制；登录仍校验用户名、密码、请求来源和失败次数。NS 侧已经配置的客户端标识（Client ID）、证书标识（Certificate ID）、角色和证书映射直接复用。服务器还需填写：
+前端已移除登录表单和退出按钮。设置 `LOCAL_BROWSER_ACCESS=true` 后，页面通过 `POST /api/session/local` 自动建立原管理员身份的会话；要求服务器绑定本机地址、APP_ORIGIN为本机地址，并校验实际来源IP、Host及Origin。未启用时页面显示连接错误，不自动绕过后端。原密码登录API继续保留，使用该API时 `ADMIN_PASSWORD` 必须为非空值并校验用户名、密码、来源和失败次数。NS 侧已经配置的客户端标识（Client ID）、证书标识（Certificate ID）、角色和证书映射直接复用。服务器还需填写：
 
 - NETSUITE_ACCOUNT_ID（账户标识）、NETSUITE_CLIENT_ID（客户端标识）、NETSUITE_CERTIFICATE_ID（证书标识）。
 - NETSUITE_PRIVATE_KEY_PATH：服务器私钥路径，不放前端或公开目录。Windows 路径建议使用正斜线。
@@ -118,7 +122,7 @@ TLS_KEY_PATH=C:/secure/tls/private.key
 
 ## 写入约束与恢复
 
-当前为单管理员登录，服务调用使用独立 SERVICE_API_KEY（至少 32 位）；网页登录使用带 `HttpOnly` 属性的会话 Cookie，变更请求校验请求来源（`Origin`）。生产 HTTPS 下的 Cookie 设置 `Secure` 属性。NS 访问令牌和私钥不会返回浏览器。
+当前本机浏览器自动建立管理员会话，无需输入密码；owner仍为 `user:ADMIN_USERNAME`，不会改变原数据归属。远程地址不允许使用本机入口，转发头不作为本机证明；公网部署必须关闭LOCAL_BROWSER_ACCESS并另行提供经过认证的访问入口，当前前端不提供远程登录表单。服务调用仍使用独立 SERVICE_API_KEY（至少32位）；浏览器使用HttpOnly／SameSite=Strict会话Cookie，变更请求继续校验Origin。生产 HTTPS 下的 Cookie 设置 `Secure` 属性。NS 访问令牌和私钥不会返回浏览器。
 
 预览有效期 15 分钟。创建使用 POST 方法和稳定的外部标识（`externalId`）；更新只接受内部标识（Internal ID），使用 PATCH 方法。预览通过 GET 方法读取记录并验证字段白名单，不意味着 NS 全部业务规则已通过。执行先持久占用目标，再读取并核对 NS，成功后在同一数据库事务中保存结果、释放锁并写审计。
 
@@ -141,7 +145,8 @@ TLS_KEY_PATH=C:/secure/tls/private.key
 | 接口 | 用途 |
 | --- | --- |
 | GET /api/health | 不暴露配置的健康检查 |
-| POST /api/session；DELETE /api/session | 登录／退出 |
+| POST /api/session/local | 仅本机同源浏览器自动建立会话 |
+| POST /api/session；DELETE /api/session | 保留的密码登录／退出API，当前前端不调用 |
 | GET /api/ns/status；POST /api/ns/connect | 配置状态／M2M 验证 |
 | GET /api/ns/records/:type；GET /api/ns/records/:type/:id | 前 50 条索引／指定记录 |
 | POST /api/ns/preview | 操作类型（`operation`）、记录类型（`type`）、记录标识（`id`，更新时必填）、拟写入内容（`payload`） |

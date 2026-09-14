@@ -1,4 +1,5 @@
 import argparse
+import json
 
 from alembic import command
 from alembic.config import Config
@@ -6,6 +7,7 @@ from alembic.script import ScriptDirectory
 from sqlalchemy import inspect, text
 
 from .config import ROOT, load_settings
+from .core.business_database import check_business_database, make_business_engine
 from .database import make_engine
 from .workflow import Workflow
 
@@ -32,13 +34,22 @@ def upgrade(database_url, sql=False):
 
 def main():
     parser = argparse.ArgumentParser(description="NS 数据库迁移与离线恢复")
-    parser.add_argument("command", choices=["upgrade", "mysql-sql", "recover"])
+    parser.add_argument("command", choices=["upgrade", "mysql-sql", "recover", "business-check"])
     parser.add_argument("--services-stopped", action="store_true", help="明确确认所有 API/任务进程已停止")
     args = parser.parse_args()
     if args.command == "mysql-sql":
         upgrade("mysql+pymysql://unused@localhost/unused?charset=utf8mb4", sql=True)
         return
     settings = load_settings()
+    if args.command == "business-check":
+        engine = make_business_engine(settings.business_database_url)
+        try:
+            result = check_business_database(engine)
+            print(json.dumps(result, ensure_ascii=False, indent=2))
+            raise SystemExit(0 if result["ready"] else 1)
+        finally:
+            if engine is not None:
+                engine.dispose()
     if args.command == "upgrade":
         upgrade(settings.database_url)
         print("数据库迁移完成")

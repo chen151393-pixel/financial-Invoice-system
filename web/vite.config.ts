@@ -7,5 +7,13 @@ export default defineConfig({
   publicDir: "../public",
   plugins: [react()],
   build: { outDir: "../dist/web", emptyOutDir: true },
-  server: { host: "127.0.0.1", port: 5173, strictPort: true, proxy: { "/api": "http://127.0.0.1:3000" } },
+  server: {
+    host: "127.0.0.1",
+    port: 5173,
+    strictPort: true,
+    proxy: {
+      // 保留浏览器 Host，供后端校验本机会话的请求来源。
+      "/api": { target: "http://127.0.0.1:3000", changeOrigin: false },
+    },
+  },
 });

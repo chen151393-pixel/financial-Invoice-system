@@ -9,11 +9,6 @@ body {
   color: var(--color-text);
   font-family: var(--font-body);
 }
-.ui-panel {
-  background: var(--color-surface);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-panel);
-}
 .ui-button {
   font: inherit;
   padding: 9px 14px;

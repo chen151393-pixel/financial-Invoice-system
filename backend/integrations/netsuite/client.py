@@ -3,6 +3,7 @@
 import math
 import re
 import time
+from decimal import Decimal
 from threading import Lock
 from urllib.parse import quote
 
@@ -73,7 +74,17 @@ class NetSuite:
         ):
             raise ApiError(400, "NS 记录 ID 格式错误")
 
-    def request(self, method, record_type, record_id=None, payload=None, token=None):
+    def request(
+        self,
+        method,
+        record_type,
+        record_id=None,
+        payload=None,
+        token=None,
+        *,
+        query_params=None,
+        exact_numbers=False,
+    ):
         self.validate(record_type, record_id)
         if method not in ("GET", "POST", "PATCH"):
             raise ApiError(400, "不支持的 NS 操作")
@@ -81,6 +92,10 @@ class NetSuite:
         if record_id is not None:
             url += "/" + quote(record_id, safe="")
         params = {"expandSubResources": "true"} if record_id else {"limit": "50"}
+        if query_params is not None:
+            if method != "GET" or record_id is not None:
+                raise ApiError(400, "筛选参数只用于记录列表读取")
+            params = query_params
         access_token = token or self.token()
         try:
             response = self.client.request(
@@ -103,7 +118,55 @@ class NetSuite:
                 f"NS 请求未成功（HTTP {response.status_code}）；请核对 NS 权限和字段",
             )
         try:
-            data = response.json() if response.content else None
+            data = (
+                response.json(**({"parse_float": Decimal} if exact_numbers else {}))
+                if response.content
+                else None
+            )
         except ValueError:
             raise ApiError(502, "NS 返回非 JSON 响应") from None
         return {"data": data, "location": response.headers.get("location"), "status": response.status_code}
+
+    def filtered_ids(self, record_type, field, value, *, reference=False):
+        """只构造精确查询；分页不跟随远端链接，避免跨账户或主机请求。"""
+        if not re.fullmatch(r"[A-Za-z][A-Za-z0-9_]{0,99}", field):
+            raise ApiError(503, "PL 联查筛选字段配置无效")
+        if reference:
+            if not re.fullmatch(r"[0-9]{1,40}", value):
+                raise ApiError(502, "NS 返回了无效的关联内部 ID")
+            condition = f"{field} ANY_OF [{value}]"
+        else:
+            if not re.fullmatch(r"[A-Za-z0-9_-]{1,80}", value):
+                raise ApiError(400, "PL 单号只允许字母、数字、下划线和短横线")
+            condition = f'{field} IS "{value}"'
+        ids = []
+        seen = set()
+        offset = 0
+        while True:
+            data = self.request(
+                "GET",
+                record_type,
+                query_params={
+                    "q": condition,
+                    "limit": 100,
+                    "offset": offset,
+                },
+            )["data"]
+            if not isinstance(data, dict) or not isinstance(data.get("items"), list):
+                raise ApiError(502, "NS 列表响应不完整")
+            items = data["items"]
+            for item in items:
+                record_id = str(item.get("id", "")) if isinstance(item, dict) else ""
+                if not re.fullmatch(r"[0-9]{1,40}", record_id):
+                    raise ApiError(502, "NS 列表缺少有效内部 ID")
+                if record_id in seen:
+                    raise ApiError(502, "NS 分页数据重复，请重新查询")
+                seen.add(record_id)
+                ids.append(record_id)
+            if len(ids) > 300:
+                raise ApiError(422, "该 PL 关联记录过多，单类最多支持 300 条，请缩小业务范围")
+            if not data.get("hasMore", False):
+                return ids
+            if not items:
+                raise ApiError(502, "NS 分页未取得后续数据")
+            offset += len(items)

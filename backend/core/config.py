@@ -9,6 +9,8 @@ from dotenv import dotenv_values
 from sqlalchemy.engine import make_url
 from sqlalchemy.exc import ArgumentError
 
+from .business_database import business_database_url, ensure_separate_database
+
 ROOT = Path(__file__).resolve().parents[2]
 
 
@@ -23,11 +25,14 @@ class Settings:
     record_types: list[str] = field(default_factory=list)
     write_fields: dict[str, list[str]] = field(default_factory=dict)
     write_enabled: bool = False
+    pl_lookup: dict = field(default_factory=dict)
     origin: str = "http://localhost:3000"
     admin_user: str = "admin"
     admin_password: str = field(default="", repr=False)
+    local_browser_access: bool = False
     service_key: str = field(default="", repr=False)
     database_url: str = field(default="sqlite:///./data/ns-python.sqlite", repr=False)
+    business_database_url: str = field(default="", repr=False)
     host: str = "127.0.0.1"
     port: int = 3000
     tls_cert: str = ""
@@ -89,6 +94,14 @@ def load_settings(source=None):
         raise ValueError("APP_ORIGIN 必须是完整 origin，不含路径")
     if url.scheme != "https" and url.hostname not in ("localhost", "127.0.0.1", "::1"):
         raise ValueError("非本机入口必须使用 HTTPS")
+    local_access = get("LOCAL_BROWSER_ACCESS", "false")
+    if local_access not in ("true", "false"):
+        raise ValueError("LOCAL_BROWSER_ACCESS 必须为 true 或 false")
+    if local_access == "true" and (
+        url.hostname not in ("localhost", "127.0.0.1", "::1")
+        or get("HOST", "127.0.0.1") not in ("localhost", "127.0.0.1", "::1")
+    ):
+        raise ValueError("免登录浏览器入口只允许本机地址与本机监听")
     private_key = Path(get("NETSUITE_PRIVATE_KEY_PATH")) if get("NETSUITE_PRIVATE_KEY_PATH") else None
     if private_key:
         private_key = (ROOT / private_key).resolve()
@@ -126,10 +139,18 @@ def load_settings(source=None):
         raise ValueError(
             "DATABASE_URL 必须指向 MySQL（mysql+pymysql）或本地 SQLite，不能放在公开目录"
         ) from None
+    business_url = business_database_url(env)
+    ensure_separate_database(db_url, business_url)
     types = [v.strip() for v in get("NETSUITE_RECORD_TYPES").split(",") if v.strip()]
     if any(not re.fullmatch(r"[A-Za-z][A-Za-z0-9_]{0,99}", v) for v in types):
         raise ValueError("NETSUITE_RECORD_TYPES 格式错误")
     enabled = get("NETSUITE_WRITE_ENABLED", "false")
+    try:
+        pl_lookup = json.loads(get("NETSUITE_PL_LOOKUP", "{}"))
+        if not isinstance(pl_lookup, dict):
+            raise ValueError()
+    except ValueError:
+        raise ValueError("NETSUITE_PL_LOOKUP 必须是 JSON 对象") from None
     if enabled not in ("true", "false"):
         raise ValueError("NETSUITE_WRITE_ENABLED 必须为 true 或 false")
     if len(get("ADMIN_USERNAME", "admin")) > 190:
@@ -144,11 +165,14 @@ def load_settings(source=None):
         record_types=types,
         write_fields=fields,
         write_enabled=enabled == "true",
+        pl_lookup=pl_lookup,
         origin=origin,
         admin_user=get("ADMIN_USERNAME", "admin"),
         admin_password=get("ADMIN_PASSWORD"),
+        local_browser_access=local_access == "true",
         service_key=get("SERVICE_API_KEY"),
         database_url=db_url,
+        business_database_url=business_url,
         host=get("HOST", "127.0.0.1"),
         port=int(get("PORT", "3000")),
         tls_cert=get("TLS_CERT_PATH"),

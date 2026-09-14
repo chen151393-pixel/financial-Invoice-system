@@ -3,16 +3,24 @@ import { invoices } from "../fixtures";
 import { SourceHealth } from "../components/SourceHealth";
 import type { View } from "../types";
 
+const statuses = ["全部", "已匹配", "待确认", "待匹配", "异常", "待回写", "已回写"] as const;
+
 export function InvoiceList({ navigate }: { navigate: (view: View) => void }) {
-  const [filter, setFilter] = useState("全部 2,846");
+  const [filter, setFilter] = useState<(typeof statuses)[number]>("全部");
   const [query, setQuery] = useState("");
-  const visibleInvoices = useMemo(
+  // 仅筛选本地演示样本；正式业务列表的筛选和统计由后端负责。
+  const searchedInvoices = useMemo(
     () =>
       invoices.filter(
         (row) => row.supplier.includes(query) || row.no.includes(query) || row.vendorId.includes(query),
       ),
     [query],
   );
+  const visibleInvoices = searchedInvoices.filter((row) => filter === "全部" || row.status === filter);
+  function clearFilters() {
+    setQuery("");
+    setFilter("全部");
+  }
   return (
     <>
       <SourceHealth navigate={navigate} />
@@ -20,7 +28,7 @@ export function InvoiceList({ navigate }: { navigate: (view: View) => void }) {
         <div>
           <span>价税合计</span>
           <strong>¥ 18,264,300.00</strong>
-          <small>2,846 张发票</small>
+          <small>全量模拟概览 · 2,846 张发票</small>
         </div>
         <div>
           <span>可抵扣税额</span>
@@ -40,9 +48,14 @@ export function InvoiceList({ navigate }: { navigate: (view: View) => void }) {
       </div>
       <article className="panel table-panel">
         <div className="list-tabs">
-          {["全部 2,846", "已匹配 2,701", "待确认 169", "待匹配 98", "异常 47"].map((tab) => (
-            <button className={filter === tab ? "active" : ""} onClick={() => setFilter(tab)} key={tab}>
-              {tab}
+          {statuses.map((tab) => (
+            <button
+              className={filter === tab ? "active" : ""}
+              aria-pressed={filter === tab}
+              onClick={() => setFilter(tab)}
+              key={tab}
+            >
+              {tab} {searchedInvoices.filter((row) => tab === "全部" || row.status === tab).length}
             </button>
           ))}
         </div>
@@ -89,7 +102,19 @@ export function InvoiceList({ navigate }: { navigate: (view: View) => void }) {
               </tr>
             </thead>
             <tbody>
-              {visibleInvoices.map((row, index) => (
+              {visibleInvoices.length === 0 && (
+                <tr>
+                  <td colSpan={10}>
+                    <div className="invoice-list-empty">
+                      <p role="status">未找到匹配发票，请调整搜索词或状态筛选。</p>
+                      <button className="button secondary" onClick={clearFilters}>
+                        清除筛选
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              )}
+              {visibleInvoices.map((row) => (
                 <tr key={row.no}>
                   <td>
                     <input type="checkbox" aria-label={`选择发票 ${row.no}`} />
@@ -136,7 +161,7 @@ export function InvoiceList({ navigate }: { navigate: (view: View) => void }) {
                   <td>
                     <button
                       className="link-button"
-                      onClick={() => (index === 4 ? navigate("exceptions") : navigate("match"))}
+                      onClick={() => navigate(row.status === "异常" ? "exceptions" : "match")}
                     >
                       {row.status === "异常" ? "处理" : "查看"}
                     </button>
@@ -147,17 +172,8 @@ export function InvoiceList({ navigate }: { navigate: (view: View) => void }) {
           </table>
         </div>
         <div className="pagination">
-          <span>共 2,846 条</span>
-          <div>
-            <button>‹</button>
-            <button className="active">1</button>
-            <button>2</button>
-            <button>3</button>
-            <span>...</span>
-            <button>143</button>
-            <button>›</button>
-          </div>
-          <span>20 条 / 页⌄</span>
+          <span role="status">共 {visibleInvoices.length} 条匹配结果</span>
+          <span>演示样本共 {invoices.length} 条 · 匹配结果已全部展示</span>
         </div>
       </article>
     </>

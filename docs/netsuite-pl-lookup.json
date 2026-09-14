@@ -1,0 +1,95 @@
+{
+  "company_record_type": "classification",
+  "pl": {
+    "type": "customrecord_swc_packing",
+    "number": "name"
+  },
+  "purchase": {
+    "type": "customrecord_swc_subpo",
+    "pl": "custrecord_swc_subpo_plnum",
+    "customs": "custrecord_swc_subpo_baoguannum",
+    "company": "custrecord_swc_subpo_class",
+    "fields": {
+      "purchase": "name",
+      "parent": "custrecord_swc_subpo_mainpo",
+      "sales": "custrecord_swc_subpo_so",
+      "vendor": "custrecord_swc_subpo_vendor"
+    },
+    "storage_fields": {
+      "order_no": "name",
+      "order_date": "custrecord_swc_subpo_trandate",
+      "parent_order_no": "custrecord_swc_subpo_mainpo",
+      "supplier_identifier": "custrecord_swc_subpo_vendor",
+      "supplier_name": "custrecord_swc_subpo_vendor",
+      "total_amount": "custrecord_swc_subpo_total"
+    }
+  },
+  "purchase_line": {
+    "type": "customrecord_swc_subpo_item",
+    "parent": "custrecord_swc_subpo_main",
+    "fields": {
+      "name": "custrecord_swc_subpo_item_bgname",
+      "quantity": "custrecord_swc_subpo_item_qty",
+      "unit": "custrecord_swc_subpo_item_bgunit",
+      "price": "custrecord_swc_subpo_item_ratewithrate",
+      "amount": "custrecord_swc_subpo_item_amountwithtax"
+    },
+    "storage_fields": {
+      "line_no": "custrecord_swc_subpo_item_lineid",
+      "item_name": "custrecord_swc_subpo_item_name",
+      "declaration_name": "custrecord_swc_subpo_item_bgname",
+      "quantity": "custrecord_swc_subpo_item_qty",
+      "unit_name": "custrecord_swc_subpo_item_bgunit",
+      "declaration_quantity": "custrecord_swc_subpo_item_bgqty",
+      "declaration_unit": "custrecord_swc_subpo_item_bgunit",
+      "tax_inclusive_price": "custrecord_swc_subpo_item_ratewithrate",
+      "amount": "custrecord_swc_subpo_item_amountwithtax"
+    }
+  },
+  "customs": {
+    "type": "customrecord_swc_declare_record",
+    "fields": {
+      "declaration": "custrecord_swc_realno",
+      "date": "custrecord315"
+    },
+    "storage_fields": {
+      "record_no": "name",
+      "declaration_no": "custrecord_swc_realno",
+      "declaration_date": "custrecord315",
+      "declarant_identifier": "custrecord_swc_piname",
+      "declarant_name": "custrecord_swc_piname"
+    },
+    "omitted_as_null": ["declaration_no", "declaration_date"]
+  },
+  "customs_line": {
+    "type": "customrecord_swc_delare_detail",
+    "parent": "custrecord_swc_relate_record",
+    "pl": "custrecord_swc_packing_no",
+    "company": "custrecord_swc_company",
+    "fields": {
+      "sales": "custrecord_swc_salesorder_number",
+      "parent": "custrecord_swc_purachse_no",
+      "origin": "custrecord_swc_goods_place",
+      "name": "custrecord_swc_delare_name",
+      "spec": "custrecord_swc_huge",
+      "quantity": "custrecord_swc_quantity",
+      "unit": "custrecord_swc_unit",
+      "price": "custrecord_swc_unitprice",
+      "amount": "custrecord_swc_grossamount",
+      "currency": "custrecord_swc_currency"
+    },
+    "storage_fields": {
+      "sales_order_no": "custrecord_swc_salesorder_number",
+      "origin_place": "custrecord_swc_goods_place",
+      "declaration_name": "custrecord_swc_delare_name",
+      "specification": "custrecord_swc_huge",
+      "quantity": "custrecord_swc_quantity",
+      "unit_name": "custrecord_swc_unit",
+      "declared_quantity": "custrecord_swc_delare_quantity",
+      "declared_unit": "custrecord_swc_delare_unit",
+      "unit_price": "custrecord_swc_unitprice",
+      "amount": "custrecord_swc_grossamount",
+      "currency_code": "custrecord_swc_currency"
+    }
+  }
+}
