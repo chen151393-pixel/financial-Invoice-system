@@ -1,0 +1,18 @@
+:root {
+  --color-text: #172033;
+  --color-muted: #667085;
+  --color-primary: #3156d9;
+  --color-surface: #fff;
+  --color-canvas: #f4f6fa;
+  --color-border: #e7ebf2;
+  --color-input-border: #cbd2df;
+  --color-feedback: #a54119;
+  --color-demo-bg: #fff1bd;
+  --color-demo-text: #573e00;
+  --radius-control: 7px;
+  --radius-panel: 12px;
+  --space-small: 8px;
+  --space-control: 12px;
+  --space-layout: 24px;
+  --font-body: Inter, "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+}

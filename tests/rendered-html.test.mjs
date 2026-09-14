@@ -17,7 +17,7 @@ test("renders the NS invoice center shell", async () => {
   assert.equal(response.status, 200);
   assert.match(response.headers.get("content-type") ?? "", /^text\/html\b/i);
   const html = await response.text();
-  assert.match(html, /<title>NS 发票中心<\/title>/i);
+  assert.match(html, /<title>NetSuite 发票对账平台<\/title>/i);
   assert.match(html, /发票工作台/);
   assert.match(html, /柠檬云/);
   assert.doesNotMatch(html, /codex-preview/);

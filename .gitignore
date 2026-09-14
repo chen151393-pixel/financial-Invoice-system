@@ -21,6 +21,16 @@
 # misc
 .DS_Store
 *.pem
+*.key
+*.p12
+*.pfx
+/data/
+/secrets/
+/.venv/
+__pycache__/
+.pytest_cache/
+.ruff_cache/
+*.pyc
 
 # debug
 npm-debug.log*

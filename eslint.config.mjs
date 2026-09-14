@@ -10,10 +10,16 @@ import tseslint from "typescript-eslint";
 const eslintConfig = defineConfig([
   globalIgnores([
     ".next/**",
+    ".wrangler/**",
+    ".vinext/**",
     "dist/**",
     "out/**",
     "build/**",
     "next-env.d.ts",
+    ".venv/**",
+    ".pytest_cache/**",
+    ".ruff_cache/**",
+    "data/**",
   ]),
   eslint.configs.recommended,
   ...tseslint.configs.recommended,
@@ -22,6 +28,10 @@ const eslintConfig = defineConfig([
   reactHooks.configs.flat["recommended-latest"],
   jsxA11y.flatConfigs.recommended,
   next.configs["core-web-vitals"],
+  {
+    files: ["web/**/*.{ts,tsx}", "scripts/**/*.mjs"],
+    rules: { "@next/next/no-html-link-for-pages": "off" },
+  },
   {
     languageOptions: {
       globals: {
