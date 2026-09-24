@@ -20,6 +20,8 @@
 
 ## 本地启动（Windows PowerShell）
 
+开发联动入口为 `npm.cmd run dev`，同时启动 Vite 和 Python。端口读取根目录 `.env`、`.env.local`、进程环境变量，后者优先；`PORT` 配置后端（默认 3333），`WEB_PORT` 配置前端（默认 5173）。启动器自动按前端端口设置 `APP_ORIGIN`，Vite 代理按后端端口同步。Windows 下启动器移除 `--reload`，避免 Uvicorn 重载广播 Ctrl+C 导致联动退出；修改后端代码后手动重启，前端热更新保留。主动 `Ctrl+C` 停止本次启动的服务，端口占用时不自动结束已有进程。以下 `npm start` 流程为构建后运行方式。
+
 需要 Python 3.11+、前端构建所需 Node.js 22.13+。依赖的实际验证版本锁定在 `backend/requirements.txt`，直接依赖约束在 `requirements.in`。
 
 ```powershell
@@ -71,7 +73,15 @@ Linux/macOS 使用 `.venv/bin/python`。后台生产机可以只安装 Python、
 
 ## 前后端独立开发
 
-设置 `APP_ORIGIN=http://localhost:5173`，分别在两个终端运行 `npm.cmd run dev:api` 与 `npm.cmd run dev`。Python 后端监听 3000，Vite 监听 5173 并转发 `/api`；浏览器只访问 5173。部署前把 APP_ORIGIN 改回正式域名。
+根目录 `.env.local` 可设置 `PORT=5174`、`WEB_PORT=5173`，分别控制后端和前端端口；两个端口不能相同，必须为 1–65535 的整数。Vite 转发 `/api` 时保留浏览器 Host。分开启动使用 `npm.cmd run dev:api` 与 `npm.cmd run dev:web`，同样自动读取端口并同步来源和代理。浏览器访问 `http://localhost:前端端口`，不要改用 IP 地址或后端端口。修改配置后需要重启开发服务。开发地址仅注入子进程，`npm start` 仍按显式 `APP_ORIGIN` 配置运行。
+
+## 接口运行日志排查
+
+后端终端输出 `ns_api` 接口日志：成功请求输出 INFO `request_completed`，接口 4xx 使用 WARNING、5xx 使用 ERROR，包含 HTTP 方法、路由模板、状态码和耗时（毫秒，计至响应头发出）。使用 `npm.cmd run dev` 联动启动时，前后端日志显示在同一个控制台。未知路由或路由匹配前被拒绝的请求显示 `<unmatched>`。非预期异常额外记录异常类型。
+
+NS 接入层使用 `ns_api.netsuite` 输出 `ns_request_failed`，区分 `token`（认证）、`record`（记录）、`restlet`（脚本）调用，记录上游状态码或网络异常类型（如 `ConnectError`、`ReadTimeout`）及耗时。日志不记录查询参数、路径参数、令牌、私钥、请求/响应正文及异常原文；不增加自动重试。
+
+Uvicorn 的完整访问日志仍关闭，避免将查询参数写入日志。上述失败日志不依赖访问日志开关，默认输出到后端终端，由部署环境负责收集。如果 Vite 提示 `ECONNREFUSED 127.0.0.1:3000`，说明未连接到后端；检查运行 `npm.cmd run dev:api` 的终端中启动异常和监听地址。这类未到达后端的请求只能在代理侧看到错误。
 
 ## 接入 MySQL 8.0
 
@@ -141,6 +151,8 @@ TLS_KEY_PATH=C:/secure/tls/private.key
 默认单个 Uvicorn 进程；会话和登录限流保存在内存，不要直接用多进程部署。后续扩容前应先外置会话和限流。完整分页同步、自动发票匹配、多角色审批、飞书用户登录和自定义 RESTlet 适配仍需按业务补齐。
 
 ## 接口与测试
+
+通过 `npm.cmd start` 或 `npm.cmd run dev:api` 启动时，终端记录 API 成功请求的 `request_completed`（INFO），以及失败请求的 `request_failed`（4xx 为 WARNING、5xx 为 ERROR），包含方法、路由模板、状态码和响应头发出前的耗时。日志不包含查询值、正文、令牌或原始异常内容。Uvicorn 原始访问日志保持关闭，避免重复输出及原始 URL 泄露。修改启动日志配置后须停止并重新启动命令，仅热重载业务文件不会更新父进程日志配置。
 
 | 接口 | 用途 |
 | --- | --- |

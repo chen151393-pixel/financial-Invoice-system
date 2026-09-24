@@ -1,8 +1,24 @@
 # 真实业务 MySQL 数据库
 
+## 当前代码与迁移入口
+
+截至 2026-09-24，基础来源为[八张业务表](eight-table-relations.md)，另有[报关关联结果](customs-reconciliation-results.md)、发票数量分配及整票关联表。业务迁移代码 head 为 `0007_invoice_purchase_links`：`0004` 增加数量分配，`0005` 将报关依据移入独立表，`0006` 增加审核匹配预留字段，`0007` 增加整票关系。预留审核字段不表示匹配已经绑定财务审核，当前边界见[匹配模块](../../backend/modules/matching/README.md)。
+
+业务迁移由 `backend/business_alembic.ini` 和 `backend/business_migrations/` 管理，使用 `npm.cmd run db:business:upgrade`。它依赖已有基础表与所需发票扩展，不是空库初始化入口；已有库不要重跑下方历史六表脚本。应用库审核、开票任务与回写使用另一套迁移和 `npm.cmd run db:upgrade`，见[双库边界](../project-structure.md)。本次目录整理只核对代码版本，没有访问或升级实际数据库。
+
+历史正式来源导入、补拉和验收记录见[历史实施记录](../history/implementation-notes.md)。NS 按页拉取并保存已接入；持久定时同步未实现，具体来源接口要求见[同步模块](../../backend/modules/sync/README.md)。
+
+## 历史六表初始化设计
+
+以下内容保留原初始化设计及当时的实施状态，包括“六表／114字段”“尚未执行”“发票保存待实现”等阶段表述，不代表当前全部代码能力。初始化 SQL、扩展 SQL 与后续 Alembic 增量须分别核对，不能只执行一份历史 SQL 就认为当前业务库完整。
+
+完整业务目标见[母子采购、报关审核与发票匹配数据库设计](purchase-customs-invoice-schema-design.md)：包含2026-09-22只读核实的六表143个实际字段，以及母采购、审核、匹配、同步和审计的新增表设计。该文档明确区分现有结构与计划；下文“六表／114字段”及未接入说明描述原始初始化版本，当前发票导入实现以[发票模块说明](../../backend/modules/invoice/README.md)为准。
+
 当前设计只保留六张业务表：采购订单和报关单来源 NS，发票来源外部平台或文件导入。每张单据只保存一个来源的当前完整快照，后期来源变化时再扩展。
 
 本目录是独立建库建表 SQL，不包含迁移，不改变现有应用数据库和 NS 回写表。已从本草案移除 `document_sources`、`sync_jobs`、`sync_targets`，来源信息直接放入主表；未删除任何实际数据库中的表。
+
+针对进项发票 Excel 的[两表扩展设计](invoice-excel-design.md)及[增量 SQL 草案](invoice-excel-design.sql)已单独提供，覆盖票种、红冲状态、税务及记账字段、特殊税率和八位小数数量。它们尚未执行，也未合入下述六表初始化脚本；下文114字段等描述仍指原始六表版本。
 
 ## 六张表
 

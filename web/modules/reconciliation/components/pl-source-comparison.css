@@ -1,0 +1,101 @@
+.pl-source {
+  color: var(--color-text);
+  font-size: 12px;
+}
+.pl-source__summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 20px;
+  margin: 20px 0 12px;
+  color: var(--color-muted);
+}
+.pl-source__summary strong {
+  color: var(--color-text);
+}
+.pl-source__group {
+  margin-bottom: 20px;
+  border: 1px solid var(--color-table-border);
+  border-radius: var(--radius-panel);
+  overflow: hidden;
+  background: var(--color-surface);
+}
+.pl-source__group h2 {
+  margin: 0;
+  padding: 12px;
+  font-size: 14px;
+  background: var(--color-table-heading);
+}
+.pl-source__scroll {
+  overflow-x: auto;
+}
+.pl-source__scroll:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: -2px;
+}
+.pl-source table {
+  width: 100%;
+  min-width: 1750px;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+.pl-source caption {
+  text-align: left;
+  padding: 8px 12px;
+  color: var(--color-muted);
+}
+.pl-source :is(th, td) {
+  padding: 10px 8px;
+  text-align: left;
+  border-bottom: 1px solid var(--color-table-border);
+  overflow-wrap: anywhere;
+  line-height: 1.6;
+  vertical-align: top;
+}
+.pl-source th {
+  background: var(--color-table-heading);
+  font-weight: 600;
+}
+.pl-source td.pl-source__numeric,
+.pl-source th:nth-child(12),
+.pl-source th:nth-child(14),
+.pl-source th:nth-child(15),
+.pl-source th:nth-child(16) {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.pl-source th:nth-child(8),
+.pl-source th:nth-child(9) {
+  width: 180px;
+}
+.pl-source th:nth-child(13) {
+  width: 55px;
+}
+.pl-source small {
+  display: block;
+  color: var(--color-muted);
+  font-size: 11px;
+}
+.pl-source__row--purchase {
+  background: var(--color-table-purchase);
+}
+.pl-source__warnings {
+  color: var(--color-feedback);
+  line-height: 1.7;
+  margin: 12px;
+  padding-left: 18px;
+}
+.pl-source-state {
+  text-align: center;
+  padding: 48px 20px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-panel);
+}
+.pl-source-state h2 {
+  font-size: 17px;
+}
+.pl-source-state p {
+  color: var(--color-muted);
+  line-height: 1.7;
+  font-size: 13px;
+}

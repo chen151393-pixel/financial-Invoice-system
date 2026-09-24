@@ -32,15 +32,34 @@ def upgrade(database_url, sql=False):
     command.upgrade(config, "head", sql=sql)
 
 
+def upgrade_business(database_url, sql=False):
+    """业务库单独登记版本；不借用应用库迁移或初始化脚本。"""
+    if not database_url:
+        raise ValueError("尚未配置独立业务 MySQL，不能执行迁移")
+    config = Config(str(ROOT / "backend" / "business_alembic.ini"))
+    config.attributes["database_url"] = database_url
+    command.upgrade(config, "head", sql=sql)
+
+
 def main():
     parser = argparse.ArgumentParser(description="NS 数据库迁移与离线恢复")
-    parser.add_argument("command", choices=["upgrade", "mysql-sql", "recover", "business-check"])
+    parser.add_argument(
+        "command",
+        choices=["upgrade", "mysql-sql", "recover", "business-check", "business-upgrade", "business-sql"],
+    )
     parser.add_argument("--services-stopped", action="store_true", help="明确确认所有 API/任务进程已停止")
     args = parser.parse_args()
     if args.command == "mysql-sql":
         upgrade("mysql+pymysql://unused@localhost/unused?charset=utf8mb4", sql=True)
         return
+    if args.command == "business-sql":
+        upgrade_business("mysql+pymysql://unused@localhost/unused?charset=utf8mb4", sql=True)
+        return
     settings = load_settings()
+    if args.command == "business-upgrade":
+        upgrade_business(settings.business_database_url)
+        print("独立业务库增量迁移完成，未拉取或写回 NS")
+        return
     if args.command == "business-check":
         engine = make_business_engine(settings.business_database_url)
         try:

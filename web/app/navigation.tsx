@@ -52,8 +52,18 @@ export const navigation: readonly SidebarGroup<View>[] = [
         icon: <MenuIcon path="M20 10a8 8 0 0 0-14-4L3 9 M3 3v6h6 M4 14a8 8 0 0 0 14 4l3-3 M15 15h6v6" />,
       },
       {
+        id: "finance",
+        label: "财务核对",
+        icon: <MenuIcon path="M5 12l4 4L19 6" />,
+      },
+      {
+        id: "invoice-followup",
+        label: "开票跟进",
+        icon: <MenuIcon path="M5 3h14v18H5z M8 8h8 M8 12h8 M8 16h5" />,
+      },
+      {
         id: "pl",
-        label: "PL 采购报关核对",
+        label: "采购报关联查",
         icon: <MenuIcon path="M3 4h18v16H3z M3 9h18 M3 14h18 M9 4v16" />,
       },
       {

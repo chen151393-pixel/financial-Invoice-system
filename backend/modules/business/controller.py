@@ -5,13 +5,27 @@ from fastapi import APIRouter
 from backend.core.dependencies import Owner
 
 from .database_vo import DatabaseStatus, StorageConfiguration, StorageResult
-from .dto import LocalPlQuery, PlComparisonQuery, PlQuery, PlSyncRequest, RecordQuery
+from .dto import (
+    LocalPlQuery,
+    PlComparisonQuery,
+    PlQuery,
+    PlScriptQuery,
+    PlSyncRequest,
+    RecordQuery,
+    RelatedPurchaseQuery,
+)
 from .pl_comparison_vo import ComparisonResult
+from .pl_script_vo import ScriptComparisonResult
 from .pl_vo import PlConfiguration, PlResult
+from .related_purchase_vo import RelatedPurchaseFound, RelatedPurchaseMissing
 
 
 def create_router(service):
     router = APIRouter(prefix="/api/ns", tags=["业务记录"])
+
+    @router.post("/pl-script-comparison", response_model=ScriptComparisonResult)
+    def pl_script_comparison(body: PlScriptQuery, owner: Owner):
+        return service.pl_script.query(body)
 
     @router.post("/pl-comparison", response_model=ComparisonResult)
     def pl_comparison(body: PlComparisonQuery, owner: Owner):
@@ -24,6 +38,10 @@ def create_router(service):
     @router.post("/pl-lookup", response_model=PlResult)
     def pl_lookup(body: PlQuery, owner: Owner):
         return service.pl_lookup.query(body.pl, body.page)
+
+    @router.post("/related-purchase", response_model=RelatedPurchaseFound | RelatedPurchaseMissing)
+    def related_purchase(body: RelatedPurchaseQuery, owner: Owner):
+        return service.related_purchase.query(body.subPurchaseNo, body.invoiceGross)
 
     @router.get("/records/{record_type}")
     def records(record_type: str, owner: Owner):

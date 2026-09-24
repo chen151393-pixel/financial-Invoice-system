@@ -1,80 +1,139 @@
 import { useId, useState } from "react";
 import { Button } from "../../../shared/components/Button";
+import type { PlSearchCriteria } from "../types";
 import "./pl-search-form.css";
 
-export interface PlSearchCriteria {
-  pl: string;
-  company: string;
-}
+export type { PlSearchCriteria } from "../types";
+const initial: PlSearchCriteria = {
+  type: "customsRecord",
+  pl: "",
+  month: "",
+  createdFrom: "",
+  createdTo: "",
+  showIncomplete: true,
+};
+const queryTypes = [
+  { value: "pl", label: "PL单号" },
+  { value: "customsRecord", label: "NS报关记录号（CD编号）" },
+  { value: "declaration", label: "真实报关单号" },
+] as const;
 
-interface PlSearchFormProps {
+export function PlSearchForm({
+  onSearch,
+  onReset,
+  busy = false,
+  submitLabel,
+}: {
   onSearch: (criteria: PlSearchCriteria) => void;
   onReset: () => void;
   busy?: boolean;
   submitLabel: string;
-}
-
-/** 仅收集查询条件；数据源、匹配方式和查询结果由调用方提供。 */
-export function PlSearchForm({ onSearch, onReset, busy = false, submitLabel }: PlSearchFormProps) {
+}) {
   const id = useId();
-  const [pl, setPl] = useState("");
-  const [company, setCompany] = useState("");
+  const [criteria, setCriteria] = useState<PlSearchCriteria>(initial);
   return (
     <form
       className="pl-search-form"
       role="search"
-      aria-label="查询 PL 采购报关明细"
+      aria-label="采购报关查询条件"
+      noValidate
       onSubmit={(event) => {
         event.preventDefault();
-        onSearch({ pl, company });
+        if (!busy) onSearch(criteria);
       }}
       onReset={() => {
-        setPl("");
-        setCompany("");
+        setCriteria(initial);
         onReset();
       }}
     >
-      <div className="pl-search-form__field">
-        <label htmlFor={`${id}-pl`}>
-          PL 单号<span>必填</span>
+      <h2>查找报关与采购单据</h2>
+      <div className="pl-search-form__primary">
+        <label>
+          查询方式
+          <select
+            value={criteria.type}
+            disabled={busy}
+            onChange={(event) => {
+              const type = queryTypes.find((item) => item.value === event.target.value)?.value;
+              if (type) setCriteria({ ...criteria, type });
+            }}
+          >
+            {queryTypes.map((item) => (
+              <option key={item.value} value={item.value}>
+                {item.label}
+              </option>
+            ))}
+          </select>
         </label>
-        <input
-          id={`${id}-pl`}
-          name="pl"
-          value={pl}
-          onChange={(event) => setPl(event.target.value)}
-          placeholder="例如 PL2510280002"
-          aria-describedby={`${id}-pl-help`}
-          required
-          disabled={busy}
-          autoComplete="off"
-        />
-        <p id={`${id}-pl-help`}>按完整 PL 单号查询对应的子采购订单和报关明细。</p>
-      </div>
-      <div className="pl-search-form__field">
-        <label htmlFor={`${id}-company`}>
-          申报公司<span>选填</span>
+        <label className="pl-search-form__number">
+          查询单号
+          <input
+            value={criteria.pl}
+            disabled={busy}
+            placeholder={criteria.type === "customsRecord" ? "例如 CD000630" : "输入完整单号"}
+            autoComplete="off"
+            onChange={(event) => setCriteria({ ...criteria, pl: event.target.value })}
+          />
         </label>
-        <input
-          id={`${id}-company`}
-          name="company"
-          value={company}
-          onChange={(event) => setCompany(event.target.value)}
-          placeholder="公司名称、关键词或内部 ID"
-          aria-describedby={`${id}-company-help`}
-          disabled={busy}
-          autoComplete="off"
-        />
-        <p id={`${id}-company-help`}>可填写公司抬头关键词；留空查看该 PL 下全部公司。</p>
+        <div className="pl-search-form__actions">
+          <Button type="submit" variant="primary" disabled={busy}>
+            {busy ? "查询中…" : submitLabel}
+          </Button>
+          <Button type="reset">清空</Button>
+        </div>
       </div>
-      <div className="pl-search-form__actions">
-        <Button type="submit" variant="primary" disabled={busy}>
-          {busy ? "查询中…" : submitLabel}
-        </Button>
-        <Button type="reset" disabled={busy}>
-          重置
-        </Button>
-      </div>
+      <details className="pl-search-form__advanced">
+        <summary>
+          更多查询条件
+          {(criteria.month || criteria.createdFrom || criteria.createdTo || !criteria.showIncomplete) && (
+            <span>（已设置）</span>
+          )}
+        </summary>
+        <div className="pl-search-form__dates">
+          <label>
+            申报月份
+            <input
+              type="month"
+              value={criteria.month}
+              disabled={busy}
+              aria-describedby={id + "-hint"}
+              onChange={(event) => setCriteria({ ...criteria, month: event.target.value })}
+            />
+          </label>
+          <label>
+            创建日期 · 起始
+            <input
+              type="date"
+              value={criteria.createdFrom}
+              disabled={busy}
+              aria-describedby={id + "-hint"}
+              onChange={(event) => setCriteria({ ...criteria, createdFrom: event.target.value })}
+            />
+          </label>
+          <label>
+            创建日期 · 结束
+            <input
+              type="date"
+              value={criteria.createdTo}
+              disabled={busy}
+              aria-describedby={id + "-hint"}
+              onChange={(event) => setCriteria({ ...criteria, createdTo: event.target.value })}
+            />
+          </label>
+        </div>
+        <label className="pl-search-form__option">
+          <input
+            type="checkbox"
+            checked={criteria.showIncomplete}
+            disabled={busy}
+            onChange={(event) => setCriteria({ ...criteria, showIncomplete: event.target.checked })}
+          />
+          显示无真实报关单号且无子采购单的报关单
+        </label>
+        <p id={id + "-hint"}>
+          单号、申报月份或完整创建日期范围至少填写一项。创建日期包含结束当天；多个条件同时生效。
+        </p>
+      </details>
     </form>
   );
 }

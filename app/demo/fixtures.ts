@@ -7,6 +7,8 @@ export const viewMeta: Record<View, { title: string; subtitle: string }> = {
   exceptions: { title: "异常处理", subtitle: "集中处理差异、缺失、重复票与回写失败" },
   sync: { title: "数据同步中心", subtitle: "监控 NetSuite 与柠檬云的数据新鲜度、批次和失败任务" },
   pl: { title: "PL 采购报关核对", subtitle: "按 PL＋公司抬头归组，上下核对报关与子采购订单，导出对照表" },
+  finance: { title: "财务核对", subtitle: "进入正式页面，逐层核对报关与采购明细并整单审核" },
+  "invoice-followup": { title: "开票跟进", subtitle: "财务审核后按供应商或报关单查看开票任务" },
   reconcile: { title: "系统对账", subtitle: "按主体、期间核对业务应付、进项发票与 NetSuite 应付账" },
   writeback: { title: "回写 NetSuite", subtitle: "审批匹配结果并跟踪回写队列、结果与审计记录" },
 };
@@ -156,44 +158,5 @@ export const exceptionRows = [
     level: "高",
     owner: "系统管理员",
     trace: "TRC-8F1FD2",
-  },
-];
-
-export const syncJobs = [
-  {
-    system: "NetSuite",
-    job: "增量同步 Purchase Order / Item Receipt",
-    batch: "NS-0825-1026",
-    records: "1,286",
-    time: "10:26:42",
-    status: "成功",
-    tone: "success",
-  },
-  {
-    system: "柠檬云",
-    job: "增量同步进项发票与附件",
-    batch: "LY-0825-1028",
-    records: "21",
-    time: "10:28:17",
-    status: "成功",
-    tone: "success",
-  },
-  {
-    system: "NetSuite",
-    job: "同步 Vendor Bill 自定义字段",
-    batch: "NS-0825-0955",
-    records: "3 / 4",
-    time: "09:55:08",
-    status: "部分失败",
-    tone: "danger",
-  },
-  {
-    system: "对账引擎",
-    job: "重新计算 2026-08 主体差异",
-    batch: "RC-0825-0930",
-    records: "2,846",
-    time: "09:30:12",
-    status: "成功",
-    tone: "success",
   },
 ];

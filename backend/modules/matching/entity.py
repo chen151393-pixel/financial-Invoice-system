@@ -1,0 +1,72 @@
+"""匹配分配归属业务库；仅迁移或隔离测试建表，启动不建表。"""
+
+from sqlalchemy import (
+    JSON,
+    Column,
+    DateTime,
+    ForeignKey,
+    Integer,
+    MetaData,
+    Numeric,
+    String,
+    Table,
+    UniqueConstraint,
+)
+
+metadata = MetaData()
+allocations = Table(
+    "invoice_purchase_allocations",
+    metadata,
+    Column("id", Integer, primary_key=True, autoincrement=True),
+    Column("tenant_id", String(64), nullable=False),
+    Column("request_id", String(36), nullable=False),
+    Column("request_hash", String(64), nullable=False),
+    Column("invoice_id", String(20), nullable=False),
+    Column("invoice_line_id", String(20), nullable=False),
+    Column("purchase_line_id", String(20)),
+    Column("purchase_order_id", String(20)),
+    Column("purchase_key", String(64)),
+    Column("customs_line_id", String(20)),
+    Column("review_account", String(100)),
+    Column("review_declaration_id", String(190)),
+    Column("review_snapshot_id", String(36)),
+    Column("review_revision", Integer),
+    Column("review_digest", String(64)),
+    Column("quantity", Numeric(26, 8), nullable=False),
+    Column("gross", Numeric(26, 8), nullable=False),
+    Column("source_hash", String(64), nullable=False),
+    Column("purchase_hash", String(64), nullable=False),
+    Column("source_snapshot", JSON, nullable=False),
+    Column("actor", String(255), nullable=False),
+    Column("created_at", DateTime, nullable=False),
+    UniqueConstraint("tenant_id", "request_id", name="uq_matching_request"),
+)
+
+link_batches = Table(
+    "invoice_purchase_link_batches",
+    metadata,
+    Column("id", Integer, primary_key=True, autoincrement=True),
+    Column("tenant_id", String(64), nullable=False),
+    Column("request_id", String(36), nullable=False),
+    Column("request_hash", String(64), nullable=False),
+    Column("invoice_id", String(20), nullable=False),
+    Column("source_snapshot", JSON, nullable=False),
+    Column("actor", String(255), nullable=False),
+    Column("created_at", DateTime, nullable=False),
+    UniqueConstraint("tenant_id", "request_id", name="uq_invoice_link_request"),
+    UniqueConstraint("tenant_id", "invoice_id", name="uq_invoice_link_invoice"),
+)
+link_pairs = Table(
+    "invoice_purchase_link_pairs",
+    metadata,
+    Column("id", Integer, primary_key=True, autoincrement=True),
+    Column("batch_id", Integer, ForeignKey("invoice_purchase_link_batches.id"), nullable=False),
+    Column("tenant_id", String(64), nullable=False),
+    Column("invoice_line_id", String(20), nullable=False),
+    Column("purchase_line_id", String(20), nullable=False),
+    Column("purchase_order_id", String(20), nullable=False),
+    Column("source_hash", String(64), nullable=False),
+    Column("purchase_hash", String(64), nullable=False),
+    UniqueConstraint("tenant_id", "purchase_line_id", name="uq_invoice_link_purchase_line"),
+    UniqueConstraint("batch_id", "invoice_line_id", "purchase_line_id", name="uq_invoice_link_pair"),
+)

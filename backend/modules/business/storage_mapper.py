@@ -134,7 +134,12 @@ def map_bundle(bundle, config, tables, tenant, account, pl_number):
             )
             linked_customs = None
             if kind == "purchase":
-                head.update(pl_no=pl_number, **company(record, spec.company, config.company_record_type))
+                head.update(
+                    pl_no=pl_number
+                    if pl_number is not None
+                    else bundle["pl_names"].get(reference(record.get(spec.pl))),
+                    **company(record, spec.company, config.company_record_type),
+                )
                 linked_customs = reference(record.get(spec.customs)) or None
             lines = []
             for line_id, raw in raw_lines:

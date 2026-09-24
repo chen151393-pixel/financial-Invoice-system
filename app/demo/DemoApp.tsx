@@ -2,13 +2,12 @@
 import { useState, useSyncExternalStore } from "react";
 import { AppFrame } from "../../web/shared/components/AppFrame";
 import { navigation } from "../../web/app/navigation";
+import { workspaceRoutes } from "../../web/app/views";
 import { viewMeta } from "./fixtures";
 import type { View } from "./types";
 import { Dashboard } from "./pages/Dashboard";
-import { InvoiceList } from "./pages/InvoiceList";
 import { MatchDetail } from "./pages/MatchDetail";
 import { Exceptions } from "./pages/Exceptions";
-import { SyncCenter } from "./pages/SyncCenter";
 import { ReconcileCenter } from "./pages/ReconcileCenter";
 import { WritebackCenter } from "./pages/WritebackCenter";
 
@@ -31,8 +30,9 @@ export default function Home() {
   };
   const meta = viewMeta[view];
   const navigate = (target: View) => {
-    if (target === "pl") {
-      window.location.assign("/pl-reconciliation");
+    const workspace = workspaceRoutes[target];
+    if (workspace) {
+      window.location.assign(workspace);
       return;
     }
     const url = new URL(window.location.href);
@@ -61,13 +61,14 @@ export default function Home() {
       }
     >
       {view === "pl" && <a href="/pl-reconciliation">进入真实 PL 采购报关核对</a>}
+      {view === "finance" && <a href="/finance-reconciliation">进入财务核对</a>}
       {view === "dashboard" && <Dashboard navigate={navigate} />}{" "}
-      {view === "invoices" && <InvoiceList navigate={navigate} />}{" "}
+      {view === "invoices" && <a href="/invoices">进入真实进项发票列表</a>}{" "}
       {view === "match" && (
         <MatchDetail notify={notify} back={() => navigate("invoices")} navigate={navigate} />
       )}{" "}
       {view === "exceptions" && <Exceptions notify={notify} />}{" "}
-      {view === "sync" && <SyncCenter notify={notify} />}{" "}
+      {view === "sync" && <a href="/sync">进入数据同步中心</a>}{" "}
       {view === "reconcile" && <ReconcileCenter navigate={navigate} />}{" "}
       {view === "writeback" && <WritebackCenter notify={notify} />}
       {toast && (

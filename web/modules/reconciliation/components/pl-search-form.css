@@ -1,86 +1,99 @@
 .pl-search-form {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
-  align-items: start;
-  gap: 20px;
-  padding: 20px;
+  padding: 16px;
   margin-bottom: 16px;
   background: var(--color-surface);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-panel);
-}
-.pl-search-form__field {
-  min-width: 0;
-}
-.pl-search-form__field label {
-  display: flex;
-  align-items: baseline;
-  gap: 8px;
   color: var(--color-text);
-  font-size: 13px;
-  font-weight: 600;
-  margin-bottom: 8px;
+  font-size: 12px;
 }
-.pl-search-form__field label span {
+.pl-search-form h2 {
+  margin: 0 0 12px;
+  font-size: 14px;
+}
+.pl-search-form__primary {
+  display: flex;
+  align-items: flex-end;
+  gap: 12px;
+  max-width: 950px;
+}
+.pl-search-form__number {
+  flex: 1;
+}
+.pl-search-form__dates {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  max-width: 800px;
+  margin-top: 12px;
+}
+.pl-search-form :is(.pl-search-form__primary, .pl-search-form__dates) label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
   color: var(--color-muted);
-  font-size: 11px;
-  font-weight: 400;
 }
-.pl-search-form__field input {
-  display: block;
+.pl-search-form :is(.pl-search-form__primary, .pl-search-form__dates) :is(input, select) {
   width: 100%;
-  min-height: 42px;
-  padding: 10px 12px;
+  min-width: 0;
+  height: 38px;
+  padding: 4px 8px;
   border: 1px solid var(--color-input-border);
   border-radius: var(--radius-control);
   background: var(--color-surface);
   color: var(--color-text);
   font: inherit;
-  font-size: 13px;
 }
-.pl-search-form__field input::placeholder {
-  color: var(--color-muted);
-}
-.pl-search-form__field input:focus-visible {
+.pl-search-form :is(input, select, summary):focus-visible {
   outline: 2px solid var(--color-primary);
   outline-offset: 2px;
 }
-.pl-search-form__field input:disabled {
-  background: var(--color-canvas);
-  cursor: not-allowed;
+.pl-search-form__option {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 12px;
 }
-.pl-search-form__field p {
-  margin: 8px 0 0;
-  font-size: 11px;
+.pl-search-form__option input {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--color-primary);
+}
+.pl-search-form p {
   color: var(--color-muted);
-  line-height: 1.7;
+  line-height: 1.6;
+  margin: 6px 0 12px;
 }
 .pl-search-form__actions {
   display: flex;
   gap: 8px;
-  padding-top: 26px;
+  flex-shrink: 0;
 }
-.pl-search-form__actions button {
-  min-height: 42px;
-  white-space: nowrap;
-  font-size: 13px;
+.pl-search-form__actions .ui-button {
+  min-height: 38px;
 }
-@media (max-width: 1100px) {
-  .pl-search-form {
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  }
-  .pl-search-form__actions {
-    grid-column: 1 / -1;
-    padding-top: 0;
-  }
+.pl-search-form__advanced {
+  margin-top: 12px;
+}
+.pl-search-form__advanced summary {
+  width: fit-content;
+  color: var(--color-muted);
+  cursor: pointer;
+}
+.pl-search-form__advanced[open] summary {
+  color: var(--color-primary);
 }
 @media (max-width: 760px) {
-  .pl-search-form {
-    grid-template-columns: minmax(0, 1fr);
-    padding: 16px;
-    gap: 16px;
+  .pl-search-form__primary {
+    flex-wrap: wrap;
   }
-  .pl-search-form__actions button {
-    flex: 1;
+  .pl-search-form__number {
+    flex-basis: 200px;
+  }
+}
+@media (max-width: 420px) {
+  .pl-search-form__dates {
+    grid-template-columns: minmax(0, 1fr);
   }
 }

@@ -1586,9 +1586,7 @@ button {
   background: linear-gradient(145deg, #6a46bd, #8d68db);
 }
 .source-health strong,
-.source-health small,
-.connector-card strong,
-.connector-card small {
+.source-health small {
   display: block;
 }
 .source-health strong {
@@ -1599,8 +1597,7 @@ button {
   color: #98a2b3;
   margin-top: 3px;
 }
-.source-health em,
-.connector-state {
+.source-health em {
   font-style: normal;
   font-size: 8px;
   border-radius: 20px;
@@ -1712,99 +1709,6 @@ button {
 }
 .compare-grid.three {
   grid-template-columns: repeat(3, 1fr);
-}
-.connector-grid {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 14px;
-  margin-bottom: 14px;
-}
-.connector-card {
-  background: #fff;
-  border: 1px solid var(--line);
-  border-radius: 11px;
-  padding: 18px;
-  position: relative;
-}
-.connector-card > div:first-child {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-.connector-card > div:first-child strong {
-  font-size: 11px;
-}
-.connector-card > div:first-child small {
-  font-size: 8px;
-  color: #98a2b3;
-  margin-top: 3px;
-}
-.connector-state {
-  position: absolute;
-  right: 15px;
-  top: 18px;
-}
-.connector-card dl {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 1px;
-  background: #eef0f4;
-  border: 1px solid #eef0f4;
-  border-radius: 7px;
-  overflow: hidden;
-  margin: 18px 0 13px;
-}
-.connector-card dl > div {
-  background: #f9fafc;
-  padding: 9px;
-}
-.connector-card dt {
-  font-size: 7px;
-  color: #98a2b3;
-}
-.connector-card dd {
-  font-size: 9px;
-  font-weight: 700;
-  margin: 4px 0 0;
-  color: #344054;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.connector-card > .button {
-  width: 100%;
-}
-.pipeline-steps {
-  display: flex !important;
-  align-items: center !important;
-  justify-content: space-between;
-  margin: 25px 0 12px;
-}
-.pipeline-steps b {
-  font-size: 8px;
-  background: #edf2ff;
-  color: #3156d9;
-  border-radius: 5px;
-  padding: 6px;
-}
-.pipeline-steps i {
-  font-size: 8px;
-  color: #a6afbd;
-  font-style: normal;
-}
-.connector-card.pipeline p {
-  font-size: 8px;
-  color: #7d8797;
-  line-height: 1.7;
-  margin: 0 0 13px;
-}
-.sync-table {
-  padding: 0;
-  overflow: hidden;
-}
-.sync-table .panel-head {
-  padding: 16px 18px;
-  border-bottom: 1px solid var(--line);
 }
 .reconcile-summary {
   display: grid;
@@ -1926,8 +1830,7 @@ button {
   color: #7d8797;
 }
 @media (max-width: 1180px) {
-  .source-health,
-  .connector-grid {
+  .source-health {
     grid-template-columns: 1fr;
   }
   .reconcile-summary {
@@ -1960,9 +1863,6 @@ button {
   .table-context {
     flex-wrap: wrap;
     gap: 7px;
-  }
-  .connector-grid {
-    grid-template-columns: 1fr;
   }
   .reconcile-summary {
     grid-template-columns: 1fr;

@@ -1,6 +1,7 @@
-# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
+# Git 忽略清单；分类、保留原因与清理条件见 docs/ignored-files.md。
+# 忽略不等于删除，且不影响已经被 Git 跟踪的文件。
 
-# dependencies
+# 安装依赖：由依赖清单重建，保留 package-lock.json。
 /node_modules
 /.pnp
 .pnp.*
@@ -10,45 +11,57 @@
 !.yarn/releases
 !.yarn/versions
 
-# testing
+# 测试报告与覆盖率产物。
 /coverage
+.coverage
+.coverage.*
+/coverage.xml
+/htmlcov/
 
-# NS：本地独立脚本及依赖它的专用测试
+# 本地独立 NS 共用脚本及其专用测试：仍有调用方，不是无用文件。
 /SuiteScripts
 /tests/ns-pl-lookup.test.mjs
-# next.js
+
+# 正式前端与历史原型的构建产物、TypeScript 增量缓存。
+/dist/
 /.next/
 /.vinext/
 /out/
+*.tsbuildinfo
 
-# misc
-.DS_Store
+# 本地配置、业务数据与密钥：不入库，但不能按缓存删除。
+.env*
+!.env.example
+/data/
+/secrets/
 *.pem
 *.key
 *.p12
 *.pfx
-/data/
-/secrets/
+
+# Python 虚拟环境与可重新生成的缓存。
 /.venv/
 __pycache__/
 .pytest_cache/
 .ruff_cache/
 *.pyc
+*.pyo
 
-# debug
+# 操作系统生成文件。
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# 包管理器调试日志。
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
 
-# env files (can opt-in for committing if needed)
-.env*
-!.env.example
-
-# vercel
+# 本地部署工具状态，可能包含绑定数据；清理前核实内容。
 .vercel
-
-/dist/
 /.wrangler/
+
+# 本地工作产物与临时输出；需要交付的文件应转入明确的受管目录。
 /outputs/
 /work/

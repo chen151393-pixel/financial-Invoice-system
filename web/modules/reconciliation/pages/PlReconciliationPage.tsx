@@ -1,12 +1,12 @@
 import { useEffect, useRef, useState } from "react";
 import { openLocalSession } from "../../identity/api";
-import { queryPlComparison } from "../api";
+import { queryPlSourceComparison } from "../api";
 import { PlSearchForm, type PlSearchCriteria } from "../components/PlSearchForm";
-import { PlComparison } from "../components/PlComparison";
-import type { ComparisonState } from "../types";
+import { PlSourceComparison } from "../components/PlSourceComparison";
+import type { SourceComparisonState } from "../source-types";
 
 export function PlReconciliationPage() {
-  const [state, setState] = useState<ComparisonState>({ kind: "idle" });
+  const [state, setState] = useState<SourceComparisonState>({ kind: "idle" });
   const requestId = useRef(0);
   const lastQuery = useRef<PlSearchCriteria | null>(null);
   useEffect(
@@ -21,15 +21,15 @@ export function PlReconciliationPage() {
     lastQuery.current = criteria;
     setState({ kind: "loading" });
     try {
-      // 复用现有本机会话及后端M2M权限校验；浏览器不接触NS凭证。
       await openLocalSession();
-      const result = await queryPlComparison(criteria);
+      const result = await queryPlSourceComparison(criteria);
       if (current === requestId.current) setState({ kind: "ready", result });
     } catch (error) {
       if (current === requestId.current)
-        setState({ kind: "error", message: error instanceof Error ? error.message : "拉取失败，请稍后重试" });
+        setState({ kind: "error", message: error instanceof Error ? error.message : "查询失败，请重试" });
     }
   }
+
   return (
     <>
       <PlSearchForm
@@ -40,9 +40,9 @@ export function PlReconciliationPage() {
           setState({ kind: "idle" });
         }}
         busy={state.kind === "loading"}
-        submitLabel="从 NS 拉取"
+        submitLabel="查询"
       />
-      <PlComparison
+      <PlSourceComparison
         state={state}
         onRetry={() => {
           if (lastQuery.current) void search(lastQuery.current);

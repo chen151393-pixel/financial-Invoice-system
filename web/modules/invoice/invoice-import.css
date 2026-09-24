@@ -1,0 +1,104 @@
+.invoice-import {
+  display: grid;
+  gap: var(--space-layout);
+}
+.invoice-import__dropzone {
+  padding: var(--space-layout);
+  border: 1px dashed var(--color-input-border);
+  border-radius: var(--radius-control);
+  background: var(--color-canvas);
+  min-width: 0;
+}
+.invoice-import__dropzone--active {
+  border-color: var(--color-primary);
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+.invoice-import__filename {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.invoice-import__file-picker {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-control);
+  max-width: 100%;
+}
+.invoice-import fieldset {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  display: grid;
+  gap: var(--space-control);
+  grid-template-columns: minmax(0, 1fr);
+  justify-items: start;
+  min-width: 0;
+}
+.invoice-import legend {
+  margin-bottom: var(--space-control);
+  font-weight: 600;
+}
+.invoice-import p {
+  margin: 0;
+}
+.invoice-import__summary {
+  display: grid;
+  gap: var(--space-small);
+}
+.invoice-import__warnings {
+  margin: 0;
+  padding-left: 20px;
+  color: var(--color-feedback);
+  line-height: 1.8;
+}
+.invoice-import__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-control);
+}
+.invoice-import__actions span {
+  color: var(--color-muted);
+  font-size: 13px;
+}
+.invoice-import__table {
+  max-height: 560px;
+}
+.invoice-import__table table {
+  min-width: 950px;
+}
+.invoice-import__table caption {
+  text-align: left;
+  padding-bottom: var(--space-control);
+  font-weight: 600;
+}
+.invoice-import__table th {
+  position: sticky;
+  top: 0;
+  background: var(--color-canvas);
+}
+.invoice-import__table td {
+  overflow-wrap: anywhere;
+}
+.invoice-import__table td:nth-child(3) {
+  min-width: 200px;
+}
+.invoice-import__amount {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.invoice-import :focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 3px;
+}
+@media (max-width: 760px) {
+  .invoice-import {
+    padding: var(--space-control);
+  }
+  .invoice-import__actions {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}

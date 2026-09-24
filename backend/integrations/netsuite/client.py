@@ -1,5 +1,6 @@
 """NS HTTP适配器：认证缓存、读写与传输约束。"""
 
+import logging
 import math
 import re
 import time
@@ -13,6 +14,21 @@ from backend.core.config import Settings
 from backend.core.errors import ApiError
 
 from .auth import assertion
+from .relation_sources import read_relation_rows
+
+logger = logging.getLogger("ns_api.netsuite")
+
+
+def log_failure(operation, method, started_at, *, error_type, status=None):
+    # 不输出异常原文或 HTTP 对象，避免 URL、令牌和业务正文进入日志。
+    logger.error(
+        "ns_request_failed operation=%s method=%s upstream_status=%s type=%s duration_ms=%.1f",
+        operation,
+        method,
+        status if status is not None else "-",
+        error_type,
+        (time.monotonic() - started_at) * 1000,
+    )
 
 
 class NetSuite:
@@ -25,6 +41,82 @@ class NetSuite:
     def close(self):
         self.client.close()
 
+    def pl_script_query(self, payload):
+        """固定只读RESTlet；不接受客户端URL/脚本编号，不重试或回退到旧口径。"""
+        settings = self.settings
+        if not settings.pl_restlet_script or not settings.pl_restlet_deploy:
+            raise ApiError(503, "NS 同规则查询入口尚未配置，请部署 PL RESTlet 并填写脚本及部署编号")
+        return self._read_restlet(settings.pl_restlet_script, settings.pl_restlet_deploy, payload)
+
+    def finance_source_query(self, declaration_ids):
+        settings = self.settings
+        if not settings.finance_source_script or not settings.finance_source_deploy:
+            raise ApiError(503, "原始报关行只读接口未配置，关联依据尚未完整")
+        return self._read_restlet(
+            settings.finance_source_script,
+            settings.finance_source_deploy,
+            {"declarationIds": declaration_ids},
+        )
+
+    def relation_rows(self, kind, ids):
+        return read_relation_rows(self, kind, ids)
+
+    def _read_restlet(self, script, deploy, payload):
+        settings = self.settings
+        if "restlets" not in settings.scope:
+            raise ApiError(503, "NS 集成尚未配置 restlets 授权范围，请管理员完成授权")
+        access_token = self.token()
+        url = f"https://{settings.account}.restlets.api.netsuite.com/app/site/hosting/restlet.nl"
+        started_at = time.monotonic()
+        try:
+            with self.client.stream(
+                "POST",
+                url,
+                params={"script": script, "deploy": deploy},
+                headers={"Authorization": f"Bearer {access_token}", "Accept": "application/json"},
+                json=payload,
+                timeout=60,
+                follow_redirects=False,
+            ) as response:
+                if response.status_code == 401:
+                    with self._lock:
+                        if self._cached and self._cached[0] == access_token:
+                            self._cached = None
+                if not response.is_success:
+                    log_failure(
+                        "restlet",
+                        "POST",
+                        started_at,
+                        error_type="HTTPStatusError",
+                        status=response.status_code,
+                    )
+                    raise ApiError(
+                        502, f"NS 同规则查询失败（HTTP {response.status_code}），请核对部署受众及权限"
+                    )
+                chunks, size = [], 0
+                for chunk in response.iter_bytes():
+                    size += len(chunk)
+                    if size > 8 * 1024 * 1024:
+                        log_failure(
+                            "restlet",
+                            "POST",
+                            started_at,
+                            error_type="ResponseTooLarge",
+                            status=response.status_code,
+                        )
+                        raise ApiError(502, "NS 查询结果超过传输上限，未返回截断结果")
+                    chunks.append(chunk)
+        except httpx.HTTPError as error:
+            log_failure("restlet", "POST", started_at, error_type=type(error).__name__)
+            raise ApiError(502, "NS 查询连接失败或超时；前一只读请求可能仍在执行，请稍后手动查询") from None
+        try:
+            import json
+
+            return json.loads(b"".join(chunks), parse_float=Decimal)
+        except (ValueError, UnicodeError):
+            log_failure("restlet", "POST", started_at, error_type="InvalidJSON", status=response.status_code)
+            raise ApiError(502, "NS 同规则查询返回格式异常，请核对 RESTlet 部署") from None
+
     def token(self):
         with self._lock:
             if self._cached and self._cached[1] > time.monotonic() + 60:
@@ -36,6 +128,7 @@ class NetSuite:
                 signed = assertion(c, c.private_key.read_bytes())
             except OSError:
                 raise ApiError(503, "无法读取 NS 私钥") from None
+            started_at = time.monotonic()
             try:
                 response = self.client.post(
                     c.token_url,
@@ -47,9 +140,13 @@ class NetSuite:
                     timeout=20,
                     follow_redirects=False,
                 )
-            except httpx.HTTPError:
+            except httpx.HTTPError as error:
+                log_failure("token", "POST", started_at, error_type=type(error).__name__)
                 raise ApiError(502, "NS Token 请求失败或超时") from None
             if not response.is_success:
+                log_failure(
+                    "token", "POST", started_at, error_type="HTTPStatusError", status=response.status_code
+                )
                 raise ApiError(502, f"NS 认证失败（HTTP {response.status_code}），请检查证书映射和权限")
             try:
                 data = response.json()
@@ -57,6 +154,13 @@ class NetSuite:
                 if not isinstance(value, str) or not value or not math.isfinite(expiry) or expiry <= 0:
                     raise ValueError()
             except (ValueError, TypeError, KeyError):
+                log_failure(
+                    "token",
+                    "POST",
+                    started_at,
+                    error_type="InvalidTokenResponse",
+                    status=response.status_code,
+                )
                 raise ApiError(502, "NS Token 响应不完整") from None
             self._cached = value, time.monotonic() + expiry
             return value
@@ -97,6 +201,7 @@ class NetSuite:
                 raise ApiError(400, "筛选参数只用于记录列表读取")
             params = query_params
         access_token = token or self.token()
+        started_at = time.monotonic()
         try:
             response = self.client.request(
                 method,
@@ -106,13 +211,17 @@ class NetSuite:
                 **({"json": payload} if payload is not None else {}),
                 follow_redirects=False,
             )
-        except httpx.HTTPError:
+        except httpx.HTTPError as error:
+            log_failure("record", method, started_at, error_type=type(error).__name__)
             raise ApiError(502, "NS 请求失败或超时；写入结果可能需要人工核对") from None
         if response.status_code == 401:
             with self._lock:
                 if self._cached and self._cached[0] == access_token:
                     self._cached = None
         if not response.is_success:
+            log_failure(
+                "record", method, started_at, error_type="HTTPStatusError", status=response.status_code
+            )
             raise ApiError(
                 404 if response.status_code == 404 else 502,
                 f"NS 请求未成功（HTTP {response.status_code}）；请核对 NS 权限和字段",
@@ -124,6 +233,7 @@ class NetSuite:
                 else None
             )
         except ValueError:
+            log_failure("record", method, started_at, error_type="InvalidJSON", status=response.status_code)
             raise ApiError(502, "NS 返回非 JSON 响应") from None
         return {"data": data, "location": response.headers.get("location"), "status": response.status_code}
 

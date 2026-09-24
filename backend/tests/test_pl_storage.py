@@ -21,6 +21,8 @@ from sqlalchemy import Column, Date, MetaData, Numeric, String, Table, select
 def configured_ns():
     ns = LookupNS()
     ns.settings.account = "isolated-test-account"
+    ns.index["purchase", "customs", "20"] = ["10", "11"]
+    ns.data["pl", "1"] = {"name": "PL001"}
     config = ns.settings.pl_lookup
     config["company_record_type"] = "classification"
     config["purchase"]["storage_fields"] = {"order_no": "name"}
@@ -135,7 +137,7 @@ def test_rejects_lossy_money(value):
 def mysql_storage():
     url = os.getenv("PL_STORAGE_TEST_URL")
     if not url:
-        pytest.skip("需要已初始化六表的独立MySQL库PL_STORAGE_TEST_URL，库名须以_pl_test结尾")
+        pytest.skip("需要已完成业务迁移的独立MySQL库PL_STORAGE_TEST_URL，库名须以_pl_test结尾")
     engine = make_business_engine(url)
     assert engine.url.database.endswith("_pl_test"), "只允许独立PL测试库"
     ns = configured_ns()
@@ -146,8 +148,9 @@ def mysql_storage():
     finally:
         tenants = [service.scope(name)[0] for name in (owner, owner + "-other")]
         with engine.begin() as connection:
-            tables = load_tables(connection)
+            tables = load_tables(connection, include_relations=True)
             for name in (
+                "customs_reconciliation_results",
                 "purchase_order_lines",
                 "customs_declaration_lines",
                 "purchase_orders",

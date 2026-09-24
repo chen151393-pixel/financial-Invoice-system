@@ -4,7 +4,9 @@ from backend.core.business_database import check_business_database
 from backend.core.errors import ApiError
 
 from .pl_comparison_service import PlComparisonService
+from .pl_script_service import PlScriptService
 from .pl_service import PlLookupService
+from .related_purchase_lookup import RelatedPurchaseLookup
 from .storage_service import StorageService
 
 
@@ -13,7 +15,9 @@ class BusinessService:
         self.ns = ns
         self.database_engine = database_engine
         self.pl_lookup = PlLookupService(ns)
+        self.related_purchase = RelatedPurchaseLookup(ns)
         self.pl_comparison = PlComparisonService(ns)
+        self.pl_script = PlScriptService(ns)
         self.storage = StorageService(ns, database_engine)
 
     def database_status(self):

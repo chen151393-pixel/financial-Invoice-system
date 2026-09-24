@@ -26,6 +26,15 @@ class Settings:
     write_fields: dict[str, list[str]] = field(default_factory=dict)
     write_enabled: bool = False
     pl_lookup: dict = field(default_factory=dict)
+    sync_date_format: str = "YYYY-MM-DD"
+    pl_restlet_script: str = ""
+    pl_restlet_deploy: str = ""
+    finance_source_script: str = ""
+    finance_source_deploy: str = ""
+    subpo_contract_script: str = ""
+    subpo_contract_deploy: str = ""
+    subpo_connection_file: Path | None = field(default=None, repr=False)
+    subpo_archive_root: Path | None = None
     origin: str = "http://localhost:3000"
     admin_user: str = "admin"
     admin_password: str = field(default="", repr=False)
@@ -74,6 +83,10 @@ def load_settings(source=None):
 
     def get(key, default=""):
         return env.get(key) or default
+
+    sync_date_format = get("NETSUITE_SYNC_DATE_FORMAT", "YYYY-MM-DD")
+    if sync_date_format not in {"YYYY-MM-DD", "M/D/YYYY", "D/M/YYYY"}:
+        raise ValueError("NETSUITE_SYNC_DATE_FORMAT 须为 YYYY-MM-DD、M/D/YYYY 或 D/M/YYYY")
 
     account = get("NETSUITE_ACCOUNT_ID").strip().lower().replace("_", "-")
     if account and not re.fullmatch(r"[a-z0-9]+(?:-[a-z0-9]+)*", account):
@@ -155,6 +168,29 @@ def load_settings(source=None):
         raise ValueError("NETSUITE_WRITE_ENABLED 必须为 true 或 false")
     if len(get("ADMIN_USERNAME", "admin")) > 190:
         raise ValueError("ADMIN_USERNAME 过长")
+    pl_script = get("NETSUITE_PL_RESTLET_SCRIPT").strip()
+    pl_deploy = get("NETSUITE_PL_RESTLET_DEPLOY").strip()
+    finance_script = get("NETSUITE_FINANCE_SOURCE_SCRIPT").strip()
+    finance_deploy = get("NETSUITE_FINANCE_SOURCE_DEPLOY").strip()
+    contract_script = get("NETSUITE_SUBPO_CONTRACT_SCRIPT").strip()
+    contract_deploy = get("NETSUITE_SUBPO_CONTRACT_DEPLOY").strip()
+    archive_root = Path(get("NETSUITE_SUBPO_ARCHIVE_ROOT")) if get("NETSUITE_SUBPO_ARCHIVE_ROOT") else None
+    if archive_root and not archive_root.is_absolute():
+        raise ValueError("NETSUITE_SUBPO_ARCHIVE_ROOT 必须为绝对路径或 UNC 共享路径")
+    for value, prefix in (
+        (pl_script, "customscript"),
+        (pl_deploy, "customdeploy"),
+        (finance_script, "customscript"),
+        (finance_deploy, "customdeploy"),
+        (contract_script, "customscript"),
+        (contract_deploy, "customdeploy"),
+    ):
+        if value and not re.fullmatch(rf"(?:[0-9]{{1,20}}|{prefix}_[a-zA-Z0-9_]{{1,100}})", value):
+            raise ValueError("RESTlet 脚本或部署编号无效")
+    if bool(finance_script) != bool(finance_deploy):
+        raise ValueError("原始报关行接口的脚本和部署编号须同时填写")
+    if bool(contract_script) != bool(contract_deploy):
+        raise ValueError("子采购合同接口的脚本和部署编号须同时填写")
     return Settings(
         account=account,
         client_id=get("NETSUITE_CLIENT_ID"),
@@ -166,6 +202,17 @@ def load_settings(source=None):
         write_fields=fields,
         write_enabled=enabled == "true",
         pl_lookup=pl_lookup,
+        sync_date_format=sync_date_format,
+        pl_restlet_script=pl_script,
+        pl_restlet_deploy=pl_deploy,
+        finance_source_script=finance_script,
+        finance_source_deploy=finance_deploy,
+        subpo_contract_script=contract_script,
+        subpo_contract_deploy=contract_deploy,
+        subpo_archive_root=archive_root,
+        subpo_connection_file=(ROOT / get("NETSUITE_SUBPO_CONNECTION_FILE")).resolve()
+        if get("NETSUITE_SUBPO_CONNECTION_FILE")
+        else None,
         origin=origin,
         admin_user=get("ADMIN_USERNAME", "admin"),
         admin_password=get("ADMIN_PASSWORD"),

@@ -1,4 +1,4 @@
-"""复用已建的四张业务表；只反射结构，不注册迁移、不自动建表。"""
+"""默认反射采购报关四表，关联导入按需增加母采购两表；不自动建表。"""
 
 from sqlalchemy import MetaData, Table
 
@@ -59,6 +59,11 @@ REQUIRED_FIELDS = {
 }
 
 
-def load_tables(connection):
+def load_tables(connection, *, include_parents=False, include_relations=False):
     metadata = MetaData()
-    return {name: Table(name, metadata, autoload_with=connection) for name in TABLE_NAMES}
+    names = TABLE_NAMES + (
+        ("parent_purchase_orders", "parent_purchase_order_lines") if include_parents else ()
+    )
+    if include_relations:
+        names += ("customs_reconciliation_results",)
+    return {name: Table(name, metadata, autoload_with=connection) for name in names}

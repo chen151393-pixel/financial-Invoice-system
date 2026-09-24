@@ -101,3 +101,80 @@ class PlReader:
         if not ids and not discover_customs:
             bundle["warnings"].append("该PL未找到子采购订单；本功能沿采购单引用联查，未独立扫描其他报关单")
         return bundle
+
+    def collect_records(self, kind, rows):
+        """按同步页的服务器读取结果补齐明细；不从浏览器接收待保存正文。"""
+        config = self.config
+        spec = config.purchase if kind == "sub-purchase-orders" else config.customs
+        bundle = {"purchases": [], "customs": [], "warnings": [], "pl_names": {}}
+        customs_ids = set()
+        for row in rows:
+            record_id, head = row["id"], row["record"]
+            self.ns.validate(spec.type, record_id)
+            if str(head.get("id")) != record_id:
+                raise ApiError(502, "同步单据身份不一致，未保存")
+            if (spec.type, record_id) not in self.cache and len(self.cache) >= 300:
+                raise ApiError(422, "本次同步超过 300 条详情读取上限，未保存不完整结果")
+            self.cache[spec.type, record_id] = head
+            if kind == "sub-purchase-orders":
+                lines = self.lines(config.purchase_line, record_id)
+                bundle["purchases"].append((record_id, head, lines))
+                linked = reference(head.get(config.purchase.customs))
+                if linked:
+                    customs_ids.add(linked)
+            else:
+                customs_ids.add(record_id)
+        for record_id in sorted(customs_ids):
+            bundle["customs"].append(
+                (record_id, self.read(config.customs, record_id), self.lines(config.customs_line, record_id))
+            )
+        self.complete_customs_purchases(bundle)
+        self.resolve_pl_names(bundle)
+        return bundle
+
+    def complete_customs_purchases(self, bundle):
+        """按 NS 显式报关引用反查全量子单，避免只同步报关头或漏掉同单的其他子采购。"""
+        config = self.config
+        purchases = {identity: (identity, head, lines) for identity, head, lines in bundle["purchases"]}
+        membership = {}
+        for identity, _, _ in bundle["customs"]:
+            ids = self.ns.filtered_ids(
+                config.purchase.type, config.purchase.customs, identity, reference=True
+            )
+            if len(set(ids)) != len(ids):
+                raise ApiError(502, "关联子采购单身份重复，未保存")
+            previous = {
+                key
+                for key, (_, head, _) in purchases.items()
+                if reference(head.get(config.purchase.customs)) == identity
+            }
+            if not previous.issubset(ids):
+                raise ApiError(502, "读取期间子采购报关引用发生变化，未保存本页")
+            for purchase_id in ids:
+                head = self.read(config.purchase, purchase_id)
+                if reference(head.get(config.purchase.customs)) != identity:
+                    raise ApiError(502, "关联子采购单的报关引用与查询范围不一致")
+                if purchase_id not in purchases:
+                    purchases[purchase_id] = (
+                        purchase_id,
+                        head,
+                        self.lines(config.purchase_line, purchase_id),
+                    )
+            membership[identity] = ids
+        bundle["purchases"] = list(purchases.values())
+        bundle["customs_purchase_membership"] = membership
+
+    def resolve_pl_names(self, bundle):
+        config = self.config
+        pl_ids = {reference(head.get(config.purchase.pl)) for _, head, _ in bundle["purchases"]}
+        pl_ids.update(
+            reference(line.get(config.customs_line.pl))
+            for _, _, lines in bundle["customs"]
+            for _, line in lines
+        )
+        for pl_id in sorted(pl_ids - {""}):
+            record = self.read(config.pl, pl_id)
+            number = text(record.get(config.pl.number))
+            if not number:
+                raise ApiError(502, "关联PL单号未能完整解析，未保存")
+            bundle["pl_names"][pl_id] = number

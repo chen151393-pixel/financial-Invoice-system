@@ -1,4 +1,5 @@
 import sys
+from copy import deepcopy
 
 import uvicorn
 
@@ -13,6 +14,12 @@ def main():
         raise ValueError("后端直接对外监听时必须配置 HTTPS 证书")
     if not 1 <= settings.port <= 65535:
         raise ValueError("PORT 必须在 1–65535 之间")
+    log_config = deepcopy(uvicorn.config.LOGGING_CONFIG)
+    log_config["loggers"]["ns_api"] = {
+        "handlers": ["default"],
+        "level": "INFO",
+        "propagate": False,
+    }
     uvicorn.run(
         "backend.app:create_app",
         factory=True,
@@ -24,6 +31,8 @@ def main():
         ssl_certfile=settings.tls_cert or None,
         ssl_keyfile=settings.tls_key or None,
         proxy_headers=False,
+        log_config=log_config,
+        # 统一由中间件记录路由模板，避免原始 URL 中的查询条件进入日志。
         access_log=False,
     )
 
