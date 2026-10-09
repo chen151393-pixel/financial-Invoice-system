@@ -6,6 +6,7 @@ React + TypeScript + Vite 前端，Python + FastAPI + SQLAlchemy + Alembic 后�
 
 | 需要了解什么 | 入口 |
 | --- | --- |
+| 目标架构与开发规则（分步实施中） | [架构设计 v2](docs/architecture/README.md) |
 | 目录归属、启动入口、配置和依赖 | [项目目录与架构地图](docs/project-structure.md) |
 | 页面 → 接口 → Service → 数据表及未衔接部分 | [系统整体链路与实现关系](docs/system-chain.md) |
 | 配置、部署、数据库、方案和模块文档 | [文档索引](docs/README.md) |

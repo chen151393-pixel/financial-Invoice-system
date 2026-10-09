@@ -1,11 +1,13 @@
 # 文档索引
 
-先读[项目目录与架构地图](project-structure.md)了解文件放在哪里，再读[系统链路](system-chain.md)了解页面、服务、数据和业务缺口。本文只维护导航，模块规则不在此复制。
+目标架构与开发规则以[架构设计 v2](architecture/README.md)为准（分步实施中）；现状先读[项目目录与架构地图](project-structure.md)了解文件放在哪里，再读[系统链路](system-chain.md)了解页面、服务、数据和业务缺口。本文只维护导航，模块规则不在此复制。
 
 ## 当前实现与开发规范
 
 | 文档 | 用途 |
 | --- | --- |
+| [架构设计 v2](architecture/README.md) | 目标模块、数据库收口、删除清单、实施顺序 |
+| [后端规则](architecture/backend-rules.md)、[前端规则](architecture/frontend-rules.md) | 分层目录、模块解耦、公共能力复用、文件大小 |
 | [项目 README](../README.md) | 当前能力、安装、启动与检查命令 |
 | [目录与架构地图](project-structure.md) | 实际目录、模块归属、双库边界、兼容入口保留原因 |
 | [文件忽略与清理清单](ignored-files.md) | 无需提交的产物、本地数据保留边界与源码保留依据 |
