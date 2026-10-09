@@ -30,13 +30,17 @@ python -m venv .venv
 npm.cmd install
 ```
 
-首次配置时，把根目录 `.env.example` 复制为 `.env.local`；如果已有 `.env.local`，补齐其中配置，不要覆盖凭证。后端读取 `.env`、`.env.local`、进程环境变量，后者优先级更高。
+首次配置时，把根目录 `.env.example` 复制为 `.env`；如果已有 `.env` 或 `.env.local`，补齐其中配置，不要覆盖凭证。后端读取 `.env`、`.env.local`、进程环境变量，后者优先级更高。Docker 同样依次读取 `.env` 和 `.env.local`，后者覆盖前者；兼容只保留其中一个文件，详见 [Docker 部署说明](docker-deploy.md)。
 
 ```dotenv
 APP_ORIGIN=http://localhost:3000
 HOST=127.0.0.1
 PORT=3000
-DATABASE_URL=sqlite:///./data/ns-python.sqlite
+BUSINESS_MYSQL_HOST=127.0.0.1
+BUSINESS_MYSQL_PORT=3306
+BUSINESS_MYSQL_DATABASE=financial_invoice_business
+BUSINESS_MYSQL_USER=你的数据库用户名
+BUSINESS_MYSQL_PASSWORD='你的数据库密码'
 ADMIN_USERNAME=admin
 LOCAL_BROWSER_ACCESS=true
 # 原密码登录API需要此项；本机自动进入不使用该密码。
@@ -85,28 +89,37 @@ Uvicorn 的完整访问日志仍关闭，避免将查询参数写入日志。上
 
 ## 接入 MySQL 8.0
 
-由数据库管理员预先建立专用数据库和用户；此项目不会创建或修改数据库账号。数据库使用 utf8mb4，表迁移明确指定 InnoDB、utf8mb4 和 utf8mb4_bin，事务写入与任务锁使用同一个数据库。
-
-修改服务器 `.env.local`：
+正式后端统一读取 `BUSINESS_DATABASE_URL` 或 `BUSINESS_MYSQL_*`；两种方式不能混用。审核、开票任务、供应商群、采购报关、发票、匹配以及保留的回写和审计表共用一个数据库及连接池。不配置业务库时正式启动明确失败，不回退到 SQLite。
 
 ```dotenv
-DATABASE_URL=mysql+pymysql://invoice_user:URL_ENCODED_PASSWORD@127.0.0.1:3306/ns_invoice?charset=utf8mb4
+BUSINESS_MYSQL_HOST=127.0.0.1
+BUSINESS_MYSQL_PORT=3306
+BUSINESS_MYSQL_DATABASE=financial_invoice_business
+BUSINESS_MYSQL_USER=你的数据库用户名
+BUSINESS_MYSQL_PASSWORD='你的数据库密码'
 ```
 
-把账户、密码、地址及库名替换为真实值。密码中的 `@`、`#`、`%` 等字符需要 URL 编码。例如密码中的 `@` 写为 `%40`。不要把连接串放在前端、公开文档或 Git 中。跨主机数据库连接按公司要求配置网络权限及 TLS。
+分项密码使用原文；若使用完整 URL，删除分项配置并对密码进行 URL 编码。旧 `DATABASE_URL` 不覆盖业务连接，仅支持显式历史迁移与隔离测试。账户、网络和 TLS 由部署环境管理。
 
-执行 `npm.cmd run db:upgrade` 后再启动后端。迁移账号需要建表和索引权限；运行时账号需要业务表读写权限及读取 alembic_version 权限。本次表结构：
+已有库核对基础表与发票扩展后运行 `npm.cmd run db:upgrade`。该命令在同一库协调 `backend/business_migrations` 与 `backend/migrations`，保留 `business_alembic_version` 和 `alembic_version` 两个版本表；`db:business:upgrade` 是兼容入口。启动只核对版本，不执行迁移、同步、NS 写入或状态恢复。迁移账号需要建表及索引权限，运行账号需要业务读写及两个版本表读取权限。
 
-| 表 | 用途 |
-| --- | --- |
-| ns_previews | 绑定账户及操作者的不可变预览、原记录快照、执行状态和结果 |
-| ns_target_locks | 按 NS 账户和目标记录唯一约束，实现持久执行锁 |
-| ns_audit | 预览、取得执行权、成功、结果未知（`unknown`）与离线恢复记录 |
-| alembic_version | 已应用的表结构版本 |
+目标库尚无应用版本表时，部署工具按当前实体定义补齐应用表；仅允许接管结构一致的既有 `finance_supplier_groups`。先比较既有结构，再创建缺失表，核对最终字段、主键、索引、唯一约束、外键及 InnoDB 引擎后才登记应用版本。已有应用版本表则正常执行历史增量迁移。发现其他未登记历史表或结构差异时停止，不能盲目 stamp 或删表重试。MySQL DDL 不能整批回滚，中途失败须检查实际结构后处理。
 
-锁实现使用标准唯一约束和事务，不依赖 SQLite 的部分索引。大 JSON 快照在 MySQL 使用 LONGTEXT，时间戳使用 BIGINT。后续增加金额业务列应明确小数位，采用 Decimal/DECIMAL；当前接口不计算金额，仅传递和比较字段。
+共用连接池不自动合并所有事务。保留现有审核、审计、任务同事务及匹配、占用同事务；跨用例事务仍由 Service 显式传递同一个 Connection。
 
-**修改 DATABASE_URL 只切换数据库，不会复制已有数据。** 本地 SQLite 的任务记录和旧 Node `data/ns.sqlite` 都不会自动导入 MySQL。正式切换前要停止写入、备份、核对执行中及结果未知（`unknown`）的任务，再设计数据导入，不能把新空库当成已有任务已完成。原 Node 的 DATABASE_PATH 已停用；仅保留旧变量时会明确提示设置 DATABASE_URL。
+## 历史应用库合入业务库
+
+切换连接不会自动复制历史记录。先停止全部 API 和任务进程，备份旧 SQLite 及目标 MySQL，核对源库应用版本与当前代码一致，再执行：
+
+```powershell
+npm.cmd run db:upgrade
+.\.venv\Scripts\python.exe -m backend.manage import-application --services-stopped --source-database-url "sqlite:///./data/ns-python.sqlite"
+npm.cmd start
+```
+
+复制按外键依赖顺序在目标库一个事务中进行，保留原主键、身份/账套、审核快照、任务、旧 PDF、合同归档路径、通知历史、审计及回写状态和锁。同主键同内容可重跑；同主键不同内容整笔回滚。提交前逐字段核对全部源记录；不覆盖目标额外记录，不删除源文件，不调用 NS 或企微，也不把 executing/unknown 改成普通失败。
+
+`--services-stopped` 是维护操作声明，不会自动终止进程。切换前必须实际停止写入；恢复旧服务前需处理切换后新增数据，不能只改回旧连接。原 Node 数据库不属于本工具支持的源结构。
 
 ## 单域名 HTTPS
 

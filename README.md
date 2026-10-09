@@ -23,7 +23,7 @@ React + TypeScript + Vite 前端，Python + FastAPI + SQLAlchemy + Alembic 后�
 | `/sync/ns` | NS 分页读取；子采购和报关可补齐来源并保存 | 没有持久定时同步队列；依赖来源接口及字段配置 |
 | `/pl-reconciliation`（默认首页） | 通过 NS 共用脚本实时查询采购报关依据 | 只读对照，页面查询不自动入库或审核 |
 | `/finance-reconciliation` | 本地来源核对、整单人工审核、不可变快照 | 审核通过不等于获得完整可分配开票额度 |
-| `/invoice-followup` | 审核后生成任务、合同共享盘归档、通知草稿和人工发送登记 | 企微自动发送、任务收票与收齐判断未接入 |
+| `/invoice-followup` | 审核后生成任务、合同共享盘归档、供应商群配置、通知草稿和人工发送登记 | 企微自动发送、任务收票与收齐判断未接入 |
 | `/sync/lemon`、`/invoices` | Excel 预览、确认导入、发票查询 | 仅导入“采购固定资产”；柠檬云 API 未接入 |
 | `/matching?invoiceId=本地主键` | 发票与子采购的整票关联或数量分配 | 尚未绑定审核获批范围；确认不写 NS |
 | `/api/ns/preview`、`/execute`、`/jobs` | 独立的通用回写 API，保留预览、持久锁与未知结果保护 | 尚未由匹配生成业务回写方案；旧正式页面已移除 |
@@ -59,7 +59,7 @@ python -m venv .venv
 
 首次配置时，参照 [.env.example](.env.example) 配置 `.env`；已有配置时补齐缺项即可。在 `.env` 设置 `LOCAL_BROWSER_ACCESS=true`，填写 NS 账户及 M2M 配置、允许访问的记录类型和写入字段。私钥只提供服务器路径，实际写入先保持 `NETSUITE_WRITE_ENABLED=false`。
 
-应用库由 `DATABASE_URL` 指定，本地默认使用 `data/ns-python.sqlite`。业务库另由 `BUSINESS_DATABASE_URL` / `BUSINESS_MYSQL_*` 配置；发票导入、匹配及本地来源查询依赖业务库。MySQL 8.0 连接格式、凭证说明及配置示例见 [Python 后端与 MySQL 配置](docs/python-backend.md)。
+正式运行统一读取 `BUSINESS_DATABASE_URL` / `BUSINESS_MYSQL_*`，审核、开票跟进、供应商群、采购报关、发票与匹配共用一个 MySQL 连接池。旧 `DATABASE_URL` 不覆盖业务配置；SQLite 仅用于隔离测试和历史数据迁移。MySQL 8.0 连接格式、凭证说明及配置示例见 [Python 后端与 MySQL 配置](docs/python-backend.md)。
 
 ```powershell
 npm.cmd run build
@@ -69,7 +69,7 @@ npm.cmd start
 
 按配置的 `PORT` / `APP_ORIGIN` 访问后端托管页面，首页进入采购报关联查；未改默认配置时可打开[本地系统](http://localhost:3000)。启用本机访问后，提交查询时自动建立本机会话。按 `Ctrl+C` 停止服务。Linux/macOS 使用 `npm` 和 `.venv/bin/python`，详细步骤见后端文档。
 
-业务库不是上述应用库迁移的一部分。已有业务库按[业务库说明](docs/mysql/README.md)核对基础表与发票扩展，再执行 `npm.cmd run db:business:upgrade`；该命令不能代替空库初始化，也不要对已有库重跑历史建表 SQL。
+已有业务库按[业务库说明](docs/mysql/README.md)核对基础表与发票扩展，`npm.cmd run db:upgrade` 在同一库升级两条历史迁移链；`db:business:upgrade` 是兼容入口。两者都不能代替空库初始化，不要对已有库重跑历史建表 SQL。旧 SQLite 记录须按[历史数据迁移](docs/python-backend.md#历史应用库合入业务库)在服务停止后复制，切换连接不会自动搬数据。
 
 ## 开发启动
 

@@ -4,7 +4,7 @@
 
 截至 2026-09-24，基础来源为[八张业务表](eight-table-relations.md)，另有[报关关联结果](customs-reconciliation-results.md)、发票数量分配及整票关联表。业务迁移代码 head 为 `0007_invoice_purchase_links`：`0004` 增加数量分配，`0005` 将报关依据移入独立表，`0006` 增加审核匹配预留字段，`0007` 增加整票关系。预留审核字段不表示匹配已经绑定财务审核，当前边界见[匹配模块](../../backend/modules/matching/README.md)。
 
-业务迁移由 `backend/business_alembic.ini` 和 `backend/business_migrations/` 管理，使用 `npm.cmd run db:business:upgrade`。它依赖已有基础表与所需发票扩展，不是空库初始化入口；已有库不要重跑下方历史六表脚本。应用库审核、开票任务与回写使用另一套迁移和 `npm.cmd run db:upgrade`，见[双库边界](../project-structure.md)。本次目录整理只核对代码版本，没有访问或升级实际数据库。
+正式运行统一读取 `BUSINESS_DATABASE_URL` / `BUSINESS_MYSQL_*`，应用表和来源/匹配表共用业务库。`npm.cmd run db:upgrade` 协调两条历史迁移链，保留各自版本表，`db:business:upgrade` 是兼容入口。迁移仍依赖已有基础表与所需发票扩展，不是空库初始化入口；已有库不要重跑下方历史六表脚本。见[数据库边界](../project-structure.md)及[历史应用记录迁移](../python-backend.md#历史应用库合入业务库)。
 
 历史正式来源导入、补拉和验收记录见[历史实施记录](../history/implementation-notes.md)。NS 按页拉取并保存已接入；持久定时同步未实现，具体来源接口要求见[同步模块](../../backend/modules/sync/README.md)。
 
@@ -85,7 +85,7 @@ SHOW TABLES FROM financial_invoice_business;
 
 本脚本只用于新库一次建表。若此前已执行九表版，不直接重跑此脚本，本次未提供删表或迁移 SQL；需要修改真实库时再按实际数据处理。没有 DROP、TRUNCATE、授权或关闭外键检查。DDL 中断不会像普通事务一样整体回滚，不使用 `--force` 忽略错误。
 
-执行脚本不会自动保存单据。独立业务库连接、采购报关保存及本地查询已接入，使用方式见 [PL保存说明](../pl-storage.md)。外部发票适配仍待实现；不替换现有 `DATABASE_URL`。
+历史初始化脚本不会自动保存单据。采购报关保存及本地查询已接入，使用方式见[PL保存说明](../pl-storage.md)。当前运行统一读取业务连接；本段历史 SQL 不负责应用表及旧 SQLite 数据迁移。
 
 ## 接入本地 MySQL
 
@@ -99,7 +99,7 @@ BUSINESS_MYSQL_USER=你的MySQL用户名
 BUSINESS_MYSQL_PASSWORD='你的MySQL密码'
 ```
 
-分项配置中的密码使用原文，不需要 URL 编码；特殊字符按 dotenv 引号规则填写。USER 为空时业务库不启用。也支持单独设置 `BUSINESS_DATABASE_URL=mysql+pymysql://...`，使用完整 URL 时密码需 URL 编码，且不能同时填写分项 `BUSINESS_MYSQL_*`。
+分项配置中的密码使用原文，不需要 URL 编码；特殊字符按 dotenv 引号规则填写。USER 为空且未配置完整业务 URL 时，正式运行拒绝启动。也支持单独设置 `BUSINESS_DATABASE_URL=mysql+pymysql://...`，使用完整 URL 时密码需 URL 编码，且不能同时填写分项 `BUSINESS_MYSQL_*`。
 
 执行只读检查：
 
@@ -120,7 +120,7 @@ npm.cmd run db:business:check
 | message | 中文检查结果，不含连接串或密码 |
 | missingTables | 缺失的预期业务表名 |
 
-连接池启用失效检测与回收，每个新连接设置 UTC 和 utf8mb4。业务库暂不可用时检查接口明确报告失败，原有应用库、NS实时读取及回写链路不因业务库未配置而被切换。启动不自动建表，也不执行单据同步。
+连接池启用失效检测与回收，每个新连接设置 UTC 和 utf8mb4。业务库暂不可用时明确报错，不回退到旧 SQLite；正式启动要求两条迁移版本有效。启动不自动建表，也不执行单据同步。
 
 ## 验证范围
 

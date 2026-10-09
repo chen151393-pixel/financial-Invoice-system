@@ -111,7 +111,17 @@ class NotificationEvent(StrictModel):
     attachments: list[str] = []
 
 
+class NotificationGroup(StrictModel):
+    groupName: str
+    chatId: str
+    employee: str
+    userid: str
+    revision: int
+
+
 class NotificationDetail(StrictModel):
+    supplierGroup: NotificationGroup | None = None
+    groupConfigReason: str = ""
     revision: int
     groupName: str
     employee: str

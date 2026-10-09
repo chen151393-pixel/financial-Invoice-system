@@ -253,3 +253,9 @@
     gap: 10px;
   }
 }
+
+.it-workspace-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-small);
+}

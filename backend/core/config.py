@@ -9,7 +9,7 @@ from dotenv import dotenv_values
 from sqlalchemy.engine import make_url
 from sqlalchemy.exc import ArgumentError
 
-from .business_database import business_database_url, ensure_separate_database
+from .business_database import business_database_url
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -40,8 +40,11 @@ class Settings:
     admin_password: str = field(default="", repr=False)
     local_browser_access: bool = False
     service_key: str = field(default="", repr=False)
-    database_url: str = field(default="sqlite:///./data/ns-python.sqlite", repr=False)
+    database_url: str = field(default="", repr=False)
     business_database_url: str = field(default="", repr=False)
+    wecom_corp_id: str = field(default="", repr=False)
+    wecom_secret: str = field(default="", repr=False)
+    wecom_connection_file: Path | None = field(default=None, repr=False)
     host: str = "127.0.0.1"
     port: int = 3000
     tls_cert: str = ""
@@ -131,29 +134,28 @@ def load_settings(source=None):
         for key, values in fields.items()
     ):
         raise ValueError("NS 写入字段配置无效")
-    db_url = get("DATABASE_URL", "sqlite:///./data/ns-python.sqlite")
-    if not get("DATABASE_URL") and get("DATABASE_PATH"):
-        raise ValueError("DATABASE_PATH 属于旧 Node 后端，请设置新的 DATABASE_URL；旧数据不会自动迁移")
-    try:
-        parsed = make_url(db_url)
-        if parsed.drivername not in ("mysql+pymysql", "sqlite") or not parsed.database:
-            raise ValueError()
-        if parsed.drivername == "mysql+pymysql" and (not parsed.host or not parsed.username):
-            raise ValueError()
-        if parsed.drivername == "sqlite":
-            db_file = (ROOT / parsed.database).resolve()
-            if any(db_file.is_relative_to(ROOT / name) for name in ("public", "dist", "web", "app")):
-                raise ValueError()
-            parsed = parsed.set(database=str(db_file))
-        else:
-            parsed = parsed.update_query_dict({"charset": "utf8mb4"})
-        db_url = parsed.render_as_string(hide_password=False)
-    except (ValueError, TypeError, ArgumentError):
-        raise ValueError(
-            "DATABASE_URL 必须指向 MySQL（mysql+pymysql）或本地 SQLite，不能放在公开目录"
-        ) from None
     business_url = business_database_url(env)
-    ensure_separate_database(db_url, business_url)
+    # 正式运行只读业务库配置；旧连接仅供显式隔离测试及历史库迁移。
+    db_url = business_url or get("DATABASE_URL")
+    if not db_url and get("DATABASE_PATH"):
+        raise ValueError("DATABASE_PATH 属于旧 Node 后端，请设置业务MySQL；旧数据不会自动迁移")
+    if db_url:
+        try:
+            parsed = make_url(db_url)
+            if parsed.drivername not in ("mysql+pymysql", "sqlite") or not parsed.database:
+                raise ValueError()
+            if parsed.drivername == "mysql+pymysql" and (not parsed.host or not parsed.username):
+                raise ValueError()
+            if parsed.drivername == "sqlite":
+                db_file = (ROOT / parsed.database).resolve()
+                if any(db_file.is_relative_to(ROOT / name) for name in ("public", "dist", "web", "app")):
+                    raise ValueError()
+                parsed = parsed.set(database=str(db_file))
+            else:
+                parsed = parsed.update_query_dict({"charset": "utf8mb4"})
+            db_url = parsed.render_as_string(hide_password=False)
+        except (ValueError, TypeError, ArgumentError):
+            raise ValueError("DATABASE_URL 仅供历史迁移及隔离测试，须为MySQL或非公开目录的SQLite") from None
     types = [v.strip() for v in get("NETSUITE_RECORD_TYPES").split(",") if v.strip()]
     if any(not re.fullmatch(r"[A-Za-z][A-Za-z0-9_]{0,99}", v) for v in types):
         raise ValueError("NETSUITE_RECORD_TYPES 格式错误")
@@ -220,6 +222,11 @@ def load_settings(source=None):
         service_key=get("SERVICE_API_KEY"),
         database_url=db_url,
         business_database_url=business_url,
+        wecom_corp_id=get("WECOM_CORP_ID"),
+        wecom_secret=get("WECOM_SECRET"),
+        wecom_connection_file=(ROOT / get("WECOM_CONNECTION_FILE")).resolve()
+        if get("WECOM_CONNECTION_FILE")
+        else None,
         host=get("HOST", "127.0.0.1"),
         port=int(get("PORT", "3000")),
         tls_cert=get("TLS_CERT_PATH"),

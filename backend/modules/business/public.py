@@ -18,8 +18,10 @@ from .relation_mapper import summarize_relations
 from .relation_policy import incomplete_reason as incomplete_relation_reason
 from .relation_policy import source_digest as relation_digest
 from .review_source_mapper import review_sources
+from .supplier_service import SupplierDirectory as SupplierDirectory
 
 __all__ = [
+    "SupplierDirectory",
     "SubpoContractSource",
     "CustomsReconciliationSource",
     "PurchaseMatchingSource",

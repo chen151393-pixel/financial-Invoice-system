@@ -106,9 +106,10 @@ def detail(connection, owner, task_id, *, lock=False):
 def document_rows(connection, task_id):
     return list(
         connection.execute(
-            select(*[column for column in documents.c if column.name != "content"]).where(
-                documents.c.task_id == task_id
-            )
+            select(
+                *[column for column in documents.c if column.name != "content"],
+                documents.c.content.is_not(None).label("has_cached_content"),
+            ).where(documents.c.task_id == task_id)
         ).mappings()
     )
 

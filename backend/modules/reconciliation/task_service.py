@@ -12,7 +12,14 @@ from sqlalchemy.exc import SQLAlchemyError
 from backend.core.errors import ApiError
 from backend.integrations.contract_archive import ContractArchive
 
-from . import dao, notification_dao, notification_service, task_dao, task_mapper, task_policy
+from . import (
+    dao,
+    notification_dao,
+    notification_service,
+    task_dao,
+    task_mapper,
+    task_policy,
+)
 from .task_vo import TaskCapability, TaskDetail, TaskGroup, TaskList
 
 
@@ -44,10 +51,11 @@ def generate_tasks(connection, preview, payload, owner, now):
 
 
 class InvoiceTaskService:
-    def __init__(self, engine, local_source, contract_source=None, archive=None):
+    def __init__(self, engine, local_source, contract_source=None, archive=None, *, supplier_groups=None):
         self.engine, self.local_source = engine, local_source
         self.contract_source = contract_source
         self.archive = archive or ContractArchive(None)
+        self.supplier_groups = supplier_groups
 
     def browse(self, query, owner):
         try:
@@ -113,7 +121,7 @@ class InvoiceTaskService:
             block = (
                 (source_message if source_status != "current" else "")
                 or ("合同共享盘路径尚未配置" if self.archive.root is None else "")
-                or (reason if not doc else "")
+                or (reason if not (doc and doc["has_cached_content"]) else "")
                 or ("审核快照缺少子采购单编号" if not order["number"] else "")
             )
             archived = bool(doc and doc["archived_at"])
@@ -137,8 +145,7 @@ class InvoiceTaskService:
                         allowed=not block and not archived,
                         reason="已保存到共享盘"
                         if archived
-                        else block
-                        or ("原件已暂存，待保存到共享盘" if doc else "获取子采购合同并保存到共享盘"),
+                        else block or ("合同待保存到共享盘" if doc else "获取子采购合同并保存到共享盘"),
                     ),
                 }
             )
@@ -146,7 +153,32 @@ class InvoiceTaskService:
         historical = row["status"] == "superseded"
         with self.engine.connect() as connection:
             history = notification_dao.history(connection, task_id)
+        binding = None
+        group_error = ""
+        if source_status == "current":
+            if self.supplier_groups is None:
+                group_error = "供应商群配置服务未接入，暂不能带出默认群。"
+            else:
+                try:
+                    binding = self.supplier_groups.for_task(owner, row["account"], row["supplier_key"])
+                except ApiError as error:
+                    if error.status != 503:
+                        raise
+                    # 群配置读取失败不阻断合同及原通知查看，也不冒充未配置。
+                    group_error = error.message
         notification = notification_service.view(row, history, source_status, source_message, ready)
+        if binding:
+            notification.supplierGroup = binding
+            notification.groupConfigReason = "已带出保存的供应商默认群；发送前仍需核对群及群主。"
+            if not history:
+                notification.groupName = binding.groupName
+                notification.employee = binding.employee
+        else:
+            notification.groupConfigReason = (
+                "当前来源不可操作，保留原通知内容。"
+                if source_status != "current"
+                else group_error or "尚未配置有效的供应商默认群，请先维护供应商群配置。"
+            )
         recorded = bool(notification.history and notification.history[0].sentAt)
         return TaskDetail(
             task=task_mapper.summary(row),
@@ -219,8 +251,11 @@ class InvoiceTaskService:
             raise ApiError(503, "合同共享盘路径尚未配置")
         with self.engine.connect() as connection:
             cached = task_dao.document_file(connection, task_id, order_id)
-        if cached:
-            return self._archive_document(row, order, cached, owner)
+        if cached and cached["archived_at"]:
+            return self.detail(task_id, owner)
+        if cached and cached["content"] is not None:
+            # 兼容旧版待归档的缓存；保留历史原件，新请求不再写 PDF 到数据库。
+            return self._archive_document(row, order, cached, cached["content"], owner)
         if self.contract_source is None:
             raise ApiError(503, "子采购合同下载接口尚未配置")
         reason = self.contract_source.unavailable_reason()
@@ -245,6 +280,7 @@ class InvoiceTaskService:
                             connection,
                             {
                                 **document,
+                                "content": None,
                                 "task_id": task_id,
                                 "order_id": order_id,
                                 "sha256": hashlib.sha256(document["content"]).hexdigest(),
@@ -255,15 +291,21 @@ class InvoiceTaskService:
             raise ApiError(503, "合同保存失败，流程未推进；请检查应用数据库") from None
         with self.engine.connect() as connection:
             cached = task_dao.document_file(connection, task_id, order_id)
-        return self._archive_document(row, order, cached, owner)
+        if not cached["archived_at"] and (
+            cached["environment"] != document["environment"]
+            or cached["ns_id"] != document["ns_id"]
+            or cached["sha256"] != hashlib.sha256(document["content"]).hexdigest()
+        ):
+            raise ApiError(409, "合同来源或内容与首次获取记录不同，未覆盖共享盘；请人工核对")
+        return self._archive_document(row, order, cached, document["content"], owner)
 
-    def _archive_document(self, row, order, cached, owner):
+    def _archive_document(self, row, order, cached, content, owner):
         if cached["archived_at"]:
             return self.detail(row["id"], owner)
-        # 共享盘 I/O 不占用数据库锁；失败时保留暂存原件，下一次不重复调用 NS。
-        path, filename = self.archive.save(
-            order["number"], row["supplier"], cached["downloaded_at"], cached["content"]
-        )
+        # 共享盘 I/O 不占用数据库锁；新 PDF 仅在内存中，重试沿用首次日期和校验值。
+        if hashlib.sha256(content).hexdigest() != cached["sha256"]:
+            raise ApiError(409, "合同内容与获取记录不同，未写入共享盘；请人工核对")
+        path, filename = self.archive.save(order["number"], row["supplier"], cached["downloaded_at"], content)
         try:
             with self.local_source.locked_review(owner, row["account"], row["declaration_id"]) as data:
                 sources = list(data["review_sources"].values())
