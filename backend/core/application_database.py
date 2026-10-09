@@ -13,9 +13,19 @@ def schema_changes(connection):
     def include_object(obj, name, kind, reflected, compare_to):
         return not (kind == "table" and reflected and name not in metadata.tables)
 
-    return compare_metadata(
+    changes = compare_metadata(
         MigrationContext.configure(connection, opts={"include_object": include_object}), metadata
     )
+    # 已有中文注释不影响结构兼容；保留数据库注释，不为接管而清除它们。
+    structural = []
+    for change in changes:
+        if isinstance(change, list):
+            items = [item for item in change if item[0] != "modify_comment"]
+            if items:
+                structural.append(items)
+        elif change[0] not in {"add_table_comment", "remove_table_comment"}:
+            structural.append(change)
+    return structural
 
 
 def verify_application_keys(connection, names):

@@ -194,6 +194,14 @@ def test_mysql_unified_upgrade_keeps_business_tables_and_existing_group(context,
         connection.execute(text("CREATE TABLE deployment_probe (id BIGINT PRIMARY KEY)"))
         connection.execute(text("INSERT INTO deployment_probe VALUES (7)"))
     bindings.create(engine)
+    with engine.begin() as connection:
+        connection.execute(text("ALTER TABLE finance_supplier_groups COMMENT='已有群表中文说明'"))
+        connection.execute(
+            text(
+                "ALTER TABLE finance_supplier_groups MODIFY owner "
+                "VARCHAR(200) COLLATE utf8mb4_bin NOT NULL COMMENT '已有身份说明'"
+            )
+        )
     upgrade_unified(engine.url.render_as_string(hide_password=False))
     upgrade_unified(engine.url.render_as_string(hide_password=False))
     test_copy_preserves_legacy_pdf_and_review_task_history(context, engine)
