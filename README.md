@@ -9,6 +9,7 @@ React + TypeScript + Vite 前端，Python + FastAPI + SQLAlchemy + Alembic 后�
 | 目录归属、启动入口、配置和依赖 | [项目目录与架构地图](docs/project-structure.md) |
 | 页面 → 接口 → Service → 数据表及未衔接部分 | [系统整体链路与实现关系](docs/system-chain.md) |
 | 配置、部署、数据库、方案和模块文档 | [文档索引](docs/README.md) |
+| Linux ECS Docker 部署 | [Docker 部署说明](docs/docker-deploy.md) |
 | 编码约束与分层规则 | [协作规范](AGENTS.md)、[架构方案](docs/architecture-plan.md) |
 | 界面与前端工程规范 | [设计基准](design.md)、[前端统一规范](docs/frontend-conventions.md) |
 | 历次功能、数据补拉和验收记录 | [历史实施记录](docs/history/implementation-notes.md) |

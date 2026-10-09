@@ -12,6 +12,7 @@
 | [系统整体链路与实现关系](system-chain.md) | 页面 → 接口 → Service → 表，当前缺口与衔接顺序 |
 | [后端目录说明](../backend/README.md) | Python 组织和兼容导入 |
 | [Python 后端配置](python-backend.md) | 环境变量、认证、HTTPS、数据库和任务恢复 |
+| [Docker 部署](docker-deploy.md) | Linux ECS 上的镜像构建、数据库迁移和 SSH 隧道访问 |
 | [AI 协作规范](../AGENTS.md) | 开发流程、分层边界、清理与验收要求 |
 | [设计基准](../design.md)、[前端统一规范](frontend-conventions.md) | 视觉交互与前端工程约定 |
 
