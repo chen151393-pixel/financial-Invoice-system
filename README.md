@@ -70,9 +70,9 @@ npm.cmd start
 
 业务库不是上述应用库迁移的一部分。已有业务库按[业务库说明](docs/mysql/README.md)核对基础表与发票扩展，再执行 `npm.cmd run db:business:upgrade`；该命令不能代替空库初始化，也不要对已有库重跑历史建表 SQL。
 
-## 开发与检查
+## 开发启动
 
-Windows 下 Python 自动重载已关闭：当前 Uvicorn 重载会发送控制台 Ctrl+C，可能使 npm/Vite 一起退出。修改后端代码后手动重启；前端样式和组件仍可热更新。联动启动中一端异常退出会报告服务名和退出码，另一端继续运行；主动 Ctrl+C 才同时停止两端。需要完全独立控制时按下文在两个终端分别启动。
+Windows 下 Python 自动重载已关闭：当前 Uvicorn 重载会发送控制台 Ctrl+C，可能使 npm/Vite 一起退出。修改后端代码后手动重启；前端样式和组件仍可热更新。联动启动中一端异常退出会报告服务名和退出码，另一端继续运行；主动 Ctrl+C 才同时停止两端。
 
 开发时运行 `npm.cmd run dev`，同时启动前端与 Python 后端。启动器和 Vite 统一读取根目录配置，优先级为进程环境变量 > `.env.local` > `.env` > 默认值。`PORT` 是后端端口（未配置时 3333），`WEB_PORT` 是前端端口（未配置时 5173）。例如在已有 `.env.local` 中设置：
 
@@ -80,23 +80,3 @@ Windows 下 Python 自动重载已关闭：当前 Uvicorn 重载会发送控制�
 PORT=5174
 WEB_PORT=5173
 ```
-
-浏览器访问 `http://localhost:5173`，后端监听 `127.0.0.1:5174`；按实际 `WEB_PORT` 访问前端。开发启动器自动设置对应的 `APP_ORIGIN`，Vite 自动设置 `/api` 代理，无需手动同步多个文件。仅向子进程注入开发地址，不修改配置文件，不向浏览器暴露根目录凭证；仍需配置 `LOCAL_BROWSER_ACCESS=true`。
-
-端口必须为 1–65535 的整数，前后端不能相同；已占用时提示停止原服务或修改端口，不自动结束已有进程。Vite 固定端口，不自动跳到其他端口。浏览器统一使用 `localhost`，修改配置后重启服务。按 `Ctrl+C` 停止本次启动的服务。也可在两个终端分别运行 `npm.cmd run dev:api` 和 `npm.cmd run dev:web`，两者读取同一套端口配置。`npm.cmd start` 为构建后运行，继续使用后端自己的 `PORT`、`HOST` 和 `APP_ORIGIN` 配置。
-
-| 命令 | 用途 |
-| --- | --- |
-| `npm.cmd test` | 构建前端并运行请求、核对表及 Python 测试，使用模拟 NS |
-| `npm.cmd run lint:api` | 检查 Python 代码 |
-| `npm.cmd run check` | 一次执行lint、类型、架构边界、格式、构建与测试 |
-| `npm.cmd run typecheck` | 独立TypeScript严格类型检查 |
-| `npm.cmd run check:architecture` | 检查模块依赖及前端请求/演示边界 |
-| `npm.cmd run format:web` / `format:api` | 统一格式化前端 / Python |
-| `npm.cmd run format:check` | 只检查格式，不修改文件 |
-| `npm.cmd run db:upgrade` | 应用库迁移 |
-| `npm.cmd run db:sql:mysql` | 输出 MySQL 建表脚本供审阅 |
-| `npm.cmd run db:business:check` | 只读检查业务库连接 |
-| `npm.cmd run db:business:upgrade` | 在已有业务基础表上执行增量迁移 |
-
-只改文档时检查链接、内容一致性和 diff。真实 MySQL 并发、NS 权限和外部共享盘需在相应隔离环境单独验证；本地构建或静态检查不能替代这些验收。

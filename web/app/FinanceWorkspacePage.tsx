@@ -19,9 +19,14 @@ export default function FinanceWorkspacePage() {
       mode="live"
       dataLabel="已入库 NS 单据"
       actions={
-        <a className="ui-button ui-button--secondary" href="/invoice-followup">
-          开票跟进
-        </a>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          <a className="ui-button ui-button--secondary" href="/finance-reconciliation/example">
+            查看闭环示例
+          </a>
+          <a className="ui-button ui-button--secondary" href="/invoice-followup">
+            开票跟进
+          </a>
+        </div>
       }
       notice="按 NS 报关单引用自动显示关联子采购明细，由财务核对后点击「审核通过」，保存整单审核记录。"
     >

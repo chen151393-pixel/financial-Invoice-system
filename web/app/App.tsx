@@ -4,11 +4,18 @@ import { lazy, Suspense } from "react";
 const DemoPage = lazy(() => import("./DemoPage"));
 const PlWorkspacePage = lazy(() => import("./PlWorkspacePage"));
 const FinanceWorkspacePage = lazy(() => import("./FinanceWorkspacePage"));
+const FinanceWorkbenchExamplePage = lazy(() => import("./FinanceWorkbenchExamplePage"));
 const SyncWorkspacePage = lazy(() => import("./SyncWorkspacePage"));
 const InvoiceWorkspacePage = lazy(() => import("./InvoiceWorkspacePage"));
 const MatchingWorkspacePage = lazy(() => import("./MatchingWorkspacePage"));
 const InvoiceTaskWorkspacePage = lazy(() => import("./InvoiceTaskWorkspacePage"));
 export default function App() {
+  if (location.pathname === "/finance-reconciliation/example")
+    return (
+      <Suspense fallback={<p role="status">正在加载财务闭环示例…</p>}>
+        <FinanceWorkbenchExamplePage />
+      </Suspense>
+    );
   if (location.pathname === "/invoice-followup" || location.pathname.startsWith("/invoice-followup/"))
     return (
       <Suspense fallback={<p role="status">正在加载开票跟进…</p>}>
