@@ -1,0 +1,15 @@
+services:
+  app:
+    build: .
+    network_mode: host
+    env_file: .env.local
+    volumes:
+      - ./data:/app/data
+      - ./secrets:/run/secrets:ro
+    init: true
+    restart: unless-stopped
+    stop_grace_period: 30s
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true

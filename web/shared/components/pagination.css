@@ -1,0 +1,117 @@
+.ui-pagination {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-control);
+  padding: 14px 18px;
+  width: 100%;
+  min-width: 0;
+  border-top: 1px solid var(--color-border);
+  background: var(--color-surface);
+  color: var(--color-muted);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+.ui-pagination__size,
+.ui-pagination__pages,
+.ui-pagination__slot,
+.ui-pagination__jump label {
+  display: flex;
+  align-items: center;
+  gap: var(--space-small);
+}
+.ui-pagination__size {
+  gap: var(--space-control);
+  white-space: nowrap;
+}
+.ui-pagination__pages {
+  flex-wrap: wrap;
+}
+.ui-pagination select,
+.ui-pagination input {
+  height: 32px;
+  border: 1px solid var(--color-input-border);
+  border-radius: var(--radius-control);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font: inherit;
+  caret-color: var(--color-primary);
+}
+.ui-pagination select {
+  width: 112px;
+  padding: 0 10px;
+}
+.ui-pagination .ui-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 32px;
+  min-width: 32px;
+  min-height: 32px;
+  padding: 4px 8px;
+  border: 0;
+  background: transparent;
+  color: var(--color-muted);
+  font: inherit;
+}
+.ui-pagination .ui-button:hover:not(:disabled),
+.ui-pagination .ui-button[aria-current="page"] {
+  background: var(--color-canvas);
+  color: var(--color-primary);
+}
+.ui-pagination .ui-button[aria-current="page"] {
+  font-weight: 700;
+}
+.ui-pagination svg {
+  width: 14px;
+  height: 14px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.ui-pagination__previous {
+  transform: rotate(180deg);
+}
+.ui-pagination__ellipsis {
+  padding-inline: 4px;
+}
+.ui-pagination__jump {
+  margin: 0;
+}
+.ui-pagination__jump label {
+  white-space: nowrap;
+}
+.ui-pagination input {
+  width: 56px;
+  padding: 0 4px;
+  text-align: center;
+  appearance: textfield;
+}
+.ui-pagination input::-webkit-inner-spin-button,
+.ui-pagination input::-webkit-outer-spin-button {
+  appearance: none;
+  margin: 0;
+}
+.ui-pagination :is(button, input, select):focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+.ui-pagination :is(input, select):disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+@media (max-width: 760px) {
+  .ui-pagination {
+    padding-inline: var(--space-control);
+  }
+  .ui-pagination__pages {
+    flex-basis: 100%;
+    order: 1;
+    gap: 4px;
+  }
+  .ui-pagination__slot {
+    gap: 4px;
+  }
+}
