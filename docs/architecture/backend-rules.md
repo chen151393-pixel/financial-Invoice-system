@@ -20,8 +20,7 @@ backend/
 ├── core/               与业务无关的公共能力（见第 3 节）
 ├── integrations/       外部系统适配：netsuite/、lemon/、wecom.py、contract_archive.py
 ├── modules/<module>/   业务模块（见第 4 节）
-├── migrations/         主迁移链（之后所有新迁移只写这里）
-├── business_migrations/ 业务迁移链，冻结在 0007，只读
+├── migrations/         唯一迁移链（从 0001_baseline 开始，版本表 schema_version）
 └── tests/<module>/     与模块同名的测试目录；core 的测试放 tests/core/
 ```
 
@@ -158,12 +157,17 @@ events.subscribe(ReviewApproved, task_services.task.on_review_approved)
 
 ## 8. 数据库
 
+表结构以[数据库设计](database.md)为准。
+
 - 一个数据库（业务 MySQL）、一个引擎。每张表只属于一个模块，归属见[架构设计](README.md)第 5.1 节；只有所属模块的 DAO 可以读写。
-- 现有表名不变；**新表以模块名开头**：`task_invoice_lines`、`sync_runs`。
+- **表名以模块名开头**：`source_`、`review_`、`task_`、`invoice_`、`matching_`、`sync_`。
+- 主键 `BIGINT UNSIGNED AUTO_INCREMENT`；时间 `DATETIME(6)` 存 UTC；每张表有 `created_at`、`updated_at`。
 - 金额、数量用 `DECIMAL`，Python 中用 `Decimal`，禁止 `float`；接口中以十进制字符串传递。
-- 新表在 `entity/` 中显式定义，不用 `autoload_with` 反射；现有反射的表在所属模块重组时改为显式定义。
-- 新迁移只写入 `backend/migrations`，文件名 `NNNN_<module>_<说明>.py`；一个迁移只修改一个模块的表；提供 `downgrade`，无法回退时在文件开头写明原因。历史迁移文件不修改、不删除。
-- 不删除表或数据来"整理"数据库；停用的表先停止写入，确认无用后再单独迁移删除。
+- 模块内建外键；**跨模块只保存 ID，不建外键**。
+- 表在模块 `entity/` 中用 `Table(...)` 显式定义，不用 `autoload_with` 反射；测试比对 `entity/` 定义与迁移结果一致。
+- 迁移只写入 `backend/migrations`，文件名 `NNNN_<module>_<说明>.py`；一个迁移只修改一个模块的表；提供 `downgrade`，无法回退时在文件开头写明原因。已执行过的迁移文件不修改。
+- 业务记录不物理删除：来源停用用 `is_active`，业务记录用状态（`superseded`、`rejected`、`cancelled`）。
+- 文件（合同等）不存数据库，只保存路径和 SHA256。
 
 ## 9. 定时任务
 

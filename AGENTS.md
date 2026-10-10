@@ -26,7 +26,7 @@
 - Controller 不写 SQL、不算金额、不直接调外部系统；DAO 只访问本模块的表，不决定业务状态、不自行 commit、不调用外部系统；Mapper 不查询数据库或执行校验流程。不再添加同职责的 Repository 或另一层 SQL Mapper。
 - Service 管理事务，参与同一用例的 DAO 复用同一 Connection。外部调用不放在数据库事务内：事务外读取，短事务内重新校验并写入。
 - 跨模块只能导入对方的 `public.py` 读取数据；修改其他模块的数据只能发布事件，由订阅方在同一事务中处理。订阅关系只在 `app.py` 中登记。不允许循环依赖。
-- 每张表只属于一个模块，归属见架构方案第 5.1 节；新迁移只写入 `backend/migrations`，`business_migrations` 冻结在 0007。
+- 表结构以 [数据库设计](docs/architecture/database.md) 为准：每张表只属于一个模块，表名以模块名开头；跨模块只存 ID 不建外键；迁移只写入 `backend/migrations`（从 `0001_baseline` 开始）。
 - 同步脚本、定时任务、网页接口复用同一套 Service，不能各写一套校验或审批规则。
 - 不为每个模块创建空层、空类或仅转发参数的 ServiceImpl；不为一次使用的代码搭建通用框架。
 
@@ -112,8 +112,8 @@
 ## 九、现有关键行为不可退化
 
 - NS 回写 `writeback` 按架构方案移至 `archive/writeback` 分支。它在主线存在期间及日后恢复时，保留 NS 写入开关、不可变预览、身份/账户隔离、持久目标锁、审计和结果未知时禁止盲目重试的行为。
-- 正常启动不自动清除 executing/unknown 状态及其锁；结果不明须核实，不能当作普通失败重发。移出代码后，`ns_previews`、`ns_target_locks`、`ns_audit` 的表和数据保留，删除前须人工确认没有 executing/unknown 记录。
-- 重构不删除历史数据库迁移、不删除表或数据、不重建业务数据库；结构整理不触发真实 NS 写入。
+- 正常启动不自动清除 executing/unknown 状态及其锁；结果不明须核实，不能当作普通失败重发。移出代码后，`ns_previews`、`ns_target_locks`、`ns_audit` 的表和数据保留在旧库中，删除前须人工确认没有 executing/unknown 记录。
+- 2026-10-10 决定按[数据库设计](docs/architecture/database.md)重建表结构：旧数据为测试数据不迁移，旧迁移链和旧表定义随模块切换从代码中删除（Git 保留历史）。**代码和迁移不删除数据库中的旧表和数据**，由管理员确认后手工处理。新结构上线后，已执行的迁移文件不修改、不删除。结构整理不触发真实 NS 写入。
 
 ## 十、审查重点
 

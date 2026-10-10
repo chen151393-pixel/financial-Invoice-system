@@ -6,8 +6,7 @@
 
 - [后端规则](backend-rules.md)
 - [前端规则](frontend-rules.md)
-- [数据库设计](database.md)：表结构、状态汇总规则、迁移计划
-- [目标数据库设计](database-target.md)：按整条链路重新设计的表结构，与上一份二选一（待确认）
+- [数据库设计](database.md)：按整条链路重新设计的 24 张表、比对规则、状态规则、建表与上线
 
 ## 0. 已确认的决定
 
@@ -24,6 +23,8 @@
 | 超开 | **允许确认并标记超开**：发票累计数量或金额超过子采购行应开值时可以人工通过，须填写说明，任务行带超开标记 |
 | 发票单位 | 与子采购单单位一致；不一致时降低置信度，交人工审核 |
 | 比对与完成 | 系统生成带置信度的比对建议，全部由人工审核；人工比对通过（可按差异结束）后该子采购行即结束，全部结束后任务自动完成，无另外的关闭步骤 |
+| 数据库 | 按整条链路重新设计（[数据库设计](database.md)），不在旧表上修改；旧数据为测试数据，不迁移；合同 PDF 只存共享盘路径 |
+| 供应商比对 | 子采购单上没有纳税人识别号，先按规范化名称比对 |
 
 ## 1. 业务主线
 
@@ -98,69 +99,41 @@
 - 事件契约（数据类）定义在发布方的 `public.py` 中；订阅关系只在 `app.py` 中登记。
 - 事件在发布方的事务中同步执行；任何订阅方失败，整个事务回滚。订阅方不能调用外部系统。
 
-## 4. 数据模型调整
+## 4. 数据模型
 
-完整字段、约束和迁移见[数据库设计](database.md)；本节只说明要点。
+完整表结构见[数据库设计](database.md)。要点：
 
-### 4.1 任务行（新增，task 模块）
+- **开票单元是子采购行**。审核通过时把子采购行的采购口径数量、单位、含税金额冻结为审核行，任务行从审核行复制应开值。
+- **只生成一次**：任务行对有效的子采购行加唯一约束；同一子采购行关联的全部报关单从审核行查询得出。
+- **分配挂在子采购行上**：比对记录先是系统建议（带置信度），人工通过后才计入收票；任务行的已收值由已通过的分配汇总，重新审核后进度自动延续。
+- **数据按组织共享**，只按 NS 账套区分；时间、主键、金额类型全库统一。
 
-```text
-task_invoice_lines
-  id, task_id, purchase_order_id, purchase_line_id,
-  item_name, unit, currency,
-  expected_quantity, expected_amount,     -- 来自子采购行：开票数量、含税金额；冻结，不调整
-  received_quantity, received_amount,     -- 只由「分配变化」事件更新
-  status: open / partial / received / superseded（另有超开、按差异结束两个标记）
-  唯一约束：同一条子采购行只能有一条有效任务行
-```
-
-- 应开数量和单位取子采购行的采购口径 `quantity`、`unit_name`（与发票单位一致），应开金额为子采购行含税金额 `amount`；金额容差每行 0.01 元。
-- **同一张子采购单出现在多张报关单中**时，只在第一次审核通过时生成任务行；之后的报关单审核通过时不重复生成，任务详情显示关联的全部报关单。
-
-### 4.2 比对与分配台账（matching 模块）
-
-- 一条记录先是系统生成的**比对建议**（带置信度和逐项比对结果），人工通过后才计入收票；不一致项只降低置信度，不阻止人工通过。
-
-- 现有两套台账：`invoice_purchase_allocations`（按数量分配，支持一单多票）和 `invoice_purchase_link_batches/pairs`（整票关联，一条子采购行只能关联一张发票，不支持一单多票）。
-- 统一为按数量分配：保留 `invoice_purchase_allocations`；"整票关联"改为一次性批量写入分配记录；现有 `link_pairs` 中的记录（截图中为 2 条）用迁移转为分配记录，旧表停止写入。
-- `invoice_purchase_allocations` 中预留但从未写入的 `review_*`、`customs_line_id` 列保留不动，不再使用。
-
-### 4.3 任务状态
-
-由任务行汇总得出，不提供手动修改：
+任务状态由任务行汇总得出，不提供手动修改：
 
 ```text
 documents_pending → notify_pending → awaiting_invoice → partially_received → completed
 任何未完成状态 → superseded（被新审核版本替代，只读保留）
 ```
 
-## 5. 数据库收口
+## 5. 数据库
 
-`develop` 已完成：运行时只连业务 MySQL；应用表进入同一个库；提供 `import_application_database` 复制旧应用库数据。
-
-剩余工作：
-
-| 问题 | 处理 |
-| --- | --- |
-| 两条迁移链、两张版本表（`alembic_version` 管应用表，`business_alembic_version` 管业务表） | 业务链冻结在 `0007_invoice_purchase_links`，之后**所有**新迁移只写入 `backend/migrations`；`manage upgrade` 先确认业务链在 0007，再升级主链。历史迁移文件不修改、不删除 |
-| `create_app(engine, business_engine)` 两个参数、`core/database.py` 与 `core/business_database.py`、`core/application_database.py` 三个文件 | 合并为一个 `engine` 参数和一个 `core/database.py`；`application_database.py` 的导入工具移入 `manage.py` 所在的运维命令 |
-| `DATABASE_URL` 与 `BUSINESS_*` 两套变量 | 只保留 `BUSINESS_DATABASE_URL` / `BUSINESS_MYSQL_*`（现有部署已在用），删除 `DATABASE_URL` |
-| writeback 的 `ns_previews`、`ns_target_locks`、`ns_audit` 表 | 代码移走后表和数据保留在库中，不删除；删除前必须人工确认没有 `executing/unknown` 记录 |
-| `unit_dictionary`（飞书 SKU 申报单位，163 行） | 当前代码不使用，归 `source` 模块，保留不动 |
+- 一个数据库（业务 MySQL）、一个引擎、一条迁移链。新迁移链从 `0001_baseline` 开始，一次创建[数据库设计](database.md)第 4 节的 24 张表，版本表 `schema_version`。
+- 旧数据为测试数据，**不迁移**；旧表不再被新代码读写，代码不删除库中的旧表，全部模块切换后由管理员确认删除，或直接使用新建的空库。
+- 旧迁移链（`backend/migrations`、`backend/business_migrations`）、旧表定义、`core/business_database.py`、`core/application_database.py`、`backend/database.py`、`DATABASE_URL` 变量，随第 3、4 步删除。连接配置保留 `BUSINESS_DATABASE_URL` / `BUSINESS_MYSQL_*`。
+- 回写的 `ns_previews`、`ns_target_locks`、`ns_audit` 不进入新结构；旧表留在旧库中，代码不再引用。
 
 ### 5.1 表归属
 
 | 模块 | 表 |
 | --- | --- |
-| source | `parent_purchase_orders`、`parent_purchase_order_lines`、`purchase_orders`、`purchase_order_lines`、`customs_declarations`、`customs_declaration_lines`、`customs_reconciliation_results`、`unit_dictionary` |
-| invoice | `invoices`、`invoice_lines` |
-| matching | `invoice_purchase_allocations`；停用 `invoice_purchase_link_batches`、`invoice_purchase_link_pairs` |
-| review | `finance_review_snapshots`、`finance_reviews`、`finance_review_audit` |
-| task | `finance_invoice_tasks`、`finance_task_documents`、`finance_task_notifications`、`finance_supplier_groups`；新增 `task_invoice_lines` |
-| sync | 新增 `sync_runs`、`sync_cursors` |
-| （已移出） | `ns_previews`、`ns_target_locks`、`ns_audit` |
+| source | `source_suppliers`、`source_companies`、`source_raw_records`、`source_parent_orders`、`source_parent_order_lines`、`source_purchase_orders`、`source_purchase_order_lines`、`source_customs_declarations`、`source_customs_lines`、`source_customs_purchase_links` |
+| review | `review_records`、`review_lines` |
+| task | `task_supplier_groups`、`task_tasks`、`task_lines`、`task_documents`、`task_notifications`、`task_events` |
+| invoice | `invoice_raw_records`、`invoice_headers`、`invoice_lines` |
+| matching | `matching_allocations` |
+| sync | `sync_runs`、`sync_cursors` |
 
-每张表只属于一个模块，只有该模块的 DAO 可以读写。
+每张表只属于一个模块，只有该模块的 DAO 可以读写；跨模块只保存对方 ID，不建外键。
 
 ## 6. 删除清单
 
@@ -177,7 +150,7 @@ documents_pending → notify_pending → awaiting_invoice → partially_received
 | `/api/ns/related-purchase` 及 `related_purchase_*.py` | 前端只定义未调用；同步保存若依赖其中规则，先移入 source |
 | `/api/business/pl-sync`、`/pl-storage/config`、`/pl-documents/query`、`/database-status` | 前端无调用；保存由 `/api/ns/sync/{kind}/pull-save` 承担；数据库状态改用已有命令 `db:business:check` |
 | `/api/reconciliation/query`（实时 NS 审核）及 `task_policy.split_scope` 中处理 NS 展示数据的分支 | 前端函数无调用方；审核只基于已同步数据。**移到第 4 步**：审批幂等、审计回滚、过期预览、MySQL 并发等核心测试走这条路径，须随 review 模块重组改为本地路径后再删 |
-| `backend/config.py`、`database.py`、`netsuite.py`、`auth.py` | 旧导入兼容入口，调用方改为新路径后删除。`database.py` 同时是 Alembic 元数据登记入口，**移到第 3 步**并入 `core` |
+| `backend/config.py`、`database.py`、`netsuite.py`、`auth.py` | 旧导入兼容入口，调用方改为新路径后删除。`database.py` 是旧迁移链的元数据登记入口，**随第 3 步新迁移链删除** |
 | `audit` 模块 | 审核审计并入 review；回写审计随 writeback 移走。**移到第 4 步**；第 1 步先把回写两张表的定义移入 `audit/entity.py`，保证历史数据导入仍原样复制 |
 | `StorageService.sync(pl)`、`query(pl, page)` | 接口已删，方法暂留：承载 `_save` 去重、关联、回滚规则的主要测试。**第 4 步**把测试改为经 `sync_page` 后删除 |
 
@@ -205,10 +178,9 @@ documents_pending → notify_pending → awaiting_invoice → partially_received
 | --- | --- | --- |
 | 1 清理 ✅ | 从当前 `develop` 建立 `archive/writeback` 分支；执行第 6 节删除清单（标注"移到第 3/4 步"的除外） | 全部现有测试、lint、类型检查、构建通过 |
 | 2 目录分离 | `web/` → `frontend/`（独立 `package.json`，引入 `react-router`）；`netsuite/` 独立；更新 Dockerfile、启动脚本 | 本地联动启动、Docker 构建、全部检查通过 |
-| 3 数据库收口 | 第 5 节剩余工作；首次建表路径改为标记到 `0009` 后正常升级（见[数据库设计](database.md)第 7 节） | 隔离 MySQL 上从空库初始化和从现有库升级都通过 |
-| 4 模块重组 | `business` → `source`；`reconciliation` 拆为 `review` + `task`；各模块改为分层目录；引入事件；前端同步改名；完成第 6 节标注"移到第 4 步"的删除 | 架构检查覆盖新依赖方向，全部测试通过 |
-| 5 打通链路 | 任务行、统一分配台账、匹配按任务行取候选、事件驱动任务状态 | 一张报关单从审核走到"已收齐"，无需手工改状态；MySQL 并发测试通过 |
-| 6 定时同步 | NS 报关和子采购定时拉取；柠檬云 open2 定时拉票 | 无人操作时新报关单、新发票自动进入工作台 |
+| 3 数据库基线 | 新迁移链 `0001_baseline` 建 24 张表（版本表 `schema_version`）；数据库连接收为一个引擎、一个 `core/database.py`；引入 `core/events.py` | 隔离 MySQL 空库执行基线迁移，表结构与[数据库设计](database.md)一致 |
+| 4 模块重建 | 按 source → review → task → invoice → matching 顺序，每个模块一个 PR：改为分层目录、改读写新表、实现该模块在链路中的职责（审核行、任务行、比对建议、事件）；完成第 6 节标注"移到第 4 步"的删除；删除该模块的旧表定义和旧迁移 | 每个 PR 全部测试通过；最后一个 PR 合入后，一张报关单从审核走到任务完成，无需手工改状态；MySQL 并发测试通过 |
+| 5 定时同步 | sync 模块切换新表；NS 报关和子采购定时拉取；柠檬云 open2 定时拉票并生成比对建议 | 无人操作时新报关单、新发票自动进入工作台 |
 | 以后 | 登录与角色、企微自动发送、NS 回写（从分支恢复） | 另行设计 |
 
 ## 8. 超开处理
