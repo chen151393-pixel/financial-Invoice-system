@@ -6,17 +6,17 @@ from contextlib import contextmanager
 from sqlalchemy.exc import SQLAlchemyError
 
 from backend.core.errors import ApiError
+from backend.modules.source.public import PlScriptQuery as PlScriptQuery
+from backend.modules.source.public import PlScriptService as PlScriptService
+from backend.modules.source.public import SubpoContractSource as SubpoContractSource
+from backend.modules.source.public import incomplete_reason as incomplete_relation_reason
+from backend.modules.source.public import source_digest as relation_digest
 
 from . import dao
-from .contract_service import SubpoContractSource as SubpoContractSource
 from .dao import matching_sources
-from .dto import PlScriptQuery as PlScriptQuery
 from .entity import load_tables
-from .pl_script_service import PlScriptService as PlScriptService
 from .reconciliation_dao import read_declarations
 from .relation_mapper import summarize_relations
-from .relation_policy import incomplete_reason as incomplete_relation_reason
-from .relation_policy import source_digest as relation_digest
 from .review_source_mapper import review_sources
 from .supplier_service import SupplierDirectory as SupplierDirectory
 

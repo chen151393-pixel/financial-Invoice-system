@@ -3,7 +3,7 @@
 from datetime import date, datetime
 from decimal import Decimal
 
-from .relation_policy import source_digest
+from backend.modules.source.public import source_digest
 
 
 def normalize(value):

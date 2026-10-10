@@ -1,6 +1,6 @@
 import type { PlSearchCriteria } from "./types";
 
-// 与 /api/ns/pl-script-comparison 的展示契约一致；保留NS顺序和来源文本。
+// 与 /api/source/pl-comparison 的展示契约一致；保留NS顺序和来源文本。
 export const sourceColumns = [
   "报关单号",
   "申报日期",

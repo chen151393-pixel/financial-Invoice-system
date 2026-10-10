@@ -9,8 +9,8 @@ from backend.app import create_app
 from backend.core.config import Settings, load_settings
 from backend.core.errors import ApiError
 from backend.integrations.netsuite.client import NetSuite
-from backend.modules.business.dto import PlScriptQuery
-from backend.modules.business.pl_script_service import PlScriptService
+from backend.modules.source.dto.pl_comparison import PlScriptQuery
+from backend.modules.source.service.pl_comparison_service import PlScriptService
 from fastapi.testclient import TestClient
 from pydantic import ValidationError
 
@@ -354,7 +354,7 @@ def test_endpoint_authentication_and_validation_before_ns(context, version):
 
     context.ns.pl_script_query = query
     with TestClient(create_app(context.settings, context.ns, context.engine)) as client:
-        path = "/api/ns/pl-script-comparison"
+        path = "/api/source/pl-comparison"
         assert client.post(path, json={"pl": "PL001"}).status_code == 401
         headers = {"Authorization": f"Bearer {context.settings.service_key}"}
         invalid = client.post(path, json={}, headers=headers)

@@ -2,8 +2,8 @@
 
 from backend.core.errors import ApiError
 
-from .pl_config import parse_config
-from .pl_mapper import reference, text
+from ..mapper.ns_fields import reference, text
+from ..policy.ns_config import parse_config
 
 
 class PlReader:

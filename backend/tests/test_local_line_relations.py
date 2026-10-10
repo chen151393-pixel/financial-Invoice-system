@@ -7,7 +7,6 @@ from datetime import datetime
 import pytest
 from backend.core.errors import ApiError
 from backend.modules.business import relation_dao
-from backend.modules.business.local_relation_policy import local_line_relations
 from backend.modules.business.relation_entity import RELATION_TABLE, define_relation_table
 from backend.modules.business.relation_mapper import summarize_relations
 from backend.modules.business.relation_storage_mapper import relation_values
@@ -16,6 +15,7 @@ from backend.modules.business.storage_service import StorageService
 from backend.modules.reconciliation.dto import ApproveRequest, DeclarationListQuery
 from backend.modules.reconciliation.local_mapper import declarations
 from backend.modules.reconciliation.service import ReconciliationService
+from backend.modules.source.policy.local_relation_policy import local_line_relations
 from sqlalchemy import Column, Integer, MetaData, String, Table, create_engine, select
 
 

@@ -1,11 +1,14 @@
 """统一元数据与跨数据库字段类型。"""
 
-from sqlalchemy import BigInteger, DateTime, Integer, MetaData, String, Text
+from sqlalchemy import BigInteger, Column, DateTime, Integer, MetaData, String, Text
 from sqlalchemy.dialects.mysql import BIGINT, DATETIME, LONGTEXT, VARCHAR
 from sqlalchemy.ext.compiler import compiles
 from sqlalchemy.sql.functions import FunctionElement
 
 metadata = MetaData()
+# 新表结构（docs/architecture/database.md）的表定义登记在独立元数据中，不与旧表元数据混用；
+# 旧迁移链的建表核验只比较旧元数据。
+schema_metadata = MetaData()
 
 
 def identifier(length):
@@ -37,3 +40,11 @@ def _utc_now_default(element, compiler, **kw):
 @compiles(utc_now, "mysql")
 def _utc_now_mysql(element, compiler, **kw):
     return "CURRENT_TIMESTAMP(6)"
+
+
+def timestamps():
+    """新表公共列：created_at、updated_at（UTC）；updated_at 由 DAO 在每次更新时写入。"""
+    return [
+        Column("created_at", TIMESTAMP, nullable=False, server_default=utc_now()),
+        Column("updated_at", TIMESTAMP, nullable=False, server_default=utc_now()),
+    ]

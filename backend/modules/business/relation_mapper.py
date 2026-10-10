@@ -1,7 +1,7 @@
 """财务视图只读取已校验的展示契约；原始NS记录和Packing正文留在业务库。"""
 
-from .local_relation_policy import local_line_relations
-from .relation_policy import comparison_view
+from backend.modules.source.public import comparison_view, local_line_relations
+
 from .relation_storage_mapper import relation_evidence
 
 

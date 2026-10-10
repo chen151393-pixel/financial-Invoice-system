@@ -1,5 +1,7 @@
 # 业务记录模块
 
+> **过渡期（架构 v2 第 4a 步起）**：NS 读取、v3 关联、字段映射配置、本地行定位、采购报关联查和合同下载已移入 [source 模块](../source/README.md)，本模块经 `source.public` 使用。本模块只保留旧表的保存与读取，供旧财务核对、开票跟进、匹配使用；第 4e 步删除。下文中提到的已移出文件以 source 模块为准。
+
 ## 同步来源关系
 
 `PlReader.complete_customs_purchases` 按 NS 显式报关引用反查全部关联子采购。`relation_reader.py` 读取原始报关行、Packing、销售采购行关系及母采购行键；`relation_matcher.py` 在同次同步中复用 `PlScriptService` 按CD获取NS v3整单关联，核验报关身份、明细数量及子单范围。`StorageService.sync/sync_page` 将来源、关联、分摊展示值及单头外键原子保存。固定只读SQL位于 `relation_sources.py`，不接收网页SQL。`relation_mapper.py` 校验已存契约、身份和摘要后向财务模块提供展示结果，不返回原始Packing或NS正文。
@@ -38,13 +40,13 @@
 
 ## 文件职责
 
-当前核对页使用 `POST /api/ns/pl-script-comparison`：`dto.py` 的 `PlScriptQuery` 校验条件，`pl_script_service.py` 调用NS共用服务并检查账户、范围及完整性，`pl_script_vo.py` 按contractVersion校验v1／15列、v2／17列展示契约。v2末两列为NS原单价及报关币种，保持字符串，采购行这两列必须为空；版本和列数不符时拒绝，不在Python补算。NS追溯和分摊直接复用Suitelet同目录模块，仅返回查询JSON，不在Python中维护第二套规则。需上传新版RESTlet才能返回17列，旧版在过渡期间保持兼容，见 [部署说明](../../../docs/pl-script-integration.md)。
+（已移至 source 模块，现为 `POST /api/source/pl-comparison`）原核对页接口：`dto.py` 的 `PlScriptQuery` 校验条件，`pl_script_service.py` 调用NS共用服务并检查账户、范围及完整性，`pl_script_vo.py` 按contractVersion校验v1／15列、v2／17列展示契约。v2末两列为NS原单价及报关币种，保持字符串，采购行这两列必须为空；版本和列数不符时拒绝，不在Python补算。NS追溯和分摊直接复用Suitelet同目录模块，仅返回查询JSON，不在Python中维护第二套规则。需上传新版RESTlet才能返回17列，旧版在过渡期间保持兼容，见 [部署说明](../../../docs/pl-script-integration.md)。
 
-`controller.py` 只声明 `POST /api/ns/pl-script-comparison`；`service.py` 装配联查与存储用例。
+`controller.py` 已删除，联查接口移至 source 模块；`service.py` 只装配旧表存储用例。
 
 ## 公开入口
 
-HTTP：`POST /api/ns/pl-script-comparison`。其他模块通过 `public.py` 读取来源。模块通过应用工厂注入依赖，不建立全局客户端或全局数据库连接。
+HTTP：本模块已无接口。其他模块通过 `public.py` 读取来源。模块通过应用工厂注入依赖，不建立全局客户端或全局数据库连接。
 
 已删除无调用方的接口：`/api/ns/pl-comparison`、`/api/ns/pl-lookup`、`/api/ns/pl-lookup/config`、`/api/ns/related-purchase`、`/api/ns/records/*`、`/api/ns/query`、`/api/business/pl-sync`、`/api/business/pl-storage/config`、`/api/business/pl-documents/query`、`/api/business/database-status`。
 

@@ -7,7 +7,7 @@ export const listFinanceDeclarations = (criteria: DeclarationListQuery) =>
   http<ComparisonResult>("/reconciliation/declarations", "POST", criteria);
 
 export const queryPlSourceComparison = (criteria: PlSearchCriteria) =>
-  http<SourceComparisonResult>("/ns/pl-script-comparison", "POST", criteria);
+  http<SourceComparisonResult>("/source/pl-comparison", "POST", criteria);
 
 export const approveDeclaration = (snapshotId: string, note: string) =>
   http<ComparisonGroup>("/reconciliation/approve", "POST", { snapshotId, note });

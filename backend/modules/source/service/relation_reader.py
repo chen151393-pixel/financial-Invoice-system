@@ -5,9 +5,8 @@ from datetime import datetime, timezone
 
 from backend.core.errors import ApiError
 
-from .pl_mapper import reference
+from ..mapper.ns_fields import normalize, reference
 from .relation_matcher import collect_comparisons, require_relation_interfaces
-from .storage_mapper import normalize
 
 RAW_FIELDS = (
     "plId",

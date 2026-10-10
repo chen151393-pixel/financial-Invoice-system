@@ -9,11 +9,11 @@ import pytest
 from backend.app import create_app
 from backend.core.errors import ApiError
 from backend.modules.audit.entity import finance_audit
-from backend.modules.business.dto import PlScriptQuery
-from backend.modules.business.pl_script_service import PlScriptService
 from backend.modules.reconciliation.dto import ApproveRequest, ReviewQuery
 from backend.modules.reconciliation.entity import reviews, snapshots
 from backend.modules.reconciliation.service import ReconciliationService
+from backend.modules.source.dto.pl_comparison import PlScriptQuery
+from backend.modules.source.service.pl_comparison_service import PlScriptService
 from backend.tests.test_api import login
 from backend.tests.test_pl_script import result
 from fastapi.testclient import TestClient

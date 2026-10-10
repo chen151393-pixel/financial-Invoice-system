@@ -14,7 +14,6 @@ from .integrations.netsuite.client import NetSuite
 from .integrations.netsuite.subpo_contract import connection_settings
 from .integrations.wecom import WeComGroups
 from .manage import verify_database
-from .modules.business.controller import create_router as business_router
 from .modules.business.public import (
     CustomsReconciliationSource,
     PurchaseMatchingSource,
@@ -34,6 +33,8 @@ from .modules.reconciliation.group_service import SupplierGroupService
 from .modules.reconciliation.service import ReconciliationService
 from .modules.reconciliation.task_controller import create_router as invoice_task_router
 from .modules.reconciliation.task_service import InvoiceTaskService
+from .modules.source.controller.pl_comparison_controller import create_router as source_pl_router
+from .modules.source.public import PlScriptService
 from .modules.sync.controller import create_router as sync_router
 from .modules.sync.pull_service import PullService
 from .modules.sync.service import ConnectionService
@@ -76,12 +77,13 @@ def create_app(settings=None, ns=None, engine=None, business_engine=None, wecom=
     app.add_middleware(RequestGuard, secure=settings.origin.startswith("https://"))
     register_error_handlers(app)
     app.include_router(identity_router(identity, settings))
+    pl_comparison = PlScriptService(ns)
+    app.include_router(source_pl_router(pl_comparison))
     business = BusinessService(ns, business_engine)
-    app.include_router(business_router(business))
     app.include_router(
         reconciliation_router(
             ReconciliationService(
-                settings, business.pl_script, engine, CustomsReconciliationSource(business_engine)
+                settings, pl_comparison, engine, CustomsReconciliationSource(business_engine)
             )
         )
     )

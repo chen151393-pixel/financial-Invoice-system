@@ -5,6 +5,8 @@ import importlib.util
 from pathlib import Path
 
 MODULES = Path(__file__).resolve().parents[1] / "modules"
+# 后端规则第 4 节：新模块按层分目录；旧模块仍以文件名表示层。
+LAYERS = {"controller", "service", "dao", "entity", "dto", "vo", "mapper", "policy"}
 
 
 def imports(path):
@@ -32,7 +34,7 @@ def test_module_layers_and_no_cycles():
     for name, path in modules.items():
         parts = path.relative_to(MODULES).parts
         owner = parts[0]
-        layer = path.stem
+        layer = parts[1] if len(parts) > 2 and parts[1] in LAYERS else path.stem
         for dependency, line in imports(path):
             target = dependency.split(".")
             location = f"{path.relative_to(MODULES)}:{line}"
@@ -52,6 +54,11 @@ def test_module_layers_and_no_cycles():
                 or "controller" in target
             ):
                 errors.append(f"{location} 数据层/转换层不得反向调用业务或HTTP层")
+            if layer == "policy" and (
+                dependency.startswith(("sqlalchemy", "fastapi", "httpx", "backend.integrations"))
+                or any(part in target for part in ("dao", "service", "controller"))
+            ):
+                errors.append(f"{location} 规则层须为纯函数，不得访问数据库、外部系统或业务层")
             if dependency in graph:
                 graph[name].add(dependency)
     assert not errors, "\n".join(sorted(set(errors)))

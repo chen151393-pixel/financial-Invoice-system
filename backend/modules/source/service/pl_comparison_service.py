@@ -4,7 +4,7 @@ from pydantic import ValidationError
 
 from backend.core.errors import ApiError
 
-from .pl_script_vo import ScriptComparisonResult
+from ..vo.pl_comparison import ScriptComparisonResult
 
 
 class PlScriptService:

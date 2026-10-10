@@ -7,15 +7,12 @@ from sqlalchemy.exc import SQLAlchemyError
 
 from backend.core.database import check_business_database
 from backend.core.errors import ApiError
+from backend.modules.source.public import PlReader, RelationReader, parse_config, require_relation_interfaces
 
 from . import dao, relation_dao
 from .entity import load_tables
-from .pl_config import parse_config
-from .pl_reader import PlReader
 from .related_purchase_policy import prepare_related_documents
 from .relation_entity import RELATION_TABLE
-from .relation_matcher import require_relation_interfaces
-from .relation_reader import RelationReader
 from .relation_storage_mapper import relation_evidence, relation_values
 from .storage_mapper import map_bundle, validate_storage_config
 

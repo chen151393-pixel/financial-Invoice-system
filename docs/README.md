@@ -23,7 +23,8 @@
 | 模块 | 后端文档 | 前端文档 |
 | --- | --- | --- |
 | 身份 | [identity](../backend/modules/identity/README.md) | [会话 API](../frontend/src/modules/identity/README.md) |
-| NS 来源 | [business](../backend/modules/business/README.md) | 页面在 reconciliation 模块 |
+| NS 来源（新） | [source](../backend/modules/source/README.md) | 采购报关联查页面在 reconciliation 模块 |
+| NS 来源（旧，第 4e 步删除） | [business](../backend/modules/business/README.md) | — |
 | 同步 | [sync](../backend/modules/sync/README.md) | [同步工作区](../frontend/src/modules/sync/README.md) |
 | 发票 | [invoice](../backend/modules/invoice/README.md) | [导入与列表](../frontend/src/modules/invoice/README.md) |
 | 匹配 | [matching](../backend/modules/matching/README.md) | [匹配工作区](../frontend/src/modules/matching/README.md) |

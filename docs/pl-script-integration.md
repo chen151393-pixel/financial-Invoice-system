@@ -2,7 +2,7 @@
 
 ## 财务核对v3更新（2026-09-23）
 
-两个正式页面独立导航：采购报关联查 `/pl-reconciliation` 调用 `POST /api/ns/pl-script-comparison` 保留平铺来源对照；财务核对 `/finance-reconciliation` 调用 `POST /api/reconciliation/query`，由reconciliation模块复用原business只读NS服务。财务核对使用已确认的三级展开，整单审核通过`POST /api/reconciliation/approve`保存到应用库，执行`npm.cmd run db:upgrade`增加三张审核表。详见[审核规则和表字段](../backend/modules/reconciliation/README.md)。
+两个正式页面独立导航：采购报关联查 `/pl-reconciliation` 调用 `POST /api/source/pl-comparison` 保留平铺来源对照；财务核对 `/finance-reconciliation` 调用 `POST /api/reconciliation/query`，由reconciliation模块复用原business只读NS服务。财务核对使用已确认的三级展开，整单审核通过`POST /api/reconciliation/approve`保存到应用库，执行`npm.cmd run db:upgrade`增加三张审核表。详见[审核规则和表字段](../backend/modules/reconciliation/README.md)。
 
 本次**本地代码已实现，NS端尚未上传**。部署包`outputs/finance-review-v3.zip`包含新版`pl_restlet.js`、`pl_trace.js`及说明。更新前核对现有共用查询服务版本；二者覆盖同一`pl_lookup`目录的对应文件，保持现有部署、配置、角色、账户不变。追溯脚本仅增加已确定关系的`customsIndex`，不改变配对或分摊算法。若NS仍是旧版本，网站可以查到原行，但不能按相邻行自动嵌套或整单审核。
 
@@ -29,7 +29,7 @@ v3保留17列字符串，新增：
 
 ## 当前实现
 
-原只读接口调用 `POST /api/ns/pl-script-comparison`，Python 校验身份与条件后，通过 M2M OAuth 2.0 调用 `pl_restlet.js` 的 POST 入口。RESTlet 仅依赖现有 `pl_query_service.js`，每次请求执行一次共用查询，返回 JSON。来源追溯、关联、数量与金额分摊、合并和行顺序仍由 NS 共用模块负责。
+原只读接口调用 `POST /api/source/pl-comparison`，Python 校验身份与条件后，通过 M2M OAuth 2.0 调用 `pl_restlet.js` 的 POST 入口。RESTlet 仅依赖现有 `pl_query_service.js`，每次请求执行一次共用查询，返回 JSON。来源追溯、关联、数量与金额分摊、合并和行顺序仍由 NS 共用模块负责。
 
 本接口不生成 Excel、不调用 `pl_excel.js`、不返回 Base64、`download` 或 `exportNotice`，不写业务记录或 File Cabinet。网站已移除导出按钮及专用样式。原 NS Suitelet 的页面、快照和 Excel 导出代码保留，本次未修改。
 

@@ -6,7 +6,7 @@ from pydantic import Field, field_validator, model_validator
 
 from backend.core.dto import StrictModel
 
-from .dto import PlScriptQuery
+from ..dto.pl_comparison import PlScriptQuery
 
 
 class ScriptRow(StrictModel):

@@ -6,12 +6,11 @@ import re
 from sqlalchemy.exc import SQLAlchemyError
 
 from backend.core.errors import ApiError
+from backend.modules.source.public import RelationReader, parse_config
 
 from . import dao, relation_dao
 from .entity import load_tables
-from .pl_config import parse_config
 from .relation_entity import RELATION_TABLE
-from .relation_reader import RelationReader
 from .relation_storage_mapper import relation_values
 from .storage_service import StorageService
 

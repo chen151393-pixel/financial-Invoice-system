@@ -8,9 +8,9 @@ import pytest
 from backend.core.config import load_settings
 from backend.database import make_engine
 from backend.manage import upgrade
-from backend.modules.business.pl_script_service import PlScriptService
 from backend.modules.reconciliation.service import ReconciliationService
 from backend.modules.reconciliation.task_entity import tasks
+from backend.modules.source.service.pl_comparison_service import PlScriptService
 from backend.tests.conftest import FakeNS
 from backend.tests.test_reconciliation import concurrent_approval, source_result
 from sqlalchemy import create_engine, func, inspect, select, text

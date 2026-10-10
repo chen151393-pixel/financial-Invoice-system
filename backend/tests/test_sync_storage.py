@@ -7,8 +7,8 @@ from backend.app import create_app
 from backend.core.errors import ApiError
 from backend.modules.business import dao
 from backend.modules.business.entity import load_tables
-from backend.modules.business.pl_reader import PlReader
 from backend.modules.business.storage_service import StorageService
+from backend.modules.source.service.ns_reader import PlReader
 from backend.tests.test_pl_storage import configured_ns
 from backend.tests.test_pl_storage import mysql_storage as mysql_storage
 from fastapi.testclient import TestClient

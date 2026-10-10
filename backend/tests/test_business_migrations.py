@@ -11,8 +11,8 @@ import pytest
 from alembic import command
 from alembic.config import Config
 from backend.manage import upgrade_business
-from backend.modules.business.relation_policy import source_digest
 from backend.modules.business.storage_service import StorageService
+from backend.modules.source.policy.relation_policy import source_digest
 from backend.tests.test_pl_storage import configured_ns
 from backend.tests.test_reconciliation import source_result
 from sqlalchemy import create_engine, inspect, text

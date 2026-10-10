@@ -14,7 +14,7 @@
 - 前端保留 React + TypeScript + Vite + `react-router`；后端保留 Python + FastAPI + SQLAlchemy Core + Alembic + MySQL 8。不得因熟悉其他框架而直接更换技术栈。
 - 三条基本原则：**规则写在所属模块里**；**不写大文件**（一个文件只负责一个业务对象，行数上限见前后端规则）；**模块之间低耦合**（参照 Java 微服务，只通过门面 `public.py` 读取、通过事件写入）。
 - 功能归属（前后端同名）：`identity` 会话、`source` NS 报关与子采购来源、`sync` 同步、`review` 财务核对、`task` 开票任务与通知、`invoice` 发票、`matching` 发票与子采购分配。不预建 `dashboard`、`exception`。
-- 过渡期对应关系：架构方案第 7 节第 4 步完成前，`source` 的代码仍在 `business`，`review` 与 `task` 的代码仍在 `reconciliation`，`audit` 仍为独立模块；新增代码放进现有目录中对应的位置，并按新规则的分层和文件大小编写，不另建平行模块。
+- 过渡期（架构第 4 步，2026-10-10 决定新旧并行、最后统一切换）：新模块 `source`、`review`、`task` 建在新目录并使用新表；旧 `business`、`reconciliation`、`audit` 只维持旧页面运行，不再新增功能，在第 4e 步统一删除。新功能只写在新模块中。
 - 公共能力优先复用现有代码（清单见后端规则第 3 节、前端规则第 3 节）；至少两个模块使用时才提取到公共目录。不创建 `utils2`、`new_service`、`common_business` 等模糊目录。
 - `app.py` 和前端 `main.tsx` 只负责入口装配，不能堆入新业务。旧 Node 后端已移除，不再新建第二套业务实现。
 

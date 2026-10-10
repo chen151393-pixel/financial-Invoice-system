@@ -9,9 +9,9 @@ from backend.core.database import make_business_engine
 from backend.core.errors import ApiError
 from backend.modules.business import dao
 from backend.modules.business.entity import load_tables
-from backend.modules.business.pl_config import parse_config
 from backend.modules.business.storage_mapper import database_value, project_storage, validate_storage_config
 from backend.modules.business.storage_service import StorageService
+from backend.modules.source.policy.ns_config import parse_config
 from backend.tests.pl_fakes import LookupNS
 from sqlalchemy import Column, Date, MetaData, Numeric, String, Table, select
 

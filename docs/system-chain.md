@@ -46,7 +46,7 @@ flowchart LR
 | 页面 / 入口 | 主要接口 | 后端用例 | 读取或产生的数据 |
 | --- | --- | --- | --- |
 | `/sync/ns` | `/api/ns/sync/{kind}/pull`、`/pull-save` | `sync.PullService` → `business.StorageService` | NS 来源单、完整明细、当前关联结果 |
-| `/pl-reconciliation`，当前默认首页 | `POST /api/ns/pl-script-comparison` | `business.PlScriptService` | 实时 NS 对照结果，不持久化该次页面查询 |
+| `/pl-reconciliation`，当前默认首页 | `POST /api/source/pl-comparison` | `source.PlScriptService` | 实时 NS 对照结果，不持久化该次页面查询 |
 | `/finance-reconciliation` | `POST /api/reconciliation/declarations`、`/approve` | `ReconciliationService.browse/approve` | 统一业务库来源 → 审核快照、审核头、审计、任务 |
 | `/invoice-followup` 与任务详情 | `/api/reconciliation/invoice-tasks/query`、`/{id}`、`/{id}/documents/{orderId}/prepare` | `InvoiceTaskService` → `SubpoContractSource`、`ContractArchive` | 任务、合同缓存、共享盘路径及归档时间 |
 | 任务详情中的通知区 | `/{id}/notification/draft`、`/{id}/notification/record`，前缀同上 | `InvoiceTaskService.save_notification` → `notification_service` | 通知版本、人工登记、任务状态；没有自动发送渠道回执 |

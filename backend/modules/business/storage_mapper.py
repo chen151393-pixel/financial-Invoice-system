@@ -7,9 +7,9 @@ from decimal import Decimal, InvalidOperation, localcontext
 from sqlalchemy import Date, DateTime, Numeric, String
 
 from backend.core.errors import ApiError
+from backend.modules.source.public import normalize, reference, text
 
 from .entity import REQUIRED_FIELDS, STORAGE_FIELDS
-from .pl_mapper import reference, text
 
 
 def validate_storage_config(config):
@@ -25,20 +25,6 @@ def validate_storage_config(config):
         missing = REQUIRED_FIELDS[name] - set(fields)
         if missing:
             raise ApiError(503, f"{name}.storage_fields缺少映射：{', '.join(sorted(missing))}")
-
-
-def normalize(value):
-    if isinstance(value, Decimal):
-        if not value.is_finite():
-            raise ApiError(422, "来源包含非有限数值")
-        return str(value)
-    if isinstance(value, float):
-        raise ApiError(422, "来源小数必须按Decimal读取，未保存可能丢失精度的数据")
-    if isinstance(value, dict):
-        return {k: normalize(v) for k, v in value.items()}
-    if isinstance(value, list):
-        return [normalize(v) for v in value]
-    return value
 
 
 def database_value(value, column):

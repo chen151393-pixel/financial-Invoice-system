@@ -19,7 +19,7 @@
 - `components/FinanceComparison.tsx`：每张报关单一行，CD编号、真实报关号、PL、公司、关联数量、审核状态、审核通过按钮。
 - `components/CustomsRows.tsx`、`PurchaseRows.tsx`、`DetailColumns.tsx`：报关明细 → 关联子采购行，共用列宽使数量、单位、单价、金额对齐；不显示重复的采购行审核列。
 - `components/ReviewDialog.tsx`：整单确认、本次采购数量金额、审核备注、真实结果及只读采购详情；通知供应商按钮仅预留。
-- `api.ts`：联查使用 POST `/api/ns/pl-script-comparison`；财务列表使用 POST `/api/reconciliation/declarations`。审核使用 POST `/api/reconciliation/approve`。后端实时 NS 审核接口 `/api/reconciliation/query` 已无前端调用，按架构方案第 4 步删除。
+- `api.ts`：联查使用 POST `/api/source/pl-comparison`；财务列表使用 POST `/api/reconciliation/declarations`。审核使用 POST `/api/reconciliation/approve`。后端实时 NS 审核接口 `/api/reconciliation/query` 已无前端调用，按架构方案第 4 步删除。
 - `types.ts`：后端展示VO；金额和数量为十进制字符串，前端不重算或推断关系。
 
 默认全部收起。点击主单仅展开报关行，再点击报关行显示采购明细；收起主单清除其下级展开状态。全展开/全收起为显式操作，重新查询恢复收起。多张单的行ID按报关单隔离。

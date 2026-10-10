@@ -6,16 +6,16 @@ from decimal import Decimal
 import pytest
 from backend.app import create_app
 from backend.modules.business import relation_dao
-from backend.modules.business.dto import PlScriptQuery
 from backend.modules.business.entity import load_tables
-from backend.modules.business.pl_script_service import PlScriptService
 from backend.modules.business.public import CustomsReconciliationSource
 from backend.modules.business.relation_entity import RELATION_TABLE, define_relation_table
-from backend.modules.business.relation_policy import incomplete_reason, source_digest
 from backend.modules.business.relation_storage_mapper import relation_values
 from backend.modules.reconciliation.dto import ApproveRequest, DeclarationListQuery
 from backend.modules.reconciliation.local_mapper import declarations
 from backend.modules.reconciliation.service import ReconciliationService
+from backend.modules.source.dto.pl_comparison import PlScriptQuery
+from backend.modules.source.policy.relation_policy import incomplete_reason, source_digest
+from backend.modules.source.service.pl_comparison_service import PlScriptService
 from backend.tests.test_api import login
 from backend.tests.test_reconciliation import review_context as review_context
 from fastapi.testclient import TestClient

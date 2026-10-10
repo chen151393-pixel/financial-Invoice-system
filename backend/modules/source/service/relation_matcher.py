@@ -2,10 +2,10 @@
 
 from backend.core.errors import ApiError
 
-from .dto import PlScriptQuery
-from .pl_mapper import reference
-from .pl_script_service import PlScriptService
-from .relation_policy import incomplete_reason, source_digest
+from ..dto.pl_comparison import PlScriptQuery
+from ..mapper.ns_fields import reference
+from ..policy.relation_policy import incomplete_reason, source_digest
+from .pl_comparison_service import PlScriptService
 
 
 def require_relation_interfaces(settings):

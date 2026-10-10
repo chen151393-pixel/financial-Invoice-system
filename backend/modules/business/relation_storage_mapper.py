@@ -3,8 +3,7 @@
 from datetime import UTC, datetime
 
 from backend.core.errors import ApiError
-
-from .relation_policy import comparison_view
+from backend.modules.source.public import comparison_view
 
 META_FIELDS = {"version", "account", "declarationId", "readAt", "status", "mode", "issues", "comparison"}
 
