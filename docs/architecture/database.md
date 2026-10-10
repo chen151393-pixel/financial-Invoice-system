@@ -1,6 +1,6 @@
 # 数据库设计
 
-状态：**草案第 2 版，待确认**。依据[架构设计 v2](README.md)的业务规则和 `test` 分支当前表结构编写。总体规则见[后端规则](backend-rules.md)第 8 节。
+状态：**已确认（2026-10-10）**。依据[架构设计 v2](README.md)的业务规则和 `test` 分支当前表结构编写。总体规则见[后端规则](backend-rules.md)第 8 节。
 
 ## 1. 业务规则如何决定表结构
 
@@ -97,8 +97,8 @@ CREATE TABLE task_invoice_lines (
   item_name           VARCHAR(500)  NULL,
   specification       VARCHAR(500)  NULL,
   currency            VARCHAR(20)   NULL,
-  expected_quantity   DECIMAL(26,8) NULL COMMENT '应开数量（冻结，子采购行开票口径）',
-  unit                VARCHAR(50)   NULL COMMENT '开票单位（冻结，与发票单位比对）',
+  expected_quantity   DECIMAL(26,8) NULL COMMENT '应开数量（冻结自子采购行 quantity）',
+  unit                VARCHAR(50)   NULL COMMENT '开票单位（冻结自子采购行 unit_name），与发票单位比对',
   expected_amount     DECIMAL(24,6) NULL COMMENT '应开含税金额（冻结）；来源缺失时为空',
   received_quantity   DECIMAL(26,8) NOT NULL DEFAULT 0 COMMENT '已通过分配的数量合计（缓存）',
   received_amount     DECIMAL(24,6) NOT NULL DEFAULT 0 COMMENT '已通过分配的含税金额合计（缓存）',
@@ -121,7 +121,7 @@ CREATE TABLE task_invoice_lines (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin COMMENT='开票任务行：每条子采购行的应开与已收';
 ```
 
-`expected_quantity`、`unit` 从子采购行的哪个字段冻结，见第 8 节待确认第 1 项。
+`expected_quantity`、`unit` 取子采购行的采购口径 `quantity`、`unit_name`（第 10 节）。
 
 ### 4.2 任务行的审核关联 `task_line_reviews`（task）
 
@@ -323,17 +323,17 @@ documents_pending → notify_pending → awaiting_invoice → partially_received
 
 | 位置 | 现状 | 改为 |
 | --- | --- | --- |
-| `matching/policy.py` 的 `compare`、`capacity` | 用子采购**报关**数量、单位（`declaration_quantity/declaration_unit`）比对 | 按第 8 节待确认第 1 项确定的子采购开票口径比对 |
+| `matching/policy.py` 的 `compare`、`capacity` | 用子采购**报关**数量、单位（`declaration_quantity/declaration_unit`）比对 | 改用采购口径 `quantity`、`unit_name`；`prorated_amount` 等按数量分摊金额的计算同步改用采购数量 |
 | 同上 `capacity` | 品名、单位、数量、金额任一不一致即 `allowed=false`，人工无法确认 | 只把第 5.2 节列出的情况作为硬性校验；其余不一致计入置信度，人工可通过 |
 | 同上 `capacity` | 子采购剩余数量、金额不足时拒绝 | 允许超开，标记 `exceeds_expected` 并要求说明 |
 | `MatchingService` | 候选在页面打开时临时计算，不保存 | 柠檬云拉票后生成并保存建议；页面打开时也可手动生成 |
 
-## 10. 待确认
+## 10. 已确认（2026-10-10）
 
-1. **"子采购单单位"指哪个字段**：子采购行上有两套数量和单位——
-   - 采购数量、采购单位：`quantity`、`unit_name`，NS 字段 `custrecord_swc_subpo_item_unit`；
-   - 报关数量、报关单位：`declaration_quantity`、`declaration_unit`，NS 字段 `custrecord_swc_subpo_item_bgunit`。
+| 问题 | 决定 |
+| --- | --- |
+| 开票数量和单位 | 采购口径：子采购行 `quantity`、`unit_name`（NS 字段 `custrecord_swc_subpo_item_unit`）。冻结为任务行 `expected_quantity`、`unit` |
+| 金额容差 | 每行 0.01 元 |
+| 置信度分档 | 80 分以上为高，50–79 为中，50 以下为低；权重与分档集中定义在 `matching` 模块 `policy/` 中，可调整 |
 
-   现有匹配代码用的是**报关**那一套。发票上的单位和数量与哪一套一致？
-2. **金额容差**：每行 0.01 元是否合适？
-3. **置信度权重和分档**：第 5.1 节的权重和"80 以上为高"是否合适？
+注意：同步时 NS 未返回 `custrecord_swc_subpo_item_unit` 的子采购行，`unit_name` 为空（见 business 模块说明）。这类行的单位比对项记为不一致并在比对结果中注明"子采购单位缺失"，由人工审核。
