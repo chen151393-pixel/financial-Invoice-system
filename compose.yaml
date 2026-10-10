@@ -2,7 +2,7 @@ services:
   app:
     build: .
     network_mode: host
-    # 与本地后端保持文件覆盖顺序；兼容仅有 .env 或仅有 .env.local 的部署。
+    # 部署只加载 .env；.env.local 仅供本机直接运行后端时覆盖使用。
     env_file:
       - path: .env
         required: false

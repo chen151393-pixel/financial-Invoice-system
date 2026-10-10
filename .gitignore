@@ -62,6 +62,9 @@ yarn-error.log*
 .vercel
 /.wrangler/
 
+# 部署服务器本地 Compose 覆盖（共享盘挂载等），见 docs/docker-deploy.md。
+/compose.override.yaml
+
 # 本地工作产物与临时输出；需要交付的文件应转入明确的受管目录。
 /outputs/
 /work/
