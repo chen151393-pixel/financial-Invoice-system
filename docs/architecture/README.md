@@ -20,7 +20,9 @@
 | 新增规则 | 写在所属模块自己的代码中，不放进公共目录、入口文件或前端 |
 | 公共能力 | 优先复用现有代码（清单见[后端规则](backend-rules.md)第 3 节、[前端规则](frontend-rules.md)第 3 节），不另建一套 |
 | 同一子采购单出现在多张报关单 | **只生成一次**任务行：第一次审核通过时生成，之后的报关单不重复生成，任务详情显示关联的全部报关单 |
-| 超开 | **允许确认并标记超开**：发票累计数量或金额超过子采购行应开值时可以确认，任务行状态为 `over`（超开待处理） |
+| 超开 | **允许确认并标记超开**：发票累计数量或金额超过子采购行应开值时可以人工通过，须填写说明，任务行带超开标记 |
+| 发票单位 | 与子采购单单位一致；不一致时降低置信度，交人工审核 |
+| 比对与完成 | 系统生成带置信度的比对建议，全部由人工审核；人工比对通过（可按差异结束）后该子采购行即结束，全部结束后任务自动完成，无另外的关闭步骤 |
 
 ## 1. 业务主线
 
@@ -105,16 +107,18 @@
 task_invoice_lines
   id, task_id, purchase_order_id, purchase_line_id,
   item_name, unit, currency,
-  expected_quantity, expected_amount,     -- 来自子采购行：报关数量、含税金额；不调整
+  expected_quantity, expected_amount,     -- 来自子采购行：开票数量、含税金额；冻结，不调整
   received_quantity, received_amount,     -- 只由「分配变化」事件更新
-  status: open / partial / received / over
+  status: open / partial / received / superseded（另有超开、按差异结束两个标记）
   唯一约束：同一条子采购行只能有一条有效任务行
 ```
 
-- 应开数量和单位沿用当前匹配使用的口径（子采购行 `declaration_quantity` / `declaration_unit`），应开金额为子采购行含税金额 `amount`。
+- 应开数量和单位取子采购行的开票口径（与发票单位一致的那一套，字段待确认，见[数据库设计](database.md)第 10 节），应开金额为子采购行含税金额 `amount`。
 - **同一张子采购单出现在多张报关单中**时，只在第一次审核通过时生成任务行；之后的报关单审核通过时不重复生成，任务详情显示关联的全部报关单。
 
-### 4.2 统一分配台账（matching 模块）
+### 4.2 比对与分配台账（matching 模块）
+
+- 一条记录先是系统生成的**比对建议**（带置信度和逐项比对结果），人工通过后才计入收票；不一致项只降低置信度，不阻止人工通过。
 
 - 现有两套台账：`invoice_purchase_allocations`（按数量分配，支持一单多票）和 `invoice_purchase_link_batches/pairs`（整票关联，一条子采购行只能关联一张发票，不支持一单多票）。
 - 统一为按数量分配：保留 `invoice_purchase_allocations`；"整票关联"改为一次性批量写入分配记录；现有 `link_pairs` 中的记录（截图中为 2 条）用迁移转为分配记录，旧表停止写入。
@@ -125,8 +129,7 @@ task_invoice_lines
 由任务行汇总得出，不提供手动修改：
 
 ```text
-documents_pending → notify_pending → awaiting_invoice → partially_received → received → closed
-                                                      ↘ over_invoiced（任一任务行超开，待处理）
+documents_pending → notify_pending → awaiting_invoice → partially_received → completed
 任何未完成状态 → superseded（被新审核版本替代，只读保留）
 ```
 
@@ -209,6 +212,6 @@ documents_pending → notify_pending → awaiting_invoice → partially_received
 
 ## 8. 超开处理
 
-- `matching` 确认分配时不因超开而拒绝，确认结果中返回超开提示，由用户确认后提交。
-- `task` 收到「分配变化」事件后重新汇总：已收数量或金额大于应开值时，任务行状态为 `over`，任务显示"超开待处理"，不自动进入"已收齐"。
-- 超开的后续处理（红冲、调整分配、人工关闭）在第 5 步实现时细化，处理规则写在 `task` 模块的 `policy/` 中。
+- `matching` 人工通过时不因超开而拒绝，必须填写说明，记录超开标记。
+- `task` 收到「分配变化」事件后重新汇总：超开的任务行带超开标记并视为已结束，任务列表可按"含超开"筛选。
+- 详细规则见[数据库设计](database.md)第 5、6 节。

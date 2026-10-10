@@ -203,7 +203,7 @@ events.subscribe(ReviewApproved, task_services.task.on_review_approved)
 
   ```python
   TRANSITIONS = {
-      "awaiting_invoice": {"partially_received", "received", "over_invoiced", "superseded"},
+      "awaiting_invoice": {"partially_received", "completed", "superseded"},
       ...
   }
   ```
