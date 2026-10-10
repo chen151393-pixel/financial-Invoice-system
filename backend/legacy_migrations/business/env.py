@@ -3,7 +3,7 @@
 import hashlib
 
 from alembic import context
-from backend.core.business_database import make_business_engine
+from backend.core.database import make_business_engine
 from sqlalchemy import text
 from sqlalchemy.engine import make_url
 

@@ -215,7 +215,7 @@ def test_invalid_binding_fields(field, value):
 
 def test_simplification_migration_preserves_current_binding(tmp_path):
     url = f"sqlite:///{tmp_path / 'groups-upgrade.sqlite'}"
-    config = Config(str(ROOT / "backend" / "alembic.ini"))
+    config = Config(str(ROOT / "backend" / "legacy_migrations" / "app.ini"))
     config.attributes["database_url"] = url
     command.upgrade(config, "0008_contract_metadata")
     engine = make_engine(url)

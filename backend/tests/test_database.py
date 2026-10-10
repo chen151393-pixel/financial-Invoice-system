@@ -13,7 +13,7 @@ from sqlalchemy.engine import make_url
 
 def test_mysql_8_ddl_portable_locks_charset_and_text_capacity():
     output = StringIO()
-    config = Config(str(ROOT / "backend" / "alembic.ini"), output_buffer=output)
+    config = Config(str(ROOT / "backend" / "legacy_migrations" / "app.ini"), output_buffer=output)
     config.attributes["database_url"] = "mysql+pymysql://unused@localhost/test?charset=utf8mb4"
     command.upgrade(config, "head", sql=True)
     sql = output.getvalue()

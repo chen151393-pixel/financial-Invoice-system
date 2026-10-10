@@ -66,7 +66,7 @@ npm.cmd start
 
 按配置的 `PORT` / `APP_ORIGIN` 访问后端托管页面，首页进入采购报关联查；未改默认配置时可打开[本地系统](http://localhost:3000)。启用本机访问后，提交查询时自动建立本机会话。按 `Ctrl+C` 停止服务。Linux/macOS 使用 `npm` 和 `.venv/bin/python`，详细步骤见后端文档。
 
-已有业务库按[业务库说明](docs/mysql/README.md)核对基础表与发票扩展，`npm.cmd run db:upgrade` 在同一库升级两条历史迁移链；`db:business:upgrade` 是兼容入口。两者都不能代替空库初始化，不要对已有库重跑历史建表 SQL。旧 SQLite 记录须按[历史数据迁移](docs/python-backend.md#历史应用库合入业务库)在服务停止后复制，切换连接不会自动搬数据。
+已有业务库按[业务库说明](docs/mysql/README.md)核对基础表与发票扩展，`npm.cmd run db:upgrade` 在同一库升级两条历史迁移链；`db:business:upgrade` 是兼容入口。两者都不能代替空库初始化，不要对已有库重跑历史建表 SQL。旧 SQLite 记录为测试数据，不迁移。
 
 ## 开发启动
 

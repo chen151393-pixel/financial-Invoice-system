@@ -4,8 +4,8 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 
-from .core.business_database import make_business_engine
 from .core.config import load_settings
+from .core.database import make_business_engine
 from .core.dependencies import Owner
 from .core.frontend import create_router as frontend_router
 from .core.middleware import RequestGuard, register_error_handlers
@@ -41,7 +41,8 @@ from .modules.sync.service import ConnectionService
 
 def create_app(settings=None, ns=None, engine=None, business_engine=None, wecom=None):
     settings = settings or load_settings()
-    # 正式运行共用业务库连接池；显式注入连接仅供隔离测试和预览。
+    # 正式运行只有一个业务库连接池。显式注入连接仅供隔离测试和预览；
+    # business_engine 只给旧模块测试分开注入旧业务表，架构第 4 步各模块重建后删除。
     owns_engine = engine is None and business_engine is None
     engine = engine if engine is not None else business_engine
     if engine is None:

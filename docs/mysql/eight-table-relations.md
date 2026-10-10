@@ -4,7 +4,7 @@
 
 本次按 NS 创建日期查询 2026-08-23 至 2026-09-23 截至查询时的数据：86 张报关、194 张子采购；补齐34张更早报关及173张母采购。实际入库120张报关／304行、194张子采购／670行、173张母采购／665行；重复来源更新原记录。187张子单关联母采购，7张经REST与独立SQL核实后标记no_parent。
 
-XN-002050、XN-002051、XN-002100 共5条明细在NS缺少单价与金额；来源空值保存NULL，source_data.amountValidation.status为source_missing，并返回待核实警告，不能当成金额核对通过。另1张报关缺申报主体、17条汇总行缺规格，均有独立空值证据。报关单价通过[精度增量迁移](../../backend/business_migrations/versions/0003_customs_price_precision.py)扩为DECIMAL(38,18)，保留10条超过原8位小数的源值，不舍入、不改写NS。
+XN-002050、XN-002051、XN-002100 共5条明细在NS缺少单价与金额；来源空值保存NULL，source_data.amountValidation.status为source_missing，并返回待核实警告，不能当成金额核对通过。另1张报关缺申报主体、17条汇总行缺规格，均有独立空值证据。报关单价通过[精度增量迁移](../../backend/legacy_migrations/business/versions/0003_customs_price_precision.py)扩为DECIMAL(38,18)，保留10条超过原8位小数的源值，不舍入、不改写NS。
 
 ## 表和关系
 
@@ -75,7 +75,7 @@ erDiagram
 
 ## 母采购字段
 
-新表沿用现有来源表的轻量结构，完整 DDL 以[母采购建表迁移](../../backend/business_migrations/versions/0001_parent_purchase.py)和[关联状态增量迁移](../../backend/business_migrations/versions/0002_parent_relation_status.py)为准，已执行的历史迁移不改写。
+新表沿用现有来源表的轻量结构，完整 DDL 以[母采购建表迁移](../../backend/legacy_migrations/business/versions/0001_parent_purchase.py)和[关联状态增量迁移](../../backend/legacy_migrations/business/versions/0002_parent_relation_status.py)为准，已执行的历史迁移不改写。
 
 | 母单字段 | 类型 | 用途 |
 | --- | --- | --- |
@@ -125,7 +125,7 @@ npm.cmd run db:business:sql
 npm.cmd run db:business:upgrade
 ```
 
-业务迁移使用 `backend/business_alembic.ini`、`backend/business_migrations/` 及独立版本表 `business_alembic_version`；原 `db:upgrade` 仍只处理应用库。此增量要求六张基础表已存在，不对空库重跑初始化、不修改其他表。原六表连接检查继续兼容旧部署，只表示基础能力可用，不代表母采购功能已接入。
+业务迁移使用 `backend/legacy_migrations/business.ini`、`backend/legacy_migrations/business/` 及独立版本表 `business_alembic_version`；原 `db:upgrade` 仍只处理应用库。此增量要求六张基础表已存在，不对空库重跑初始化、不修改其他表。原六表连接检查继续兼容旧部署，只表示基础能力可用，不代表母采购功能已接入。
 
 MySQL DDL不是整批事务：中途失败应先检查实际结构及版本表，不删除业务表后重试、不盲目stamp。未登记但已存在母表／关联字段，或新状态／原始行标识字段时，对应迁移主动停止；同一已完成版本再次执行为空操作。没有自动删除母表或新字段的downgrade。迁移命令的命名锁只协调迁移进程，不能代替部署期间的业务写入协调。
 

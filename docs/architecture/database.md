@@ -1,6 +1,6 @@
 # 数据库设计
 
-状态：**已确认（2026-10-10），尚未实施**。按整条业务链路重新设计，不沿用现有表结构，不做旧数据迁移。原增量方案已归档到[历史方案](../history/database-incremental.md)。总体规则见[后端规则](backend-rules.md)第 8 节。
+状态：**已确认（2026-10-10）；第 3 步已建立基线迁移 `backend/migrations/versions/0001_baseline.py`，各模块在第 4 步切换到新表**。按整条业务链路重新设计，不沿用现有表结构，不做旧数据迁移。原增量方案已归档到[历史方案](../history/database-incremental.md)。总体规则见[后端规则](backend-rules.md)第 8 节。
 
 ## 1. 已确认的决定
 
@@ -41,13 +41,16 @@
 
   ```sql
   created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
-  updated_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
+  updated_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
   ```
+
+  `updated_at` 由 DAO 在每次更新时写入，不使用 MySQL 专有的 `ON UPDATE`，保证 SQLite 测试与 MySQL 行为一致。
 
 - **状态**：`VARCHAR(24)` + `CHECK`，与模块 `policy/` 中的状态机一致。
 - **外键**：模块内建外键；**跨模块只存 ID，不建外键**，一致性由 Service 在事务中校验。
 - **表选项**：`ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin`（下文省略）。单号、ID 类列区分大小写。
 - **名称比较列**：需要按名称比对的表保存 `*_normalized`（规则见第 5.2 节），由写入方计算，建索引。
+- **生成列**：只用标准 `CASE`、`COALESCE` 表达式（MySQL 与 SQLite 都支持），不用 `IF()`、`IFNULL()`、`CONCAT()`。
 
 ## 4. 表结构
 
@@ -58,7 +61,7 @@ source   10：suppliers、companies、raw_records、parent_orders、parent_order
              purchase_orders、purchase_order_lines、customs_declarations、customs_lines、customs_purchase_links
 review    2：records、lines
 task      6：supplier_groups、tasks、lines、documents、notifications、events
-invoice   3：raw_records、headers、lines
+invoice   3：raw_records、headers、items
 matching  1：allocations
 sync      2：runs、cursors
 ```
@@ -71,7 +74,7 @@ sync      2：runs、cursors
                                  ▼                       ▼
 source（NS 来源）                                  invoice（进项发票）
   suppliers  companies  raw_records                  raw_records
-  parent_orders ─< parent_order_lines                headers ─< lines
+  parent_orders ─< parent_order_lines                headers ─< items
   purchase_orders ─< purchase_order_lines  ← 开票单元          │
   customs_declarations ─< customs_lines                         │
   customs_purchase_links（报关 ↔ 子采购，单头级 + 行级）         │
@@ -298,8 +301,8 @@ CREATE TABLE source_customs_purchase_links (
   evidence               VARCHAR(24) NOT NULL COMMENT 'ns_reference / ns_v3 / local_packing',
   status                 VARCHAR(24) NOT NULL DEFAULT 'active' COMMENT 'active / stale',
   -- 唯一约束中可空列用 0 代替，避免多个空值绕过唯一性
-  customs_line_key       BIGINT UNSIGNED GENERATED ALWAYS AS (IFNULL(customs_line_id, 0)) STORED,
-  purchase_line_key      BIGINT UNSIGNED GENERATED ALWAYS AS (IFNULL(purchase_line_id, 0)) STORED,
+  customs_line_key       BIGINT UNSIGNED GENERATED ALWAYS AS (COALESCE(customs_line_id, 0)) STORED,
+  purchase_line_key      BIGINT UNSIGNED GENERATED ALWAYS AS (COALESCE(purchase_line_id, 0)) STORED,
   synced_at              DATETIME(6) NOT NULL,
   -- 公共列
   PRIMARY KEY (id),
@@ -333,7 +336,7 @@ CREATE TABLE review_records (
   approved_at            DATETIME(6) NOT NULL,
   note                   VARCHAR(300) NULL,
   active_declaration_id  BIGINT UNSIGNED
-      GENERATED ALWAYS AS (IF(status = 'active', customs_declaration_id, NULL)) STORED,
+      GENERATED ALWAYS AS (CASE WHEN status = 'active' THEN customs_declaration_id END) STORED,
   -- 公共列
   PRIMARY KEY (id),
   UNIQUE KEY uq_review_revision (customs_declaration_id, revision),
@@ -422,7 +425,7 @@ CREATE TABLE task_lines (
   over_invoiced           BOOL NOT NULL DEFAULT 0,
   closed_with_difference  BOOL NOT NULL DEFAULT 0,
   active_purchase_line_id BIGINT UNSIGNED
-      GENERATED ALWAYS AS (IF(status = 'superseded', NULL, purchase_line_id)) STORED,
+      GENERATED ALWAYS AS (CASE WHEN status <> 'superseded' THEN purchase_line_id END) STORED,
   -- 公共列
   PRIMARY KEY (id),
   UNIQUE KEY uq_task_line_active (active_purchase_line_id),
@@ -540,7 +543,7 @@ CREATE TABLE invoice_headers (
   CONSTRAINT ck_invoice_status CHECK (status IN ('normal','red_offset','void','unknown'))
 ) COMMENT='进项发票';
 
-CREATE TABLE invoice_lines (
+CREATE TABLE invoice_items (
   id                    BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
   invoice_id            BIGINT UNSIGNED NOT NULL,
   source_line_key       VARCHAR(190) NOT NULL,
@@ -557,8 +560,8 @@ CREATE TABLE invoice_lines (
   amount_including_tax  DECIMAL(18,2) NULL,
   -- 公共列
   PRIMARY KEY (id),
-  UNIQUE KEY uq_invoice_line (invoice_id, source_line_key),
-  CONSTRAINT fk_invoice_line_header FOREIGN KEY (invoice_id) REFERENCES invoice_headers (id)
+  UNIQUE KEY uq_invoice_item (invoice_id, source_line_key),
+  CONSTRAINT fk_invoice_item_header FOREIGN KEY (invoice_id) REFERENCES invoice_headers (id)
 ) COMMENT='发票行';
 ```
 
@@ -570,7 +573,7 @@ CREATE TABLE invoice_lines (
 CREATE TABLE matching_allocations (
   id                    BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
   invoice_id            BIGINT UNSIGNED NOT NULL COMMENT 'invoice_headers.id',
-  invoice_line_id       BIGINT UNSIGNED NOT NULL COMMENT 'invoice_lines.id',
+  invoice_item_id       BIGINT UNSIGNED NOT NULL COMMENT 'invoice_items.id',
   purchase_line_id      BIGINT UNSIGNED NOT NULL COMMENT 'source_purchase_order_lines.id',
   quantity              DECIMAL(26,8) NOT NULL,
   amount                DECIMAL(24,6) NOT NULL COMMENT '分配的含税金额',
@@ -588,15 +591,14 @@ CREATE TABLE matching_allocations (
   cancelled_at          DATETIME(6) NULL,
   cancel_reason         VARCHAR(300) NULL,
   request_id            CHAR(36) NOT NULL COMMENT '幂等',
-  active_pair_key       VARCHAR(41)
-      GENERATED ALWAYS AS (IF(status IN ('proposed','confirmed'),
-                              CONCAT(invoice_line_id, ':', purchase_line_id), NULL)) STORED,
+  active_invoice_item_id BIGINT UNSIGNED
+      GENERATED ALWAYS AS (CASE WHEN status IN ('proposed','confirmed') THEN invoice_item_id END) STORED,
   -- 公共列
   PRIMARY KEY (id),
   UNIQUE KEY uq_matching_request (request_id),
-  UNIQUE KEY uq_matching_active_pair (active_pair_key),
+  UNIQUE KEY uq_matching_active_pair (active_invoice_item_id, purchase_line_id),
   KEY ix_matching_purchase (purchase_line_id, status),
-  KEY ix_matching_invoice_line (invoice_line_id, status),
+  KEY ix_matching_invoice_item (invoice_item_id, status),
   KEY ix_matching_queue (status, confidence),
   CONSTRAINT ck_matching_status CHECK (status IN ('proposed','confirmed','rejected','cancelled'))
 ) COMMENT='发票行与子采购行的比对与分配';
@@ -735,14 +737,18 @@ documents_pending → notify_pending → awaiting_invoice → partially_received
 | 采购待办任务 | `task_tasks.ix_task_status_supplier` |
 | 子采购行关联的报关单 | `review_lines.ix_review_line_purchase` → `review_records` |
 | 比对审核队列 | `matching_allocations.ix_matching_queue` |
-| 任务收票明细 | `task_lines`（`task_id`）→ `matching_allocations.ix_matching_purchase` → `invoice_lines` |
+| 任务收票明细 | `task_lines`（`task_id`）→ `matching_allocations.ix_matching_purchase` → `invoice_items` |
 
 注："待审核报关单"一行查询跨了 source 与 review 两个模块的表。按模块边界，由 review 经 source 门面取报关单列表和摘要，再与自己的审核记录比对，不在 SQL 中直接连接对方的表。
 
 ## 9. 建表与上线
 
 - **不做数据迁移**。新表在业务库中从空表开始，旧表不再被新代码读写。
-- **一条新的迁移链**：`backend/migrations` 从 `0001_baseline` 重新开始，一次创建第 4 节全部表；版本表改名为 `schema_version`，与旧的 `alembic_version`、`business_alembic_version` 不冲突。表定义同时写在各模块 `entity/` 中，测试比对两者一致。
-- **旧迁移链**（现 `backend/migrations`、`backend/business_migrations`）和旧表定义随各模块切换删除，代码历史保留在 Git 中。
+- **新迁移链**（第 3 步已建立）：`backend/migrations`，配置 `backend/alembic.ini`，版本表 `schema_version`，基线 `0001_baseline` 一次创建第 4 节全部 24 张表。与设计稿的实现差异：
+  - 发票行表名为 `invoice_items`（比对表列名 `invoice_item_id`），避免与过渡期仍在使用的旧表 `invoice_lines` 同名；
+  - 生成列使用 `CASE` / `COALESCE`；`updated_at` 由 DAO 写入，不用 `ON UPDATE`（第 3 节）。
+- **旧迁移链**：已移到 `backend/legacy_migrations/app`、`backend/legacy_migrations/business`（版本号、版本表不变，已部署的库不受影响），随第 4 步各模块切换删除，代码历史保留在 Git 中。
+- **命令**：`npm.cmd run db:upgrade` 先升级两条旧迁移链，再升级新迁移链；`python -m backend.manage schema-sql` 输出新表结构的 MySQL DDL 供审阅；正式启动时核对三条链都在最新版本。
+- **验证**：`backend/tests/test_schema_baseline.py` 在 SQLite 上验证建表、关键唯一约束、CHECK 约束与回退；提供 `BUSINESS_MIGRATION_TEST_SERVER_URL` 时在随机新建的 MySQL 库上执行同样的检查。
 - **旧表**：代码不删除数据库中的旧表。全部模块切换完成后提供旧表清单，由管理员确认后手工删除；也可以直接新建空库使用。
-- **实施顺序**（架构第 4 步，每个模块一个 PR，按依赖顺序）：source → review → task → invoice → match → sync。每个模块切换时同时改为分层目录，并调整调用它的门面；之后的模块从新表读取。
+- **实施顺序**（架构第 4 步，每个模块一个 PR，按依赖顺序）：source → review → task → invoice → matching → sync。每个模块切换时同时改为分层目录，在 `entity/` 中定义本模块的表并由测试比对与迁移结果一致，调整调用它的门面；之后的模块从新表读取。

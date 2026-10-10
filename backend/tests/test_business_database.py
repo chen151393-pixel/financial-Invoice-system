@@ -6,7 +6,7 @@ from unittest.mock import Mock
 
 import pytest
 from backend.app import create_app
-from backend.core import business_database as database
+from backend.core import database
 from backend.core.config import load_settings
 from fastapi.testclient import TestClient
 from sqlalchemy.engine import make_url

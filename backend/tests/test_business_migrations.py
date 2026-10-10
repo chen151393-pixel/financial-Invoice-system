@@ -133,7 +133,7 @@ def migrated_engine():
                     "INSERT INTO invoice_lines (id,tenant_id,invoice_id,source_line_key,quantity) VALUES (1,'a',1,'invoice-line',29.24937028)"
                 )
             )
-        config = Config(str(ROOT / "backend" / "business_alembic.ini"))
+        config = Config(str(ROOT / "backend" / "legacy_migrations" / "business.ini"))
         config.attributes["database_url"] = engine.url.render_as_string(hide_password=False)
         command.upgrade(config, "0001_business_parents")
         # 模拟上一版本已有关联的数据，验证增量升级保留外键并正确回填状态。

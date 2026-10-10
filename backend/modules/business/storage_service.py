@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 
 from sqlalchemy.exc import SQLAlchemyError
 
-from backend.core.business_database import check_business_database
+from backend.core.database import check_business_database
 from backend.core.errors import ApiError
 
 from . import dao, relation_dao

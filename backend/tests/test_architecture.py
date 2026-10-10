@@ -70,3 +70,24 @@ def test_module_layers_and_no_cycles():
 
     for name in graph:
         visit(name)
+
+
+def test_core_and_integrations_do_not_depend_on_business_modules():
+    """后端规则第 2 节：core/ 与 integrations/ 不能导入业务模块或旧迁移链。"""
+    backend = MODULES.parent
+    errors = []
+    for folder in ("core", "integrations"):
+        for path in (backend / folder).rglob("*.py"):
+            package = "backend." + ".".join(path.relative_to(backend).with_suffix("").parts[:-1])
+            for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
+                if isinstance(node, ast.Import):
+                    names = [alias.name for alias in node.names]
+                elif isinstance(node, ast.ImportFrom):
+                    name = "." * node.level + (node.module or "")
+                    names = [importlib.util.resolve_name(name, package) if node.level else name]
+                else:
+                    continue
+                for dependency in names:
+                    if dependency.startswith(("backend.modules", "backend.legacy_migrations")):
+                        errors.append(f"{path.relative_to(backend)}:{node.lineno} 不得依赖 {dependency}")
+    assert not errors, "\n".join(sorted(errors))

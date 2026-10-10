@@ -120,7 +120,8 @@ documents_pending → notify_pending → awaiting_invoice → partially_received
 
 - 一个数据库（业务 MySQL）、一个引擎、一条迁移链。新迁移链从 `0001_baseline` 开始，一次创建[数据库设计](database.md)第 4 节的 24 张表，版本表 `schema_version`。
 - 旧数据为测试数据，**不迁移**；旧表不再被新代码读写，代码不删除库中的旧表，全部模块切换后由管理员确认删除，或直接使用新建的空库。
-- 旧迁移链（`backend/migrations`、`backend/business_migrations`）、旧表定义、`core/business_database.py`、`core/application_database.py`、`backend/database.py`、`DATABASE_URL` 变量，随第 3、4 步删除。连接配置保留 `BUSINESS_DATABASE_URL` / `BUSINESS_MYSQL_*`。
+- 第 3 步已完成：新迁移链 `backend/migrations`；旧迁移链移到 `backend/legacy_migrations/`；`core/business_database.py` 并入 `core/database.py`；旧应用库数据导入工具（`core/application_database.py` 的复制部分与 `import-application` 命令）已删除。
+- 随第 4 步删除：旧迁移链与旧表定义、`backend/legacy_migrations/bootstrap.py`、`backend/database.py`、`DATABASE_URL` 变量、`create_app` 的过渡参数 `business_engine`（只供旧模块测试分开注入旧业务表）。连接配置保留 `BUSINESS_DATABASE_URL` / `BUSINESS_MYSQL_*`。
 - 回写的 `ns_previews`、`ns_target_locks`、`ns_audit` 不进入新结构；旧表留在旧库中，代码不再引用。
 
 ### 5.1 表归属
@@ -130,7 +131,7 @@ documents_pending → notify_pending → awaiting_invoice → partially_received
 | source | `source_suppliers`、`source_companies`、`source_raw_records`、`source_parent_orders`、`source_parent_order_lines`、`source_purchase_orders`、`source_purchase_order_lines`、`source_customs_declarations`、`source_customs_lines`、`source_customs_purchase_links` |
 | review | `review_records`、`review_lines` |
 | task | `task_supplier_groups`、`task_tasks`、`task_lines`、`task_documents`、`task_notifications`、`task_events` |
-| invoice | `invoice_raw_records`、`invoice_headers`、`invoice_lines` |
+| invoice | `invoice_raw_records`、`invoice_headers`、`invoice_items` |
 | matching | `matching_allocations` |
 | sync | `sync_runs`、`sync_cursors` |
 
@@ -179,7 +180,7 @@ documents_pending → notify_pending → awaiting_invoice → partially_received
 | --- | --- | --- |
 | 1 清理 ✅ | 从当前 `develop` 建立 `archive/writeback` 分支；执行第 6 节删除清单（标注"移到第 3/4 步"的除外） | 全部现有测试、lint、类型检查、构建通过 |
 | 2 目录分离 ✅ | `web/` → `frontend/`（独立 `package.json`，引入 `react-router`）；`netsuite/` 独立；更新 Dockerfile、启动脚本。根目录保留一个**不含依赖**的 `package.json` 作为命令入口，原有 `npm.cmd run …` 命令不变 | 本地联动启动、Docker 构建、全部检查通过 |
-| 3 数据库基线 | 新迁移链 `0001_baseline` 建 24 张表（版本表 `schema_version`）；数据库连接收为一个引擎、一个 `core/database.py`；引入 `core/events.py` | 隔离 MySQL 空库执行基线迁移，表结构与[数据库设计](database.md)一致 |
+| 3 数据库基线 ✅ | 新迁移链 `0001_baseline` 建 24 张表（版本表 `schema_version`）；数据库连接收为一个引擎、一个 `core/database.py`；引入 `core/events.py`。`create_app` 暂留过渡参数 `business_engine` 供旧模块测试使用，第 4 步删除 | 隔离 MySQL 空库执行基线迁移，表结构与[数据库设计](database.md)一致 |
 | 4 模块重建 | 按 source → review → task → invoice → matching 顺序，每个模块一个 PR：改为分层目录、改读写新表、实现该模块在链路中的职责（审核行、任务行、比对建议、事件）；完成第 6 节标注"移到第 4 步"的删除；删除该模块的旧表定义和旧迁移 | 每个 PR 全部测试通过；最后一个 PR 合入后，一张报关单从审核走到任务完成，无需手工改状态；MySQL 并发测试通过 |
 | 5 定时同步 | sync 模块切换新表；NS 报关和子采购定时拉取；柠檬云 open2 定时拉票并生成比对建议 | 无人操作时新报关单、新发票自动进入工作台 |
 | 以后 | 登录与角色、企微自动发送、NS 回写（从分支恢复） | 另行设计 |

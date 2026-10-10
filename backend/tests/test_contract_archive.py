@@ -172,7 +172,7 @@ def test_source_change_during_archive_does_not_advance(context, local_source, mo
 
 def test_metadata_migration_preserves_legacy_pdf_and_can_finish_archive(context, local_source, tmp_path):
     url = f"sqlite:///{tmp_path / 'legacy.sqlite'}"
-    config = Config(str(ROOT / "backend" / "alembic.ini"))
+    config = Config(str(ROOT / "backend" / "legacy_migrations" / "app.ini"))
     config.attributes["database_url"] = url
     command.upgrade(config, "0007_supplier_groups")
     engine = make_engine(url)

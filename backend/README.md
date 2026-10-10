@@ -19,7 +19,7 @@ backend/
 │   └── audit/               事务内审核审计；保留的历史回写表定义
 ├── integrations/            NS认证、HTTP与合同来源适配、共享盘归档
 ├── migrations/              应用表迁移：审核、开票任务及其资料（含历史回写表）
-├── business_migrations/     业务库增量迁移：母采购、关系依据与发票匹配
+├── legacy_migrations/       旧迁移链（app、business）及旧应用表首次建表；第 4 步删除
 └── tests/                   API、状态、数据库及架构依赖检查
 ```
 

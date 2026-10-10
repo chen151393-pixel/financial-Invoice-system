@@ -1,10 +1,9 @@
-"""应用表合入业务库的部署工具；不在启动期间建表、复制或修改状态。"""
+"""旧应用表在业务库中的首次建表（过渡期使用，随架构第 4 步旧迁移链一并删除）。"""
 
 from alembic.autogenerate import compare_metadata
 from alembic.migration import MigrationContext
-from sqlalchemy import inspect, select
-
 from backend.database import metadata
+from sqlalchemy import inspect
 
 
 def schema_changes(connection):
@@ -70,49 +69,3 @@ def bootstrap_application_tables(engine):
             raise RuntimeError("应用表最终结构核验失败，未登记迁移版本")
         connection.commit()
     return True
-
-
-def copy_application_records(source_engine, target_engine, expected_version):
-    """同主键同内容可重跑；冲突整笔回滚，保留源库和目标库既有记录。"""
-    with source_engine.connect() as source, target_engine.begin() as target:
-        if source.dialect.name == "sqlite":
-            source.exec_driver_sql("BEGIN")
-        for connection in (source, target):
-            names = set(inspect(connection).get_table_names())
-            if not set(metadata.tables) <= names or "alembic_version" not in names:
-                raise RuntimeError("历史库或目标库缺少应用表，请先核对迁移版本")
-            version = connection.exec_driver_sql("SELECT version_num FROM alembic_version").scalar()
-            if version != expected_version:
-                raise RuntimeError("历史库和目标库须先核对到当前应用迁移版本")
-        results = {}
-        for table in metadata.sorted_tables:
-            keys = tuple(column.name for column in table.primary_key)
-            existing = {
-                tuple(row[name] for name in keys): dict(row)
-                for row in target.execute(select(table).with_for_update()).mappings()
-            }
-            pending, total, reused = [], 0, 0
-            for row in source.execute(select(table)).mappings():
-                values = dict(row)
-                identity = tuple(values[name] for name in keys)
-                total += 1
-                if identity in existing:
-                    if existing[identity] != values:
-                        raise RuntimeError(f"{table.name} 存在同主键不同内容，迁移已回滚，请人工核对")
-                    reused += 1
-                else:
-                    pending.append(values)
-            for offset in range(0, len(pending), 200):
-                target.execute(table.insert(), pending[offset : offset + 200])
-            results[table.name] = {"source": total, "inserted": len(pending), "reused": reused}
-        # 检查写入后的完整源记录，包含快照、旧PDF、审计、executing/unknown及其锁。
-        for table in metadata.sorted_tables:
-            keys = tuple(column.name for column in table.primary_key)
-            actual = {
-                tuple(row[name] for name in keys): dict(row)
-                for row in target.execute(select(table)).mappings()
-            }
-            for row in source.execute(select(table)).mappings():
-                if actual.get(tuple(row[name] for name in keys)) != dict(row):
-                    raise RuntimeError(f"{table.name} 内容核验失败，迁移已回滚")
-        return results

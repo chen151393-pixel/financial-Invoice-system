@@ -5,7 +5,7 @@ from decimal import Decimal
 from uuid import uuid4
 
 import pytest
-from backend.core.business_database import make_business_engine
+from backend.core.database import make_business_engine
 from backend.core.errors import ApiError
 from backend.modules.business import dao
 from backend.modules.business.entity import load_tables

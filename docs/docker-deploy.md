@@ -201,7 +201,7 @@ docker compose exec app sh -c 'cd /mnt/invoice-contracts && echo t > .probe && l
 
 ## 首次启动
 
-先检查 Compose 配置并构建镜像。下列 `upgrade` 在业务 MySQL 中升级两条历史迁移链，不能代替空库初始化。已有库先备份并核对目标连接；旧 SQLite 历史记录须在服务停止后按[历史数据迁移](python-backend.md#历史应用库合入业务库)复制。
+先检查 Compose 配置并构建镜像。下列 `upgrade` 在业务 MySQL 中先升级两条旧迁移链，再升级新表结构迁移链（版本表 `schema_version`），不能代替空库初始化。已有库先备份并核对目标连接；旧 SQLite 历史记录为测试数据，不迁移。
 
 ```bash
 docker compose config -q

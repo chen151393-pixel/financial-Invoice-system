@@ -9,7 +9,7 @@ from dotenv import dotenv_values
 from sqlalchemy.engine import make_url
 from sqlalchemy.exc import ArgumentError
 
-from .business_database import business_database_url
+from .database import business_database_url
 
 ROOT = Path(__file__).resolve().parents[2]
 

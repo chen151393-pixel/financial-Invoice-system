@@ -44,7 +44,7 @@
 | --- | --- |
 | `package.json`、`package-lock.json`、`backend/requirements.in`、`requirements.txt` | 项目安装与依赖版本依据 |
 | `frontend/`、`backend/`、`netsuite/`、`scripts/` | 正式实现、工具及测试；虚构测试样例也需随代码保存 |
-| `backend/migrations/`、`backend/business_migrations/` | 已有数据库的升级历史，不按“旧代码”删除 |
+| `backend/migrations/`、`backend/legacy_migrations/` | 新迁移链与旧迁移链；旧链随架构第 4 步各模块切换删除 |
 | `docs/mysql/*.sql` | 建表与字段设计资料；SQL 文件不是本地数据库文件，不应统一忽略 |
 | `frontend/public/` | 前端静态资源 |
 | `.agents/skills/frontend-design/` | 项目技能及随附许可证；本次未发现删除依据 |

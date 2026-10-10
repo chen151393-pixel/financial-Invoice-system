@@ -11,7 +11,7 @@
 | NS 网络请求 | HTTPX 客户端，连接池与超时控制，禁止跟随重定向和自动写入重试 |
 | M2M | PyJWT＋cryptography，PS256/384/512 或匹配的 ES256/384/512 |
 | 数据库 | SQLAlchemy 2＋PyMySQL，MySQL 8.0；本地验证可使用 SQLite |
-| 表结构迁移 | Alembic，`backend/migrations/` |
+| 表结构迁移 | Alembic：新迁移链 `backend/migrations/`（版本表 `schema_version`）；旧迁移链 `backend/legacy_migrations/`（第 4 步删除） |
 | 运行服务 | Uvicorn，默认一个进程、端口 3000 |
 
 文中的 NS 指 NetSuite；M2M 指机器对机器认证；Token 指访问令牌。框架名称、接口路径、字段名和配置项保留原文，以便与代码对应。
@@ -103,27 +103,15 @@ BUSINESS_MYSQL_PASSWORD='你的数据库密码'
 
 分项密码使用原文；若使用完整 URL，删除分项配置并对密码进行 URL 编码。旧 `DATABASE_URL` 不覆盖业务连接，仅支持显式历史迁移与隔离测试。账户、网络和 TLS 由部署环境管理。
 
-已有库核对基础表与发票扩展后运行 `npm.cmd run db:upgrade`。该命令在同一库协调 `backend/business_migrations` 与 `backend/migrations`，保留 `business_alembic_version` 和 `alembic_version` 两个版本表；`db:business:upgrade` 是兼容入口。启动只核对版本，不执行迁移、同步、NS 写入或状态恢复。迁移账号需要建表及索引权限，运行账号需要业务读写及两个版本表读取权限。
+已有库核对基础表与发票扩展后运行 `npm.cmd run db:upgrade`。该命令在同一库先升级两条旧迁移链（`backend/legacy_migrations/business`、`backend/legacy_migrations/app`，版本表 `business_alembic_version`、`alembic_version`），再升级新迁移链 `backend/migrations`（版本表 `schema_version`）；`db:business:upgrade` 是兼容入口。启动只核对版本，不执行迁移、同步、NS 写入或状态恢复。迁移账号需要建表及索引权限，运行账号需要业务读写及三个版本表读取权限。
 
 目标库尚无应用版本表时，部署工具按当前实体定义补齐应用表；仅允许接管结构一致的既有 `finance_supplier_groups`。先比较既有结构，再创建缺失表，核对最终字段、主键、索引、唯一约束、外键及 InnoDB 引擎后才登记应用版本。已有应用版本表则正常执行历史增量迁移。发现其他未登记历史表或结构差异时停止，不能盲目 stamp 或删表重试。MySQL DDL 不能整批回滚，中途失败须检查实际结构后处理。
 
 共用连接池不自动合并所有事务。保留现有审核、审计、任务同事务及匹配、占用同事务；跨用例事务仍由 Service 显式传递同一个 Connection。
 
-## 历史应用库合入业务库
+## 历史应用库数据
 
-切换连接不会自动复制历史记录。先停止全部 API 和任务进程，备份旧 SQLite 及目标 MySQL，核对源库应用版本与当前代码一致，再执行：
-
-```powershell
-npm.cmd run db:upgrade
-.\.venv\Scripts\python.exe -m backend.manage import-application --services-stopped --source-database-url "sqlite:///./data/ns-python.sqlite"
-npm.cmd start
-```
-
-复制按外键依赖顺序在目标库一个事务中进行，保留原主键、身份/账套、审核快照、任务、旧 PDF、合同归档路径、通知历史、审计及回写状态和锁。同主键同内容可重跑；同主键不同内容整笔回滚。提交前逐字段核对全部源记录；不覆盖目标额外记录，不删除源文件，不调用 NS 或企微，也不把 executing/unknown 改成普通失败。
-
-`--services-stopped` 是维护操作声明，不会自动终止进程。切换前必须实际停止写入；恢复旧服务前需处理切换后新增数据，不能只改回旧连接。原 Node 数据库不属于本工具支持的源结构。
-
-2026-10-09 本机切换已完成：105 份审核快照、26 条审核头、3 个开票任务、3 条合同记录、3 条通知版本及3条审核审计迁入业务 MySQL，复制前后逐字段一致。切换前既有15张业务表的数据摘要保持一致；原SQLite文件保留，备份位于本机 data/database-transfer-20261009-201646（不入Git）。后端已重启，业务库状态、任务列表与全部详情、供应商群及发票列表接口返回200。本机结果不代表其他部署环境已切换。
+旧数据为测试数据，按 2026-10-10 的决定不迁移；原 `import-application` 导入命令已删除。旧 SQLite 文件（默认 `data/ns-python.sqlite`）不再被读取，是否保留由管理员决定。
 
 ## 单域名 HTTPS
 

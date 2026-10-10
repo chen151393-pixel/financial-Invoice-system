@@ -233,7 +233,7 @@ sequenceDiagram
 | 优先级 | 实现证据 | 影响 | 建议统一方式，尚未实施 |
 | --- | --- | --- | --- |
 | 1 | [app.py](../backend/app.py)给 MatchingService 的依赖只有发票、采购来源和业务库；[confirm/link](../backend/modules/matching/service.py)不读取审核版本 | 可确认本地关系，但无法证明属于本次已审核范围 | 建立 reconciliation 的公开获批依据接口；匹配必须绑定审核版本、报关行及明确采购份额 |
-| 1 | [0006 业务迁移](../backend/business_migrations/versions/0006_approved_invoice_matching.py)增加 `review_snapshot_id/review_revision/customs_line_id` 等列，当前确认保存未填这些审核字段 | “已有列”容易被误解为“审核匹配已实现” | 先完成批准范围、锁与确认写入链路，再以字段和测试证明实际生效 |
+| 1 | [0006 业务迁移](../backend/legacy_migrations/business/versions/0006_approved_invoice_matching.py)增加 `review_snapshot_id/review_revision/customs_line_id` 等列，当前确认保存未填这些审核字段 | “已有列”容易被误解为“审核匹配已实现” | 先完成批准范围、锁与确认写入链路，再以字段和测试证明实际生效 |
 | 1 | [task_policy.py](../backend/modules/reconciliation/task_policy.py)保存原采购范围；任务金额为空；匹配按子采购报关数量及行金额计算 | 审核表、合同任务、匹配可能对应不同数量金额口径 | 明确本次获批范围，保留原值／分摊值标签；单位和币种未核实不得转成额度 |
 | 1 | [task_service.py](../backend/modules/reconciliation/task_service.py)的 compare 禁用、receivedInvoices 为空 | 发票即使匹配成功，开票任务也不会随之收齐 | 用审核版本与稳定来源行关联任务和匹配结果；后端计算部分收票、已收齐与需复核 |
 | 1 | [task_dao.replace_revision](../backend/modules/reconciliation/task_dao.py)将所有非 superseded 旧任务替代，已包括 awaiting_invoice | 已人工通知的旧范围会保留历史，但尚无通知变更／收票影响处理闭环 | 重审后单独暴露已通知范围变化；保留旧通知和占用，禁止把旧票静默迁到新版本 |

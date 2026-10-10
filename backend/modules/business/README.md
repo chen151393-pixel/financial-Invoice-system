@@ -34,7 +34,7 @@
 
 隔离 MySQL 验证见 `backend/tests/test_related_purchase_storage.py`：重复导入、稳定行键、无母单证据、关联变更、源空金额标记、单位缺失、跨账户／不完整快照拒绝、错误母行／商品拒绝、金额不一致和回滚。2026-09-23 与迁移测试合计 45 项通过；全后端 285 项通过，58 项需独立配置跳过，其中本次 43 项 MySQL 测试已单独通过；lint 通过。
 
-业务库连接检查使用命令 `npm.cmd run db:business:check`（`core/business_database.py`）；原 `GET /api/business/database-status` 接口无调用方，已删除。
+业务库连接检查使用命令 `npm.cmd run db:business:check`（`core/database.py`）；原 `GET /api/business/database-status` 接口无调用方，已删除。
 
 ## 文件职责
 
