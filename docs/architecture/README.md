@@ -7,6 +7,7 @@
 - [后端规则](backend-rules.md)
 - [前端规则](frontend-rules.md)
 - [数据库设计](database.md)：表结构、状态汇总规则、迁移计划
+- [目标数据库设计](database-target.md)：按整条链路重新设计的表结构，与上一份二选一（待确认）
 
 ## 0. 已确认的决定
 
