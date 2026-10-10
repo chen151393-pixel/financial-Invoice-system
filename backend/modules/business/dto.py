@@ -1,4 +1,4 @@
-"""记录查询请求；空目标等输入问题由后端处理。"""
+"""采购报关联查请求；输入问题由后端处理。"""
 
 import re
 from datetime import date
@@ -10,42 +10,8 @@ from pydantic_core import PydanticCustomError
 from backend.core.dto import StrictModel
 
 
-class RecordQuery(StrictModel):
-    type: str = Field(max_length=100)
-    id: str = Field(default="", max_length=140)
-    mode: Literal["list", "detail"]
-
-
-class PlQuery(StrictModel):
-    pl: str = Field(min_length=1, max_length=80, pattern=r"^[A-Za-z0-9_-]+$")
-    page: int = Field(default=1, ge=1, le=12)
-
-
-class RelatedPurchaseQuery(StrictModel):
-    subPurchaseNo: str = Field(min_length=1, max_length=80, pattern=r"^[A-Za-z0-9_-]+$")
-    invoiceGross: str = Field(pattern=r"^-?\d{1,16}(?:\.\d{1,6})?$")
-
-
-class PlSyncRequest(StrictModel):
-    pl: str = Field(min_length=1, max_length=80, pattern=r"^[A-Za-z0-9_-]+$")
-
-
-class LocalPlQuery(PlSyncRequest):
-    page: int = Field(default=1, ge=1, le=100000)
-
-
-class PlComparisonQuery(StrictModel):
-    pl: str = Field(min_length=1, max_length=80, pattern=r"^[A-Za-z0-9_-]+$")
-    company: str = Field(default="", max_length=120)
-
-    @field_validator("pl", "company", mode="before")
-    @classmethod
-    def strip_search_input(cls, value):
-        return value.strip() if isinstance(value, str) else value
-
-
 class PlScriptQuery(StrictModel):
-    """与NS输入一致；旧PL＋公司接口继续独立兼容原有调用方。"""
+    """与NS共用脚本的查询输入一致。"""
 
     type: Literal["pl", "customsRecord", "declaration"] = "pl"
     pl: str = Field(default="", max_length=100)

@@ -22,11 +22,6 @@ export const navigation: readonly SidebarGroup<View>[] = [
     label: "发票管理",
     items: [
       {
-        id: "dashboard",
-        label: "发票工作台",
-        icon: <MenuIcon path="M3 3h7v7H3z M14 3h7v7h-7z M3 14h7v7H3z M14 14h7v7h-7z" />,
-      },
-      {
         id: "invoices",
         label: "进项发票",
         icon: <MenuIcon path="M5 3h14v18l-3-2-4 2-4-2-3 2z M8 8h8 M8 12h8" />,
@@ -35,11 +30,6 @@ export const navigation: readonly SidebarGroup<View>[] = [
         id: "match",
         label: "自动匹配",
         icon: <MenuIcon path="M3 6h5l8 12h5 M17 14l4 4-4 4 M3 18h5l3-4 M14 10l2-4h5 M17 2l4 4-4 4" />,
-      },
-      {
-        id: "exceptions",
-        label: "异常处理",
-        icon: <MenuIcon path="M12 4l10 17H2z M12 10v4 M12 17v.1" />,
       },
     ],
   },
@@ -65,16 +55,6 @@ export const navigation: readonly SidebarGroup<View>[] = [
         id: "pl",
         label: "采购报关联查",
         icon: <MenuIcon path="M3 4h18v16H3z M3 9h18 M3 14h18 M9 4v16" />,
-      },
-      {
-        id: "reconcile",
-        label: "系统对账",
-        icon: <MenuIcon path="M3 7h17 M16 3l4 4-4 4 M21 17H4 M8 13l-4 4 4 4" />,
-      },
-      {
-        id: "writeback",
-        label: "回写 NetSuite",
-        icon: <MenuIcon path="M4 20L20 4 M9 4h11v11" />,
       },
     ],
   },

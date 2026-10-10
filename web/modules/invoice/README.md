@@ -16,7 +16,7 @@
 
 ## 真实进项发票页
 
-`InvoiceList.tsx`通过本模块api调用真实列表与详情接口，`invoice-list.css`限定页面样式；`InvoiceWorkspacePage`复用AppFrame。正式路由`/invoices`，兼容`/demo?view=invoices`并替换地址，菜单及导入成功提示进入正式列表。已移除旧模拟InvoiceList组件；模拟匹配等其他页面保持演示状态。
+`InvoiceList.tsx`通过本模块api调用真实列表与详情接口，`invoice-list.css`限定页面样式；`InvoiceWorkspacePage`复用AppFrame。正式路由`/invoices`，菜单及导入成功提示进入正式列表。
 
 搜索、状态及日期筛选、分页与金额统计均由后端提供。展示未知币种及待核实状态，不填充模拟置信度、抵扣金额或NS关联。列表加载时清除旧结果；过期请求不回写UI。商品详情按需读取，列表宽表保留原生横向滚动，详情同样使用原生横向滚动。
 

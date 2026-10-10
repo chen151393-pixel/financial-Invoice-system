@@ -10,11 +10,10 @@ from sqlalchemy import inspect, text
 from sqlalchemy.engine import make_url
 from sqlalchemy.exc import SQLAlchemyError
 
-from .config import ROOT, load_settings
 from .core.application_database import bootstrap_application_tables, copy_application_records
 from .core.business_database import check_business_database, make_business_engine
+from .core.config import ROOT, load_settings
 from .database import make_engine
-from .workflow import Workflow
 
 
 def migration_head():
@@ -104,7 +103,6 @@ def main():
         choices=[
             "upgrade",
             "mysql-sql",
-            "recover",
             "business-check",
             "business-upgrade",
             "business-sql",
@@ -140,17 +138,6 @@ def main():
         finally:
             if engine is not None:
                 engine.dispose()
-    if args.command == "recover":
-        if not args.services_stopped:
-            parser.error("recover 仅能在所有 API/任务进程停止后执行，请传 --services-stopped")
-        engine = make_business_engine(settings.business_database_url)
-        if engine is None:
-            raise ValueError("请先配置业务MySQL")
-        try:
-            count = Workflow(settings, None, engine).recover_interrupted()
-            print(f"已标记 {count} 个中断任务为 unknown；须人工核对 NS，不会再次提交")
-        finally:
-            engine.dispose()
 
 
 if __name__ == "__main__":

@@ -14,9 +14,7 @@
 
 该定位只生成展示关系 `lineRelations`，优先保留已验证的 NS v3 展示契约；没有 v3 时按本地关系逐行展开，数量和金额仍为子单原值，不生成分摊额度，不将技术状态改为 `matched`。无需新增表或字段，复用来源表 `source_data` 和关系表 `evidence_data`；先分页主键再读取当前页依据，原始 JSON 不返回前端。行归属参加审核内容摘要，改变归属后旧预览和审核不再适用。测试见 `backend/tests/test_local_line_relations.py`。
 
-## 票面线索只读核对
-
-`POST /api/ns/related-purchase` 接受 `subPurchaseNo` 和票面金额字符串 `invoiceGross`，在已配置的 NS 账户中按子采购单号精确查找，读取子单明细与其直接引用的报关记录。响应返回来源单号、真实报关号、行金额及十进制金额数值比较；无同号子单返回 `found=false`，重复单号或来源归属不一致直接报错。该接口不导入发票、不保存关系、不判定币种或审批能力。配置仍复用 PL 映射和 NS 读取白名单。
+## 母采购表
 
 独立业务库已新增母采购单主表／明细表及母子组合外键，见[八表关联说明](../../../docs/mysql/eight-table-relations.md)。版本 `0002_parent_relation_status` 增加子单母采购状态（unknown／no_parent／linked）及子行 `ns_parent_line_ref` 原始标识字段；版本 `0003_customs_price_precision` 将报关单价扩为 DECIMAL(38,18)，保留来源精度。迁移命令为 `npm.cmd run db:business:upgrade`。历史空引用仍默认 unknown；服务端快照在核实母行后写入 linked，REST 与独立 SQL 同时确认没有母单、且不存在母行引用时写入 no_parent。网页母采购自动拉取和定时同步尚未接入。
 
@@ -36,29 +34,23 @@
 
 隔离 MySQL 验证见 `backend/tests/test_related_purchase_storage.py`：重复导入、稳定行键、无母单证据、关联变更、源空金额标记、单位缺失、跨账户／不完整快照拒绝、错误母行／商品拒绝、金额不一致和回滚。2026-09-23 与迁移测试合计 45 项通过；全后端 285 项通过，58 项需独立配置跳过，其中本次 43 项 MySQL 测试已单独通过；lint 通过。
 
-查询配置允许访问的NS记录，支持列表与指定ID。已实现采购与报关按PL完整落库；本机已配置真实沙箱映射并通过单个PL只读联查，真实保存尚未验收。
-
-已接入统一 MySQL 业务库连接检查：`GET /api/business/database-status` 需要现有登录身份，返回未配置、连接失败、缺少表或连接成功。`service.py` 调用 `core/business_database.py` 的基础设施检查，`database_vo.py` 定义安全响应。连接参数使用 `BUSINESS_MYSQL_*` 或 `BUSINESS_DATABASE_URL`，正式运行与审核、开票跟进共用同一个连接池；配置及命令见 [MySQL说明](../../../docs/mysql/README.md)。检查不执行建表或单据同步。
-
-已增加 PL 单联查：`pl_service.py` 编排按需读取，`pl_config.py` 校验服务器字段映射，`pl_mapper.py` 转换源字段，`pl_vo.py` 定义输出。配置和边界见 [PL 联查说明](../../../docs/pl-lookup.md)。
+业务库连接检查使用命令 `npm.cmd run db:business:check`（`core/business_database.py`）；原 `GET /api/business/database-status` 接口无调用方，已删除。
 
 ## 文件职责
 
 当前核对页使用 `POST /api/ns/pl-script-comparison`：`dto.py` 的 `PlScriptQuery` 校验条件，`pl_script_service.py` 调用NS共用服务并检查账户、范围及完整性，`pl_script_vo.py` 按contractVersion校验v1／15列、v2／17列展示契约。v2末两列为NS原单价及报关币种，保持字符串，采购行这两列必须为空；版本和列数不符时拒绝，不在Python补算。NS追溯和分摊直接复用Suitelet同目录模块，仅返回查询JSON，不在Python中维护第二套规则。需上传新版RESTlet才能返回17列，旧版在过渡期间保持兼容，见 [部署说明](../../../docs/pl-script-integration.md)。
 
-下述旧PL＋公司接口保留兼容，网页已不再调用；确认外部调用方迁移后再整体移除。
-
-真实 PL 核对接口 `POST /api/ns/pl-comparison`：`pl_comparison_service.py` 负责公司筛选与归组；`pl_comparison_mapper.py` 将源行转换为固定 15 列；`pl_comparison_vo.py` 定义响应；`pl_export.py` 生成同次读取结果的 Excel。复用 `pl_reader.py`，额外按 PL 独立查找报关明细，避免没有采购关联时漏报关。只读，不触发数据库保存或 NS 写入。边界与验证见 [PL 联查说明](../../../docs/pl-lookup.md)。
-
-controller.py声明接口；dto.py定义查询请求；service.py校验查询目标并调用注入的NS客户端。
+`controller.py` 只声明 `POST /api/ns/pl-script-comparison`；`service.py` 装配联查与存储用例。
 
 ## 公开入口
 
-`GET /api/ns/records/*；POST /api/ns/query`。模块通过应用工厂注入依赖，不建立全局客户端或全局数据库连接。
+HTTP：`POST /api/ns/pl-script-comparison`。其他模块通过 `public.py` 读取来源。模块通过应用工厂注入依赖，不建立全局客户端或全局数据库连接。
+
+已删除无调用方的接口：`/api/ns/pl-comparison`、`/api/ns/pl-lookup`、`/api/ns/pl-lookup/config`、`/api/ns/related-purchase`、`/api/ns/records/*`、`/api/ns/query`、`/api/business/pl-sync`、`/api/business/pl-storage/config`、`/api/business/pl-documents/query`、`/api/business/database-status`。
 
 ## 关键约束
 
-详细查询空ID在后端拒绝，保留旧GET协议。
+`StorageService.sync(pl)` 与 `query(pl, page)` 已无 HTTP 入口，暂时保留：它们承载 `_save` 去重、关联与回滚规则的主要测试（`test_pl_storage.py`、`test_sync_storage.py`、`test_business_migrations.py`）。架构方案第 4 步把这些测试改为经 `sync_page` 后删除。
 
 ## 验证
 
@@ -68,7 +60,7 @@ controller.py声明接口；dto.py定义查询请求；service.py校验查询目
 
 同步页新增按页保存入口，复用 `StorageService.sync_page`：由同步模块提供服务器分页读取回调，在原有账户锁内读取，`PlReader.collect_records` 补齐独立明细、关联报关单和各自 PL。与旧PL保存共用 Mapper、DAO、短事务和去重规则；标准采购订单暂不支持保存。接口说明见 [同步模块](../sync/README.md#按页拉取并保存)。
 
-`pl_reader.py`共用完整读取；`entity.py`反射既有四表，不自动建表；`storage_mapper.py`纯字段／Decimal转换；`dao.py`负责命名锁、查询及保存SQL；`storage_service.py`协调账户范围串行读取及原子事务。接口与字段映射见 [PL保存说明](../../../docs/pl-storage.md)。后端保留本地查询、拉取保存及仅查询 NS 接口；旧 PL 单联查前端已移除，当前核对页仅查询JSON，不提供Excel导出。
+`pl_reader.py`共用完整读取；`entity.py`反射既有四表，不自动建表；`storage_mapper.py`纯字段／Decimal转换；`dao.py`负责命名锁、查询及保存SQL；`storage_service.py`协调账户范围串行读取及原子事务。接口与字段映射见 [PL保存说明](../../../docs/pl-storage.md)。当前核对页仅查询 JSON，不提供 Excel 导出。
 
 PL脚本结果校验通过后，Service按来源补充 `missingCells`，用于拼表关键字段缺失提示；保留NS关联、分摊和备注，不新增差额算法。
 

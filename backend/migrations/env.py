@@ -1,5 +1,5 @@
 from alembic import context
-from backend.config import load_settings
+from backend.core.config import load_settings
 from backend.database import make_engine, metadata
 
 config = context.config

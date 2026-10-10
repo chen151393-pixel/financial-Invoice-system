@@ -5,7 +5,6 @@ from decimal import Decimal
 from uuid import uuid4
 
 import pytest
-from backend.app import create_app
 from backend.core.business_database import make_business_engine
 from backend.core.errors import ApiError
 from backend.modules.business import dao
@@ -13,8 +12,7 @@ from backend.modules.business.entity import load_tables
 from backend.modules.business.pl_config import parse_config
 from backend.modules.business.storage_mapper import database_value, project_storage, validate_storage_config
 from backend.modules.business.storage_service import StorageService
-from backend.tests.test_pl_lookup import LookupNS
-from fastapi.testclient import TestClient
+from backend.tests.pl_fakes import LookupNS
 from sqlalchemy import Column, Date, MetaData, Numeric, String, Table, select
 
 
@@ -240,23 +238,3 @@ def test_mysql_account_lock_rejects_overlapping_pl_before_remote_reads(mysql_sto
             dao.release_sync_lock(connection, key)
             connection.commit()
     assert service.sync("PL001", owner)["purchase"]["created"] == 2
-
-
-def test_mysql_http_sync_and_local_query(context, mysql_storage):
-    service, ns, owner = mysql_storage
-    # HTTP身份与用户提交的tenant无关；测试结束由fixture清理实际身份范围。
-    app = create_app(context.settings, ns, context.engine, service.engine)
-    app.state.identity.owner = lambda **kwargs: owner
-    with TestClient(app) as client:
-        invalid = client.post("/api/business/pl-sync", json={"pl": "PL001", "tenant_id": "other"})
-        assert invalid.status_code == 400
-        assert client.post("/api/business/pl-sync", json={"pl": "PL001"}).status_code == 200
-        assert client.post("/api/business/pl-sync", json={"pl": "PL001"}).json()["purchase"]["created"] == 0
-        assert client.post("/api/business/pl-documents/query", json={"pl": "PL001"}).json()["total"] == 4
-
-
-def test_new_endpoints_require_authentication(context):
-    with TestClient(create_app(context.settings, context.ns, context.engine)) as client:
-        for path in ("pl-sync", "pl-documents/query"):
-            assert client.post("/api/business/" + path, json={"pl": "PL001"}).status_code == 401
-        assert client.get("/api/business/pl-storage/config").status_code == 401

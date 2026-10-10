@@ -3,7 +3,7 @@ from copy import deepcopy
 
 import uvicorn
 
-from .config import ROOT, load_settings
+from .core.config import ROOT, load_settings
 
 
 def main():

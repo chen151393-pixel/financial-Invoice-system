@@ -91,17 +91,9 @@ def test_driver_failure_does_not_expose_credentials(code):
     assert "secret" not in str(result) and "private" not in str(result)
 
 
-def test_database_endpoint_requires_login_and_keeps_existing_health(context):
+def test_health_is_public(context):
     with TestClient(create_app(context.settings, context.ns, context.engine)) as client:
-        assert client.get("/api/business/database-status").status_code == 401
         assert client.get("/api/health").json() == {"status": "ok"}
-        response = client.get(
-            "/api/business/database-status",
-            headers={"Authorization": f"Bearer {context.settings.service_key}"},
-        )
-        assert response.status_code == 200
-        assert response.json()["state"] == "schema_incomplete"
-        assert not context.ns.writes
 
 
 def test_runtime_owns_only_one_business_pool_and_releases_it(context, monkeypatch):
@@ -112,12 +104,8 @@ def test_runtime_owns_only_one_business_pool_and_releases_it(context, monkeypatc
     verified = []
     monkeypatch.setattr("backend.app.verify_database", lambda actual, **kwargs: verified.append(actual))
     settings = replace(context.settings, business_database_url="mysql+pymysql://user@localhost/business")
-    with TestClient(create_app(settings, context.ns)) as client:
-        response = client.get(
-            "/api/business/database-status",
-            headers={"Authorization": f"Bearer {context.settings.service_key}"},
-        )
-        assert response.json()["state"] == "connection_failed"
+    with TestClient(create_app(settings, context.ns)):
+        pass
     assert verified == [engine]
     factory.assert_called_once_with(settings.business_database_url)
     engine.dispose.assert_called_once()

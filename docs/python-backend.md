@@ -149,19 +149,7 @@ TLS_KEY_PATH=C:/secure/tls/private.key
 
 当前本机浏览器自动建立管理员会话，无需输入密码；owner仍为 `user:ADMIN_USERNAME`，不会改变原数据归属。远程地址不允许使用本机入口，转发头不作为本机证明；公网部署必须关闭LOCAL_BROWSER_ACCESS并另行提供经过认证的访问入口，当前前端不提供远程登录表单。服务调用仍使用独立 SERVICE_API_KEY（至少32位）；浏览器使用HttpOnly／SameSite=Strict会话Cookie，变更请求继续校验Origin。生产 HTTPS 下的 Cookie 设置 `Secure` 属性。NS 访问令牌和私钥不会返回浏览器。
 
-预览有效期 15 分钟。创建使用 POST 方法和稳定的外部标识（`externalId`）；更新只接受内部标识（Internal ID），使用 PATCH 方法。预览通过 GET 方法读取记录并验证字段白名单，不意味着 NS 全部业务规则已通过。执行先持久占用目标，再读取并核对 NS，成功后在同一数据库事务中保存结果、释放锁并写审计。
-
-写入失败或超时后标记为“结果未知”（`unknown`），不会自动重试；写入后结果持久化失败时保留“执行中”（`executing`）状态和锁，同样禁止再次提交。正常启动接口服务不会重置其他进程留下的执行状态。
-
-如果服务异常中断，**停止所有接口服务和任务进程后**运行：
-
-```powershell
-.\.venv\Scripts\python.exe -m backend.manage recover --services-stopped
-```
-
-该命令把当前 NS 账户的“执行中”（`executing`）任务标记为“结果未知”（`unknown`），保留目标锁，不发起 NS 请求。再通过 NS 记录、外部标识（`externalId`）或日志核对结果。当前没有自动解除“结果未知”状态的接口。
-
-本地数据库锁不能阻止 NS 内扫描任务或其他系统在检查后修改同一记录，因此仍需挑选不被现有任务处理的测试单。跨系统原子版本检查需要 NS 端协作，当前没有实现。
+NS 回写（预览、执行、未知结果保护、`recover` 恢复命令）已移至 `archive/writeback` 分支；主线保留 `ns_previews`、`ns_target_locks`、`ns_audit` 的表和数据，不再有代码读写。
 
 默认单个 Uvicorn 进程；会话和登录限流保存在内存，不要直接用多进程部署。后续扩容前应先外置会话和限流。完整分页同步、自动发票匹配、多角色审批、飞书用户登录和自定义 RESTlet 适配仍需按业务补齐。
 
@@ -175,13 +163,9 @@ TLS_KEY_PATH=C:/secure/tls/private.key
 | POST /api/session/local | 仅本机同源浏览器自动建立会话 |
 | POST /api/session；DELETE /api/session | 保留的密码登录／退出API，当前前端不调用 |
 | GET /api/ns/status；POST /api/ns/connect | 配置状态／M2M 验证 |
-| GET /api/ns/records/:type；GET /api/ns/records/:type/:id | 前 50 条索引／指定记录 |
-| POST /api/ns/preview | 操作类型（`operation`）、记录类型（`type`）、记录标识（`id`，更新时必填）、拟写入内容（`payload`） |
-| POST /api/ns/execute | 预览标识（`previewId`）、确认标记（`confirm=true`）；禁止附加替换写入内容 |
-| GET /api/ns/jobs；GET /api/ns/jobs/:id | 当前身份、当前 NS 账户的任务 |
 | GET /api/openapi.json | 登录后读取接口协议 |
 
-`npm.cmd test` 构建前端并运行 Python 测试，不使用真实 NS 凭证。`npm.cmd run lint:api` 检查代码，`npm.cmd run db:sql:mysql` 输出 MySQL 迁移 SQL 供审阅。测试覆盖签名、访问令牌缓存、防重定向、登录、防跨站请求伪造（CSRF）、权限隔离、预览、并发锁、超时和离线恢复。
+`npm.cmd test` 构建前端并运行 Python 测试，不使用真实 NS 凭证。`npm.cmd run lint:api` 检查代码，`npm.cmd run db:sql:mysql` 输出 MySQL 迁移 SQL 供审阅。测试覆盖签名、访问令牌缓存、防重定向、登录、防跨站请求伪造（CSRF）和权限隔离。
 
 真实 MySQL 8.0 集成测试为可选项：通过进程环境变量 MYSQL_TEST_URL 指向一个 **预先创建、没有表、名称以 ns_test_ 开头** 的专用 MySQL 8.0 测试库，再运行 `npm.cmd run test:api`。测试不会自动删除该库；没有提供连接配置时明确跳过，SQL 编译检查不能替代真实数据库联调。
 
@@ -191,8 +175,6 @@ NS 协议依据：[M2M 的 JWT 请求令牌结构](https://docs.oracle.com/en/cl
 
 ## P0模块化重构
 
-当前模块职责、兼容入口与目录见[后端模块说明](../backend/README.md)。既有表结构、迁移和/api/ns/*调用方式保留。
-
-新增辅助接口：`POST /api/ns/query`接收type、id、mode（list/detail），后端校验查询；`POST /api/ns/preview-text`接收operation、type、id、payloadText，后端解析并校验编辑内容；`GET /api/ns/jobs/{id}/view`返回原预览字段及stateLabel、actions.execute.allowed/reason。旧execute接口仍在提交时重做校验，前端allowed不是写入授权。
+当前模块职责、兼容入口与目录见[后端模块说明](../backend/README.md)。既有表结构和迁移保留；无调用方的 `/api/ns/*` 接口与回写接口已删除。
 
 运行 `npm.cmd run check` 完成本地质量检查。尚未生成OpenAPI TypeScript客户端、部署CI或配置远程分支保护，不将本地检查描述为远程强制门禁。

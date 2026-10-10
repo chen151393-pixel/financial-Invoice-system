@@ -23,7 +23,7 @@ npm.cmd start
 
 ## 保存字段配置
 
-复用 [PL联查配置](pl-lookup.md) 的五类记录、引用字段与白名单，并添加 `company_record_type` 和各记录的 `storage_fields`。
+复用 [PL联查配置](history/pl-lookup.md) 的五类记录、引用字段与白名单，并添加 `company_record_type` 和各记录的 `storage_fields`。
 
 `company_record_type` 表示采购公司与报关明细公司共同引用的记录类型。例如确认均引用 classification 后才填写 `classification`；不能凭公司显示名称推断。
 

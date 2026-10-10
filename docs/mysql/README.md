@@ -109,16 +109,7 @@ npm.cmd run db:business:check
 
 退出码 0 表示连接成功且六张表可见；退出码 1 表示未配置、连接失败或缺少表。检查不会创建、删除或迁移表。需要先手动执行本文件前述六表 SQL；不要使用 `db:upgrade` 初始化这个独立业务库。
 
-修改环境变量后重启后端。已登录用户可调用 `GET /api/business/database-status`，沿用现有 Cookie 或服务密钥身份验证；未登录返回 401。接口返回：
-
-| 字段 | 含义 |
-| --- | --- |
-| configured | 是否已启用业务库配置 |
-| connected | 是否连接并完成表清单读取 |
-| ready | 六张基础表是否可见；不代表字段、写入权限或自动落库已验证 |
-| state | not_configured未配置、connection_failed失败、schema_incomplete缺表、connected成功 |
-| message | 中文检查结果，不含连接串或密码 |
-| missingTables | 缺失的预期业务表名 |
+修改环境变量后重启后端。连接检查使用上述 `db:business:check` 命令；原 `GET /api/business/database-status` 接口无调用方，已删除。
 
 连接池启用失效检测与回收，每个新连接设置 UTC 和 utf8mb4。业务库暂不可用时明确报错，不回退到旧 SQLite；正式启动要求两条迁移版本有效。启动不自动建表，也不执行单据同步。
 

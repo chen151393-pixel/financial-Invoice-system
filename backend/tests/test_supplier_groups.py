@@ -4,7 +4,7 @@ import pytest
 from alembic import command
 from alembic.config import Config
 from backend.app import create_app
-from backend.config import ROOT
+from backend.core.config import ROOT
 from backend.core.errors import ApiError
 from backend.database import make_engine
 from backend.modules.business.entity import load_tables

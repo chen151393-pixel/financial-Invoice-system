@@ -17,7 +17,7 @@
 - 支持分批报关、一票多单、一单多票；本期整票确认，子采购行可部分分配。
 - 母单金额、子单金额、报关金额是不同口径，不能累加为同一应开票金额。可匹配额度来自有效审核范围，并扣除不重复的历史开票和本系统占用。
 
-依据：[业务模块](../../backend/modules/business/README.md)、[同步模块](../../backend/modules/sync/README.md)、[发票导入](../../backend/modules/invoice/README.md)、[完整匹配方案](../lemon-invoice-matching-plan.md)、[架构方案](../architecture-plan.md)。
+依据：[业务模块](../../backend/modules/business/README.md)、[同步模块](../../backend/modules/sync/README.md)、[发票导入](../../backend/modules/invoice/README.md)、[完整匹配方案](../lemon-invoice-matching-plan.md)、[架构方案](../history/architecture-plan.md)。
 
 ### 1.1 现状与目标
 

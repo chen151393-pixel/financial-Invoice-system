@@ -20,9 +20,6 @@ export default function FinanceWorkspacePage() {
       dataLabel="已入库 NS 单据"
       actions={
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-          <a className="ui-button ui-button--secondary" href="/finance-reconciliation/example">
-            查看闭环示例
-          </a>
           <a className="ui-button ui-button--secondary" href="/invoice-followup">
             开票跟进
           </a>

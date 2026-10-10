@@ -19,7 +19,7 @@ export function AppFrame<Id extends string>({
   onNavigate: (id: Id) => void;
   title: string;
   subtitle: string;
-  mode: "demo" | "live" | "pending";
+  mode: "live" | "pending";
   actions?: ReactNode;
   children: ReactNode;
   notice?: string | null;
@@ -43,8 +43,7 @@ export function AppFrame<Id extends string>({
         <header className="platform-frame__topbar">
           <span>发票对账平台 / {title}</span>
           <span className="platform-frame__badge">
-            {dataLabel ??
-              (mode === "live" ? "实时数据 · 只读查询" : mode === "pending" ? "数据源接入状态" : "演示数据")}
+            {dataLabel ?? (mode === "live" ? "实时数据 · 只读查询" : "数据源接入状态")}
           </span>
         </header>
         <div className="platform-frame__content">
@@ -60,7 +59,7 @@ export function AppFrame<Id extends string>({
               {notice ??
                 (mode === "live"
                   ? "本页通过后端读取 NS 真实数据，支持核对和导出，不写入 NS。"
-                  : "本页业务数据与连接状态均为模拟，演示操作不会调用 NS。")}
+                  : "本页显示各数据源的接入状态。")}
             </p>
           )}
           {children}

@@ -13,6 +13,30 @@ from backend.tests.test_related_purchase_storage import sample as sample
 from sqlalchemy import inspect, select, text
 
 
+def legacy_preview(engine, state, *, lock=False):
+    """回写代码已移出主线；直接写入历史记录，验证导入工具原样保留。"""
+    row = {
+        "id": "00000000-0000-0000-0000-000000000001",
+        "account": "ns-a",
+        "owner": "owner",
+        "target": "vendorBill/1",
+        "operation": "update",
+        "payload": '{"memo":"迁移测试"}',
+        "snapshot": None,
+        "created_at": 1,
+        "expires": 2,
+        "state": state,
+        "result": None,
+    }
+    with engine.begin() as connection:
+        connection.execute(metadata.tables["ns_previews"].insert(), row)
+        if lock:
+            connection.execute(
+                target_locks.insert(), {"account": "ns-a", "target": "vendorBill/1", "preview_id": row["id"]}
+            )
+    return row
+
+
 @pytest.fixture
 def target(tmp_path):
     engine = make_engine(f"sqlite:///{tmp_path / 'target.sqlite'}")
@@ -22,10 +46,7 @@ def target(tmp_path):
 
 
 def test_copy_preserves_unknown_and_lock_and_is_idempotent(context, target):
-    body = {"type": "vendorBill", "id": "1", "operation": "update", "payload": {"memo": "迁移测试"}}
-    preview = context.workflow.preview(body, "owner")
-    context.ns.fail_write = True
-    assert context.workflow.execute(preview["id"], "owner")["state"] == "unknown"
+    preview = legacy_preview(context.engine, "unknown", lock=True)
     first = copy_application_records(context.engine, target, migration_head())
     assert first["ns_previews"]["inserted"] == first["ns_target_locks"]["inserted"] == 1
     second = copy_application_records(context.engine, target, migration_head())
@@ -36,9 +57,7 @@ def test_copy_preserves_unknown_and_lock_and_is_idempotent(context, target):
 
 
 def test_copy_conflict_rolls_back_previously_inserted_tables(context, target):
-    preview = context.workflow.preview(
-        {"type": "vendorBill", "id": "1", "operation": "update", "payload": {"memo": "来源"}}, "owner"
-    )
+    preview = legacy_preview(context.engine, "preview")
     with context.engine.begin() as connection:
         connection.execute(
             bindings.insert(),

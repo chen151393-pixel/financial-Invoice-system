@@ -168,10 +168,11 @@ documents_pending → notify_pending → awaiting_invoice → partially_received
 | `/api/ns/pl-lookup/config`、`/api/ns/pl-lookup` 及仅被其使用的文件 | 前端无调用 |
 | `/api/ns/records/*`、`/api/ns/query` | NS 通用调试查询，前端无调用 |
 | `/api/ns/related-purchase` 及 `related_purchase_*.py` | 前端只定义未调用；同步保存若依赖其中规则，先移入 source |
-| `/api/business/pl-sync`、`/pl-storage/config`、`/pl-documents/query`、`/database-status` | 前端无调用；保存由 `/api/ns/sync/{kind}/pull-save` 承担；数据库状态并入 `/api/health` |
-| `/api/reconciliation/query`（实时 NS 审核）及 `task_policy.split_scope` 中处理 NS 展示数据的分支 | 前端函数无调用方；审核只基于已同步数据 |
-| `backend/config.py`、`database.py`、`netsuite.py`、`auth.py` | 旧导入兼容入口，调用方改为新路径后删除 |
-| `audit` 模块 | 审核审计并入 review；回写审计随 writeback 移走 |
+| `/api/business/pl-sync`、`/pl-storage/config`、`/pl-documents/query`、`/database-status` | 前端无调用；保存由 `/api/ns/sync/{kind}/pull-save` 承担；数据库状态改用已有命令 `db:business:check` |
+| `/api/reconciliation/query`（实时 NS 审核）及 `task_policy.split_scope` 中处理 NS 展示数据的分支 | 前端函数无调用方；审核只基于已同步数据。**移到第 4 步**：审批幂等、审计回滚、过期预览、MySQL 并发等核心测试走这条路径，须随 review 模块重组改为本地路径后再删 |
+| `backend/config.py`、`database.py`、`netsuite.py`、`auth.py` | 旧导入兼容入口，调用方改为新路径后删除。`database.py` 同时是 Alembic 元数据登记入口，**移到第 3 步**并入 `core` |
+| `audit` 模块 | 审核审计并入 review；回写审计随 writeback 移走。**移到第 4 步**；第 1 步先把回写两张表的定义移入 `audit/entity.py`，保证历史数据导入仍原样复制 |
+| `StorageService.sync(pl)`、`query(pl, page)` | 接口已删，方法暂留：承载 `_save` 去重、关联、回滚规则的主要测试。**第 4 步**把测试改为经 `sync_page` 后删除 |
 
 ### 6.2 前端与原型
 
@@ -195,10 +196,10 @@ documents_pending → notify_pending → awaiting_invoice → partially_received
 
 | 步骤 | 内容 | 验收 |
 | --- | --- | --- |
-| 1 清理 | 从当前 `develop` 建立 `archive/writeback` 分支；执行第 6 节删除清单 | 全部现有测试、lint、类型检查、构建通过 |
+| 1 清理 ✅ | 从当前 `develop` 建立 `archive/writeback` 分支；执行第 6 节删除清单（标注"移到第 3/4 步"的除外） | 全部现有测试、lint、类型检查、构建通过 |
 | 2 目录分离 | `web/` → `frontend/`（独立 `package.json`，引入 `react-router`）；`netsuite/` 独立；更新 Dockerfile、启动脚本 | 本地联动启动、Docker 构建、全部检查通过 |
 | 3 数据库收口 | 第 5 节剩余工作 | 隔离 MySQL 上从空库初始化和从现有库升级都通过 |
-| 4 模块重组 | `business` → `source`；`reconciliation` 拆为 `review` + `task`；各模块改为分层目录；引入事件；前端同步改名 | 架构检查覆盖新依赖方向，全部测试通过 |
+| 4 模块重组 | `business` → `source`；`reconciliation` 拆为 `review` + `task`；各模块改为分层目录；引入事件；前端同步改名；完成第 6 节标注"移到第 4 步"的删除 | 架构检查覆盖新依赖方向，全部测试通过 |
 | 5 打通链路 | 任务行、统一分配台账、匹配按任务行取候选、事件驱动任务状态 | 一张报关单从审核走到"已收齐"，无需手工改状态；MySQL 并发测试通过 |
 | 6 定时同步 | NS 报关和子采购定时拉取；柠檬云 open2 定时拉票 | 无人操作时新报关单、新发票自动进入工作台 |
 | 以后 | 登录与角色、企微自动发送、NS 回写（从分支恢复） | 另行设计 |

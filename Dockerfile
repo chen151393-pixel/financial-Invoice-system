@@ -4,10 +4,8 @@ WORKDIR /src
 COPY package.json package-lock.json ./
 RUN npm ci
 COPY web ./web
-COPY app ./app
 COPY public ./public
 COPY scripts ./scripts
-COPY postcss.config.mjs ./
 RUN npm run build
 
 FROM m.daocloud.io/docker.io/library/python:3.11-slim

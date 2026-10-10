@@ -1,6 +1,8 @@
 # 项目目录与架构地图
 
-核对日期：2026-09-24。本文描述当前工作区的实际目录、入口和依赖，包含未提交实现。业务规则与接口细节统一链接到模块文档；未来设计见[架构方案](architecture-plan.md)，业务衔接见[系统链路](system-chain.md)。
+> **2026-10-09 更新**：按[架构设计 v2](architecture/README.md)第 1 步，NS 回写 `writeback` 已移至 `archive/writeback` 分支，原型与 `/demo` 演示页、无调用方的接口和旧兼容入口已删除。下文中涉及这些内容的描述已过时；本文将在实施完成后由 `docs/architecture/` 替代。
+
+核对日期：2026-09-24。本文描述当前工作区的实际目录、入口和依赖，包含未提交实现。业务规则与接口细节统一链接到模块文档；未来设计见[架构方案](history/architecture-plan.md)，业务衔接见[系统链路](system-chain.md)。
 
 ## 1. 架构结论
 
@@ -81,7 +83,7 @@ flowchart TB
 | [invoice](../backend/modules/invoice/README.md) | Excel 解析、导入、查询，`parser.py`、`service.py` | `web/modules/invoice/`；同步工作区复用其导入组件 |
 | [matching](../backend/modules/matching/README.md) | 候选、关系、分配、占用，`service.py`、`policy.py`、`dao.py` | `web/modules/matching/` |
 | [reconciliation](../backend/modules/reconciliation/README.md) | 审核、任务、合同与人工通知，`service.py`、`task_service.py`、`notification_service.py` | `web/modules/reconciliation/` |
-| [writeback](../backend/modules/writeback/README.md) | 不可变预览、执行和未知结果保护，`service.py` | 正式旧页面已移除，菜单对应演示页 |
+| writeback（已移至 `archive/writeback` 分支） | 不可变预览、执行和未知结果保护，`service.py` | 正式旧页面已移除，菜单对应演示页 |
 | [audit](../backend/modules/audit/README.md) | 在调用方事务中追加审计，`public.py`、`dao.py` | 暂无独立正式页面 |
 
 `exception` 与 `dashboard` 是目标业务归属，目前没有对应正式后端目录。不要因导航有演示入口就补空模块，也不要把已有任务功能另建为第二套业务实现。

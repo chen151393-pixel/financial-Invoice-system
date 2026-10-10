@@ -1,23 +1,11 @@
-"""NS业务记录查询接口。"""
+"""NS 采购报关联查接口。"""
 
 from fastapi import APIRouter
 
 from backend.core.dependencies import Owner
 
-from .database_vo import DatabaseStatus, StorageConfiguration, StorageResult
-from .dto import (
-    LocalPlQuery,
-    PlComparisonQuery,
-    PlQuery,
-    PlScriptQuery,
-    PlSyncRequest,
-    RecordQuery,
-    RelatedPurchaseQuery,
-)
-from .pl_comparison_vo import ComparisonResult
+from .dto import PlScriptQuery
 from .pl_script_vo import ScriptComparisonResult
-from .pl_vo import PlConfiguration, PlResult
-from .related_purchase_vo import RelatedPurchaseFound, RelatedPurchaseMissing
 
 
 def create_router(service):
@@ -26,55 +14,5 @@ def create_router(service):
     @router.post("/pl-script-comparison", response_model=ScriptComparisonResult)
     def pl_script_comparison(body: PlScriptQuery, owner: Owner):
         return service.pl_script.query(body)
-
-    @router.post("/pl-comparison", response_model=ComparisonResult)
-    def pl_comparison(body: PlComparisonQuery, owner: Owner):
-        return service.pl_comparison.query(body.pl, body.company)
-
-    @router.get("/pl-lookup/config", response_model=PlConfiguration)
-    def pl_config(owner: Owner):
-        return service.pl_lookup.configuration()
-
-    @router.post("/pl-lookup", response_model=PlResult)
-    def pl_lookup(body: PlQuery, owner: Owner):
-        return service.pl_lookup.query(body.pl, body.page)
-
-    @router.post("/related-purchase", response_model=RelatedPurchaseFound | RelatedPurchaseMissing)
-    def related_purchase(body: RelatedPurchaseQuery, owner: Owner):
-        return service.related_purchase.query(body.subPurchaseNo, body.invoiceGross)
-
-    @router.get("/records/{record_type}")
-    def records(record_type: str, owner: Owner):
-        return service.records(record_type)
-
-    @router.get("/records/{record_type}/{record_id}")
-    def record(record_type: str, record_id: str, owner: Owner):
-        return service.records(record_type, record_id)
-
-    @router.post("/query")
-    def query(body: RecordQuery, owner: Owner):
-        return service.query(body.model_dump())
-
-    return router
-
-
-def create_database_router(service):
-    router = APIRouter(prefix="/api/business", tags=["业务数据库"])
-
-    @router.get("/database-status", response_model=DatabaseStatus)
-    def database_status(owner: Owner):
-        return service.database_status()
-
-    @router.get("/pl-storage/config", response_model=StorageConfiguration)
-    def storage_configuration(owner: Owner):
-        return service.storage.configuration()
-
-    @router.post("/pl-sync", response_model=StorageResult)
-    def sync_pl(body: PlSyncRequest, owner: Owner):
-        return service.storage.sync(body.pl, owner)
-
-    @router.post("/pl-documents/query", response_model=PlResult)
-    def local_pl(body: LocalPlQuery, owner: Owner):
-        return service.storage.query(body.pl, body.page, owner)
 
     return router

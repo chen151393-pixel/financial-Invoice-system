@@ -11,7 +11,7 @@ React + TypeScript + Vite 前端，Python + FastAPI + SQLAlchemy + Alembic 后�
 | 页面 → 接口 → Service → 数据表及未衔接部分 | [系统整体链路与实现关系](docs/system-chain.md) |
 | 配置、部署、数据库、方案和模块文档 | [文档索引](docs/README.md) |
 | Linux ECS Docker 部署 | [Docker 部署说明](docs/docker-deploy.md) |
-| 编码约束与分层规则 | [协作规范](AGENTS.md)、[架构方案](docs/architecture-plan.md) |
+| 编码约束与分层规则 | [协作规范](AGENTS.md)、[架构方案](docs/history/architecture-plan.md) |
 | 界面与前端工程规范 | [设计基准](design.md)、[前端统一规范](docs/frontend-conventions.md) |
 | 历次功能、数据补拉和验收记录 | [历史实施记录](docs/history/implementation-notes.md) |
 
@@ -27,10 +27,8 @@ React + TypeScript + Vite 前端，Python + FastAPI + SQLAlchemy + Alembic 后�
 | `/invoice-followup` | 审核后生成任务、合同共享盘归档、供应商群配置、通知草稿和人工发送登记 | 企微自动发送、任务收票与收齐判断未接入 |
 | `/sync/lemon`、`/invoices` | Excel 预览、确认导入、发票查询 | 仅导入“采购固定资产”；柠檬云 API 未接入 |
 | `/matching?invoiceId=本地主键` | 发票与子采购的整票关联或数量分配 | 尚未绑定审核获批范围；确认不写 NS |
-| `/api/ns/preview`、`/execute`、`/jobs` | 独立的通用回写 API，保留预览、持久锁与未知结果保护 | 尚未由匹配生成业务回写方案；旧正式页面已移除 |
-| `/demo?view=...` | 工作台、异常、系统对账、回写等原型 | 模拟数据与操作不代表正式业务能力 |
 
-审核、匹配、人工通知登记、NS 执行是不同状态。当前缺口和建议衔接顺序统一维护在[系统链路](docs/system-chain.md)，各模块规则见[文档索引](docs/README.md)。
+审核、匹配、人工通知登记是不同状态。NS 回写（预览、执行、未知结果保护、`recover` 恢复命令）已移至 `archive/writeback` 分支；主线保留 `ns_previews`、`ns_target_locks`、`ns_audit` 的表和数据，不再有代码读写。当前缺口和建议衔接顺序统一维护在[系统链路](docs/system-chain.md)，各模块规则见[文档索引](docs/README.md)。
 
 ## 目录速览
 
@@ -38,15 +36,13 @@ React + TypeScript + Vite 前端，Python + FastAPI + SQLAlchemy + Alembic 后�
 项目根目录/
 ├── web/                     正式 React 前端：app 装配、modules 业务、shared 公共能力
 ├── backend/                 FastAPI：core、modules、integrations、两套迁移和测试
-├── app/                     原型页面与演示资源；仍被 /demo 按需加载
 ├── scripts/                 本地启动、检查脚本与待部署的 NS RESTlet
 ├── tests/                   Node 测试与虚构样例
 ├── docs/                    当前说明、设计方案、MySQL 资料与历史记录
-├── public/                  前端静态资源
-└── worker/                  Vinext 原型的 Cloudflare 入口
+└── public/                  前端静态资源
 ```
 
-正式构建使用 `web/vite.config.ts`，产物为 `dist/web`；根 `vite.config.ts`、`next.config.ts`、`worker/` 和 `.openai/hosting.json` 属于原型链路。两套配置及旧 Python 导入路径的保留原因见[目录地图](docs/project-structure.md)。
+正式构建使用 `web/vite.config.ts`，产物为 `dist/web`。原型（`app/`、`worker/`、`/demo`）已删除。
 
 ## 本地启动
 

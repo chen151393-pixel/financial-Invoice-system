@@ -2,11 +2,11 @@ from copy import deepcopy
 from types import SimpleNamespace
 
 import pytest
-from backend.config import load_settings
+from backend.core.config import load_settings
+from backend.core.errors import ApiError
 from backend.database import make_engine
+from backend.integrations.netsuite.client import NetSuite
 from backend.manage import upgrade
-from backend.netsuite import ApiError, NetSuite
-from backend.workflow import Workflow
 
 
 class FakeNS:
@@ -61,5 +61,5 @@ def context(tmp_path, env):
     upgrade(settings.database_url)
     engine = make_engine(settings.database_url)
     ns = FakeNS(settings)
-    yield SimpleNamespace(settings=settings, engine=engine, ns=ns, workflow=Workflow(settings, ns, engine))
+    yield SimpleNamespace(settings=settings, engine=engine, ns=ns)
     engine.dispose()

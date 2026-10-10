@@ -2,7 +2,7 @@
 
 审查日期：2026-09-14。状态：设计建议，尚未实施本地拼表。审查对象为当前工作区的实时联查代码、独立 MySQL 建表 SQL、已有 NS 样本及供应商发票平台保存脚本。
 
-本次只新增本文档，没有修改并行任务的建表文件、业务代码、项目配置或 NS 数据。建表任务的范围以 [存储执行方案](document-storage-execution-plan.md) 和 [MySQL 说明](mysql/README.md) 为准。
+本次只新增本文档，没有修改并行任务的建表文件、业务代码、项目配置或 NS 数据。建表任务的范围以 [存储执行方案](document-storage-execution-plan.md) 和 [MySQL 说明](../mysql/README.md) 为准。
 
 存储范围后续已简化：采购、报关仅来源 NS，发票来源外部；当前 SQL 只保留六张业务表，来源信息在主表中。本文第 2 节保留原审查发现；涉及 NS 发票关联或多来源的建议暂不属于当前实施范围。下方字段约定已按六表结构更新。
 
@@ -30,7 +30,7 @@ flowchart TD
 
 ### 2.1 建表前应明确：发票商品行与 NS 收票关联行是不同粒度
 
-位置：[invoice_lines 草案](mysql/business-schema.sql)、[已核实的 NS 保存字段](netsuite-vendor-invoice-permissions.md)。
+位置：[invoice_lines 草案](../mysql/business-schema.sql)、[已核实的 NS 保存字段](../netsuite-vendor-invoice-permissions.md)。
 
 当前 `invoice_lines` 草案保存品名、数量、单价、税率等商品字段。但用户提供的 `SWC_SS_VendorInvoice.js` 第 28—34 行向 NS 发票明细写入的是账单、母采购单、子采购单、应收/此前已收金额和本次实收金额。这些字段代表发票与订单/账单的关联，不能直接解释成税务发票商品行。
 
@@ -42,7 +42,7 @@ flowchart TD
 
 ### 2.2 接本地查询时应调整：当前分组多加了报关单 ID
 
-位置：[pl_service.py](../backend/modules/business/pl_service.py#L73)、[报关侧分组](../backend/modules/business/pl_service.py#L99)。
+位置：[pl_service.py](../../backend/modules/business/pl_service.py#L73)、[报关侧分组](../../backend/modules/business/pl_service.py#L99)。
 
 当前分组为“报关单 ID / PL 单号 / 公司”。使用现有假数据扩展出同一 PL、同一公司下的两张报关单，实际返回 `20 / PL001 / 3` 和 `21 / PL001 / 3` 两组。它符合现有实时联查说明，但不符合图片中只以 PL 和公司归组的目标。
 
@@ -50,7 +50,7 @@ flowchart TD
 
 ### 2.3 接本地查询时应调整：先读完 NS 再分页会重复请求并切开分组
 
-位置：[逐条详情读取](../backend/modules/business/pl_service.py#L26)、[内存分页](../backend/modules/business/pl_service.py#L114)。
+位置：[逐条详情读取](../../backend/modules/business/pl_service.py#L26)、[内存分页](../../backend/modules/business/pl_service.py#L114)。
 
 当前缓存只存在于单次请求内。假数据构造 58 条展示行后，第 1 页显示 50 行，第 2 页显示 8 行；两次请求各读取 62 次 NS 详情，同一个分组出现在两页。每次还会执行各类 ID 查询。超过 300 次详情读取时直接拒绝返回。
 
@@ -58,7 +58,7 @@ flowchart TD
 
 ### 2.4 接本地查询时应补齐：仅有报关数据也要显示
 
-位置：[沿采购单找报关单](../backend/modules/business/pl_service.py#L47)、[当前限制提示](../backend/modules/business/pl_service.py#L110)。
+位置：[沿采购单找报关单](../../backend/modules/business/pl_service.py#L47)、[当前限制提示](../../backend/modules/business/pl_service.py#L110)。
 
 当前实时实现只能发现采购单引用的报关单。假数据中报关记录仍存在，但移除采购单查询结果后，返回 0 行并附带限制提示。这是代码已经说明的限制，不是静默报错。
 
@@ -66,7 +66,7 @@ flowchart TD
 
 ### 2.5 建表与查询交接时应明确：同名、同数字 ID 不等于同一个主体
 
-位置：[采购 PL 与公司列](mysql/business-schema.sql)、[报关明细 PL 与公司列](mysql/business-schema.sql)。
+位置：[采购 PL 与公司列](../mysql/business-schema.sql)、[报关明细 PL 与公司列](../mysql/business-schema.sql)。
 
 草案有 `pl_no`、`company_identifier`、`company_name`，但代码尚无共同标识的解析实现。不能直接用公司名称拼接，也不能把不同来源、不同账号中的数字 `3` 视为同一家公司。
 
@@ -111,7 +111,7 @@ flowchart TD
 
 ### 4.2 一次响应与翻页的一致性
 
-当前 [MySQL 连接工厂](../backend/core/database.py) 使用 `READ COMMITTED`。因此，“先查分组、再查明细、再查总数”即使放在普通事务中，也不能直接宣称来自同一读取快照。
+当前 [MySQL 连接工厂](../../backend/core/database.py) 使用 `READ COMMITTED`。因此，“先查分组、再查明细、再查总数”即使放在普通事务中，也不能直接宣称来自同一读取快照。
 
 实施时选择单条 SQL 读取所需内容，或只为本地查询开启短暂、明确的可重复读取事务，使组键、明细和统计一致；不全局更改写入流程的隔离级别，不在该事务内访问 NS。
 
@@ -158,7 +158,7 @@ flowchart TD
 
 两条采购行数值合计是 12,065.76；除以数量合计 63 得到 191.52，这是两种源单价的加权结果，不能替代任一行的实际单价。采购币种在该快照中未明确返回，不能自行标成 CNY。
 
-对应报关明细 129 的普通数量为 63、单位代码为 20；另有本次报关数量 1020.6、单位代码 34，原金额为 1799.61 USD。它虽引用其中一个货品，却不能据此把 63 全部分配给该货品。这也说明两侧必须先按组保留明细集合。证据见 [样本核对](../outputs/ns-discovery/5939865-sb1/20260914T022635Z-customs-links/报关与PL字段核对.md)。
+对应报关明细 129 的普通数量为 63、单位代码为 20；另有本次报关数量 1020.6、单位代码 34，原金额为 1799.61 USD。它虽引用其中一个货品，却不能据此把 63 全部分配给该货品。这也说明两侧必须先按组保留明细集合。证据见 [样本核对](../../outputs/ns-discovery/5939865-sb1/20260914T022635Z-customs-links/报关与PL字段核对.md)。
 
 在共享单价口径确认前，跨报关/采购的单价单元格先不合并，返回“汇总范围或计量口径待确认”。这不阻塞本地保存、按组上下展示和人工查看。
 

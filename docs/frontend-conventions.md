@@ -4,7 +4,7 @@
 
 ## 1. 基准与职责
 
-保留现有中文企业后台的导航与业务布局。当前所有页面复用 shared/components/AppFrame.tsx 与 app-frame.css；演示业务样式仅由 DemoPage 懒加载；公共框架和导航不依赖演示数据。原型算法仅限app/demo演示，后续迁移时用真实后端规则替换。
+保留现有中文企业后台的导航与业务布局。当前所有页面复用 shared/components/AppFrame.tsx 与 app-frame.css；原型与演示页面已删除，公共框架和导航不依赖演示数据。
 
 前端只负责表现和交互，所有校验、计算、业务权限、分页和统计来自后端。中文标签、字段错误与状态展示保持一致。重构阶段保持已接受的视觉基准；需要整站改版时作为独立任务处理。
 
@@ -54,7 +54,7 @@ web/modules/matching/
 
 新路由接入后才移除旧入口；同一个功能不能同时维护两套页面和两套状态逻辑。
 
-采购报关联查保留 `/pl-reconciliation`，由 `web/app/PlWorkspacePage.tsx` 装配公共侧栏及 reconciliation 模块，兼容原 `/demo?view=pl` 地址。页面按 NS 共用查询结果展示15/17列有序明细。独立“财务核对”使用 `/finance-reconciliation` 和 `FinanceWorkspacePage.tsx`，展示三级展开和整单审核；两页使用不同接口与状态，不加载模拟数据。旧记录校对与写回、PL 单联查页面已删除；首页仍进入采购报关联查。Excel 导出保留在 NS 原 Suitelet 页面。
+采购报关联查保留 `/pl-reconciliation`，由 `web/app/PlWorkspacePage.tsx` 装配公共侧栏及 reconciliation 模块；未知路径（含旧 `/demo` 地址）进入此页。页面按 NS 共用查询结果展示15/17列有序明细。独立“财务核对”使用 `/finance-reconciliation` 和 `FinanceWorkspacePage.tsx`，展示三级展开和整单审核；两页使用不同接口与状态，不加载模拟数据。旧记录校对与写回、PL 单联查页面已删除；首页仍进入采购报关联查。Excel 导出保留在 NS 原 Suitelet 页面。
 
 ## 5. 统一交互
 
@@ -84,4 +84,4 @@ web/modules/matching/
 
 ## 统一页面框架
 
-导航由 `web/app/navigation.tsx` 维护，正式路由由 `web/app/views.ts` 统一映射，共用 AppFrame 和 Sidebar。采购报关联查、财务核对及其他已接入页面标明真实来源，演示页面保持演示标记；公共导航不展示虚构业务计数或身份。首页及 `/pl-reconciliation` 进入采购报关联查，财务核对独立进入 `/finance-reconciliation`；`/demo?view=...` 保留兼容。旧独立 PL 外壳样式、演示顶部横幅和重复页头已移除。
+导航由 `web/app/navigation.tsx` 维护，正式路由由 `web/app/views.ts` 统一映射，共用 AppFrame 和 Sidebar。采购报关联查、财务核对及其他已接入页面标明真实来源；公共导航不展示虚构业务计数或身份。首页及 `/pl-reconciliation` 进入采购报关联查，财务核对独立进入 `/finance-reconciliation`；旧 `/demo?view=...` 地址进入采购报关联查。旧独立 PL 外壳样式、演示顶部横幅和重复页头已移除。

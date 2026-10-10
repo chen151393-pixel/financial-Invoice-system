@@ -16,20 +16,19 @@ backend/
 │   ├── invoice/             Excel发票导入、去重、冲突检查与查询
 │   ├── matching/            候选比对、整票关联与数量分配
 │   ├── reconciliation/      财务审核、开票任务、合同归档与人工通知登记
-│   ├── writeback/           预览、确认、执行、DAO、Mapper、DTO、VO
-│   └── audit/               事务内审计
+│   └── audit/               事务内审核审计；保留的历史回写表定义
 ├── integrations/            NS认证、HTTP与合同来源适配、共享盘归档
-├── migrations/              应用库迁移：回写、审核、开票任务及其资料
+├── migrations/              应用表迁移：审核、开票任务及其资料（含历史回写表）
 ├── business_migrations/     业务库增量迁移：母采购、关系依据与发票匹配
 └── tests/                   API、状态、数据库及架构依赖检查
 ```
 
-模块只为实际职责建层。invoice、matching、reconciliation 已注册正式接口；exception、dashboard 尚无正式后端模块。当前匹配仍直接使用发票与子采购来源，尚未接入审核获批范围；开票任务尚未关联实际收票；通用回写仍是独立能力。供应商通知已有本地草稿与人工发送登记，自动发送未接入。
+模块只为实际职责建层。invoice、matching、reconciliation 已注册正式接口；exception、dashboard 尚无正式后端模块。当前匹配仍直接使用发票与子采购来源，尚未接入审核获批范围；开票任务尚未关联实际收票。NS 回写（预览、执行、未知结果保护、`recover` 恢复命令）已移至 `archive/writeback` 分支；主线保留 `ns_previews`、`ns_target_locks`、`ns_audit` 的表和数据，不再有代码读写。供应商通知已有本地草稿与人工发送登记，自动发送未接入。
 
 正式运行统一读取 `BUSINESS_DATABASE_URL` / `BUSINESS_MYSQL_*`，所有模块复用一个 MySQL 连接池。`npm.cmd run db:upgrade` 在同一库协调两条历史迁移链及各自版本表，`db:business:upgrade` 是兼容入口。SQLite 和显式引擎注入仅供隔离测试、预览与历史迁移。共用连接池不等于所有调用自动共用事务：原有审核/审计/任务、匹配/占用的事务边界保留。业务增量迁移依赖已有基础表，不是空库初始化入口。
 
-`config.py`、`database.py`、`netsuite.py`、`workflow.py`与`auth.py`保留旧导入适配，没有第二套业务实现。现有测试、迁移与旧调用方式仍使用这些路径；待调用方和迁移环境统一切换、兼容测试通过后可移除。新代码直接引用core、modules与integrations。
+旧导入兼容入口 `config.py`、`netsuite.py`、`workflow.py`、`auth.py` 已删除，代码直接引用 `core`、`modules`、`integrations`。`database.py` 仍是 Alembic 和应用表导入工具使用的元数据登记入口，在架构方案第 3 步数据库收口时并入 `core`。
 
-数据库迁移继续使用 `manage.py`，正常启动仅检查迁移版本，不清除任务。配置和部署见[后端配置说明](../docs/python-backend.md)，架构规划见[架构方案](../docs/architecture-plan.md)。
+数据库迁移继续使用 `manage.py`，正常启动仅检查迁移版本，不清除任务。配置和部署见[后端配置说明](../docs/python-backend.md)，架构见[架构设计 v2](../docs/architecture/README.md)。
 
 运行 `npm.cmd run check` 完成当前格式、类型、依赖、lint、构建与测试检查。真实MySQL并发和真实NS联调需要单独环境，不由本地通过的检查替代。

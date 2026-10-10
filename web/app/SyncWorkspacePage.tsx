@@ -1,4 +1,3 @@
-import { useEffect } from "react";
 import SyncPage from "../modules/sync/SyncPage";
 import { AppFrame } from "../shared/components/AppFrame";
 import { navigation } from "./navigation";
@@ -8,9 +7,6 @@ import { InvoiceImport } from "../modules/invoice/InvoiceImport";
 export default function SyncWorkspacePage() {
   const source =
     location.pathname === "/sync/ns" ? "ns" : location.pathname === "/sync/lemon" ? "lemon" : "overview";
-  useEffect(() => {
-    if (location.pathname === "/demo") history.replaceState(null, "", "/sync");
-  }, []);
   return (
     <AppFrame
       groups={navigation}

@@ -60,26 +60,6 @@ export type InvoiceDetail = InvoiceRow & {
 export const listInvoices = (query: URLSearchParams) => http<InvoiceListResult>(`/invoices?${query}`);
 export const getInvoice = (id: string) => http<InvoiceDetail>(`/invoices/${encodeURIComponent(id)}`);
 
-export type RelatedPurchase =
-  | { found: false; queriedAt: string }
-  | {
-      found: true;
-      queriedAt: string;
-      subPurchaseNo: string;
-      parentPurchase: string;
-      purchaseDate: string;
-      supplier: string;
-      pl: string;
-      purchaseAmount: string | null;
-      invoiceGross: string;
-      amountMatches: boolean | null;
-      customs: { recordNo: string; declarationNo: string; date: string } | null;
-      lines: { name: string; quantity: string; amount: string }[];
-    };
-
-export const lookupRelatedPurchase = (subPurchaseNo: string, invoiceGross: string) =>
-  http<RelatedPurchase>("/ns/related-purchase", "POST", { subPurchaseNo, invoiceGross });
-
 export type ImportFile = { filename: string; content: string };
 export type ImportConfiguration = { allowed: boolean; reason: string; maxBytes: number };
 export type ImportResult = {

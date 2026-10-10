@@ -1,17 +1,7 @@
-export type View =
-  | "dashboard"
-  | "invoices"
-  | "match"
-  | "exceptions"
-  | "sync"
-  | "pl"
-  | "finance"
-  | "invoice-followup"
-  | "reconcile"
-  | "writeback";
+export type View = "invoices" | "match" | "sync" | "pl" | "finance" | "invoice-followup";
 
-// 正式页面在同一主应用中运行；其余视图继续使用现有演示入口。
-export const workspaceRoutes: Partial<Record<View, string>> = {
+// 菜单只列正式页面；演示页面已删除。
+export const workspaceRoutes: Record<View, string> = {
   invoices: "/invoices",
   match: "/matching",
   sync: "/sync",
@@ -21,5 +11,5 @@ export const workspaceRoutes: Partial<Record<View, string>> = {
 };
 
 export function viewPath(view: View): string {
-  return workspaceRoutes[view] ?? `/demo?view=${view}`;
+  return workspaceRoutes[view];
 }

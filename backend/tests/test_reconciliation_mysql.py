@@ -5,7 +5,7 @@ from types import SimpleNamespace
 from uuid import uuid4
 
 import pytest
-from backend.config import load_settings
+from backend.core.config import load_settings
 from backend.database import make_engine
 from backend.manage import upgrade
 from backend.modules.business.pl_script_service import PlScriptService

@@ -21,13 +21,13 @@ for (const path of walk(root)) {
       if (target.includes("/backend/") || value.startsWith("backend/")) {
         errors.push(`${file}:${line} 前端不能导入后端实现`);
       }
+      // 前端只依赖 web/ 内代码；vite.config.ts 读取开发端口配置除外。
       if (
-        (target.includes("/app/page") ||
-          target.includes("/app/demo/") ||
-          target.endsWith("/app/globals.css")) &&
-        file !== "app/DemoPage.tsx"
+        value.startsWith(".") &&
+        !`${target}/`.startsWith(`${root.replaceAll("\\", "/")}/`) &&
+        file !== "vite.config.ts"
       ) {
-        errors.push(`${file}:${line} 演示依赖只能由隔离的DemoPage加载`);
+        errors.push(`${file}:${line} 前端不能导入 web/ 之外的代码`);
       }
       if (file.startsWith("shared/") && target.includes("/web/modules/")) {
         errors.push(`${file}:${line} 公共组件不能反向依赖业务模块`);

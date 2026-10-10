@@ -6,8 +6,10 @@ from urllib.parse import parse_qs
 import httpx
 import jwt
 import pytest
-from backend.config import load_settings
-from backend.netsuite import ApiError, NetSuite, assertion
+from backend.core.config import load_settings
+from backend.core.errors import ApiError
+from backend.integrations.netsuite.auth import assertion
+from backend.integrations.netsuite.client import NetSuite
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import ec, rsa
 

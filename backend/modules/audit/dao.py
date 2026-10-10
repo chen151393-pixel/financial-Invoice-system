@@ -2,11 +2,7 @@
 
 from sqlalchemy import insert
 
-from .entity import audit, finance_audit
-
-
-def append(connection, *, at, actor, action, preview_id):
-    connection.execute(insert(audit).values(at=at, actor=actor, action=action, preview_id=preview_id))
+from .entity import finance_audit
 
 
 def append_finance(connection, *, at, actor, snapshot_id, note):

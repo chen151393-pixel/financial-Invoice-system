@@ -1,33 +1,17 @@
 # 采购报关联查与财务核对
 
-## 财务核对闭环示例
-
-`/finance-reconciliation/example` 从正式财务核对页右上角进入，复用项目的 `AppFrame`、统一导航、`Button` 与设计变量。示例源码在 `example/FinanceWorkbenchExample.tsx` 和对应 CSS，由 `web/app/FinanceWorkbenchExamplePage.tsx` 装配；路由仅加载演示页面，不调用保存、审核、NS 或柠檬云接口。
-
-示例按“财务待办 → 来源审核 → 发票行匹配 → 收票跟进 → 异常与接入”展示目标闭环，使用 CD000252 与 YE-ST251231-Y593-1 的已知样例演示逐行核对，并提供到现有正式页面的链接。页面将现有能力与目标能力分别标记：当前 NS 为手动分页拉取，柠檬云为 Excel 导入；审核获批范围约束、任务收票状态、异常台账、主体档案、发票查验及柠檬云 API 接入仍需后端与数据模型实现。示例中的搜索仅筛选内置样本，不得视为真实查询结果。
-
 ## 开票跟进正式页
 
 `/invoice-followup` 从导航“开票跟进”或财务核对右上角进入，读取真实的审核后任务。`pages/InvoiceTaskPage.tsx` 复用 AppFrame、Button、Pagination，默认按供应商、可切换按报关单，后端完成分组、搜索、统计和分页。供应商展开后列出各报关单任务；“查看节点”跳转独立详情页，显示六节点流程、原件获取与只读审核明细。所有金额使用后端字符串，未确认额度不显示采购单合计。
 
 页面包含加载、错误重试、空结果及历史版本查看；查询切换忽略过期响应。审核完成提示关联任务数，不把重复审核当作重复生成。历史已审核数据不会自动补建。收票统计为未接入，共享盘保存使用真实接口；通知及比对操作按后端能力禁用，不能冒充执行成功。后端规则和新增应用库迁移见 [审核模块](../../../backend/modules/reconciliation/README.md#审核后开票任务已实现)。
 
-## 开票跟进前端示例（保留作后续节点设计参考）
-
-`/demo?view=invoice-followup` 为独立交互原型，可直接打开该地址；正式入口已改为真实任务页。源码位于 `app/demo/pages/InvoiceFollowup.tsx`，固定样本位于 `app/demo/invoice-followup-data.ts`，由 `web/app/DemoPage.tsx` 隔离加载。因其覆盖尚未接入的后续节点与错误场景，保留作交互验收参考；后续完整流程落地后再移除，本次不混入正式接口。
-
-示例覆盖等待开票、部分收票、比对差异、资料获取失败、通知结果未知、完成六种场景。可筛选和搜索虚构任务、查看六节点流程与操作记录、预览通知、下载带演示标记的文本清单，以及切换加载／空结果／失败展示。不会调用业务接口、真实发送通知或写入 NS；搜索和计数只作用于六条示例数据，真实接入时必须替换为后端查询和状态结果。示例下载不是正式采购单，通知发送与发票接收明确显示未接入。
-
-前端验证使用 `npm.cmd run build`、`npm.cmd run lint`、`npm.cmd run typecheck`，并检查桌面和窄屏下的筛选、详情返回、节点状态、弹窗焦点及表格滚动。
-
-示例默认按供应商分组，可切换按报关单；六条任务覆盖三家供应商、五张报关单，两个视图复用相同任务 ID 和详情。分组可展开／收起，保留各视图的展开状态及搜索、状态筛选。分组摘要只统计当前筛选命中的任务：待开票为未收齐任务数，已收票为发票张数，待处理为异常任务数，三项可重叠；均为同一示例采购公司、人民币，不进行前端金额合计。演示分组与计数函数集中在样本文件，正式接入时须由后端替换。分组数据一致性验证：`node --experimental-strip-types --test tests/invoice-followup.test.mjs`。
-
 两个独立导航与页面都在主项目运行，使用同一条 `npm.cmd run dev` 命令：
 
 - “采购报关联查” `/pl-reconciliation`：保留 NS 原始平铺来源对照，只读查询。
 - “财务核对” `/finance-reconciliation`：三级展开与整单审核，是已确认示例的正式实现。
 
-从数据同步、进项发票及其他项目页面均可分别进入两个菜单。`/demo?view=reconcile`仍是系统对账演示页。复用 React + TypeScript + Vite、AppFrame、Sidebar 和 Button；路由统一维护于 `web/app/views.ts`。
+从数据同步、进项发票及其他项目页面均可分别进入两个菜单。复用 React + TypeScript + Vite、AppFrame、Sidebar 和 Button；路由统一维护于 `web/app/views.ts`。
 
 - `pages/PlReconciliationPage.tsx` / `components/PlSourceComparison.tsx`：只读 NS 联查，保留15/17列原值与来源行序，不创建审核快照。
 - `pages/FinanceReconciliationPage.tsx`：打开即自动分页读取已入库报关单，支持后端搜索、状态筛选、清空恢复完整列表、刷新及忽略过期响应。
@@ -35,7 +19,7 @@
 - `components/FinanceComparison.tsx`：每张报关单一行，CD编号、真实报关号、PL、公司、关联数量、审核状态、审核通过按钮。
 - `components/CustomsRows.tsx`、`PurchaseRows.tsx`、`DetailColumns.tsx`：报关明细 → 关联子采购行，共用列宽使数量、单位、单价、金额对齐；不显示重复的采购行审核列。
 - `components/ReviewDialog.tsx`：整单确认、本次采购数量金额、审核备注、真实结果及只读采购详情；通知供应商按钮仅预留。
-- `api.ts`：联查使用 POST `/api/ns/pl-script-comparison`；财务列表使用 POST `/api/reconciliation/declarations`。原 NS 不可变预览 `/api/reconciliation/query` 和审核 `/api/reconciliation/approve` 契约继续保留。
+- `api.ts`：联查使用 POST `/api/ns/pl-script-comparison`；财务列表使用 POST `/api/reconciliation/declarations`。审核使用 POST `/api/reconciliation/approve`。后端实时 NS 审核接口 `/api/reconciliation/query` 已无前端调用，按架构方案第 4 步删除。
 - `types.ts`：后端展示VO；金额和数量为十进制字符串，前端不重算或推断关系。
 
 默认全部收起。点击主单仅展开报关行，再点击报关行显示采购明细；收起主单清除其下级展开状态。全展开/全收起为显式操作，重新查询恢复收起。多张单的行ID按报关单隔离。
@@ -55,7 +39,6 @@
 `/invoice-followup/{taskId}` 使用 `InvoiceTaskDetailPage.tsx`，列表“查看节点”导航到此页，支持直接链接、刷新和返回全部任务。展示六节点流程、当前动作、审核来源环境与原件下载环境，以及可点击的六个流程节点和流转记录分区。“保存到共享盘”按钮调用后端 prepare 接口，成功才显示共享盘保存路径和时间；失败显示实际错误且允许重试。币种缺失是来源提示，不构成二次审核门槛。前端不推算金额，不伪造通知、收票或比对结果。
 
 页面不再提供 PDF 原件下载按钮；合同通过共享盘使用。保存失败时展示真实错误，可重试，资料节点不会提前完成。
-
 
 正式详情的“通知供应商”复用现有视觉，业务组件为 `components/TaskNotification.tsx`，调用真实草稿保存与人工登记接口。默认正文由后端生成，可编辑、恢复默认、居中预览、复制；接收信息按当前任务保存。未保存修改切换节点仍保留，登记必须使用已保存版本，刷新后读取数据库。人工记录与企微回执明确区分，自动发送按钮展示未接入原因。
 

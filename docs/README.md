@@ -23,12 +23,11 @@
 | 模块 | 后端文档 | 前端文档 |
 | --- | --- | --- |
 | 身份 | [identity](../backend/modules/identity/README.md) | [会话 API](../web/modules/identity/README.md) |
-| NS 来源 | [business](../backend/modules/business/README.md) | [旧入口移除说明](../web/modules/business/README.md) |
+| NS 来源 | [business](../backend/modules/business/README.md) | 页面在 reconciliation 模块 |
 | 同步 | [sync](../backend/modules/sync/README.md) | [同步工作区](../web/modules/sync/README.md) |
 | 发票 | [invoice](../backend/modules/invoice/README.md) | [导入与列表](../web/modules/invoice/README.md) |
 | 匹配 | [matching](../backend/modules/matching/README.md) | [匹配工作区](../web/modules/matching/README.md) |
 | 财务审核与开票任务 | [reconciliation](../backend/modules/reconciliation/README.md) | [核对与任务页面](../web/modules/reconciliation/README.md) |
-| 通用回写 | [writeback](../backend/modules/writeback/README.md) | [旧入口移除说明](../web/modules/writeback/README.md) |
 | 审计 | [audit](../backend/modules/audit/README.md) | 暂无独立正式页面 |
 
 ## 集成与数据
@@ -38,7 +37,7 @@
 | [NS 适配器](../backend/integrations/netsuite/README.md) | M2M 与 HTTP 适配层 |
 | [PL 共用脚本接入](pl-script-integration.md) | 当前网站与 NS RESTlet 共用查询服务的部署说明 |
 | [财务来源读取](finance-source-reader.md) | 报关原始行、Packing、采购关系及同步完整性 |
-| [PL 联查](pl-lookup.md)、[字段映射](netsuite-pl-lookup.json) | PL 查询契约、兼容路径与配置依据 |
+| [字段映射](netsuite-pl-lookup.json) | NS 来源读取的字段配置依据 |
 | [PL 来源保存](pl-storage.md) | 既有本地保存用例与边界 |
 | [NS 权限](netsuite-vendor-invoice-permissions.md) | 记录访问权限专题 |
 | [MySQL 资料入口](mysql/README.md) | 当前迁移导读与历史基础建表说明 |
@@ -52,14 +51,13 @@ SQL 文件位于 `mysql/`，不是统一自动迁移入口。环境升级分别�
 
 | 文档 | 阅读方式 |
 | --- | --- |
-| [架构方案](architecture-plan.md) | 分层原则及早期目标；目标目录、worker、接口草案不等于已实现 |
+| [架构方案](history/architecture-plan.md) | 分层原则及早期目标；目标目录、worker、接口草案不等于已实现 |
 | [审核证据与发票匹配方案](lemon-invoice-matching-plan.md) | 尚待完成的获批范围匹配规则 |
 | [完整业务数据库设计](mysql/purchase-customs-invoice-schema-design.md) | 既有字段核实与目标设计，区别已存在表和计划表 |
-| [单据存储执行方案](document-storage-execution-plan.md) | 阶段性存储方案；按当前模块实现核对 |
-| [PL 关联设计审查](pl-join-design-review.md) | 关联依据的设计评审背景 |
-| [早期 Suitelet 方案](ns-suitelet-realtime-plan.md) | 历史设计，当前接入以共用脚本说明为准 |
-| [参考项目评审](reference-project-review.md) | 外部项目的参考分析，不是本项目目录或实现 |
+| [单据存储执行方案](history/document-storage-execution-plan.md) | 阶段性存储方案；按当前模块实现核对 |
+| [PL 关联设计审查](history/pl-join-design-review.md) | 关联依据的设计评审背景 |
+| [早期 Suitelet 方案](history/ns-suitelet-realtime-plan.md) | 历史设计，当前接入以共用脚本说明为准 |
+| [参考项目评审](history/reference-project-review.md) | 外部项目的参考分析，不是本项目目录或实现 |
 | [历史实施记录](history/implementation-notes.md) | 从根 README 移入的功能、数据补拉与验收记录，保留原语境 |
-| [原型演示说明](../app/demo/README.md) | 演示交互和虚构数据，不代表正式接口能力 |
 
 新增文档按用途放置：当前实现与专题说明放 `docs/`，业务规则优先更新所属模块 README，数据库资料放 `docs/mysql/`，阶段记录放 `docs/history/`。避免在根 README 持续追加阶段日志或复制另一份架构规范。
