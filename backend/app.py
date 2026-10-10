@@ -36,6 +36,8 @@ from .modules.reconciliation.service import ReconciliationService
 from .modules.reconciliation.task_controller import create_router as invoice_task_router
 from .modules.reconciliation.task_service import InvoiceTaskService
 from .modules.sync.controller import create_router as sync_router
+from .modules.sync.lemon_controller import create_router as lemon_router
+from .modules.sync.lemon_service import LemonCallbackService
 from .modules.sync.pull_service import PullService
 from .modules.sync.service import ConnectionService
 from .modules.writeback.controller import create_router as writeback_router
@@ -78,6 +80,7 @@ def create_app(settings=None, ns=None, engine=None, business_engine=None, wecom=
     app.add_middleware(RequestGuard, secure=settings.origin.startswith("https://"))
     register_error_handlers(app)
     app.include_router(identity_router(identity, settings))
+    app.include_router(lemon_router(LemonCallbackService(settings, identity.owner), settings))
     business = BusinessService(ns, business_engine)
     app.include_router(business_router(business))
     app.include_router(create_database_router(business))

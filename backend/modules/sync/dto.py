@@ -10,6 +10,18 @@ from pydantic_core import PydanticCustomError
 SourceKind = Literal["purchase-orders", "sub-purchase-orders", "customs-declarations"]
 
 
+class LemonAuthorizationRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    mobile: str = Field(pattern=r"^1[0-9]{10}$", strict=True)
+
+
+class LemonCallbackRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    code: str | None = Field(default=None, min_length=1, max_length=2048, pattern=r"^[^\s\x00-\x1f\x7f]+$")
+
+
 class PullRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 

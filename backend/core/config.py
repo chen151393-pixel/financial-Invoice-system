@@ -45,6 +45,7 @@ class Settings:
     wecom_corp_id: str = field(default="", repr=False)
     wecom_secret: str = field(default="", repr=False)
     wecom_connection_file: Path | None = field(default=None, repr=False)
+    lemon_app_id: str = ""
     host: str = "127.0.0.1"
     port: int = 3000
     tls_cert: str = ""
@@ -176,6 +177,11 @@ def load_settings(source=None):
     finance_deploy = get("NETSUITE_FINANCE_SOURCE_DEPLOY").strip()
     contract_script = get("NETSUITE_SUBPO_CONTRACT_SCRIPT").strip()
     contract_deploy = get("NETSUITE_SUBPO_CONTRACT_DEPLOY").strip()
+    lemon_app_id = get("LEMON_OPEN2_APP_KEY").strip()
+    if lemon_app_id and (
+        not re.fullmatch(r"[0-9]{1,10}", lemon_app_id) or not 1 <= int(lemon_app_id) <= 2147483647
+    ):
+        raise ValueError("LEMON_OPEN2_APP_KEY 须为柠檬云分配的正整数 AppId")
     archive_root = Path(get("NETSUITE_SUBPO_ARCHIVE_ROOT")) if get("NETSUITE_SUBPO_ARCHIVE_ROOT") else None
     if archive_root and not archive_root.is_absolute():
         raise ValueError("NETSUITE_SUBPO_ARCHIVE_ROOT 必须为绝对路径或 UNC 共享路径")
@@ -224,6 +230,7 @@ def load_settings(source=None):
         business_database_url=business_url,
         wecom_corp_id=get("WECOM_CORP_ID"),
         wecom_secret=get("WECOM_SECRET"),
+        lemon_app_id=lemon_app_id,
         wecom_connection_file=(ROOT / get("WECOM_CONNECTION_FILE")).resolve()
         if get("WECOM_CONNECTION_FILE")
         else None,

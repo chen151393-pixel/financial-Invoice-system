@@ -50,11 +50,12 @@ class RequestGuard:
                         (time.monotonic() - started_at) * 1000,
                     )
                 headers = list(message.get("headers", []))
+                if not any(name.lower() == b"referrer-policy" for name, _ in headers):
+                    headers.append((b"referrer-policy", b"same-origin"))
                 headers.extend(
                     [
                         (b"cache-control", b"no-store"),
                         (b"x-content-type-options", b"nosniff"),
-                        (b"referrer-policy", b"same-origin"),
                         (
                             b"content-security-policy",
                             b"default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'",

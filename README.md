@@ -24,7 +24,7 @@ React + TypeScript + Vite 前端，Python + FastAPI + SQLAlchemy + Alembic 后�
 | `/pl-reconciliation`（默认首页） | 通过 NS 共用脚本实时查询采购报关依据 | 只读对照，页面查询不自动入库或审核 |
 | `/finance-reconciliation` | 本地来源核对、整单人工审核、不可变快照 | 审核通过不等于获得完整可分配开票额度 |
 | `/invoice-followup` | 审核后生成任务、合同共享盘归档、供应商群配置、通知草稿和人工发送登记 | 企微自动发送、任务收票与收齐判断未接入 |
-| `/sync/lemon`、`/invoices` | Excel 预览、确认导入、发票查询 | 仅导入“采购固定资产”；柠檬云 API 未接入 |
+| `/sync/lemon`、`/invoices` | Excel 预览、确认导入、发票查询 | 仅导入“采购固定资产”；[授权回调接收](docs/lemon-callback.md)已实现，正式绑定及发票 API 未接入 |
 | `/matching?invoiceId=本地主键` | 发票与子采购的整票关联或数量分配 | 尚未绑定审核获批范围；确认不写 NS |
 | `/api/ns/preview`、`/execute`、`/jobs` | 独立的通用回写 API，保留预览、持久锁与未知结果保护 | 尚未由匹配生成业务回写方案；旧正式页面已移除 |
 | `/demo?view=...` | 工作台、异常、系统对账、回写等原型 | 模拟数据与操作不代表正式业务能力 |
