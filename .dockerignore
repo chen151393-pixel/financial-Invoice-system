@@ -1,6 +1,5 @@
 .git
 .agents
-.openai
 .tmp
 .workbuddy
 .env*
@@ -16,14 +15,12 @@ node_modules
 **/.pytest_cache
 **/.ruff_cache
 dist
+frontend/dist
 data
 secrets
 docs
-tests
+frontend/tests
 backend/tests
-worker
-.next
-.vinext
-.wrangler
+netsuite
 outputs
 work

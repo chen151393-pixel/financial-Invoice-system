@@ -49,7 +49,7 @@ class Settings:
     port: int = 3000
     tls_cert: str = ""
     tls_key: str = field(default="", repr=False)
-    web_root: Path = ROOT / "dist" / "web"
+    web_root: Path = ROOT / "frontend" / "dist"
 
     @property
     def token_url(self):
@@ -121,7 +121,7 @@ def load_settings(source=None):
     private_key = Path(get("NETSUITE_PRIVATE_KEY_PATH")) if get("NETSUITE_PRIVATE_KEY_PATH") else None
     if private_key:
         private_key = (ROOT / private_key).resolve()
-        if any(private_key.is_relative_to(ROOT / folder) for folder in ("public", "dist", "web", "app")):
+        if private_key.is_relative_to(ROOT / "frontend"):
             raise ValueError("NS 私钥不能放在前端或公开目录")
     try:
         fields = json.loads(get("NETSUITE_WRITE_FIELDS", "{}"))
@@ -148,7 +148,7 @@ def load_settings(source=None):
                 raise ValueError()
             if parsed.drivername == "sqlite":
                 db_file = (ROOT / parsed.database).resolve()
-                if any(db_file.is_relative_to(ROOT / name) for name in ("public", "dist", "web", "app")):
+                if db_file.is_relative_to(ROOT / "frontend"):
                     raise ValueError()
                 parsed = parsed.set(database=str(db_file))
             else:

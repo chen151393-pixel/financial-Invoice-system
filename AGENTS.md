@@ -66,7 +66,7 @@
 ### 实施要求
 
 - 先查看相关页面、调用方和现有布局、样式变量、表格、表单、按钮及状态组件，再确定最小修改范围。
-- 页面外壳与导航优先复用 `web/shared/components/AppFrame.tsx`、`Sidebar.tsx` 和 `web/app/navigation.tsx`；按钮复用已有 `Button`，设计变量统一维护在 `web/shared/styles/tokens.css`。
+- 页面外壳与导航优先复用 `frontend/src/shared/components/AppFrame.tsx`、`Sidebar.tsx` 和 `frontend/src/app/navigation.tsx`；按钮复用已有 `Button`，设计变量统一维护在 `frontend/src/shared/styles/tokens.css`。
 - 遵循 `design.md`；尚未提取的公共组件按实际需求建立，不把文档中的目标组件当成已有实现，也不提前生成整套空组件。
 - 同类功能复用一套组件与交互；新增基础组件应集中建立，不能在多个业务页面复制修改。
 - 业务特有组件留在业务模块；共享组件不包含发票匹配、审批条件等领域逻辑。
@@ -102,7 +102,7 @@
 
 ## 八、验证与交付
 
-- 根据实际改动执行已有检查：前端 `npm.cmd run build`、`npm.cmd run lint`；后端 `npm.cmd run test:api`、`npm.cmd run lint:api`。跨前后端变更可执行 `npm.cmd test` 并补对应 lint。
+- 根据实际改动执行已有检查：前端 `npm.cmd run build`、`npm.cmd run lint`、`npm.cmd run typecheck`、`npm.cmd run test:web`；后端 `npm.cmd run test:api`、`npm.cmd run lint:api`。跨前后端变更可执行 `npm.cmd test` 并补对应 lint。
 - 只改文档时检查链接、内容一致性和变更范围，无需运行业务测试。只修复排版时不新增重复实现的测试。
 - 金额、权限、并发、状态机或回写变更必须有有意义的针对性验证；MySQL 并发不能只靠 SQLite 测试声称通过。
 - 完成前检查 diff，确认没有混入无关功能、临时调试、无依据的依赖升级或重复实现。不得修改质量规则以掩盖本次失败。

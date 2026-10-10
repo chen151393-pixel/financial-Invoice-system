@@ -41,7 +41,7 @@ flowchart LR
 
 ## 2. 页面、接口、服务和存储如何对应
 
-正式前端入口由 [App.tsx](../web/app/App.tsx)和 [views.ts](../web/app/views.ts)决定；后端是否接入以 [app.py](../backend/app.py)注册的 Router 和注入的 Service 为准。
+正式前端入口由 [router.tsx](../frontend/src/app/router.tsx)和 [paths.ts](../frontend/src/app/paths.ts)决定；后端是否接入以 [app.py](../backend/app.py)注册的 Router 和注入的 Service 为准。
 
 | 页面 / 入口 | 主要接口 | 后端用例 | 读取或产生的数据 |
 | --- | --- | --- | --- |
@@ -55,7 +55,7 @@ flowchart LR
 | `/matching?invoiceId=本地主键` | `/api/matching/invoices/{id}`、`/links/review`、`/links`、`/confirm` | `MatchingService` | 当前发票、子采购候选、整票关系或数量分配 |
 | 后端保留的通用回写能力 | `/api/ns/preview`、`/preview-text`、`/execute`、`/jobs` | `WritebackService` | 统一业务库 NS 预览、持久目标锁、审计 |
 
-`/sync/lemon` 虽位于同步工作区，Excel 解析和入库归属 `invoice`，由 [SyncWorkspacePage.tsx](../web/app/SyncWorkspacePage.tsx)装配，不在 `sync` 中再写一套导入规则。
+`/sync/lemon` 虽位于同步工作区，Excel 解析和入库归属 `invoice`，由 [SyncWorkspacePage.tsx](../frontend/src/app/SyncWorkspacePage.tsx)装配，不在 `sync` 中再写一套导入规则。
 
 `dashboard`、`exceptions`、`reconcile`、`writeback` 视图目前经 `viewPath` 进入 `/demo?view=...`。其中“系统对账”演示与正式“财务核对”是不同入口；正式后端 `reconciliation` 当前主要承担审核和开票跟进，并未实现完整三方系统对账。
 
@@ -238,7 +238,7 @@ sequenceDiagram
 | 1 | [task_service.py](../backend/modules/reconciliation/task_service.py)的 compare 禁用、receivedInvoices 为空 | 发票即使匹配成功，开票任务也不会随之收齐 | 用审核版本与稳定来源行关联任务和匹配结果；后端计算部分收票、已收齐与需复核 |
 | 1 | [task_dao.replace_revision](../backend/modules/reconciliation/task_dao.py)将所有非 superseded 旧任务替代，已包括 awaiting_invoice | 已人工通知的旧范围会保留历史，但尚无通知变更／收票影响处理闭环 | 重审后单独暴露已通知范围变化；保留旧通知和占用，禁止把旧票静默迁到新版本 |
 | 2 | [task_controller.py](../backend/modules/reconciliation/task_controller.py)已有通知草稿及人工登记，模块说明仍有“仅禁用占位” | 读文档可能漏掉新增持久状态和迁移要求 | 以当前注册接口区分人工登记、自动发送；新增实现完成验收后同步模块文档 |
-| 2 | [views.ts](../web/app/views.ts)仍将工作台、异常、系统对账和回写指向演示 | 菜单齐全容易被当成业务闭环齐全 | 页面持续标注数据模式；导航命名与实际能力在后续交互任务中统一 |
+| 2 | [paths.ts](../frontend/src/app/paths.ts)仍将工作台、异常、系统对账和回写指向演示 | 菜单齐全容易被当成业务闭环齐全 | 页面持续标注数据模式；导航命名与实际能力在后续交互任务中统一 |
 | 2 | 回写服务独立，未接收匹配／审核业务标识 | 通用写入保护已存在，业务回写前置条件未建立 | 后续由后端依据有效匹配生成不可变回写方案，复用现有锁和 unknown 保护 |
 | 2 | 现有数据按 owner 摘要隔离，会话仅单进程 | 管理员、服务身份及未来真实用户可能看到不同范围 | 正式多人协作前设计组织／主体授权及旧 owner 映射，不能直接放宽查询或前端传角色 |
 | 3 | [早期架构方案](history/architecture-plan.md)、[数据库说明](mysql/README.md)保留六表、统一库、尚未实现匹配等阶段表述 | 文档年代不同导致新需求重复建链路 | 本文提供当前总览，历史方案保留背景；新功能以注册代码及最新模块规则核对 |

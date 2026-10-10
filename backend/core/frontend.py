@@ -24,7 +24,7 @@ def create_router(settings):
                 raise ApiError(404, "文件不存在")
             file = root / "index.html"
         if not file.is_file():
-            raise ApiError(503, "请先执行 npm run build 构建前端")
+            raise ApiError(503, "请先执行 npm run build 构建前端（产物位于 frontend/dist）")
         return FileResponse(file)
 
     return router

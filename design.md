@@ -15,7 +15,7 @@
 
 ### 颜色与设计变量
 
-沿用“深色侧栏、浅灰画布、白色内容面板、蓝色主操作”的现有风格。设计变量的唯一代码来源是 [tokens.css](web/shared/styles/tokens.css)，下表是当前基准；调整公共变量时同步维护本文并检查受影响页面。
+沿用“深色侧栏、浅灰画布、白色内容面板、蓝色主操作”的现有风格。设计变量的唯一代码来源是 [tokens.css](frontend/src/shared/styles/tokens.css)，下表是当前基准；调整公共变量时同步维护本文并检查受影响页面。
 
 | 用途 | 现有变量 | 当前值 |
 | --- | --- | --- |
@@ -51,11 +51,11 @@
 
 ## 3. 页面布局
 
-- 页面统一复用 [AppFrame](web/shared/components/AppFrame.tsx) 和 [Sidebar](web/shared/components/Sidebar.tsx)，菜单由 [navigation.tsx](web/app/navigation.tsx) 维护。业务模块不另建侧栏、品牌区或整页外壳。
+- 页面统一复用 [AppFrame](frontend/src/shared/components/AppFrame.tsx) 和 [Sidebar](frontend/src/shared/components/Sidebar.tsx)，菜单由 [navigation.tsx](frontend/src/app/navigation.tsx) 维护。业务模块不另建侧栏、品牌区或整页外壳。
 - 标准阅读顺序为：当前位置与数据来源 → 页面标题与说明 → 页面级操作 → 查询或筛选条件 → 结果说明 → 数据内容 → 分页或后续操作。
 - 标题和页面级操作使用公共框架提供的位置；模块内部只增加分区标题，避免重复出现两套页头。
 - 查询按钮靠近条件，行操作靠近对应记录，批量操作靠近选中数量。相同操作在同类页面中的位置、名称和顺序保持稳定。
-- 桌面端沿用现有框架：侧栏宽 232px，内容区域最大宽度 1700px，左右内边距 30px。相关尺寸统一在 [app-frame.css](web/shared/components/app-frame.css) 维护，不在业务页面覆盖。
+- 桌面端沿用现有框架：侧栏宽 232px，内容区域最大宽度 1700px，左右内边距 30px。相关尺寸统一在 [app-frame.css](frontend/src/shared/components/app-frame.css) 维护，不在业务页面覆盖。
 - 列表、核对表和数据源工作区可保留各自必要的布局差异；统一的是导航、层级、控件和反馈，不强制所有模块使用同一种卡片排列。
 - 数据来源、只读范围和接入限制应在页头或相邻提示区清楚展示，不虚构连接状态、统计数字或操作者身份。
 
@@ -65,13 +65,13 @@
 
 当前已有公共 `AppFrame`、`Sidebar`、`Button`。表格、表单字段、状态标签、弹窗及请求状态组件尚未全部统一提取；以下是实现要求，不能当作已有组件清单。
 
-- 优先检查 [共享组件目录](web/shared/components) 与当前业务模块，复用已有实现。
+- 优先检查 [共享组件目录](frontend/src/shared/components) 与当前业务模块，复用已有实现。
 - 同类基础控件出现重复需求时，在共享目录统一提取；业务特有的核对行、来源标记等保留在业务模块。
 - 新样式按组件或模块限定作用域，不在页面 CSS 中直接覆盖全站 `button`、`input`、`table`，不复制整份全局样式。
 
 ### 按钮与链接
 
-- 当前 [Button](web/shared/components/Button.tsx) 提供 `primary` 和 `secondary` 两种样式，默认次要按钮；样式由 [base.css](web/shared/styles/base.css) 维护。
+- 当前 [Button](frontend/src/shared/components/Button.tsx) 提供 `primary` 和 `secondary` 两种样式，默认次要按钮；样式由 [base.css](frontend/src/shared/styles/base.css) 维护。
 - 同一操作区通常只强调一个主操作，例如“查询”或“拉取数据”；“重置”“取消”“返回”等使用次要样式。
 - 导航使用链接或路由入口，执行操作使用按钮。按钮名称写明动作，避免只有“确定”“处理”等含义不清的文字。
 - 请求期间禁用重复提交，并展示“查询中…”等真实进度文字；禁用的业务操作需提供可见原因，不能只依赖鼠标悬停。

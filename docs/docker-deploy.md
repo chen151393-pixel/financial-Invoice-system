@@ -2,7 +2,7 @@
 
 本配置用于先在 Linux ECS 上运行 `develop` 分支，并通过 SSH 隧道从自己的电脑访问。它不是公网网站配置：Compose 使用 Linux 的 host 网络，后端只监听服务器的 `127.0.0.1:3000`，不发布公网端口。当前正式前端没有远程登录表单；公网域名部署需要另行完成 HTTPS 和远程身份入口，不能直接把本机免登录模式暴露到公网。
 
-`Dockerfile` 用 Node 22 构建正式 Vite 前端，再把 `dist/web` 和 Python 后端放入 Python 3.11 运行镜像。运行时复用 `python -m backend`，保持单进程会话与原有数据库迁移规则；镜像不包含 `.env`、`.env.local`、数据库和私钥。正式运行统一读取业务 MySQL 连接，所有模块共用一个连接池。两条历史迁移链在同一库登记；启动不会自动迁移或初始化数据库。
+`Dockerfile` 用 Node 22 构建正式 Vite 前端，前端构建只使用 `frontend/` 目录，再把 `frontend/dist` 和 Python 后端放入 Python 3.11 运行镜像。运行时复用 `python -m backend`，保持单进程会话与原有数据库迁移规则；镜像不包含 `.env`、`.env.local`、数据库和私钥。正式运行统一读取业务 MySQL 连接，所有模块共用一个连接池。两条历史迁移链在同一库登记；启动不会自动迁移或初始化数据库。
 
 ## 拉取 develop
 

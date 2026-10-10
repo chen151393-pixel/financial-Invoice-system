@@ -53,11 +53,12 @@
 ├── frontend/                 React 前端（独立 package.json）
 ├── netsuite/                 上传到 NS 的 RESTlet 脚本及其 Node 测试
 ├── scripts/dev.mjs           本地同时启动前后端
+├── package.json              命令入口（不含依赖）
 ├── docs/                     当前有效文档；历史方案放 docs/history/
 └── Dockerfile、compose.yaml、.env.example、README.md、AGENTS.md
 ```
 
-根目录不再有前端配置文件（`package.json`、`vite.config.ts`、`tsconfig.json` 等）和原型目录（`app/`、`worker/`）。
+根目录不再有前端配置文件（`vite.config.ts`、`tsconfig.json`、`eslint.config.mjs` 等）、前端依赖和原型目录（`app/`、`worker/`）。根目录 `package.json` 只作命令入口，不含任何依赖；前端命令转到 `frontend/` 执行。
 
 ## 3. 模块划分
 
@@ -159,9 +160,9 @@ documents_pending → notify_pending → awaiting_invoice → partially_received
 | 删除项 | 依据 |
 | --- | --- |
 | `app/`、`worker/`、`.openai/`、根 `vite.config.ts`、`next.config.ts`、`next-env.d.ts`、根 `tsconfig.json`、`postcss.config.mjs`、`scripts/vinext.mjs` | Vinext / Cloudflare 原型，不参与正式部署 |
-| `web/app/DemoPage.tsx`、`/demo` 路由；导航中"发票工作台、异常处理、系统对账、回写 NetSuite" | 指向演示数据 |
-| `web/app/FinanceWorkbenchExamplePage.tsx`、`web/modules/reconciliation/example/` | 示例页 |
-| `web/modules/business/`、`web/modules/writeback/` | 只有 README |
+| `frontend/src/app/DemoPage.tsx`、`/demo` 路由；导航中"发票工作台、异常处理、系统对账、回写 NetSuite" | 指向演示数据 |
+| `frontend/src/app/FinanceWorkbenchExamplePage.tsx`、`frontend/src/modules/reconciliation/example/` | 示例页 |
+| `frontend/src/modules/business/`、`frontend/src/modules/writeback/` | 只有 README |
 | 无调用的前端接口函数（`queryFinanceComparison`、`relatedPurchase` 等） | 无调用方 |
 | `tests/rendered-html.test.mjs` 及只测试演示数据的 Node 测试 | 随原型删除 |
 | 依赖 `vinext`、`wrangler`、`@cloudflare/vite-plugin`、`@openai/sites-vite-plugin`、`@vitejs/plugin-rsc`、`react-server-dom-webpack`、`@next/eslint-plugin-next`、`tailwindcss`、`@tailwindcss/postcss` | 只被原型使用 |
@@ -177,7 +178,7 @@ documents_pending → notify_pending → awaiting_invoice → partially_received
 | 步骤 | 内容 | 验收 |
 | --- | --- | --- |
 | 1 清理 ✅ | 从当前 `develop` 建立 `archive/writeback` 分支；执行第 6 节删除清单（标注"移到第 3/4 步"的除外） | 全部现有测试、lint、类型检查、构建通过 |
-| 2 目录分离 | `web/` → `frontend/`（独立 `package.json`，引入 `react-router`）；`netsuite/` 独立；更新 Dockerfile、启动脚本 | 本地联动启动、Docker 构建、全部检查通过 |
+| 2 目录分离 ✅ | `web/` → `frontend/`（独立 `package.json`，引入 `react-router`）；`netsuite/` 独立；更新 Dockerfile、启动脚本。根目录保留一个**不含依赖**的 `package.json` 作为命令入口，原有 `npm.cmd run …` 命令不变 | 本地联动启动、Docker 构建、全部检查通过 |
 | 3 数据库基线 | 新迁移链 `0001_baseline` 建 24 张表（版本表 `schema_version`）；数据库连接收为一个引擎、一个 `core/database.py`；引入 `core/events.py` | 隔离 MySQL 空库执行基线迁移，表结构与[数据库设计](database.md)一致 |
 | 4 模块重建 | 按 source → review → task → invoice → matching 顺序，每个模块一个 PR：改为分层目录、改读写新表、实现该模块在链路中的职责（审核行、任务行、比对建议、事件）；完成第 6 节标注"移到第 4 步"的删除；删除该模块的旧表定义和旧迁移 | 每个 PR 全部测试通过；最后一个 PR 合入后，一张报关单从审核走到任务完成，无需手工改状态；MySQL 并发测试通过 |
 | 5 定时同步 | sync 模块切换新表；NS 报关和子采购定时拉取；柠檬云 open2 定时拉票并生成比对建议 | 无人操作时新报关单、新发票自动进入工作台 |

@@ -6,7 +6,7 @@
 
 | 部分 | 当前实现 |
 | --- | --- |
-| 前端 | React＋TypeScript＋Vite，`web/` |
+| 前端 | React＋TypeScript＋Vite＋react-router，`frontend/`（独立 package.json） |
 | 业务接口 | Python＋FastAPI，`backend/` |
 | NS 网络请求 | HTTPX 客户端，连接池与超时控制，禁止跟随重定向和自动写入重试 |
 | M2M | PyJWT＋cryptography，PS256/384/512 或匹配的 ES256/384/512 |
@@ -27,8 +27,10 @@
 ```powershell
 python -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -r backend/requirements.txt
-npm.cmd install
+npm.cmd run setup
 ```
+
+`npm.cmd run setup` 在 `frontend/` 中按锁文件安装前端依赖；根目录 `package.json` 只是命令入口，不安装依赖。
 
 首次配置时，把根目录 `.env.example` 复制为 `.env`；如果已有 `.env` 或 `.env.local`，补齐其中配置，不要覆盖凭证。后端读取 `.env`、`.env.local`、进程环境变量，后者优先级更高。Docker 同样依次读取 `.env` 和 `.env.local`，后者覆盖前者；兼容只保留其中一个文件，详见 [Docker 部署说明](docker-deploy.md)。
 
@@ -73,7 +75,7 @@ npm.cmd start
 .\.venv\Scripts\python.exe -m backend
 ```
 
-Linux/macOS 使用 `.venv/bin/python`。后台生产机可以只安装 Python、后端文件和前端构建产物 `dist/web/`。
+Linux/macOS 使用 `.venv/bin/python`。后台生产机可以只安装 Python、后端文件和前端构建产物 `frontend/dist/`。
 
 ## 前后端独立开发
 

@@ -35,7 +35,7 @@ v3保留17列字符串，新增：
 
 ## 最小部署
 
-1. 将 `scripts/netsuite/pl_restlet.js` 上传到当前 `pl_suitelet.js` 所在目录，使相对依赖 `./pl_query_service` 指向同一服务文件。
+1. 将 `netsuite/pl_restlet.js` 上传到当前 `pl_suitelet.js` 所在目录，使相对依赖 `./pl_query_service` 指向同一服务文件。
 2. 共用服务需支持 `query(input, parameterPrefix)`，接受 `custscript_pw` 前缀，并输出 `TABLE_KEYS`（固定17列）、`complete`、`groups`、`counts`、查询范围及读取时间。用户提供的线上对应目录 `SuiteScripts/pl_lookup` 已具备这些能力。新版入口会先核对17列定义；旧服务不支持时返回 `SERVICE_VERSION_UNSUPPORTED`，应先核对差异，不要整包覆盖共用模块或切换查询模式。
 3. 新建 RESTlet 脚本记录，选择 `pl_restlet.js`；建议脚本 ID 为 `customscript_pl_web_query`，部署 ID 为 `customdeploy_pl_web_query`，以 NS 实际保存的编号为准。
 4. 在新脚本记录创建自由格式文本参数 `custscript_pw_config_file`，部署值填写原 Suitelet 的 `custscript_pl_config_file` 所指向的同一配置文件 ID。脚本参数不会跨记录自动共享。
@@ -95,7 +95,7 @@ Python核验账户、查询条件、行唯一性与统计一致性，并增加�
 
 `stage=TRACE_SOURCES` 且 `code=QUERY_FAILED` 表示来源追溯期间发生未分类异常，不足以直接断定权限错误。使用 `2026-09-22-trace-diagnostic-1` 的 `pl_query_service.js` 和配套 `pl_trace.js` 后，NS 日志会补充受控的异常名称、记录类型、读取阶段和 API 操作；不会记录原始异常或业务值，也不会改变网页通用失败响应。原 Suitelet 成功而 RESTlet 失败时，核对实际执行角色、M2M 映射以及两入口加载的共用模块与配置。此诊断更新需部署到 NS 才生效，重启 Python 无法更新 NS 文件。
 
-本地测试：`node --test tests/ns-pl-restlet.test.mjs tests/ns-pl-lookup.test.mjs tests/ns-pl-trace.test.mjs tests/ns-pl-direct.test.mjs tests/ns-pl-export.test.mjs`；后端 `npm.cmd run test:api`、`npm.cmd run lint:api`；前端 `npm.cmd run build`、`npm.cmd run lint`、`npm.cmd run typecheck`、`npm.cmd run test:reconciliation`。
+本地测试：`node --test netsuite/tests/ns-pl-restlet.test.mjs netsuite/tests/ns-pl-lookup.test.mjs netsuite/tests/ns-pl-trace.test.mjs netsuite/tests/ns-pl-direct.test.mjs netsuite/tests/ns-pl-export.test.mjs`；后端 `npm.cmd run test:api`、`npm.cmd run lint:api`；前端 `npm.cmd run build`、`npm.cmd run lint`、`npm.cmd run typecheck`、`npm.cmd run test:web`。
 
 部署后，使用同一账户、等效角色权限、同一单号及日期范围对照 NS 页面与网站的行序、数量和金额。角色或查询时点不同可能产生差异，两个请求不是同一事务快照。网站手动查询，不自动轮询；RESTlet仍占用账户并发额度，共用模块本身的诊断查询开销也保留。
 

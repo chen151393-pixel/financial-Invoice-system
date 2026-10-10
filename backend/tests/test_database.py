@@ -32,9 +32,9 @@ def test_migrations_match_models_and_are_repeatable(context):
 @pytest.mark.parametrize(
     "values",
     [
-        {"NETSUITE_PRIVATE_KEY_PATH": "public/private.pem"},
-        {"NETSUITE_PRIVATE_KEY_PATH": "web/private.pem"},
-        {"DATABASE_URL": "sqlite:///./dist/secret.sqlite"},
+        {"NETSUITE_PRIVATE_KEY_PATH": "frontend/public/private.pem"},
+        {"NETSUITE_PRIVATE_KEY_PATH": "frontend/private.pem"},
+        {"DATABASE_URL": "sqlite:///./frontend/dist/secret.sqlite"},
         {"DATABASE_URL": "postgresql://user:secret@localhost/test"},
         {"APP_ORIGIN": "http://example.com"},
         {"APP_ORIGIN": "https://example.com/"},

@@ -8,7 +8,7 @@
 
 ## 已准备内容
 
-- 文件：[`finance_source_restlet.js`](../scripts/netsuite/finance_source_restlet.js)。独立 RESTlet，不替换已有创建或审批脚本。
+- 文件：[`finance_source_restlet.js`](../netsuite/finance_source_restlet.js)。独立 RESTlet，不替换已有创建或审批脚本。
 - 输入：`POST {"declarationIds":["839"]}`，只接受最多20个不同的内部ID。
 - 输出：`contractVersion=1`、`complete`、规范化账套及每张单的原始行。每行保留唯一ID、报关头、PL、Packing、公司、货品、履行及行号、母采购、开票品名与原始装箱数量。
 - 缺失子列表、来源字段、唯一ID、超限或权限失败时，返回明确失败且不返回部分成功数据。最多2000行。
@@ -22,7 +22,7 @@
 
 匹配必须继续经过原始报关行 → Packing → 销售/母采购行 → 子采购行；原始行还需唯一归属报关汇总行。重复候选、跨账套、数量上限冲突和分摊依据缺失不得强配。此文件本身不意味着精确匹配或审核已经完成。
 
-验证：`node --test tests/ns-finance-source.test.mjs` 使用隔离模拟 API，覆盖输入边界、只读方法、唯一来源身份、额度与失败响应；不代表真实 NS 部署验收。
+验证：`node --test netsuite/tests/ns-finance-source.test.mjs` 使用隔离模拟 API，覆盖输入边界、只读方法、唯一来源身份、额度与失败响应；不代表真实 NS 部署验收。
 
 ## 同步时保存的对应关系
 

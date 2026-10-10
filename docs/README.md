@@ -22,12 +22,12 @@
 
 | 模块 | 后端文档 | 前端文档 |
 | --- | --- | --- |
-| 身份 | [identity](../backend/modules/identity/README.md) | [会话 API](../web/modules/identity/README.md) |
+| 身份 | [identity](../backend/modules/identity/README.md) | [会话 API](../frontend/src/modules/identity/README.md) |
 | NS 来源 | [business](../backend/modules/business/README.md) | 页面在 reconciliation 模块 |
-| 同步 | [sync](../backend/modules/sync/README.md) | [同步工作区](../web/modules/sync/README.md) |
-| 发票 | [invoice](../backend/modules/invoice/README.md) | [导入与列表](../web/modules/invoice/README.md) |
-| 匹配 | [matching](../backend/modules/matching/README.md) | [匹配工作区](../web/modules/matching/README.md) |
-| 财务审核与开票任务 | [reconciliation](../backend/modules/reconciliation/README.md) | [核对与任务页面](../web/modules/reconciliation/README.md) |
+| 同步 | [sync](../backend/modules/sync/README.md) | [同步工作区](../frontend/src/modules/sync/README.md) |
+| 发票 | [invoice](../backend/modules/invoice/README.md) | [导入与列表](../frontend/src/modules/invoice/README.md) |
+| 匹配 | [matching](../backend/modules/matching/README.md) | [匹配工作区](../frontend/src/modules/matching/README.md) |
+| 财务审核与开票任务 | [reconciliation](../backend/modules/reconciliation/README.md) | [核对与任务页面](../frontend/src/modules/reconciliation/README.md) |
 | 审计 | [audit](../backend/modules/audit/README.md) | 暂无独立正式页面 |
 
 ## 集成与数据

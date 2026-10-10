@@ -24,8 +24,8 @@ function stop(code = 0) {
   }
 }
 
-function launch(name, args, env) {
-  const child = spawn(process.execPath, args, { cwd: root, stdio: "inherit", env });
+function launch(name, args, env, cwd = root) {
+  const child = spawn(process.execPath, args, { cwd, stdio: "inherit", env });
   children.add(child);
   child.on("error", (error) => {
     console.error(`${name}启动失败：${error.message}；另一端继续运行。`);
@@ -66,7 +66,13 @@ try {
   };
   launch("后端", ["scripts/python.mjs", "-m", "backend", "--reload"], env);
   if (!apiOnly) {
-    launch("前端", ["node_modules/vite/bin/vite.js", "--config", "web/vite.config.ts"], env);
+    // 前端在 frontend/ 目录内运行，使用其自身依赖与 vite.config.ts。
+    launch(
+      "前端",
+      ["node_modules/vite/bin/vite.js"],
+      env,
+      fileURLToPath(new URL("../frontend/", import.meta.url)),
+    );
   }
   console.log(`后端地址 ${config.apiTarget}；前端访问 ${config.origin}；Ctrl+C 停止本次启动的服务。`);
 } catch (error) {

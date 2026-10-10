@@ -132,15 +132,16 @@ modules/task/
 
 ## 9. 检查
 
-提交前在 `frontend/` 下运行：
+提交前在 `frontend/` 下运行（或在根目录用 `npm run lint` 等同名命令）：
 
 ```bash
 npm run lint
 npm run typecheck
 npm run build
+npm test
 npm run check:architecture
 ```
 
-`check:architecture`（由现有 `scripts/check-web-architecture.mjs` 改造）检查：模块之间不互相导入、`shared` 不导入 `modules`、页面和组件不直接调用 `http()`。
+`check:architecture`（由现有 `frontend/scripts/check-architecture.mjs` 改造）检查：模块之间不互相导入、`shared` 不导入 `modules`、页面和组件不直接调用 `http()`。
 
 页面布局或交互变化时，在桌面和较窄窗口下检查受影响页面的四种状态和键盘操作。

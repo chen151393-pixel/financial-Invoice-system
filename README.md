@@ -34,22 +34,22 @@ React + TypeScript + Vite 前端，Python + FastAPI + SQLAlchemy + Alembic 后�
 
 ```text
 项目根目录/
-├── web/                     正式 React 前端：app 装配、modules 业务、shared 公共能力
-├── backend/                 FastAPI：core、modules、integrations、两套迁移和测试
-├── scripts/                 本地启动、检查脚本与待部署的 NS RESTlet
-├── tests/                   Node 测试与虚构样例
-├── docs/                    当前说明、设计方案、MySQL 资料与历史记录
-└── public/                  前端静态资源
+├── frontend/                React 前端：独立 package.json；src/ 下为 app 路由与装配、modules 业务、shared 公共能力
+├── backend/                 FastAPI：core、modules、integrations、迁移和测试
+├── netsuite/                需上传到 NS 的 RESTlet 脚本及其 Node 测试
+├── scripts/                 本地联动启动（dev.mjs）与 Python 运行器
+├── docs/                    当前说明、架构设计、MySQL 资料与历史记录
+└── package.json             命令入口，不含依赖；前端命令转到 frontend/
 ```
 
-正式构建使用 `web/vite.config.ts`，产物为 `dist/web`。原型（`app/`、`worker/`、`/demo`）已删除。
+正式构建使用 `frontend/vite.config.ts`，产物为 `frontend/dist`，由后端托管。原型（`app/`、`worker/`、`/demo`）已删除。
 
 ## 本地启动
 
 需要 Python 3.11+ 和 Node.js 22.13+。在项目根目录使用 Windows PowerShell 执行：
 
 ```powershell
-npm.cmd install
+npm.cmd run setup
 python -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -r backend/requirements.txt
 ```

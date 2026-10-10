@@ -10,7 +10,7 @@
 
 ## 2. 一份设计变量
 
-已落地文件：`web/shared/styles/tokens.css`，已提取颜色、字体族、常用间距和圆角。字号、字重、阴影与浮层层级等其余变量在实际复用时继续从现有页面提取，建立统一命名，不凭每次 AI 的偏好重新选一套。
+已落地文件：`frontend/src/shared/styles/tokens.css`，已提取颜色、字体族、常用间距和圆角。字号、字重、阴影与浮层层级等其余变量在实际复用时继续从现有页面提取，建立统一命名，不凭每次 AI 的偏好重新选一套。
 
 建议变量分组：`--color-*`、`--font-*`、`--space-*`、`--radius-*`、`--border-*`、`--shadow-*`、`--z-*`。状态采用成功、提示、待处理、失败、中性等语义变量。
 
@@ -20,7 +20,7 @@
 
 ## 3. 公共组件目录
 
-目标目录：`web/shared/components/`。先从至少两个实际使用处提取，或在首次明确要统一的基础控件任务中建立，不批量生成空组件。
+目标目录：`frontend/src/shared/components/`。先从至少两个实际使用处提取，或在首次明确要统一的基础控件任务中建立，不批量生成空组件。
 
 | 组件 | 统一的内容 |
 | --- | --- |
@@ -35,14 +35,14 @@
 | Feedback | 成功、失败和处理中反馈，绑定实际响应 |
 | Sidebar（已提取） | 菜单分组、图标、选中态、徽标、品牌及页脚；菜单由调用方传入 |
 
-`web/shared/components/Sidebar.tsx` 与同目录 `sidebar.css` 提供统一侧栏。调用方传 `groups`、`activeId`、`onNavigate`、`brand` 和可选 `footer`，不向组件塞入业务数据查询、角色判断或模拟连接状态。当前由演示入口的八个模块复用，正式 PL 核对页也复用该侧栏。
+`frontend/src/shared/components/Sidebar.tsx` 与同目录 `sidebar.css` 提供统一侧栏。调用方传 `groups`、`activeId`、`onNavigate`、`brand` 和可选 `footer`，不向组件塞入业务数据查询、角色判断或模拟连接状态。当前由演示入口的八个模块复用，正式 PL 核对页也复用该侧栏。
 
 组件公共参数用清晰的类型声明；避免增加几十个布尔开关把表格、卡片、表单硬塞进一个组件。业务特有的 CandidateList、InvoicePaper 等放回模块。
 
 ## 4. 页面组织
 
 ```text
-web/modules/matching/
+frontend/src/modules/matching/
 ├── pages/MatchDetailPage.tsx       # 组合页面
 ├── components/CandidateList.tsx   # 候选呈现
 ├── hooks/useMatchEvaluation.ts    # 请求与UI状态
@@ -54,7 +54,7 @@ web/modules/matching/
 
 新路由接入后才移除旧入口；同一个功能不能同时维护两套页面和两套状态逻辑。
 
-采购报关联查保留 `/pl-reconciliation`，由 `web/app/PlWorkspacePage.tsx` 装配公共侧栏及 reconciliation 模块；未知路径（含旧 `/demo` 地址）进入此页。页面按 NS 共用查询结果展示15/17列有序明细。独立“财务核对”使用 `/finance-reconciliation` 和 `FinanceWorkspacePage.tsx`，展示三级展开和整单审核；两页使用不同接口与状态，不加载模拟数据。旧记录校对与写回、PL 单联查页面已删除；首页仍进入采购报关联查。Excel 导出保留在 NS 原 Suitelet 页面。
+采购报关联查保留 `/pl-reconciliation`，由 `frontend/src/app/PlWorkspacePage.tsx` 装配公共侧栏及 reconciliation 模块；未知路径（含旧 `/demo` 地址）进入此页。页面按 NS 共用查询结果展示15/17列有序明细。独立“财务核对”使用 `/finance-reconciliation` 和 `FinanceWorkspacePage.tsx`，展示三级展开和整单审核；两页使用不同接口与状态，不加载模拟数据。旧记录校对与写回、PL 单联查页面已删除；首页仍进入采购报关联查。Excel 导出保留在 NS 原 Suitelet 页面。
 
 ## 5. 统一交互
 
@@ -77,11 +77,11 @@ web/modules/matching/
 1. 检查当前正常数据页面及受影响的加载、空数据、失败状态；涉及弹窗或确认时覆盖对应交互。
 2. 在主要桌面尺寸和较窄窗口下检查布局；表格允许容器内横向滚动，页面外壳不能异常溢出。
 3. 检查其他复用该组件的页面，避免修改公共样式只让一页正确。
-4. 执行构建和 lint；类型检查独立于 Vite 构建，已通过web/tsconfig.json和npm run typecheck独立执行。
+4. 执行构建和 lint；类型检查独立于 Vite 构建，已通过frontend/tsconfig.json和npm run typecheck独立执行。
 5. 删除本次替代的重复样式、未使用组件和过时导入，说明引用核查结果。
 
 构建通过只能证明对应构建检查通过。未打开页面、未做交互时如实记录，不能写“UI 验收通过”。视觉检查可以逐步增加关键页面基线，但更新基线前要查看差异，不能自动接受所有新截图。
 
 ## 统一页面框架
 
-导航由 `web/app/navigation.tsx` 维护，正式路由由 `web/app/views.ts` 统一映射，共用 AppFrame 和 Sidebar。采购报关联查、财务核对及其他已接入页面标明真实来源；公共导航不展示虚构业务计数或身份。首页及 `/pl-reconciliation` 进入采购报关联查，财务核对独立进入 `/finance-reconciliation`；旧 `/demo?view=...` 地址进入采购报关联查。旧独立 PL 外壳样式、演示顶部横幅和重复页头已移除。
+导航由 `frontend/src/app/navigation.tsx` 维护，正式路由由 `frontend/src/app/views.ts` 统一映射，共用 AppFrame 和 Sidebar。采购报关联查、财务核对及其他已接入页面标明真实来源；公共导航不展示虚构业务计数或身份。首页及 `/pl-reconciliation` 进入采购报关联查，财务核对独立进入 `/finance-reconciliation`；旧 `/demo?view=...` 地址进入采购报关联查。旧独立 PL 外壳样式、演示顶部横幅和重复页头已移除。

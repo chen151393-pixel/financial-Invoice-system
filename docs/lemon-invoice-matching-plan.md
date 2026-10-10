@@ -184,7 +184,7 @@ flowchart LR
 
 `allocation_guard` 与分配台账在同一个事务更新；缓存占用与台账不一致时阻止继续确认并核实，不通过重算清零“修复”。来源金额更新不能直接覆盖匹配占用。
 
-新增 `invoice`、`matching` 的最小业务实现；集成客户端放入 `backend/integrations/lemon/`。沿用 Controller → Service → DAO 和纯 Mapper；前端对应 `web/modules/invoice/`、`web/modules/matching/`。`sync` 负责任务编排，发票与采购的校验保存归所属模块。
+新增 `invoice`、`matching` 的最小业务实现；集成客户端放入 `backend/integrations/lemon/`。沿用 Controller → Service → DAO 和纯 Mapper；前端对应 `frontend/src/modules/invoice/`、`frontend/src/modules/matching/`。`sync` 负责任务编排，发票与采购的校验保存归所属模块。
 
 `matching` 通过 `invoice/public.py`、`business/public.py` 读取并锁定数据，公开方法接受调用方 Connection；不导入其他模块 DAO。来源模块负责版本递增，匹配模块在读取、评估和确认时比较保存版本，判定“需复核”；可由后台检查补记审计状态，不能依赖后台检查完成后才阻止操作。这样无需让 `business` 反向依赖 `matching`。
 

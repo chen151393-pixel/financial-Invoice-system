@@ -1,0 +1,2 @@
+# 依赖本地 SuiteScripts 的专项测试，沿用原忽略约定
+/tests/ns-pl-lookup.test.mjs

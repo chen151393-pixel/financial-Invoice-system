@@ -71,7 +71,7 @@ NS逐行自动匹配的缺失数据仍由同步模块补充，不因人工审核
 | `GET /api/reconciliation/invoice-tasks/{UUID}` | 返回任务、原始采购行、待补齐原因、六节点流程、来源核验结果、prepare/notify/compare的allowed与reason；无权访问返回404 |
 | `POST /api/reconciliation/approve` | 保持原请求，响应新增 `invoiceTaskCount`，表示该审核版本已关联的任务数，重试不表示再次创建 |
 
-启用前运行 `npm.cmd run db:upgrade` 并重启后端；应用库增量迁移不修改业务八表，不触发NS写入。采购原件获取已接入，通知草稿和人工发送登记已接入；企微自动发送、收票与比对关联尚未接入，不会模拟渠道发送成功。正式前端见 [前端模块说明](../../../web/modules/reconciliation/README.md)。
+启用前运行 `npm.cmd run db:upgrade` 并重启后端；应用库增量迁移不修改业务八表，不触发NS写入。采购原件获取已接入，通知草稿和人工发送登记已接入；企微自动发送、收票与比对关联尚未接入，不会模拟渠道发送成功。正式前端见 [前端模块说明](../../../frontend/src/modules/reconciliation/README.md)。
 
 ## 验证
 

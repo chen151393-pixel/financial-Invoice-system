@@ -10,7 +10,7 @@
 
 | 路径 | 用途 | 重新生成方式 |
 | --- | --- | --- |
-| `dist/` | 正式前端构建结果，当前为 `dist/web/` | `npm.cmd run build`；清理后 FastAPI 托管页面需先重新构建 |
+| `frontend/dist/` | 正式前端构建结果（由 `frontend/.gitignore` 忽略）；根目录 `dist/` 为第 2 步之前的旧产物，可删除 | `npm.cmd run build`；清理后 FastAPI 托管页面需先重新构建 |
 | `.next/`、`.vinext/`、`out/` | 已删除原型的历史构建产物，本地可能残留 | 不再生成，可直接清理 |
 | `__pycache__/`、`*.pyc`、`*.pyo` | Python 编译缓存 | 运行 Python 时重新生成 |
 | `.pytest_cache/`、`.ruff_cache/` | 测试与代码检查缓存，可出现在 backend 等子目录 | 再次运行 pytest / Ruff |
@@ -34,7 +34,7 @@
 | `compose.override.yaml` | 部署服务器本地的 Compose 覆盖，如合同共享盘挂载，见 [Docker 部署](docker-deploy.md#合同仅保存到共享盘) | 删除后容器失去共享盘挂载，合同保存失败；按服务器实际挂载维护 |
 | `outputs/`、`work/` | 本地导出、检查结果或临时工作文件 | 逐项核对是否需交付或归档，不能仅凭目录名删除 |
 | `SuiteScripts/` | 延续原仓库的本地独立 NS 脚本管理方式 | 网站 RESTlet 与部分 Node 测试仍依赖其共用模块；应单独管理和交付 |
-| `tests/ns-pl-lookup.test.mjs` | 延续原有独立脚本测试的忽略约定 | 本地专项测试可能仍有用途，不纳入自动删除范围 |
+| `netsuite/tests/ns-pl-lookup.test.mjs` | 延续原有独立脚本测试的忽略约定（由 `netsuite/.gitignore` 忽略） | 本地专项测试可能仍有用途，不纳入自动删除范围 |
 
 仅克隆仓库不会获得上述本地配置、业务数据和独立 NS 共用脚本。真实部署以及依赖 SuiteScripts 的专项测试，需要另行准备相应内容；忽略这些文件不表示功能不依赖它们。
 
@@ -43,10 +43,10 @@
 | 文件或目录 | 保留依据 |
 | --- | --- |
 | `package.json`、`package-lock.json`、`backend/requirements.in`、`requirements.txt` | 项目安装与依赖版本依据 |
-| `web/`、`backend/`、`scripts/`、`tests/` | 正式实现、工具及测试；虚构测试样例也需随代码保存 |
+| `frontend/`、`backend/`、`netsuite/`、`scripts/` | 正式实现、工具及测试；虚构测试样例也需随代码保存 |
 | `backend/migrations/`、`backend/business_migrations/` | 已有数据库的升级历史，不按“旧代码”删除 |
 | `docs/mysql/*.sql` | 建表与字段设计资料；SQL 文件不是本地数据库文件，不应统一忽略 |
-| `public/` | 前端静态资源 |
+| `frontend/public/` | 前端静态资源 |
 | `.agents/skills/frontend-design/` | 项目技能及随附许可证；本次未发现删除依据 |
 | `AGENTS.md`、`design.md`、模块 README 与架构文档 | 项目约束、设计基准和实现说明 |
 | `backend/database.py` | Alembic 与应用表导入工具的元数据登记入口；数据库收口时并入 core |
