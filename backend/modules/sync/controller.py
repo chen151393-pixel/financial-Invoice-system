@@ -28,6 +28,6 @@ def create_router(service, pull_service):
 
     @router.post("/sync/{kind}/pull-save")
     def pull_save(kind: SourceKind, body: PullRequest, owner: Owner):
-        return pull_service.pull_and_save(kind, body, owner)
+        return pull_service.pull_and_save(kind, body)
 
     return router

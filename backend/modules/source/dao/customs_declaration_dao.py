@@ -2,7 +2,7 @@
 
 from sqlalchemy import func, or_, select, update
 
-from ..entity import companies, customs_declarations, customs_lines, raw_records
+from ..entity import companies, customs_declarations, customs_lines, customs_purchase_links, raw_records
 from . import document_dao
 
 
@@ -67,8 +67,8 @@ def head(connection, declaration_id, *, lock=False):
     return dict(row) if row else None
 
 
-def page(connection, account, keyword, offset, limit):
-    """有效报关单分页；关键字匹配 CD 编号、真实报关单号或明细 PL。"""
+def _conditions(account, keyword):
+    """有效报关单；关键字匹配 CD 编号、真实报关单号或明细 PL。"""
     conditions = [customs_declarations.c.is_active.is_(True)]
     if account:
         conditions.append(customs_declarations.c.ns_account == account)
@@ -84,6 +84,40 @@ def page(connection, account, keyword, offset, limit):
                 customs_declarations.c.id.in_(pl_match),
             )
         )
+    return conditions
+
+
+def index(connection, account, keyword):
+    """符合条件的全部报关单：ID、内容摘要、有效关联的子采购单数，按申报日期倒序。"""
+    linked = (
+        select(func.count(func.distinct(customs_purchase_links.c.purchase_order_id)))
+        .where(
+            customs_purchase_links.c.customs_declaration_id == customs_declarations.c.id,
+            customs_purchase_links.c.status == "active",
+        )
+        .scalar_subquery()
+    )
+    query = (
+        select(customs_declarations.c.id, customs_declarations.c.content_sha256, linked.label("order_count"))
+        .where(*_conditions(account, keyword))
+        .order_by(customs_declarations.c.declaration_date.desc(), customs_declarations.c.id.desc())
+    )
+    return [dict(row) for row in connection.execute(query).mappings()]
+
+
+def accounts(connection):
+    query = (
+        select(customs_declarations.c.ns_account)
+        .where(customs_declarations.c.is_active.is_(True))
+        .distinct()
+        .order_by(customs_declarations.c.ns_account)
+    )
+    return list(connection.execute(query).scalars())
+
+
+def page(connection, account, keyword, offset, limit):
+    """有效报关单分页。"""
+    conditions = _conditions(account, keyword)
     total = connection.execute(
         select(func.count()).select_from(customs_declarations).where(*conditions)
     ).scalar()

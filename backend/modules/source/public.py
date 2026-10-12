@@ -10,6 +10,7 @@ from .policy.local_relation_policy import local_line_relations
 from .policy.ns_config import parse_config
 from .policy.relation_policy import comparison_view, incomplete_reason, source_digest
 from .service.contract_service import SubpoContractSource
+from .service.declaration_service import DeclarationService, digest, snapshot
 from .service.ns_reader import PlReader
 from .service.pl_comparison_service import PlScriptService
 from .service.relation_matcher import require_relation_interfaces
@@ -20,6 +21,11 @@ __all__ = [
     "PlScriptQuery",
     "PlScriptService",
     "SubpoContractSource",
+    # 报关单读取（review）：DeclarationService 提供分页/索引/完整内容/审核锁；
+    # snapshot、digest 供调用方在 DeclarationService.locked() 的同一连接中读取并核对摘要
+    "DeclarationService",
+    "digest",
+    "snapshot",
     # 过渡期导出：仅供旧 business / reconciliation 使用，第 4e 步删除
     "PlReader",
     "RelationReader",

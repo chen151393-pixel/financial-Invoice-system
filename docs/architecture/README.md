@@ -183,7 +183,7 @@ documents_pending → notify_pending → awaiting_invoice → partially_received
 | 2 目录分离 ✅ | `web/` → `frontend/`（独立 `package.json`，引入 `react-router`）；`netsuite/` 独立；更新 Dockerfile、启动脚本。根目录保留一个**不含依赖**的 `package.json` 作为命令入口，原有 `npm.cmd run …` 命令不变 | 本地联动启动、Docker 构建、全部检查通过 |
 | 3 数据库基线 ✅ | 新迁移链 `0001_baseline` 建 24 张表（版本表 `schema_version`）；数据库连接收为一个引擎、一个 `core/database.py`；引入 `core/events.py`。`create_app` 暂留过渡参数 `business_engine` 供旧模块测试使用，第 4 步删除 | 隔离 MySQL 空库执行基线迁移，表结构与[数据库设计](database.md)一致 |
 | 4a source ✅ | 新建 source 模块：NS 读取逻辑由 business 移入；同步保存写入 `source_*` 新表（主数据、明细、关联、依据状态、内容摘要）；采购报关联查改为 `POST /api/source/pl-comparison`；迁移 `0002` 增加 `parent_order_no` | 新表保存与读取测试通过；旧链路不受影响 |
-| 4b review | 新建 review 模块（审核记录、审核行、`ReviewApproved` 事件）；财务核对页与数据同步页一起切换到新接口 | 新页面审核走新表 |
+| 4b review ✅ | 新建 review 模块（审核记录、审核行、`ReviewApproved` 事件）；财务核对页改为 `/review`（旧地址跳转）并使用 `/api/review/*`；同步页保存改走 source 新表 | 新页面审核走新表；task 接入前审核通过暂不生成开票任务 |
 | 4c task | 新建 task 模块（任务、任务行、合同、通知、供应商群）；开票跟进页切换 | 审核通过自动生成任务行 |
 | 4d invoice + matching | 原地重建发票与比对（置信度建议、人工通过、`AllocationChanged`）；发票、比对页切换 | 一张报关单从审核走到任务完成，无需手工改状态；MySQL 并发测试通过 |
 | 4e 切换收尾 | 删除 business、reconciliation、audit、旧迁移链、`create_app` 过渡参数、`source.public` 过渡期导出及第 6 节标注"移到第 4 步"的删除项 | 只剩一套实现，全部测试通过 |

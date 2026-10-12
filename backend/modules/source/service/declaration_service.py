@@ -80,6 +80,31 @@ class DeclarationService:
             raise ApiError(503, "报关单读取失败，请检查业务数据库及迁移状态") from None
         return total, rows
 
+    def index(self, account, keyword):
+        self._require_engine()
+        try:
+            with self.engine.connect() as connection:
+                return customs_declaration_dao.index(connection, account, keyword)
+        except SQLAlchemyError:
+            raise ApiError(503, "报关单读取失败，请检查业务数据库及迁移状态") from None
+
+    def accounts(self):
+        self._require_engine()
+        try:
+            with self.engine.connect() as connection:
+                return customs_declaration_dao.accounts(connection)
+        except SQLAlchemyError:
+            raise ApiError(503, "报关单读取失败，请检查业务数据库及迁移状态") from None
+
+    def details(self, declaration_ids):
+        """按给定顺序返回多张报关单的完整内容（同一连接读取）。"""
+        self._require_engine()
+        try:
+            with self.engine.connect() as connection:
+                return [snapshot(connection, declaration_id) for declaration_id in declaration_ids]
+        except SQLAlchemyError:
+            raise ApiError(503, "报关单读取失败，请检查业务数据库及迁移状态") from None
+
     def detail(self, declaration_id):
         self._require_engine()
         try:

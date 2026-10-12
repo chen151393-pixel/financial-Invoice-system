@@ -257,7 +257,7 @@ export function InvoiceTaskPage() {
                   : "还没有开票任务"}
               </h2>
               <p>财务审核通过后自动生成任务；历史已审核数据不会自动补建。</p>
-              <Link to={paths.finance}>前往财务核对</Link>
+              <Link to={paths.review}>前往财务核对</Link>
             </div>
           )}
           <Pagination

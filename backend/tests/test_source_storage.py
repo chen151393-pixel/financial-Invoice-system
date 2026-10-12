@@ -378,3 +378,52 @@ def test_sync_page_reads_ns_and_relations_then_saves(ns, engine, monkeypatch):
 def test_sync_page_rejects_unsupported_kind(ns, engine):
     with pytest.raises(ApiError, match="标准采购订单"):
         StorageService(ns, engine).sync_page("purchase-orders", lambda: {"rows": []})
+
+
+def test_http_pull_save_uses_source_storage(context, engine, monkeypatch):
+    """同步页接口经应用装配走 source 保存；业务库检查针对新表。"""
+    from backend.app import create_app
+    from fastapi.testclient import TestClient
+
+    settings = context.settings
+    mapping = config()
+    settings.pl_lookup = mapping
+    settings.record_types = [
+        mapping[key]["type"] for key in ("pl", "purchase", "purchase_line", "customs", "customs_line")
+    ]
+    settings.account = ACCOUNT
+    for key in ("finance_source_script", "finance_source_deploy", "pl_restlet_script", "pl_restlet_deploy"):
+        setattr(settings, key, "configured")
+    data = bundle([purchase()], [customs()], with_evidence=False)
+
+    class FakeReader:
+        def __init__(self, client):
+            pass
+
+        def collect_records(self, kind, page_rows):
+            return deepcopy(data)
+
+    class FakeRelations:
+        def __init__(self, client):
+            pass
+
+        def collect(self, collected, *, match):
+            return {"870": evidence("870")}
+
+    monkeypatch.setattr("backend.modules.source.service.storage_service.PlReader", FakeReader)
+    monkeypatch.setattr("backend.modules.source.service.storage_service.RelationReader", FakeRelations)
+    page = {"rows": [{"id": "870"}], "count": 1, "offset": 0, "hasMore": False, "nextOffset": None}
+    monkeypatch.setattr(
+        "backend.modules.sync.pull_service.PullService.pull", lambda self, kind, request: page
+    )
+    app = create_app(settings, context.ns, context.engine, business_engine=engine)
+    headers = {"Authorization": f"Bearer {settings.service_key}"}
+    # 新库只有 source_* 等新表，旧六表检查在此会失败
+    assert StorageService(context.ns, engine).configuration()["allowed"]
+    with TestClient(app) as client:
+        response = client.post(
+            "/api/ns/sync/customs-declarations/pull-save", json={"limit": 20}, headers=headers
+        )
+    assert response.status_code == 200, response.text
+    assert response.json()["storage"]["customs"]["created"] == 1
+    assert declaration(engine)["relation_status"] == "complete"

@@ -1,38 +1,16 @@
-# 采购报关联查与财务核对
+# 采购报关联查与开票跟进
 
 ## 开票跟进正式页
 
-`/invoice-followup` 从导航“开票跟进”或财务核对右上角进入，读取真实的审核后任务。`pages/InvoiceTaskPage.tsx` 复用 AppFrame、Button、Pagination，默认按供应商、可切换按报关单，后端完成分组、搜索、统计和分页。供应商展开后列出各报关单任务；“查看节点”跳转独立详情页，显示六节点流程、原件获取与只读审核明细。所有金额使用后端字符串，未确认额度不显示采购单合计。
+`/invoice-followup` 从导航“开票跟进”或财务核对右上角进入（旧链路任务），读取真实的审核后任务。`pages/InvoiceTaskPage.tsx` 复用 AppFrame、Button、Pagination，默认按供应商、可切换按报关单，后端完成分组、搜索、统计和分页。供应商展开后列出各报关单任务；“查看节点”跳转独立详情页，显示六节点流程、原件获取与只读审核明细。所有金额使用后端字符串，未确认额度不显示采购单合计。
 
 页面包含加载、错误重试、空结果及历史版本查看；查询切换忽略过期响应。审核完成提示关联任务数，不把重复审核当作重复生成。历史已审核数据不会自动补建。收票统计为未接入，共享盘保存使用真实接口；通知及比对操作按后端能力禁用，不能冒充执行成功。后端规则和新增应用库迁移见 [审核模块](../../../../backend/modules/reconciliation/README.md#审核后开票任务已实现)。
 
-两个独立导航与页面都在主项目运行，使用同一条 `npm.cmd run dev` 命令：
+采购报关联查 `/pl-reconciliation`：`pages/PlReconciliationPage.tsx`、`components/PlSourceComparison.tsx`、`components/PlSearchForm.tsx`，调用 POST `/api/source/pl-comparison` 实时读取 NS，只读不入库，保留原值与来源行序。
 
-- “采购报关联查” `/pl-reconciliation`：保留 NS 原始平铺来源对照，只读查询。
-- “财务核对” `/finance-reconciliation`：三级展开与整单审核，是已确认示例的正式实现。
+财务核对已于架构 v2 第 4b 步移到 [review 模块](../review/README.md)（`/review`，旧地址自动跳转），改用 `/api/review/*` 新接口。第 4c 步接入新开票任务前，开票跟进页仍读取旧链路生成的任务。
 
-从数据同步、进项发票及其他项目页面均可分别进入两个菜单。复用 React + TypeScript + Vite、AppFrame、Sidebar 和 Button；路由统一维护于 `frontend/src/app/views.ts`。
-
-- `pages/PlReconciliationPage.tsx` / `components/PlSourceComparison.tsx`：只读 NS 联查，保留15/17列原值与来源行序，不创建审核快照。
-- `pages/FinanceReconciliationPage.tsx`：打开即自动分页读取已入库报关单，支持后端搜索、状态筛选、清空恢复完整列表、刷新及忽略过期响应。
-- `components/FinanceSearchForm.tsx`：财务页关键字查询与账套过滤。`components/PlSearchForm.tsx`：采购报关联查表单，默认按 CD 查询；PL/CD/真实报关号同一行查询，申报月份与创建日期范围放在“更多查询条件”。
-- `components/FinanceComparison.tsx`：每张报关单一行，CD编号、真实报关号、PL、公司、关联数量、审核状态、审核通过按钮。
-- `components/CustomsRows.tsx`、`PurchaseRows.tsx`、`DetailColumns.tsx`：报关明细 → 关联子采购行，共用列宽使数量、单位、单价、金额对齐；不显示重复的采购行审核列。
-- `components/ReviewDialog.tsx`：整单确认、本次采购数量金额、审核备注、真实结果及只读采购详情；通知供应商按钮仅预留。
-- `api.ts`：联查使用 POST `/api/source/pl-comparison`；财务列表使用 POST `/api/reconciliation/declarations`。审核使用 POST `/api/reconciliation/approve`。后端实时 NS 审核接口 `/api/reconciliation/query` 已无前端调用，按架构方案第 4 步删除。
-- `types.ts`：后端展示VO；金额和数量为十进制字符串，前端不重算或推断关系。
-
-默认全部收起。点击主单仅展开报关行，再点击报关行显示采购明细；收起主单清除其下级展开状态。全展开/全收起为显式操作，重新查询恢复收起。多张单的行ID按报关单隔离。
-
-报关单默认收起，展开后先显示报关明细；再点击哪条报关行，就在该行紧下方展开后端返回的对应采购表，各行独立收起，不再共用整单采购区域或增加“关联子采购明细”标题。没有对应采购的行显示数量0，不提供会打开其他行采购的按钮。报关和采购表共用边距和列宽；后端返回 `scope=order` 时显示“子单数量／订单金额”。财务页面不展示“NS来源说明”及重复的关联核对提示，原始依据继续由后端保存。
-
-财务表格底部复用共享 `Pagination`：显示后端总条数、每页条数、数字页码和页码跳转。默认每页20条，可选择10/20/50条；输入页码后按回车跳转。切换条数、搜索或筛选时回到第一页，查询和统计均由后端执行。分页栏与表格外框对齐，不随宽表横向滚动；窄屏自动换行。进项发票页复用同一组件，保留原有每页100条选项。
-
-审核是否允许、状态筛选和计数全部由后端返回。财务页只保留待审核/审核通过筛选，移除“完成关联核实后才可审核”的前置提示。未定位到唯一报关行的采购保留在整单审核确认窗口，不挂到任意报关行下；前端不按相邻行或品名配对。确认请求只提交快照ID与备注，后端复核本地来源、持久化并审计；失败显示真实原因，不自动重发。
-
-财务列表读取已入库NS来源快照，采购报关联查实时读取NS，不接入演示数组。完整同步已保存v3逐行关联时，由后端返回嵌套的本次采购行；没有v3时，后端使用已存来源引用和Packing定位唯一报关行，保留采购原值口径。人工审核状态与技术依据完整性分开；前端不配对、不分摊。本地行定位不代表正式原始行及v3接口已经部署。已删除独立 `data/previews/finance-review` 目录、临时验收服务和日志，不再运行5191。合成样本仅用于测试；NS原Suitelet及Excel导出不受影响。数据库与规则见[后端模块](../../../../backend/modules/reconciliation/README.md)，NS v3部署见[接口说明](../../../../docs/pl-script-integration.md)。
-
-验证：`npm.cmd run build`、`npm.cmd run lint`、`npm.cmd run typecheck`、`npm.cmd run test:web`；浏览器检查正常、加载、空结果、失败、逐级折叠、整单审核、键盘和窄屏。合成隔离数据的审核测试不代表真实NS部署验收。
+验证：`npm.cmd run build`、`npm.cmd run lint`、`npm.cmd run typecheck`、`npm.cmd run test:web`。
 
 ## 开票任务独立详情
 

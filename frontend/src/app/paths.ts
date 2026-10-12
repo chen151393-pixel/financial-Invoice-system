@@ -1,7 +1,7 @@
 // 全部页面路径集中在此；页面和模块之间跳转只用这里的常量。
 export const paths = {
   pl: "/pl-reconciliation",
-  finance: "/finance-reconciliation",
+  review: "/review",
   invoiceFollowup: "/invoice-followup",
   supplierGroups: "/invoice-followup/supplier-groups",
   invoices: "/invoices",
@@ -10,6 +10,9 @@ export const paths = {
   syncNs: "/sync/ns",
   syncLemon: "/sync/lemon",
 } as const;
+
+// 旧地址，路由中重定向到新地址；保留一个版本后删除。
+export const legacyPaths = { finance: "/finance-reconciliation" } as const;
 
 export const invoiceTaskPath = (id: string) => `${paths.invoiceFollowup}/${encodeURIComponent(id)}`;
 export const matchingInvoicePath = (invoiceId: string) =>
@@ -23,7 +26,7 @@ const viewPaths: Record<View, string> = {
   match: paths.matching,
   sync: paths.sync,
   pl: paths.pl,
-  finance: paths.finance,
+  finance: paths.review,
   "invoice-followup": paths.invoiceFollowup,
 };
 

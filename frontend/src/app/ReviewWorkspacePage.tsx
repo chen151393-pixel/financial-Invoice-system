@@ -1,11 +1,11 @@
 import { Link } from "react-router";
-import { FinanceReconciliationPage } from "../modules/reconciliation/pages/FinanceReconciliationPage";
+import { ReviewPage } from "../modules/review/pages/ReviewPage";
 import { AppFrame } from "../shared/components/AppFrame";
 import { navigation } from "./navigation";
 import { paths } from "./paths";
 import { useViewNavigate } from "./useViewNavigate";
 
-export default function FinanceWorkspacePage() {
+export default function ReviewWorkspacePage() {
   const navigateView = useViewNavigate();
   return (
     <AppFrame
@@ -23,9 +23,9 @@ export default function FinanceWorkspacePage() {
           </Link>
         </div>
       }
-      notice="按 NS 报关单引用自动显示关联子采购明细，由财务核对后点击「审核通过」，保存整单审核记录。"
+      notice="按 NS 报关单引用自动显示关联子采购明细，财务核对后点击「审核通过」：保存审核记录，并冻结子采购的开票数量、单位和含税金额。新链路的开票任务将在下一步接入后自动生成。"
     >
-      <FinanceReconciliationPage />
+      <ReviewPage />
     </AppFrame>
   );
 }

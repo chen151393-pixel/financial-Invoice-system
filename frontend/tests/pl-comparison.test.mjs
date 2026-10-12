@@ -26,18 +26,18 @@ before(async () => {
     logLevel: "error",
   });
   ({ FinanceComparison: PlComparison } = await server.ssrLoadModule(
-    "/src/modules/reconciliation/components/FinanceComparison.tsx",
+    "/src/modules/review/components/FinanceComparison.tsx",
   ));
-  ({ CustomsRows } = await server.ssrLoadModule("/src/modules/reconciliation/components/CustomsRows.tsx"));
-  ({ ReviewDialog } = await server.ssrLoadModule("/src/modules/reconciliation/components/ReviewDialog.tsx"));
+  ({ CustomsRows } = await server.ssrLoadModule("/src/modules/review/components/CustomsRows.tsx"));
+  ({ ReviewDialog } = await server.ssrLoadModule("/src/modules/review/components/ReviewDialog.tsx"));
   ({ PlSourceComparison } = await server.ssrLoadModule(
     "/src/modules/reconciliation/components/PlSourceComparison.tsx",
   ));
   ({ viewPath } = await server.ssrLoadModule("/src/app/paths.ts"));
   ({ navigation } = await server.ssrLoadModule("/src/app/navigation.tsx"));
-  ({ PurchaseRows } = await server.ssrLoadModule("/src/modules/reconciliation/components/PurchaseRows.tsx"));
+  ({ PurchaseRows } = await server.ssrLoadModule("/src/modules/review/components/PurchaseRows.tsx"));
   ({ FinanceSearchForm } = await server.ssrLoadModule(
-    "/src/modules/reconciliation/components/FinanceSearchForm.tsx",
+    "/src/modules/review/components/FinanceSearchForm.tsx",
   ));
   ({ Pagination } = await server.ssrLoadModule("/src/shared/components/Pagination.tsx"));
 });
@@ -74,7 +74,7 @@ test("采购报关联查与财务核对有两个独立导航和路由", () => {
   assert.equal(items.filter((item) => item.id === "pl").length, 1);
   assert.equal(items.filter((item) => item.id === "finance").length, 1);
   assert.equal(viewPath("pl"), "/pl-reconciliation");
-  assert.equal(viewPath("finance"), "/finance-reconciliation");
+  assert.equal(viewPath("finance"), "/review");
 });
 
 test("只读联查保持NS行序、17列与精确金额，不渲染财务审核入口", () => {

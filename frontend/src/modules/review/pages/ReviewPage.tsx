@@ -1,13 +1,13 @@
 import { useEffect, useRef, useState } from "react";
 import { Pagination } from "../../../shared/components/Pagination";
 import { openLocalSession } from "../../identity/api";
-import { approveDeclaration, listFinanceDeclarations } from "../api";
+import { approveDeclaration, queryDeclarations } from "../api";
 import { FinanceSearchForm } from "../components/FinanceSearchForm";
 import { FinanceComparison } from "../components/FinanceComparison";
 import { ReviewDialog } from "../components/ReviewDialog";
 import type { ComparisonGroup, ComparisonState, DeclarationListQuery } from "../types";
 
-export function FinanceReconciliationPage() {
+export function ReviewPage() {
   const [state, setState] = useState<ComparisonState>({ kind: "loading" });
   const [query, setQuery] = useState<DeclarationListQuery>({
     keyword: "",
@@ -17,6 +17,8 @@ export function FinanceReconciliationPage() {
     pageSize: 20,
   });
   const [refresh, setRefresh] = useState(0);
+  // 每次加载成功递增，用于重置列表的展开状态。
+  const [loads, setLoads] = useState(0);
   const [accounts, setAccounts] = useState<string[]>([]);
   const [review, setReview] = useState<ComparisonGroup | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -29,9 +31,10 @@ export function FinanceReconciliationPage() {
       setState({ kind: "loading" });
       try {
         await openLocalSession();
-        const result = await listFinanceDeclarations(query);
+        const result = await queryDeclarations(query);
         if (active) {
           setState({ kind: "ready", result });
+          setLoads((value) => value + 1);
           setAccounts(result.accounts || []);
         }
       } catch (error) {
@@ -54,7 +57,7 @@ export function FinanceReconciliationPage() {
     setSubmitting(true);
     setApprovalError("");
     try {
-      const approved = await approveDeclaration(review.snapshotId, note);
+      const approved = await approveDeclaration(review.id, review.contentSha256, note);
       setReview(approved);
       setNotice(
         `${approved.recordNumber} 审核结果已保存${approved.invoiceTaskCount != null ? `，关联 ${approved.invoiceTaskCount} 个开票任务，可前往「开票跟进」查看` : ""}。`,
@@ -84,7 +87,7 @@ export function FinanceReconciliationPage() {
         </p>
       )}
       <FinanceComparison
-        key={state.kind === "ready" ? state.result.requestId : state.kind}
+        key={state.kind === "ready" ? `ready-${loads}` : state.kind}
         state={state}
         filter={query.status}
         onFilter={(status) => setQuery((current) => ({ ...current, status, page: 1 }))}
@@ -111,7 +114,7 @@ export function FinanceReconciliationPage() {
       />
       {review && (
         <ReviewDialog
-          key={review.snapshotId}
+          key={`${review.id}-${review.contentSha256}`}
           group={review}
           busy={submitting}
           error={approvalError}

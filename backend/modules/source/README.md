@@ -52,12 +52,12 @@
 
 - `PlScriptQuery`、`PlScriptService`、`SubpoContractSource`。
 - 过渡期导出（仅供旧 business / reconciliation 使用，第 4e 步删除）：`PlReader`、`RelationReader` 等 NS 读取能力。
-- 报关单读取门面在第 4b 步随 review 模块接入时加入 `public.py`。
+- 报关单读取门面（第 4b 步加入，供 review 使用）：`DeclarationService`（索引、分页内容、账户锁 `locked`）、`snapshot`（锁内读取完整内容）、`digest`（重算内容摘要）。
 
 ## 过渡期
 
-旧 `business` 模块仍保存旧表，同步页在第 4b 步切换到本模块的 `StorageService`。在此之前，本模块的保存只由测试调用。
+第 4b 步起，同步页 `/api/ns/sync/{kind}/pull-save` 经 `StorageService.sync_page` 保存到本模块新表；业务库连接检查只检查本模块的表（`entity.SOURCE_TABLES`）。旧 `business` 模块的保存不再由同步页调用，第 4e 步删除。
 
 ## 验证
 
-`backend/tests/test_source_storage.py`（SQLite，合成 NS 数据）、`test_schema_entities.py`、`test_pl_script.py`；锁与并发须在 MySQL 上验证。
+`backend/tests/test_source_storage.py`（SQLite，合成 NS 数据，含 `/pull-save` 接口）、`test_schema_entities.py`、`test_pl_script.py`；锁与并发须在 MySQL 上验证。

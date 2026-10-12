@@ -16,7 +16,8 @@ export function createPlComparisonState() {
   };
   const group = {
     id: "101",
-    snapshotId: "00000000-0000-4000-8000-000000000001",
+    contentSha256: "a".repeat(64),
+    account: "prod",
     recordNumber: "CDTEST001",
     declaration: "合成真实报关号",
     pl: "PL-TEST",
@@ -53,12 +54,14 @@ export function createPlComparisonState() {
   return {
     kind: "ready",
     result: {
-      source: "netsuite",
-      requestId: "synthetic-1",
-      readCompletedAt: "2026-09-23T01:00:00Z",
       groups: [group],
       counts: { all: 1, pending: 1, approved: 0, blocked: 0, shown: 1, customs: 1, purchase: 1 },
       notices: [],
+      accounts: ["prod"],
+      page: 1,
+      pageSize: 20,
+      total: 1,
+      pages: 1,
     },
   };
 }

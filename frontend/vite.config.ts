@@ -16,6 +16,8 @@ export default defineConfig(({ command, mode }) => {
   const env = loadEnv(mode, fileURLToPath(new URL("../", import.meta.url)), "");
   const apiPort = port(env, "PORT", 3333);
   const webPort = port(env, "WEB_PORT", 5173);
+  // 与 scripts/dev.mjs 一致：两端同端口会让代理指向前端自身。
+  if (apiPort === webPort) throw new Error("PORT 与 WEB_PORT 不能使用相同端口");
   return {
     plugins: [react()],
     build: { outDir: "dist", emptyOutDir: true },

@@ -4,7 +4,7 @@ import type { ComparisonGroup, ComparisonState, PurchaseLine, ReviewFilter } fro
 import { CustomsRows } from "./CustomsRows";
 import { FinanceIcon } from "./FinanceIcon";
 import { PurchaseDialog } from "./ReviewDialog";
-import "./pl-comparison.css";
+import "./review.css";
 
 export function FinanceComparison({
   state,
@@ -94,9 +94,7 @@ export function FinanceComparison({
           {result.counts.shown} 张报关单 · {result.counts.customs} 条报关行 · {result.counts.purchase}{" "}
           条子采购行
         </p>
-        <span>
-          {result.source === "database" ? "数据来源：已入库单据" : `NS读取：${result.readCompletedAt}`}
-        </span>
+        <span>数据来源：已入库单据</span>
       </div>
       {!result.groups.length ? (
         <div className="fr-declaration-list">

@@ -30,7 +30,7 @@ export default function InvoiceTaskWorkspacePage() {
           >
             {groupsPage ? "返回开票跟进" : "供应商群配置"}
           </Link>
-          <Link className="ui-button ui-button--secondary" to={paths.finance}>
+          <Link className="ui-button ui-button--secondary" to={paths.review}>
             返回财务核对
           </Link>
         </div>

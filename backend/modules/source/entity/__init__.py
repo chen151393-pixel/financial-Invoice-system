@@ -11,7 +11,25 @@ from .purchase_order_line import purchase_order_lines
 from .raw_record import raw_records
 from .supplier import suppliers
 
+# 同步保存所需的全部表，供业务库连接检查使用
+SOURCE_TABLES = tuple(
+    table.name
+    for table in (
+        companies,
+        customs_declarations,
+        customs_lines,
+        customs_purchase_links,
+        parent_orders,
+        parent_order_lines,
+        purchase_orders,
+        purchase_order_lines,
+        raw_records,
+        suppliers,
+    )
+)
+
 __all__ = [
+    "SOURCE_TABLES",
     "companies",
     "customs_declarations",
     "customs_lines",

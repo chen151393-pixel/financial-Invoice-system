@@ -7,6 +7,7 @@ from fastapi import FastAPI
 from .core.config import load_settings
 from .core.database import make_business_engine
 from .core.dependencies import Owner
+from .core.events import EventBus
 from .core.frontend import create_router as frontend_router
 from .core.middleware import RequestGuard, register_error_handlers
 from .integrations.contract_archive import ContractArchive
@@ -20,7 +21,6 @@ from .modules.business.public import (
     SubpoContractSource,
     SupplierDirectory,
 )
-from .modules.business.service import BusinessService
 from .modules.identity.controller import create_router as identity_router
 from .modules.identity.service import IdentityService
 from .modules.invoice.controller import create_router as invoice_router
@@ -33,8 +33,11 @@ from .modules.reconciliation.group_service import SupplierGroupService
 from .modules.reconciliation.service import ReconciliationService
 from .modules.reconciliation.task_controller import create_router as invoice_task_router
 from .modules.reconciliation.task_service import InvoiceTaskService
+from .modules.review.controller.review_controller import create_router as review_router
+from .modules.review.service.review_service import ReviewService
 from .modules.source.controller.pl_comparison_controller import create_router as source_pl_router
-from .modules.source.public import PlScriptService
+from .modules.source.public import DeclarationService, PlScriptService
+from .modules.source.service.storage_service import StorageService as SourceStorageService
 from .modules.sync.controller import create_router as sync_router
 from .modules.sync.pull_service import PullService
 from .modules.sync.service import ConnectionService
@@ -77,9 +80,13 @@ def create_app(settings=None, ns=None, engine=None, business_engine=None, wecom=
     app.add_middleware(RequestGuard, secure=settings.origin.startswith("https://"))
     register_error_handlers(app)
     app.include_router(identity_router(identity, settings))
+    events = EventBus()
     pl_comparison = PlScriptService(ns)
     app.include_router(source_pl_router(pl_comparison))
-    business = BusinessService(ns, business_engine)
+    # 新链路（架构第 4 步）：source 保存与读取新表，review 审核写新表；订阅关系在 4c 起登记。
+    source_storage = SourceStorageService(ns, business_engine)
+    declarations = DeclarationService(business_engine)
+    app.include_router(review_router(ReviewService(business_engine, declarations, events)))
     app.include_router(
         reconciliation_router(
             ReconciliationService(
@@ -108,7 +115,7 @@ def create_app(settings=None, ns=None, engine=None, business_engine=None, wecom=
         matching_router(MatchingService(invoices, PurchaseMatchingSource(business_engine), business_engine))
     )
     app.include_router(
-        sync_router(ConnectionService(settings, ns), PullService(settings, ns, business.storage))
+        sync_router(ConnectionService(settings, ns), PullService(settings, ns, source_storage))
     )
 
     @app.get("/api/health", tags=["基础设施"])

@@ -96,8 +96,12 @@ def make_business_engine(database_url):
     return engine
 
 
-def check_business_database(engine):
-    """只检查可连接及六张基础表可见；不读取业务数据、不声明写入权限已验证。"""
+def check_business_database(engine, tables=BUSINESS_TABLES):
+    """只检查可连接及所需表可见；不读取业务数据、不声明写入权限已验证。
+
+    默认检查旧六表；新链路（source 等）传入自己的表名，过渡期结束后旧默认值随旧模块删除。
+    """
+    legacy = tuple(tables) == BUSINESS_TABLES
     result = {
         "configured": engine is not None,
         "connected": False,
@@ -110,16 +114,22 @@ def check_business_database(engine):
         return result
     try:
         with engine.connect() as connection:
-            tables = set(inspect(connection).get_table_names())
-        missing = sorted(set(BUSINESS_TABLES) - tables)
+            existing = set(inspect(connection).get_table_names())
+        missing = sorted(set(tables) - existing)
         return {
             **result,
             "connected": True,
             "ready": not missing,
             "state": "schema_incomplete" if missing else "connected",
-            "message": "业务库缺少基础表，请核对六表建库SQL"
-            if missing
-            else "MySQL连接成功，六张业务表可见；本次连接检查不写入数据",
+            "message": (
+                ("业务库缺少基础表，请核对六表建库SQL" if legacy else "业务库缺少新表，请执行数据库迁移")
+                if missing
+                else (
+                    "MySQL连接成功，六张业务表可见；本次连接检查不写入数据"
+                    if legacy
+                    else "MySQL连接成功，所需业务表可见；本次连接检查不写入数据"
+                )
+            ),
             "missingTables": missing,
         }
     except SQLAlchemyError as error:

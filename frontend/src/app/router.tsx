@@ -1,10 +1,10 @@
 import { lazy, Suspense, type ReactNode } from "react";
 import { createBrowserRouter, Navigate } from "react-router";
-import { paths } from "./paths";
+import { legacyPaths, paths } from "./paths";
 
 // 各页面按需加载；新增页面只在这里登记路由。
 const PlWorkspacePage = lazy(() => import("./PlWorkspacePage"));
-const FinanceWorkspacePage = lazy(() => import("./FinanceWorkspacePage"));
+const ReviewWorkspacePage = lazy(() => import("./ReviewWorkspacePage"));
 const SyncWorkspacePage = lazy(() => import("./SyncWorkspacePage"));
 const InvoiceWorkspacePage = lazy(() => import("./InvoiceWorkspacePage"));
 const MatchingWorkspacePage = lazy(() => import("./MatchingWorkspacePage"));
@@ -16,7 +16,8 @@ function page(label: string, element: ReactNode) {
 
 export const router = createBrowserRouter([
   { path: paths.pl, element: page("采购报关联查", <PlWorkspacePage />) },
-  { path: paths.finance, element: page("财务核对", <FinanceWorkspacePage />) },
+  { path: paths.review, element: page("财务核对", <ReviewWorkspacePage />) },
+  { path: legacyPaths.finance, element: <Navigate to={paths.review} replace /> },
   { path: paths.invoiceFollowup, element: page("开票跟进", <InvoiceTaskWorkspacePage />) },
   { path: paths.supplierGroups, element: page("供应商群配置", <InvoiceTaskWorkspacePage />) },
   { path: `${paths.invoiceFollowup}/:taskId`, element: page("开票任务详情", <InvoiceTaskWorkspacePage />) },

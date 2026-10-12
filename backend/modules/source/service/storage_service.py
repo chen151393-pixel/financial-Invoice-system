@@ -15,6 +15,7 @@ from ..dao import (
     raw_record_dao,
     supplier_dao,
 )
+from ..entity import SOURCE_TABLES
 from ..mapper.storage_mapper import map_bundle, validate_storage_config
 from ..policy.ns_config import parse_config
 from . import link_service
@@ -31,7 +32,7 @@ class StorageService:
         self.ns, self.engine = ns, engine
 
     def configuration(self):
-        database = check_business_database(self.engine)
+        database = check_business_database(self.engine, SOURCE_TABLES)
         allowed, reason = database["ready"], database["message"]
         try:
             validate_storage_config(parse_config(self.ns.settings))

@@ -69,7 +69,7 @@ export function ReviewDialog({
         <p className="fr-dialog__hint">
           {approved
             ? "该报关单审核结果已保存。"
-            : "请核对本张报关单及关联子采购明细。通过后保存整单审核记录并自动生成开票任务；数据变化时需刷新后重新审核。"}
+            : "请核对本张报关单及关联子采购明细。通过后保存整单审核记录，并冻结子采购的开票数量、单位和含税金额；数据变化时需刷新后重新审核。"}
         </p>
         {approved && group.invoiceTaskCount != null && (
           <p className="fr-dialog__hint" role="status">
@@ -110,7 +110,7 @@ export function ReviewDialog({
         </ul>
         {reviewLines.some(({ line }) => line.scope === "order") && (
           <p className="fr-dialog__hint">
-            子采购原值用于财务核对，审核通过不自动将整单数量和金额计为可开票额度。
+            开票口径为子采购的采购数量、单位和含税金额；金额缺失的行审核后只能人工按差异结束。
           </p>
         )}
         {approved ? (

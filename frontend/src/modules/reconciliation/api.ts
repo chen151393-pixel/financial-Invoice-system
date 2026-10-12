@@ -1,16 +1,10 @@
 import { http } from "../../shared/api/http";
-import type { ComparisonGroup, ComparisonResult, DeclarationListQuery, PlSearchCriteria } from "./types";
+import type { PlSearchCriteria } from "./types";
 import type { SourceComparisonResult } from "./source-types";
 import type { InvoiceTaskDetail, InvoiceTaskList, InvoiceTaskQuery } from "./task-types";
 
-export const listFinanceDeclarations = (criteria: DeclarationListQuery) =>
-  http<ComparisonResult>("/reconciliation/declarations", "POST", criteria);
-
 export const queryPlSourceComparison = (criteria: PlSearchCriteria) =>
   http<SourceComparisonResult>("/source/pl-comparison", "POST", criteria);
-
-export const approveDeclaration = (snapshotId: string, note: string) =>
-  http<ComparisonGroup>("/reconciliation/approve", "POST", { snapshotId, note });
 
 export const listInvoiceTasks = (query: InvoiceTaskQuery) =>
   http<InvoiceTaskList>("/reconciliation/invoice-tasks/query", "POST", query);

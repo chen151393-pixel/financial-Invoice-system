@@ -85,10 +85,10 @@ class PullService:
             )
         return {"sources": result, "lemon": {"allowed": False, "reason": "柠檬云接口尚未接入"}}
 
-    def pull_and_save(self, kind, request, owner):
+    def pull_and_save(self, kind, request):
         if self.storage is None:
             raise ApiError(503, "尚未配置业务存储")
-        return self.storage.sync_page(kind, lambda: self.pull(kind, request), owner)
+        return self.storage.sync_page(kind, lambda: self.pull(kind, request))
 
     def pull(self, kind, request):
         record_type = self.record_type(kind)
