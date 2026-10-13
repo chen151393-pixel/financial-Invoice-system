@@ -11,6 +11,7 @@ from .policy.ns_config import parse_config
 from .policy.relation_policy import comparison_view, incomplete_reason, source_digest
 from .service.contract_service import SubpoContractSource
 from .service.declaration_service import DeclarationService, digest, snapshot
+from .service.directory_service import SourceDirectory
 from .service.ns_reader import PlReader
 from .service.pl_comparison_service import PlScriptService
 from .service.relation_matcher import require_relation_interfaces
@@ -26,6 +27,8 @@ __all__ = [
     "DeclarationService",
     "digest",
     "snapshot",
+    # 来源目录（task）：供应商、采购公司、子采购单号与行品名的只读查询
+    "SourceDirectory",
     # 过渡期导出：仅供旧 business / reconciliation 使用，第 4e 步删除
     "PlReader",
     "RelationReader",

@@ -32,7 +32,6 @@ export interface CustomsLine {
 export interface ComparisonGroup {
   id: string;
   contentSha256: string;
-  invoiceTaskCount?: number | null;
   account: string;
   recordNumber: string;
   declaration: string;

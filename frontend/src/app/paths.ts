@@ -2,8 +2,8 @@
 export const paths = {
   pl: "/pl-reconciliation",
   review: "/review",
-  invoiceFollowup: "/invoice-followup",
-  supplierGroups: "/invoice-followup/supplier-groups",
+  tasks: "/tasks",
+  supplierGroups: "/tasks/supplier-groups",
   invoices: "/invoices",
   matching: "/matching",
   sync: "/sync",
@@ -12,9 +12,13 @@ export const paths = {
 } as const;
 
 // 旧地址，路由中重定向到新地址；保留一个版本后删除。
-export const legacyPaths = { finance: "/finance-reconciliation" } as const;
+export const legacyPaths = {
+  finance: "/finance-reconciliation",
+  invoiceFollowup: "/invoice-followup",
+  supplierGroups: "/invoice-followup/supplier-groups",
+} as const;
 
-export const invoiceTaskPath = (id: string) => `${paths.invoiceFollowup}/${encodeURIComponent(id)}`;
+export const taskPath = (id: string) => `${paths.tasks}/${encodeURIComponent(id)}`;
 export const matchingInvoicePath = (invoiceId: string) =>
   `${paths.matching}?invoiceId=${encodeURIComponent(invoiceId)}`;
 
@@ -27,7 +31,7 @@ const viewPaths: Record<View, string> = {
   sync: paths.sync,
   pl: paths.pl,
   finance: paths.review,
-  "invoice-followup": paths.invoiceFollowup,
+  "invoice-followup": paths.tasks,
 };
 
 export function viewPath(view: View): string {

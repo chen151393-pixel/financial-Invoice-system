@@ -60,7 +60,7 @@ export function ReviewPage() {
       const approved = await approveDeclaration(review.id, review.contentSha256, note);
       setReview(approved);
       setNotice(
-        `${approved.recordNumber} 审核结果已保存${approved.invoiceTaskCount != null ? `，关联 ${approved.invoiceTaskCount} 个开票任务，可前往「开票跟进」查看` : ""}。`,
+        `${approved.recordNumber} 审核结果已保存，并按供应商自动生成开票任务，可前往「开票跟进」查看。`,
       );
       setRefresh((value) => value + 1);
     } catch (error) {

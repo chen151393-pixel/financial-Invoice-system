@@ -3,8 +3,15 @@ import { Button } from "../../../shared/components/Button";
 import { Pagination } from "../../../shared/components/Pagination";
 import { openLocalSession } from "../../identity/api";
 import { SupplierGroupEditor } from "../components/SupplierGroupEditor";
-import { querySupplierGroups, type GroupBinding, type GroupList, type GroupQuery } from "../group-api";
-import "./invoice-task.css";
+import { formatTime } from "../components/format";
+import {
+  querySupplierGroups,
+  querySuppliers,
+  queryWecomGroups,
+  saveSupplierGroup,
+} from "../api/supplier-group";
+import type { GroupBinding, GroupList, GroupQuery } from "../types/supplier-group";
+import "./task.css";
 import "./supplier-groups.css";
 
 export function SupplierGroupsPage() {
@@ -76,6 +83,9 @@ export function SupplierGroupsPage() {
       {editor !== undefined && (
         <SupplierGroupEditor
           initial={editor}
+          loadSuppliers={querySuppliers}
+          searchWecom={queryWecomGroups}
+          save={saveSupplierGroup}
           onClose={() => setEditor(undefined)}
           onSaved={() => {
             setEditor(undefined);
@@ -179,9 +189,7 @@ export function SupplierGroupsPage() {
                       </td>
                       <td>
                         {item.enabled ? "启用" : "停用"}
-                        <span className="it-secondary">
-                          {new Date(item.updatedAt).toLocaleString("zh-CN", { timeZone: "Asia/Shanghai" })}
-                        </span>
+                        <span className="it-secondary">{formatTime(item.updatedAt)}</span>
                       </td>
                       <td>
                         <Button

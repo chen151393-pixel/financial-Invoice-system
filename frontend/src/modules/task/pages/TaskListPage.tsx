@@ -1,103 +1,18 @@
 import { Link } from "react-router";
-import { invoiceTaskPath, paths } from "../../../app/paths";
+import { paths } from "../../../app/paths";
 import { useEffect, useState } from "react";
 import { Button } from "../../../shared/components/Button";
 import { Pagination } from "../../../shared/components/Pagination";
 import { openLocalSession } from "../../identity/api";
-import { listInvoiceTasks } from "../api";
-import type { InvoiceTaskGroup, InvoiceTaskList, InvoiceTaskQuery, TaskCounts } from "../task-types";
-import "./invoice-task.css";
+import { listTasks } from "../api/task";
+import { TaskCountList, TaskGroupTable } from "../components/TaskGroupTable";
+import type { TaskList, TaskListQuery } from "../types/task";
+import "./task.css";
 
 type Remote<T> = { kind: "loading" } | { kind: "error"; message: string } | { kind: "ready"; data: T };
 
-function Counts({ counts }: { counts: TaskCounts }) {
-  return (
-    <dl className="it-counts">
-      <div>
-        <dt>待开票</dt>
-        <dd>
-          {counts.awaitingInvoice}
-          <small> 个任务</small>
-        </dd>
-      </div>
-      <div>
-        <dt>已收票</dt>
-        <dd>{counts.receivedInvoices === null ? "未接入" : `${counts.receivedInvoices} 张`}</dd>
-      </div>
-      <div>
-        <dt>待处理</dt>
-        <dd>
-          {counts.needsAttention}
-          <small> 个任务</small>
-        </dd>
-      </div>
-    </dl>
-  );
-}
-
-function TaskGroup({ group, first }: { group: InvoiceTaskGroup; first: boolean }) {
-  return (
-    <details className="it-group" open={first}>
-      <summary>
-        <span className="it-group__title">
-          <strong>{group.label}</strong>
-          <span>
-            {group.account} · {group.counts.tasks} 个任务
-          </span>
-        </span>
-        <Counts counts={group.counts} />
-      </summary>
-      <div
-        className="it-table-wrap"
-        // eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex -- 允许键盘用户聚焦并滚动宽表，保留原生表格语义。
-        tabIndex={0}
-        role="region"
-        aria-label={`${group.label}的开票任务，可横向滚动`}
-      >
-        <table>
-          <thead>
-            <tr>
-              <th>报关单 / 子采购单</th>
-              <th>供应商 / 采购公司</th>
-              <th>币种</th>
-              <th>当前节点</th>
-              <th>操作</th>
-            </tr>
-          </thead>
-          <tbody>
-            {group.tasks.map((task) => (
-              <tr key={task.id}>
-                <td>
-                  <strong>{task.recordNumber}</strong>
-                  <span className="it-secondary">{task.orderNumbers.join("、")}</span>
-                </td>
-                <td>
-                  {task.supplier}
-                  <span className="it-secondary">{task.company}</span>
-                </td>
-                <td>{task.currency || "来源未提供"}</td>
-                <td>
-                  <span className="it-status">{task.statusLabel}</span>
-                  <span className="it-secondary">
-                    审核版本 {task.reviewRevision} · {task.lineCount} 行采购明细
-                  </span>
-                </td>
-                <td>
-                  <Link className="ui-button ui-button--secondary" to={invoiceTaskPath(task.id)}>
-                    查看节点
-                  </Link>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </details>
-  );
-}
-
-export function InvoiceTaskPage() {
-  const [query, setQuery] = useState<InvoiceTaskQuery>({
+export function TaskListPage() {
+  const [query, setQuery] = useState<TaskListQuery>({
     keyword: "",
     account: "",
     groupBy: "supplier",
@@ -108,14 +23,14 @@ export function InvoiceTaskPage() {
   const [keyword, setKeyword] = useState("");
   const [account, setAccount] = useState("");
   const [accounts, setAccounts] = useState<string[]>([]);
-  const [state, setState] = useState<Remote<InvoiceTaskList>>({ kind: "loading" });
+  const [state, setState] = useState<Remote<TaskList>>({ kind: "loading" });
   const [refresh, setRefresh] = useState(0);
   useEffect(() => {
     let active = true;
     async function load() {
       try {
         await openLocalSession();
-        const data = await listInvoiceTasks(query);
+        const data = await listTasks(query);
         if (active) {
           setState({ kind: "ready", data });
           setAccounts(data.accounts);
@@ -130,7 +45,7 @@ export function InvoiceTaskPage() {
       active = false;
     };
   }, [query, refresh]);
-  function change(patch: Partial<InvoiceTaskQuery>) {
+  function change(patch: Partial<TaskListQuery>) {
     setState({ kind: "loading" });
     setQuery((current) => ({ ...current, page: 1, ...patch }));
   }
@@ -145,7 +60,7 @@ export function InvoiceTaskPage() {
         }}
       >
         <label className="it-search__keyword">
-          报关单 / 供应商 / 采购公司
+          报关单 / 供应商 / 子采购单
           <input
             type="search"
             maxLength={120}
@@ -204,7 +119,7 @@ export function InvoiceTaskPage() {
             aria-label="任务版本"
             value={query.status}
             disabled={busy}
-            onChange={(e) => change({ status: e.target.value as InvoiceTaskQuery["status"] })}
+            onChange={(e) => change({ status: e.target.value as TaskListQuery["status"] })}
           >
             <option value="current">当前任务</option>
             <option value="superseded">已被替代</option>
@@ -213,7 +128,7 @@ export function InvoiceTaskPage() {
         </label>
       </div>
       <p className="it-help">
-        两种视图展示同一批任务。待开票包含待保存合同、待通知供应商及等待供应商开票的任务，待处理可与其重叠；已收票统计尚未接入。按完整分组分页。
+        两种视图展示同一批任务。待开票包含待保存合同、待通知供应商、等待开票及部分收票的任务，待处理可与其重叠；已收票统计在发票比对接入后提供。按完整分组分页。
       </p>
       {state.kind === "loading" && (
         <div className="it-empty" role="status">
@@ -243,11 +158,11 @@ export function InvoiceTaskPage() {
           <div className="it-result" role="status">
             共 {state.data.counts.tasks} 个任务 · {state.data.total} 个
             {query.groupBy === "supplier" ? "供应商分组" : "报关单分组"}
-            <Counts counts={state.data.counts} />
+            <TaskCountList counts={state.data.counts} />
           </div>
           {state.data.groups.length ? (
             state.data.groups.map((group, index) => (
-              <TaskGroup key={`${query.groupBy}:${group.id}`} group={group} first={index === 0} />
+              <TaskGroupTable key={`${query.groupBy}:${group.id}`} group={group} first={index === 0} />
             ))
           ) : (
             <div className="it-empty">
@@ -256,7 +171,7 @@ export function InvoiceTaskPage() {
                   ? "没有符合条件的任务"
                   : "还没有开票任务"}
               </h2>
-              <p>财务审核通过后自动生成任务；历史已审核数据不会自动补建。</p>
+              <p>财务审核通过后按供应商、采购公司和币种自动生成任务；新链路之前的旧任务不迁移。</p>
               <Link to={paths.review}>前往财务核对</Link>
             </div>
           )}

@@ -69,12 +69,12 @@ export function ReviewDialog({
         <p className="fr-dialog__hint">
           {approved
             ? "该报关单审核结果已保存。"
-            : "请核对本张报关单及关联子采购明细。通过后保存整单审核记录，并冻结子采购的开票数量、单位和含税金额；数据变化时需刷新后重新审核。"}
+            : "请核对本张报关单及关联子采购明细。通过后保存整单审核记录，冻结子采购的开票数量、单位和含税金额，并自动生成开票任务；数据变化时需刷新后重新审核。"}
         </p>
-        {approved && group.invoiceTaskCount != null && (
+        {approved && (
           <p className="fr-dialog__hint" role="status">
-            本次审核已关联 {group.invoiceTaskCount} 个开票任务。
-            <Link to={paths.invoiceFollowup}>前往开票跟进查看节点</Link>
+            审核通过时已按供应商、采购公司和币种生成开票任务。
+            <Link to={paths.tasks}>前往开票跟进查看</Link>
           </p>
         )}
         <div className="fr-scope-heading">

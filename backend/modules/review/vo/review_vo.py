@@ -51,7 +51,6 @@ class ReviewState(StrictModel):
 class Declaration(StrictModel):
     id: str
     contentSha256: str
-    invoiceTaskCount: int | None = None
     account: str
     recordNumber: str
     declaration: str

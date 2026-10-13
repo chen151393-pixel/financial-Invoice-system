@@ -67,3 +67,30 @@ def lines(connection, order_ids):
         .order_by(purchase_order_lines.c.purchase_order_id, purchase_order_lines.c.id)
     )
     return [dict(row) for row in connection.execute(query).mappings()]
+
+
+def numbers(connection, ids):
+    """子采购单号，按 ID 返回（含已停用，供历史任务展示）。"""
+    if not ids:
+        return {}
+    query = select(purchase_orders.c.id, purchase_orders.c.order_no).where(purchase_orders.c.id.in_(ids))
+    return {row.id: row.order_no for row in connection.execute(query)}
+
+
+def ids_like(connection, keyword, limit):
+    """单号包含关键字的子采购单 ID（任务搜索用）。"""
+    query = select(purchase_orders.c.id).where(purchase_orders.c.order_no.like(f"%{keyword}%")).limit(limit)
+    return list(connection.execute(query).scalars())
+
+
+def line_names(connection, line_ids):
+    """子采购行的品名与规格，按 ID 返回（含已停用）。"""
+    if not line_ids:
+        return {}
+    query = select(
+        purchase_order_lines.c.id,
+        purchase_order_lines.c.item_name,
+        purchase_order_lines.c.declaration_name,
+        purchase_order_lines.c.specification,
+    ).where(purchase_order_lines.c.id.in_(line_ids))
+    return {row.id: dict(row._mapping) for row in connection.execute(query)}

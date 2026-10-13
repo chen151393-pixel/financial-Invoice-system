@@ -1,7 +1,7 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { Button } from "../../../shared/components/Button";
 import { Pagination } from "../../../shared/components/Pagination";
-import type { GroupPage } from "../group-api";
+import type { GroupPage } from "../types/supplier-group";
 
 export function GroupLookup<T>({
   label,

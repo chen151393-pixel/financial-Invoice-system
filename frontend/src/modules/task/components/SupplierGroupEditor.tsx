@@ -1,21 +1,29 @@
 import { useEffect, useRef, useState } from "react";
 import { Button } from "../../../shared/components/Button";
-import {
-  querySuppliers,
-  saveSupplierGroup,
-  type GroupBinding,
-  type GroupFields,
-  type SupplierOption,
-} from "../group-api";
+import type {
+  GroupBinding,
+  GroupFields,
+  GroupPage,
+  GroupSave,
+  SupplierOption,
+  WecomGroupPage,
+  WecomGroupQuery,
+} from "../types/supplier-group";
 import { GroupLookup } from "./GroupLookup";
 import { WecomGroupPicker } from "./WecomGroupPicker";
 
 export function SupplierGroupEditor({
   initial,
+  loadSuppliers,
+  searchWecom,
+  save: submit,
   onSaved,
   onClose,
 }: {
   initial: GroupBinding | null;
+  loadSuppliers: (keyword: string, page: number) => Promise<GroupPage<SupplierOption>>;
+  searchWecom: (query: WecomGroupQuery) => Promise<WecomGroupPage>;
+  save: (value: GroupSave) => Promise<unknown>;
   onSaved: () => void;
   onClose: () => void;
 }) {
@@ -33,8 +41,7 @@ export function SupplierGroupEditor({
     setBusy(true);
     setError("");
     try {
-      await saveSupplierGroup({
-        account: supplier?.account ?? "",
+      await submit({
         supplierId: supplier?.supplierId ?? "",
         chatId: group?.chatId ?? "",
         enabled,
@@ -57,9 +64,7 @@ export function SupplierGroupEditor({
           取消
         </Button>
       </div>
-      <p className="it-help">
-        每个供应商在同一 NS 环境配置一个默认通知群。查询并选择企微群，系统自动获取群及群主信息。
-      </p>
+      <p className="it-help">每个供应商配置一个默认通知群。查询并选择企微群，系统自动获取群及群主信息。</p>
       {supplier && (
         <p className="sg-selection">
           <strong>{supplier.supplierName}</strong> · {supplier.account} · 供应商 ID：{supplier.supplierId}
@@ -70,7 +75,7 @@ export function SupplierGroupEditor({
           <summary>选择供应商</summary>
           <GroupLookup
             label="查询系统供应商"
-            load={querySuppliers}
+            load={loadSuppliers}
             disabled={busy}
             render={(item) => (
               <>
@@ -87,7 +92,7 @@ export function SupplierGroupEditor({
           />
         </details>
       )}
-      <WecomGroupPicker onChoose={setGroup} disabled={busy} inputRef={groupInput} />
+      <WecomGroupPicker search={searchWecom} onChoose={setGroup} disabled={busy} inputRef={groupInput} />
       {group && (
         <div className="sg-selection">
           <p>

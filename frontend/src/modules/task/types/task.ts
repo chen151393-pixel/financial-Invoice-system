@@ -1,16 +1,29 @@
-export interface InvoiceTask {
+// 与后端 task 模块 VO 一致；金额、数量为十进制字符串，前端不重算。
+export interface Capability {
+  allowed: boolean;
+  reason: string;
+}
+
+export type TaskStatus =
+  | "documents_pending"
+  | "notify_pending"
+  | "awaiting_invoice"
+  | "partially_received"
+  | "completed"
+  | "superseded";
+
+export interface TaskSummary {
   id: string;
   account: string;
   recordNumber: string;
   supplier: string;
   company: string;
   currency: string;
-  status: "documents_pending" | "notify_pending" | "awaiting_invoice" | "superseded";
+  status: TaskStatus;
   statusLabel: string;
   reason: string;
   createdAt: string;
   reviewRevision: number;
-  snapshotId: string;
   orderNumbers: string[];
   lineCount: number;
   expectedAmount: string | null;
@@ -21,14 +34,14 @@ export interface TaskCounts {
   receivedInvoices: number | null;
   needsAttention: number;
 }
-export interface InvoiceTaskGroup {
+export interface TaskGroup {
   id: string;
   label: string;
   account: string;
   counts: TaskCounts;
-  tasks: InvoiceTask[];
+  tasks: TaskSummary[];
 }
-export interface InvoiceTaskQuery {
+export interface TaskListQuery {
   keyword: string;
   account: string;
   groupBy: "supplier" | "declaration";
@@ -36,9 +49,9 @@ export interface InvoiceTaskQuery {
   page: number;
   pageSize: number;
 }
-export interface InvoiceTaskList {
-  groupBy: InvoiceTaskQuery["groupBy"];
-  groups: InvoiceTaskGroup[];
+export interface TaskList {
+  groupBy: TaskListQuery["groupBy"];
+  groups: TaskGroup[];
   counts: TaskCounts;
   accounts: string[];
   total: number;
@@ -46,33 +59,26 @@ export interface InvoiceTaskList {
   pageSize: number;
   pages: number;
 }
-export interface InvoiceTaskDetail {
-  task: InvoiceTask;
-  notification: TaskNotification;
-  downloadEnvironment: string;
-  documents: TaskDocument[];
-  lines: {
-    id: string;
-    order: string;
-    name: string;
-    quantity: string;
-    unit: string;
-    amount: string;
-    currency: string;
-  }[];
-  reasons: string[];
-  sourceStatus: "current" | "changed" | "unavailable" | "superseded";
-  sourceMessage: string;
-  prepare: { allowed: boolean; reason: string };
-  notify: { allowed: boolean; reason: string };
-  compare: { allowed: boolean; reason: string };
-  steps: { label: string; description: string; state: "done" | "current" | "waiting" }[];
+
+export interface TaskLine {
+  id: string;
+  order: string;
+  name: string;
+  specification: string;
+  quantity: string;
+  unit: string;
+  amount: string;
+  currency: string;
+  receivedQuantity: string;
+  receivedAmount: string;
+  status: "open" | "partial" | "received" | "superseded";
+  statusLabel: string;
 }
 
 export interface TaskDocument {
   orderId: string;
   orderNumber: string;
-  status: "pending" | "archive_pending" | "ready";
+  status: "pending" | "failed" | "ready";
   environment: string;
   nsId: string;
   filename: string;
@@ -80,7 +86,31 @@ export interface TaskDocument {
   downloadedAt: string | null;
   archivePath: string | null;
   archivedAt: string | null;
-  prepare: { allowed: boolean; reason: string };
+  error: string;
+  prepare: Capability;
+}
+
+export interface TaskEvent {
+  at: string;
+  actor: string;
+  label: string;
+  reason: string;
+}
+
+export interface TaskDetail {
+  task: TaskSummary;
+  lines: TaskLine[];
+  reasons: string[];
+  sourceStatus: "current" | "superseded";
+  sourceMessage: string;
+  prepare: Capability;
+  notify: Capability;
+  compare: Capability;
+  steps: { label: string; description: string; state: "done" | "current" | "waiting" }[];
+  documents: TaskDocument[];
+  downloadEnvironment: string;
+  notification: TaskNotification;
+  events: TaskEvent[];
 }
 
 export interface NotificationDraft {
@@ -103,6 +133,7 @@ export interface NotificationEvent {
   employee: string;
   message: string;
   sentAt: string | null;
+  recordedBy: string;
   note: string;
   attachments: string[];
 }
@@ -117,8 +148,8 @@ export interface TaskNotification extends NotificationDraft {
   groupConfigReason: string;
   defaultMessage: string;
   statusLabel: string;
-  edit: { allowed: boolean; reason: string };
-  record: { allowed: boolean; reason: string };
-  send: { allowed: boolean; reason: string };
+  edit: Capability;
+  record: Capability;
+  send: Capability;
   history: NotificationEvent[];
 }

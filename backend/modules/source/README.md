@@ -53,6 +53,7 @@
 - `PlScriptQuery`、`PlScriptService`、`SubpoContractSource`。
 - 过渡期导出（仅供旧 business / reconciliation 使用，第 4e 步删除）：`PlReader`、`RelationReader` 等 NS 读取能力。
 - 报关单读取门面（第 4b 步加入，供 review 使用）：`DeclarationService`（索引、分页内容、账户锁 `locked`）、`snapshot`（锁内读取完整内容）、`digest`（重算内容摘要）。
+- 来源目录（第 4c 步加入，供 task 使用）：`SourceDirectory`（`service/directory_service.py`）——按 ID 批量取供应商、采购公司、子采购单号与行品名（含已停用记录，保证历史任务可显示），按名称 / 单号搜索 ID，有效供应商分页。
 
 ## 过渡期
 

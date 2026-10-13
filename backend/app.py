@@ -34,13 +34,22 @@ from .modules.reconciliation.service import ReconciliationService
 from .modules.reconciliation.task_controller import create_router as invoice_task_router
 from .modules.reconciliation.task_service import InvoiceTaskService
 from .modules.review.controller.review_controller import create_router as review_router
+from .modules.review.public import ReviewApproved
 from .modules.review.service.review_service import ReviewService
 from .modules.source.controller.pl_comparison_controller import create_router as source_pl_router
-from .modules.source.public import DeclarationService, PlScriptService
+from .modules.source.public import DeclarationService, PlScriptService, SourceDirectory
+from .modules.source.public import SubpoContractSource as SourceContracts
 from .modules.source.service.storage_service import StorageService as SourceStorageService
 from .modules.sync.controller import create_router as sync_router
 from .modules.sync.pull_service import PullService
 from .modules.sync.service import ConnectionService
+from .modules.task.controller.supplier_group_controller import create_router as task_group_router
+from .modules.task.controller.task_controller import create_router as task_router
+from .modules.task.service.document_service import DocumentService
+from .modules.task.service.notification_service import NotificationService
+from .modules.task.service.supplier_group_service import SupplierGroupService as TaskGroupService
+from .modules.task.service.task_generation_service import on_review_approved
+from .modules.task.service.task_service import TaskService
 
 
 def create_app(settings=None, ns=None, engine=None, business_engine=None, wecom=None):
@@ -83,10 +92,22 @@ def create_app(settings=None, ns=None, engine=None, business_engine=None, wecom=
     events = EventBus()
     pl_comparison = PlScriptService(ns)
     app.include_router(source_pl_router(pl_comparison))
-    # 新链路（架构第 4 步）：source 保存与读取新表，review 审核写新表；订阅关系在 4c 起登记。
+    # 新链路（架构第 4 步）：source 保存与读取新表，review 审核写新表，task 订阅审核通过生成任务。
     source_storage = SourceStorageService(ns, business_engine)
     declarations = DeclarationService(business_engine)
     app.include_router(review_router(ReviewService(business_engine, declarations, events)))
+    directory = SourceDirectory(business_engine)
+    archive = ContractArchive(settings.subpo_archive_root)
+    task_queries = TaskService(business_engine, directory, SourceContracts(contract_ns), archive)
+    app.include_router(task_group_router(TaskGroupService(business_engine, directory, wecom)))
+    app.include_router(
+        task_router(
+            task_queries,
+            DocumentService(business_engine, directory, SourceContracts(contract_ns), archive, task_queries),
+            NotificationService(business_engine, task_queries),
+        )
+    )
+    events.subscribe(ReviewApproved, on_review_approved)
     app.include_router(
         reconciliation_router(
             ReconciliationService(

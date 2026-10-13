@@ -18,12 +18,12 @@ export default function ReviewWorkspacePage() {
       dataLabel="已入库 NS 单据"
       actions={
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-          <Link className="ui-button ui-button--secondary" to={paths.invoiceFollowup}>
+          <Link className="ui-button ui-button--secondary" to={paths.tasks}>
             开票跟进
           </Link>
         </div>
       }
-      notice="按 NS 报关单引用自动显示关联子采购明细，财务核对后点击「审核通过」：保存审核记录，并冻结子采购的开票数量、单位和含税金额。新链路的开票任务将在下一步接入后自动生成。"
+      notice="按 NS 报关单引用自动显示关联子采购明细，财务核对后点击「审核通过」：保存审核记录，冻结子采购的开票数量、单位和含税金额，并按供应商、采购公司和币种自动生成开票任务。"
     >
       <ReviewPage />
     </AppFrame>

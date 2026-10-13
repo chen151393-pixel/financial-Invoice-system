@@ -13,7 +13,11 @@ from backend.core.schema import schema_metadata
 from backend.manage import upgrade_schema
 
 # 已切换到新表的模块：导入其 entity 包即登记表定义。
-MODULES = ["backend.modules.source.entity", "backend.modules.review.entity"]
+MODULES = [
+    "backend.modules.source.entity",
+    "backend.modules.review.entity",
+    "backend.modules.task.entity",
+]
 
 
 @pytest.fixture(scope="module")

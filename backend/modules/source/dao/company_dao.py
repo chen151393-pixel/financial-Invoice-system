@@ -36,3 +36,11 @@ def upsert(connection, account, party, now):
             update(companies).where(companies.c.id == row["id"]).values(updated_at=now, **values)
         )
     return row["id"]
+
+
+def names(connection, ids):
+    """采购公司名称，按 ID 返回（含已停用，供历史任务展示）。"""
+    if not ids:
+        return {}
+    query = select(companies.c.id, companies.c.name).where(companies.c.id.in_(ids))
+    return {row.id: row.name for row in connection.execute(query)}

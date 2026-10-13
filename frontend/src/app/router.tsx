@@ -8,7 +8,7 @@ const ReviewWorkspacePage = lazy(() => import("./ReviewWorkspacePage"));
 const SyncWorkspacePage = lazy(() => import("./SyncWorkspacePage"));
 const InvoiceWorkspacePage = lazy(() => import("./InvoiceWorkspacePage"));
 const MatchingWorkspacePage = lazy(() => import("./MatchingWorkspacePage"));
-const InvoiceTaskWorkspacePage = lazy(() => import("./InvoiceTaskWorkspacePage"));
+const TaskWorkspacePage = lazy(() => import("./TaskWorkspacePage"));
 
 function page(label: string, element: ReactNode) {
   return <Suspense fallback={<p role="status">正在加载{label}…</p>}>{element}</Suspense>;
@@ -18,9 +18,13 @@ export const router = createBrowserRouter([
   { path: paths.pl, element: page("采购报关联查", <PlWorkspacePage />) },
   { path: paths.review, element: page("财务核对", <ReviewWorkspacePage />) },
   { path: legacyPaths.finance, element: <Navigate to={paths.review} replace /> },
-  { path: paths.invoiceFollowup, element: page("开票跟进", <InvoiceTaskWorkspacePage />) },
-  { path: paths.supplierGroups, element: page("供应商群配置", <InvoiceTaskWorkspacePage />) },
-  { path: `${paths.invoiceFollowup}/:taskId`, element: page("开票任务详情", <InvoiceTaskWorkspacePage />) },
+  { path: paths.tasks, element: page("开票跟进", <TaskWorkspacePage />) },
+  { path: paths.supplierGroups, element: page("供应商群配置", <TaskWorkspacePage />) },
+  { path: `${paths.tasks}/:taskId`, element: page("开票任务详情", <TaskWorkspacePage />) },
+  // 旧链路的任务编号在新表中不存在，旧任务详情地址统一回到任务列表。
+  { path: legacyPaths.supplierGroups, element: <Navigate to={paths.supplierGroups} replace /> },
+  { path: `${legacyPaths.invoiceFollowup}/*`, element: <Navigate to={paths.tasks} replace /> },
+  { path: legacyPaths.invoiceFollowup, element: <Navigate to={paths.tasks} replace /> },
   { path: paths.invoices, element: page("进项发票", <InvoiceWorkspacePage />) },
   { path: paths.matching, element: page("自动匹配", <MatchingWorkspacePage />) },
   { path: paths.sync, element: page("数据同步", <SyncWorkspacePage />) },

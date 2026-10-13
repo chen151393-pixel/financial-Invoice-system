@@ -1,19 +1,22 @@
 import { useEffect, useState, type Ref } from "react";
 import { Button } from "../../../shared/components/Button";
 import { Pagination } from "../../../shared/components/Pagination";
-import { queryWecomGroups, type WecomGroupPage, type WecomGroup } from "../group-api";
+import { formatTime } from "./format";
+import type { WecomGroup, WecomGroupPage, WecomGroupQuery } from "../types/supplier-group";
 
 export function WecomGroupPicker({
+  search: load,
   onChoose,
   disabled,
   inputRef,
 }: {
+  search: (query: WecomGroupQuery) => Promise<WecomGroupPage>;
   onChoose: (group: WecomGroup) => void;
   disabled: boolean;
   inputRef: Ref<HTMLInputElement>;
 }) {
   const [input, setInput] = useState("");
-  const [query, setQuery] = useState<{ keyword: string; page: number; refresh: boolean } | null>(null);
+  const [query, setQuery] = useState<WecomGroupQuery | null>(null);
   const [state, setState] = useState<
     | { kind: "idle" | "loading" }
     | { kind: "error"; message: string }
@@ -22,7 +25,7 @@ export function WecomGroupPicker({
   useEffect(() => {
     if (!query) return;
     let active = true;
-    void queryWecomGroups(query).then(
+    void load(query).then(
       (data) => {
         if (active) setState({ kind: "ready", data });
       },
@@ -34,7 +37,7 @@ export function WecomGroupPicker({
     return () => {
       active = false;
     };
-  }, [query]);
+  }, [query, load]);
   function search(refresh = false) {
     setState({ kind: "loading" });
     setQuery({ keyword: input, page: 1, refresh });
@@ -101,9 +104,7 @@ export function WecomGroupPicker({
                     </small>
                     <small>
                       创建时间：
-                      {group.createdAt
-                        ? new Date(group.createdAt).toLocaleString("zh-CN", { timeZone: "Asia/Shanghai" })
-                        : "未提供"}
+                      {group.createdAt ? formatTime(group.createdAt) : "未提供"}
                     </small>
                     <small>群标识：{group.chatId}</small>
                   </span>

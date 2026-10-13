@@ -401,6 +401,7 @@ CREATE TABLE task_tasks (
   group_key              CHAR(64) NOT NULL COMMENT '供应商 + 公司 + 币种的分组键；身份缺失时按子采购单隔离',
   status                 VARCHAR(24) NOT NULL DEFAULT 'documents_pending',
   completed_at           DATETIME(6) NULL,
+  review_revision        INT NOT NULL DEFAULT 1 COMMENT '生成任务的审核版本（迁移 0003）',
   -- 公共列
   PRIMARY KEY (id),
   UNIQUE KEY uq_task_review_group (review_id, group_key),
@@ -467,6 +468,8 @@ CREATE TABLE task_notifications (
   sent_by             VARCHAR(200) NULL,
   sent_at             DATETIME(6) NULL,
   channel_message_id  VARCHAR(190) NULL COMMENT '企微回执，接入自动发送后填写',
+  sender_name         VARCHAR(100) NULL COMMENT '负责发送的员工（迁移 0003）',
+  note                VARCHAR(500) NULL COMMENT '人工登记发送说明（迁移 0003）',
   created_by          VARCHAR(200) NOT NULL,
   -- 公共列
   PRIMARY KEY (id),
@@ -747,6 +750,7 @@ documents_pending → notify_pending → awaiting_invoice → partially_received
 - **新迁移链**（第 3 步已建立）：`backend/migrations`，配置 `backend/alembic.ini`，版本表 `schema_version`，基线 `0001_baseline` 一次创建第 4 节全部 24 张表。与设计稿的实现差异：
   - 发票行表名为 `invoice_items`（比对表列名 `invoice_item_id`），避免与过渡期仍在使用的旧表 `invoice_lines` 同名；
   - 生成列使用 `CASE` / `COALESCE`；`updated_at` 由 DAO 写入，不用 `ON UPDATE`（第 3 节）。
+- **后续迁移**：`0002` 增加 `source_purchase_orders.parent_order_no`；`0003` 增加 `task_tasks.review_revision`（task 不读取 review，审核版本随事件写入）、`task_notifications.sender_name`、`note`（人工发送的员工与登记说明）。
 - **旧迁移链**：已移到 `backend/legacy_migrations/app`、`backend/legacy_migrations/business`（版本号、版本表不变，已部署的库不受影响），随第 4 步各模块切换删除，代码历史保留在 Git 中。
 - **命令**：`npm.cmd run db:upgrade` 先升级两条旧迁移链，再升级新迁移链；`python -m backend.manage schema-sql` 输出新表结构的 MySQL DDL 供审阅；正式启动时核对三条链都在最新版本。
 - **验证**：`backend/tests/test_schema_baseline.py` 在 SQLite 上验证建表、关键唯一约束、CHECK 约束与回退；提供 `BUSINESS_MIGRATION_TEST_SERVER_URL` 时在随机新建的 MySQL 库上执行同样的检查。
