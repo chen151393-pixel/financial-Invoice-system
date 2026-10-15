@@ -1,12 +1,14 @@
-# 系统架构设计 v2（草案）
+# 系统架构设计 v2
 
 状态：**已确认（2026-10-09），按第 7 节分步实施中**。依据 `develop` 分支 `3537372`（已统一运行时数据库、新增供应商企微群配置）编写。各步骤完成后在第 7 节标注。
+
+**2026-10-15 修订**：以 `test` 的 `e7422b7` 为实现基线。第 4d 步已有基础闭环；本次补充币种契约、有效开票依据版本、单位换算、发票版本和冲正规则。标注“待实施”的内容属于后续补强，不表示现有代码或数据库已具备；结构差异与验收见[数据库设计第 10 节](database.md#10-2026-10-15-修订与补强待实施)。
 
 配套规则：
 
 - [后端规则](backend-rules.md)
 - [前端规则](frontend-rules.md)
-- [数据库设计](database.md)：按整条链路重新设计的 24 张表、比对规则、状态规则、建表与上线
+- [数据库设计](database.md)：当前 24 张表，以及本次修订计划增加的两张版本表、比对规则、状态规则、建表与验收
 
 ## 0. 已确认的决定
 
@@ -19,11 +21,13 @@
 | 模块设计 | 参照 Java 微服务分层：模块对外只暴露门面接口和事件，模块内部按层分目录，一个文件只管一个业务对象；改一个模块不影响其他模块 |
 | 新增规则 | 写在所属模块自己的代码中，不放进公共目录、入口文件或前端 |
 | 公共能力 | 优先复用现有代码（清单见[后端规则](backend-rules.md)第 3 节、[前端规则](frontend-rules.md)第 3 节），不另建一套 |
-| 同一子采购单出现在多张报关单 | **只生成一次**任务行：第一次审核通过时生成，之后的报关单不重复生成，任务详情显示关联的全部报关单 |
+| 同一子采购单出现在多张报关单 | 同一子采购行只有一版当前开票依据、一条有效任务行；相同依据复用，依据变化后生成后继版本，不能因为历史任务已完成而跳过增量 |
+| 采购币种 | 有母单时经 `custrecord_swc_subpo_mainpo` 读取同一 NS 账套母采购单的 `currency`；无母单或确实缺币种时待核实；独立结算与跨币种换算不在本期 |
+| 发票币种 | 本期柠檬云 `GetInvoice` 进项票及现有柠檬云 Excel 通道限定为人民币；适配时明确赋值 `CNY`，保留来源规则版本，不要求逐票人工补币种 |
 | 超开 | **允许确认并标记超开**：发票累计数量或金额超过子采购行应开值时可以人工通过，须填写说明，任务行带超开标记 |
-| 发票单位 | 与子采购单单位一致；不一致时降低置信度，交人工审核 |
-| 比对与完成 | 系统生成带置信度的比对建议，全部由人工审核；人工比对通过（可按差异结束）后该子采购行即结束，全部结束后任务自动完成，无另外的关闭步骤 |
-| 数据库 | 按整条链路重新设计（[数据库设计](database.md)），不在旧表上修改；旧数据为测试数据，不迁移；合同 PDF 只存共享盘路径 |
+| 发票单位 | 同单位直接分配；不同单位须有本商品、本规格的有效换算依据，分别保存发票数量和采购数量；仅写不一致说明不能替代换算 |
+| 比对与完成 | 建议全部人工确认；有效收票达到数量和金额条件，或明确按差异结束，才结束任务行；超开单独标记；取消、作废或红冲后按事实重新计算 |
+| 数据库 | 复用 v2 新表并追加版本迁移；旧模块测试数据不迁移，已进入 v2 的业务记录须保留并准确回填；合同 PDF 只存共享盘路径 |
 | 供应商比对 | 子采购单上没有纳税人识别号，先按规范化名称比对 |
 | 第 4 步实施方式 | **新旧并行，最后统一切换**（2026-10-10）：source、review、task 建在新目录、用新表和新接口前缀，页面逐个切换；invoice、matching 最后原地重建；旧模块在 4e 统一删除。过渡期新旧两套代码短暂并存，不写新旧表之间的适配代码 |
 
@@ -89,38 +93,45 @@
   sync     → source、invoice
   review   → source
   task     → source
-  matching → source、invoice、task
+  matching → source、review、invoice、task（review 门面属于本次待实施补强）
 
 事件：
   review   发布「审核通过 ReviewApproved」        → task 订阅：生成任务和任务行
   matching 发布「分配变化 AllocationChanged」     → task 订阅：更新已收数量金额和任务状态
   source   发布「来源变化 SourceChanged」         → review 订阅：标记需重新审核（后续）
+  invoice  发布「发票变化 InvoiceChanged」        → matching 订阅：过期建议失效、已确认分配复核（待实施）
+  review   发布「依据失效 PurchaseBasisInvalidated」→ matching、task 订阅：限制新分配、标记待复核（待实施）
 ```
 
 - 禁止循环读取依赖。`task` 不读取 `matching`，收票进度只通过事件更新。
 - 事件契约（数据类）定义在发布方的 `public.py` 中；订阅关系只在 `app.py` 中登记。
 - 事件在发布方的事务中同步执行；任何订阅方失败，整个事务回滚。订阅方不能调用外部系统。
+- `e7422b7` 已有 `InvoicesImported → matching` 和分配取消后的任务回退。本次新增的版本与失效事件仍待实施；契约、订阅次序与锁定规则见数据库设计第 10.7 节，不能仅增加订阅函数而省略事务设计。
 
 ## 4. 数据模型
 
 完整表结构见[数据库设计](database.md)。要点：
 
 - **开票单元是子采购行**。审核通过时把子采购行的采购口径数量、单位、含税金额冻结为审核行，任务行从审核行复制应开值。
-- **只生成一次**：任务行对有效的子采购行加唯一约束；同一子采购行关联的全部报关单从审核行查询得出。
-- **分配挂在子采购行上**：比对记录先是系统建议（带置信度），人工通过后才计入收票；任务行的已收值由已通过的分配汇总，重新审核后进度自动延续。
+- **依据版本唯一**：计划新增 `review_purchase_bases`，统一同一子采购行跨报关单的有效审核依据；审核行保留各次报关审核与该依据版本的引用。
+- **只保留一条有效任务行**：相同依据复用；应开值变化时，旧任务版本只读保留，新版本按可兼容的有效分配重算，不能直接复制旧进度缓存。
+- **分配双向绑定版本**：分配保留子采购行身份，同时绑定开票依据版本和不可变发票版本；发票额度占用与有效收票分别判断，待复核分配不能被再次使用。
 - **数据按组织共享**，只按 NS 账套区分；时间、主键、金额类型全库统一。
 
 任务状态由任务行汇总得出，不提供手动修改：
 
 ```text
 documents_pending → notify_pending → awaiting_invoice → partially_received → completed
-任何未完成状态 → superseded（被新审核版本替代，只读保留）
+completed / partially_received → 按剩余有效收票回退到对应节点
+依据变化：包括 completed 在内的旧任务 → superseded；后继任务重新计算
 ```
+
+资料归档、通知登记与收票进度分别按事实展示。已完成不代表合同或通知已执行；同一依据下的撤销走原任务回退，不创建重复应开量。
 
 ## 5. 数据库
 
 - 一个数据库（业务 MySQL）、一个引擎、一条迁移链。新迁移链从 `0001_baseline` 开始，一次创建[数据库设计](database.md)第 4 节的 24 张表，版本表 `schema_version`。
-- 旧数据为测试数据，**不迁移**；旧表不再被新代码读写，代码不删除库中的旧表，全部模块切换后由管理员确认删除，或直接使用新建的空库。
+- 初次 v2 切换不迁移旧模块测试数据，旧表由管理员按既有流程处理；本次补强保留已进入 v2 新表的审核、发票和分配，准确回填版本或标记待复核，不能清空台账后重建。
 - 第 3 步已完成：新迁移链 `backend/migrations`；旧迁移链移到 `backend/legacy_migrations/`；`core/business_database.py` 并入 `core/database.py`；旧应用库数据导入工具（`core/application_database.py` 的复制部分与 `import-application` 命令）已删除。
 - 随第 4 步删除：旧迁移链与旧表定义、`backend/legacy_migrations/bootstrap.py`、`backend/database.py`、`DATABASE_URL` 变量、`create_app` 的过渡参数 `business_engine`（只供旧模块测试分开注入旧业务表）。连接配置保留 `BUSINESS_DATABASE_URL` / `BUSINESS_MYSQL_*`。
 - 回写的 `ns_previews`、`ns_target_locks`、`ns_audit` 不进入新结构；旧表留在旧库中，代码不再引用。
@@ -130,9 +141,9 @@ documents_pending → notify_pending → awaiting_invoice → partially_received
 | 模块 | 表 |
 | --- | --- |
 | source | `source_suppliers`、`source_companies`、`source_raw_records`、`source_parent_orders`、`source_parent_order_lines`、`source_purchase_orders`、`source_purchase_order_lines`、`source_customs_declarations`、`source_customs_lines`、`source_customs_purchase_links` |
-| review | `review_records`、`review_lines` |
+| review | `review_records`、`review_lines`；计划新增 `review_purchase_bases` |
 | task | `task_supplier_groups`、`task_tasks`、`task_lines`、`task_documents`、`task_notifications`、`task_events` |
-| invoice | `invoice_raw_records`、`invoice_headers`、`invoice_items` |
+| invoice | `invoice_raw_records`、`invoice_headers`、`invoice_items`；计划新增 `invoice_versions` |
 | matching | `matching_allocations` |
 | sync | `sync_runs`、`sync_cursors` |
 
@@ -175,7 +186,7 @@ documents_pending → notify_pending → awaiting_invoice → partially_received
 
 ## 7. 实施顺序
 
-每一步一个 PR，合入 `develop` 后再开始下一步。前四步只调整结构，业务功能保持不变。
+每个可独立验收的步骤一个 PR。第 1、2 步以清理和结构调整为主；第 3、4 步包含新表、审核和分配行为变化，按对应业务出口验收。表内完成标记描述当前分支，不表示已经部署或合入 `develop`。
 
 | 步骤 | 内容 | 验收 |
 | --- | --- | --- |
@@ -186,6 +197,7 @@ documents_pending → notify_pending → awaiting_invoice → partially_received
 | 4b review ✅ | 新建 review 模块（审核记录、审核行、`ReviewApproved` 事件）；财务核对页改为 `/review`（旧地址跳转）并使用 `/api/review/*`；同步页保存改走 source 新表 | 新页面审核走新表；task 接入前审核通过暂不生成开票任务 |
 | 4c task ✅ | 新建 task 模块（任务、任务行、合同、通知、供应商群），订阅 `ReviewApproved` 生成任务；开票跟进页改为 `/tasks`（旧地址跳转）并使用 `/api/tasks/*`；source 增加只读门面 `SourceDirectory`；迁移 `0003` 增加任务审核版本与通知发送员工、登记说明 | 审核通过自动生成任务行；收票进度在 4d 接入 |
 | 4d invoice + matching ✅ | 原地重建发票与比对（置信度建议、人工通过、`AllocationChanged`）；发票、比对页切换（`/matching`、`/matching/:invoiceId`）；source 同步读取母采购单头，子采购单币种取自母采购单（迁移 `0004`）；锁与名称规范化移入 `core/` | 一张报关单从审核走到任务完成，无需手工改状态（SQLite 测试与浏览器已验证）；MySQL 并发测试已编写，**待在 MySQL 上执行** |
+| 4d 补强（本次修订，待实施） | 按数据库第 10 节依次补币种证据、全局开票依据、任务后继、发票版本、双数量换算及冲正 | 固定 CNY 与母单继承、重复报关、完成后增量、撤销重开、版本复核与额度守恒；MySQL 迁移、并发和回滚验收通过 |
 | 4e 切换收尾 | 删除 business、reconciliation、audit、旧迁移链、`create_app` 过渡参数、`source.public` 过渡期导出及第 6 节标注"移到第 4 步"的删除项 | 只剩一套实现，全部测试通过 |
 | 5 定时同步 | sync 模块切换新表；NS 报关和子采购定时拉取；柠檬云 open2 定时拉票并生成比对建议 | 无人操作时新报关单、新发票自动进入工作台 |
 | 以后 | 登录与角色、企微自动发送、NS 回写（从分支恢复） | 另行设计 |
@@ -193,5 +205,5 @@ documents_pending → notify_pending → awaiting_invoice → partially_received
 ## 8. 超开处理
 
 - `matching` 人工通过时不因超开而拒绝，必须填写说明，记录超开标记。
-- `task` 收到「分配变化」事件后重新汇总：超开的任务行带超开标记并视为已结束，任务列表可按"含超开"筛选。
+- `task` 收到「分配变化」事件后重新汇总：超开单独标记，仍按数量、金额的完成条件或显式差异结束判断，不能因为一项超开而掩盖另一项欠开。此项为本次待实施修订。
 - 详细规则见[数据库设计](database.md)第 5、6 节。

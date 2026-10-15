@@ -135,6 +135,8 @@ events.subscribe(ReviewApproved, task_services.task.on_review_approved)
 - 发布方不知道谁在订阅；新增订阅不需要修改发布方。
 - 事件名用过去式：`ReviewApproved`、`AllocationChanged`、`SourceChanged`。
 
+**2026-10-15 待实施补强**：版本、失效传播和事件次序以[数据库设计第 10.7 节](database.md#107-门面事件与事务契约)为准。`ReviewApproved` 在同一事务中由 task 先生成 / 换版，再由 matching 重算并发布 `AllocationChanged`；顺序在 app 显式登记与测试。新增 `InvoiceChanged`、`PurchaseBasisInvalidated` 仍未实现，不能把事件示例当作已部署契约。task 消费的是带当前依据 ID、账本摘要的绝对合计，不读取 matching 私有表，也不重复累加事件。
+
 ### 5.3 检查
 
 `tests/test_architecture.py` 静态检查：只导入 `public.py`、无循环依赖、DAO 只访问本模块表、`core/` 和 `integrations/` 不导入 `modules/`。新增模块或依赖方向时同步更新检查表。
@@ -156,6 +158,7 @@ events.subscribe(ReviewApproved, task_services.task.on_review_approved)
 - 外部调用（NS、柠檬云、企微、共享盘）不放在数据库事务内。顺序固定：**事务外读取外部数据 → 短事务内重新校验版本并写入**。
 - 需要防并发的写操作，在事务内用 `SELECT ... FOR UPDATE` 锁定相关行；按固定顺序加锁：来源 → 审核 → 任务 → 任务行 → 发票 → 分配。
 - 写接口带 `requestId` 保证幂等；依赖读取结果的确认操作带读取时返回的 `snapshot`/`revision`，不一致返回 409。
+- 待实施：涉及来源、审核依据、发票或分配的写用例，统一先取得业务库开票账本命名锁，再取账户锁与上述行锁；订阅方复用锁和 Connection，不反向加命名锁。发票换版前必须准备受影响范围并按序锁定，不能先改票头再反向锁任务。该规则须与全部关联入口同时切换，以 MySQL 并发验收，不能仅修改一个事件处理函数。
 
 ## 8. 数据库
 
@@ -170,6 +173,7 @@ events.subscribe(ReviewApproved, task_services.task.on_review_approved)
 - 迁移只写入 `backend/migrations`，文件名 `NNNN_<module>_<说明>.py`；一个迁移只修改一个模块的表；提供 `downgrade`，无法回退时在文件开头写明原因。已执行过的迁移文件不修改。
 - 业务记录不物理删除：来源停用用 `is_active`，业务记录用状态（`superseded`、`rejected`、`cancelled`）。
 - 文件（合同等）不存数据库，只保存路径和 SHA256。
+- 2026-10-15 修订新增的 `review_purchase_bases`、`invoice_versions` 尚未建表；后续迁移还须保留已进入 v2 的审核、发票和分配，准确回填或标记待复核，不能套用“旧测试数据不迁移”而清空 v2 台账。
 
 ## 9. 定时任务
 

@@ -2,6 +2,10 @@
 
 架构 v2 第 4d 步在原地重建：读写新表 `invoice_raw_records`、`invoice_headers`、`invoice_items`（[数据库设计](../../../docs/architecture/database.md)第 4.4 节）。旧两表 `invoices`、`invoice_lines` 不再读写，旧数据不迁移。
 
+**2026-10-15 接入与版本修订**：本期柠檬云 `GetInvoice` 人民币进项票和现有柠檬云 Excel 通道在适配时明确写入 `CNY`，不因接口无币种字段逐票转待核实；计划记录 `currency_source=source_rule` 与 `source_rule_version=lemon_cny_v1`。这是本期来源范围约定，不依赖 NS 采购币种推断发票币种。
+
+数据库第 10.4 节的 `invoice_versions`、稳定逻辑明细与 `InvoiceChanged` 尚待实施；此前保持当前内容冲突拒绝策略。后续同票变更追加不可变版本，关联确认进入复核，不能原地覆盖或释放旧占用。v2 已存发票及分配需准确回填版本或标记待核实，不因旧模块“不迁移”的决定而删除。
+
 ## 职责
 
 - 柠檬云 Excel 导入：预览不写数据；确认时重新解析、复核去重并整批原子保存。

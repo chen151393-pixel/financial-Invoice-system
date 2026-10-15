@@ -2,11 +2,14 @@
 
 目标架构与开发规则以[架构设计 v2](architecture/README.md)为准（分步实施中）；现状先读[项目目录与架构地图](project-structure.md)了解文件放在哪里，再读[系统链路](system-chain.md)了解页面、服务、数据和业务缺口。本文只维护导航，模块规则不在此复制。
 
+2026-10-15：设计修订以 `test/e7422b7` 为实现基线。[数据库第 10 节](architecture/database.md#10-2026-10-15-修订与补强待实施)汇总币种、有效开票依据、发票版本、单位换算和任务冲正的待实施契约；不是已执行迁移记录。匹配依据是审核冻结的子采购行，旧“按报关行开票”章节仅作历史。
+
 ## 当前实现与开发规范
 
 | 文档 | 用途 |
 | --- | --- |
 | [架构设计 v2](architecture/README.md) | 目标模块、数据库收口、删除清单、实施顺序 |
+| [数据库设计](architecture/database.md) | 当前 24 张表与计划新增的两张版本表、币种和状态规则、补强顺序及验收 |
 | [后端规则](architecture/backend-rules.md)、[前端规则](architecture/frontend-rules.md) | 分层目录、模块解耦、公共能力复用、文件大小 |
 | [项目 README](../README.md) | 当前能力、安装、启动与检查命令 |
 | [目录与架构地图](project-structure.md) | 实际目录、模块归属、双库边界、兼容入口保留原因 |
@@ -28,8 +31,9 @@
 | 同步 | [sync](../backend/modules/sync/README.md) | [同步工作区](../frontend/src/modules/sync/README.md) |
 | 发票 | [invoice](../backend/modules/invoice/README.md) | [导入与列表](../frontend/src/modules/invoice/README.md) |
 | 匹配 | [matching](../backend/modules/matching/README.md) | [匹配工作区](../frontend/src/modules/matching/README.md) |
-| 财务审核与开票任务 | [reconciliation](../backend/modules/reconciliation/README.md) | [核对与任务页面](../frontend/src/modules/reconciliation/README.md) |
-| 审计 | [audit](../backend/modules/audit/README.md) | 暂无独立正式页面 |
+| 财务审核 | [review](../backend/modules/review/README.md) | [财务核对](../frontend/src/modules/review/README.md) |
+| 开票任务 | [task](../backend/modules/task/README.md) | [开票跟进](../frontend/src/modules/task/README.md) |
+| 历史核对与审计（第 4e 步清理） | [reconciliation](../backend/modules/reconciliation/README.md)、[audit](../backend/modules/audit/README.md) | 仅保留过渡实现 |
 
 ## 集成与数据
 
@@ -46,14 +50,15 @@
 | [报关关联结果表](mysql/customs-reconciliation-results.md) | 当前独立依据与关联结果表 |
 | [发票 Excel 扩展](mysql/invoice-excel-design.md) | 发票来源两表的扩展设计及 SQL 依据 |
 
-SQL 文件位于 `mysql/`，不是统一自动迁移入口。环境升级分别使用 `backend/migrations/` 和 `backend/business_migrations/`；已有库不能重跑历史初始化脚本。
+SQL 文件位于 `mysql/`，不是统一自动迁移入口。v2 使用 `backend/migrations/`；过渡期旧链位于 `backend/legacy_migrations/`，由 `db:upgrade` 统一升级。已有库不能重跑历史初始化脚本或因方案修订删除 v2 台账。
 
 ## 设计方案与历史资料
 
 | 文档 | 阅读方式 |
 | --- | --- |
 | [架构方案](history/architecture-plan.md) | 分层原则及早期目标；目标目录、worker、接口草案不等于已实现 |
-| [审核证据与发票匹配方案](lemon-invoice-matching-plan.md) | 尚待完成的获批范围匹配规则 |
+| [发票与已审核子采购行匹配方案](lemon-invoice-matching-plan.md) | 第 0 节为当前修订规则，其余明确标记为历史；版本与换算补强待实施 |
+| [柠檬云自动拉票接入方案](lemon-invoice-sync-plan.md) | 用户提供的 Data.List 字段映射、固定 CNY 范围、商品明细与真实联调的待确认项 |
 | [完整业务数据库设计](mysql/purchase-customs-invoice-schema-design.md) | 既有字段核实与目标设计，区别已存在表和计划表 |
 | [单据存储执行方案](history/document-storage-execution-plan.md) | 阶段性存储方案；按当前模块实现核对 |
 | [PL 关联设计审查](history/pl-join-design-review.md) | 关联依据的设计评审背景 |

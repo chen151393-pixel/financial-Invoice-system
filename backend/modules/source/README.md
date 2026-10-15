@@ -2,6 +2,8 @@
 
 架构 v2 第 4a 步新建。负责从 NS 读取报关单、子采购单及关联依据，保存到新表 `source_*`，并向其他模块提供只读门面。表结构见[数据库设计](../../../docs/architecture/database.md)第 4.1 节。
 
+**2026-10-15 方案修订，待实施部分**：现有 `0004` 母单币种继承保留；后续补继承所依据的原始版本引用、真实无母单与查询失败的区分，以及母单变化对全部相关审核的失效传播，详见数据库第 10.1、10.2 节。异常人工核实归 review，不向 source 或 NS 回写人工选定币种。
+
 ## 职责
 
 - 采购报关联查：实时调用 NS 共用脚本，只读不入库（`POST /api/source/pl-comparison`）。
@@ -43,12 +45,14 @@
 
 | 情况 | 处理 |
 | --- | --- |
-| 有母采购单（`custrecord_swc_subpo_mainpo`） | 同步时以固定 SuiteQL（`parent_headers`）读取母采购单头，币种取 `purchaseOrder.currency` 的三位代码，汇率 `exchangerate` 保存在 `source_parent_orders.exchange_rate` 作为换算依据；`currency_source = parent_order` |
+| 有母采购单（`custrecord_swc_subpo_mainpo`） | 同步时以固定 SuiteQL（`parent_headers`）读取母采购单头，币种取 `purchaseOrder.currency` 的三位代码；汇率 `exchangerate` 保存在 `source_parent_orders.exchange_rate` 供追溯，本期不自动换汇；`currency_source = parent_order` |
 | 子采购独立结算或汇率换算 | NS 当前没有对应字段，暂不适用 |
 | 没有母采购单 | 待核实（需从合同或其他结算来源人工核实，人工核实入口尚未实现） |
 | 母采购单未读取到、币种缺失或无法识别为三位代码 | 待核实，原因写入 `currency_issue` |
 
 待核实的子采购行在发票比对中不能通过（保留金额确认限制）。币种参与报关单内容摘要：币种变化后已审核的报关单需重新审核。三位代码取自 NS 币种记录的 `symbol` 字段，部署后请在正式账户只读核对一次。
+
+补强后的确认以 review 的有效冻结依据为准：真实缺币种经财务有据核实后可使用审核币种，source 仍保留 `unresolved` 原值；不能以 source 仍为空否定合法人工依据，也不能在未核实前开放分配。网络或权限错误须重试，不能改写成无母单。`custrecord_swc_subpo_item_ratewithrate` 是含税单价，不是汇率。
 
 ## 关联规则
 
