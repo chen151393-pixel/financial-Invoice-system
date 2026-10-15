@@ -20,7 +20,7 @@ export const legacyPaths = {
 
 export const taskPath = (id: string) => `${paths.tasks}/${encodeURIComponent(id)}`;
 export const matchingInvoicePath = (invoiceId: string) =>
-  `${paths.matching}?invoiceId=${encodeURIComponent(invoiceId)}`;
+  `${paths.matching}/${encodeURIComponent(invoiceId)}`;
 
 // 侧栏菜单项与页面路径的对应。
 export type View = "invoices" | "match" | "sync" | "pl" | "finance" | "invoice-followup";

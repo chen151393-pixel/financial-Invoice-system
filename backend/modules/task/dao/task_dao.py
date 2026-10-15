@@ -88,3 +88,40 @@ def status_counts(connection, where):
 def accounts(connection):
     query = select(tasks.c.ns_account).distinct().order_by(tasks.c.ns_account)
     return list(connection.execute(query).scalars())
+
+
+def by_ids(connection, task_ids, *, lock=False):
+    if not task_ids:
+        return []
+    query = select(tasks).where(tasks.c.id.in_(task_ids)).order_by(tasks.c.id)
+    if lock:
+        query = query.with_for_update()
+    return [dict(row) for row in connection.execute(query).mappings()]
+
+
+def open_lines(connection, purchase_line_ids):
+    """有效任务行及所属任务字段；purchase_line_ids 为 None 时返回全部未结束（open / partial）的行。"""
+    query = select(
+        task_lines.c.id.label("task_line_id"),
+        task_lines.c.task_id,
+        task_lines.c.purchase_order_id,
+        task_lines.c.purchase_line_id,
+        task_lines.c.expected_quantity,
+        task_lines.c.unit,
+        task_lines.c.expected_amount,
+        task_lines.c.received_quantity,
+        task_lines.c.received_amount,
+        task_lines.c.status,
+        tasks.c.status.label("task_status"),
+        tasks.c.ns_account,
+        tasks.c.record_no,
+        tasks.c.customs_declaration_id,
+        tasks.c.supplier_id,
+        tasks.c.company_id,
+        tasks.c.currency,
+    ).select_from(task_lines.join(tasks, tasks.c.id == task_lines.c.task_id))
+    if purchase_line_ids is None:
+        query = query.where(task_lines.c.status.in_(("open", "partial")))
+    else:
+        query = query.where(task_lines.c.active_purchase_line_id.in_(purchase_line_ids))
+    return [dict(row) for row in connection.execute(query.order_by(task_lines.c.id)).mappings()]

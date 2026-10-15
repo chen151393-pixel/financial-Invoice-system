@@ -2,6 +2,7 @@
 
 - 新审核替代旧审核时，旧审核生成的未完成任务及其任务行改为 superseded；已完成的任务保留。
 - 按 供应商 × 采购公司 × 币种 分组；同一子采购行已有有效任务行（其他报关单或已完成任务）时跳过。
+- 被替代任务行的已收进度带到同一子采购行的新任务行（分配挂在子采购行上，进度自动延续）。
 - 订阅方在发布方事务中执行，不调用外部系统、不开启新事务；失败时整个审核回滚。
 """
 
@@ -9,6 +10,7 @@ from datetime import datetime, timezone
 
 from ..dao import event_dao, task_dao, task_line_dao
 from ..policy.task_policy import OPEN_STATUSES, group_key
+from .progress_service import apply_receipt, refresh_task
 from .task_status_service import change_status
 
 SYSTEM = "system"
@@ -16,8 +18,11 @@ SYSTEM = "system"
 
 def on_review_approved(connection, event):
     now = datetime.now(timezone.utc).replace(tzinfo=None)
-    if event.superseded_review_id:
+    carried = (
         _supersede(connection, event.superseded_review_id, event.revision, now)
+        if event.superseded_review_id
+        else {}
+    )
     active = task_line_dao.active_purchase_lines(connection, [line.purchase_line_id for line in event.lines])
     groups = {}
     for line in event.lines:
@@ -26,7 +31,8 @@ def on_review_approved(connection, event):
         key = group_key(line.supplier_id, line.company_id, line.currency, line.purchase_order_id)
         groups.setdefault(key, []).append(line)
     for key, lines in groups.items():
-        _create(connection, event, key, lines, now)
+        task_id = _create(connection, event, key, lines, now)
+        _carry_progress(connection, task_id, carried, event.approved_by, now)
 
 
 def _supersede(connection, review_id, revision, now):
@@ -35,9 +41,35 @@ def _supersede(connection, review_id, revision, now):
         for task in task_dao.by_review(connection, review_id, lock=True)
         if task["status"] in OPEN_STATUSES
     ]
+    previous_ids = [task["id"] for task in previous]
+    # 记下被替代任务行的已收进度（按子采购行），新任务行生成后带过去。
+    carried = {
+        line["purchase_line_id"]: line
+        for line in task_line_dao.by_tasks(connection, previous_ids)
+        if line["received_quantity"] or line["received_amount"] or line["closed_with_difference"]
+    }
     for task in previous:
         change_status(connection, task, "superseded", SYSTEM, f"财务重新审核（第 {revision} 版）", now)
-    task_line_dao.supersede(connection, [task["id"] for task in previous], now)
+    task_line_dao.supersede(connection, previous_ids, now)
+    return carried
+
+
+def _carry_progress(connection, task_id, carried, actor, now):
+    lines = [
+        line for line in task_line_dao.by_tasks(connection, [task_id]) if line["purchase_line_id"] in carried
+    ]
+    for line in lines:
+        old = carried[line["purchase_line_id"]]
+        apply_receipt(
+            connection,
+            line,
+            old["received_quantity"],
+            old["received_amount"],
+            old["closed_with_difference"],
+            now,
+        )
+    if lines:
+        refresh_task(connection, task_dao.get(connection, task_id), actor, "沿用重新审核前的收票进度", now)
 
 
 def _create(connection, event, key, lines, now):
@@ -86,3 +118,4 @@ def _create(connection, event, key, lines, now):
         },
         now,
     )
+    return task_id

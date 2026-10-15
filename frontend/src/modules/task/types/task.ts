@@ -31,7 +31,7 @@ export interface TaskSummary {
 export interface TaskCounts {
   tasks: number;
   awaitingInvoice: number;
-  receivedInvoices: number | null;
+  completed: number;
   needsAttention: number;
 }
 export interface TaskGroup {

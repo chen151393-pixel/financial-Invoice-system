@@ -2,6 +2,7 @@
 
 import hashlib
 import json
+from decimal import Decimal
 
 STATUS_LABELS = {
     "documents_pending": "待保存子采购合同",
@@ -21,13 +22,15 @@ STATUS_REASONS = {
     "superseded": "请查看该报关单最新审核生成的任务。",
 }
 
-# 收票进度（partially_received、completed）由发票比对的分配汇总得出，第 4d 步接入，不提供手动修改。
+# 收票进度（partially_received、completed）只由发票比对的已通过分配汇总得出，不提供手动修改。
+# 取消已通过的分配后按实际收票退回：仍有收票 → partially_received；没有收票 → 收票前的节点。
+PRE_INVOICE = ("documents_pending", "notify_pending", "awaiting_invoice")
 TRANSITIONS = {
     "documents_pending": {"notify_pending", "partially_received", "completed", "superseded"},
     "notify_pending": {"awaiting_invoice", "partially_received", "completed", "superseded"},
     "awaiting_invoice": {"partially_received", "completed", "superseded"},
-    "partially_received": {"completed", "superseded"},
-    "completed": set(),
+    "partially_received": {"completed", "superseded", *PRE_INVOICE},
+    "completed": {"partially_received", *PRE_INVOICE},
     "superseded": set(),
 }
 
@@ -42,6 +45,9 @@ LINE_STATUS_LABELS = {
 }
 
 SUPERSEDED_REASON = "此任务已被新审核版本替代，仅供追溯。"
+
+# 金额容差：每行 0.01 元（数据库设计第 1 节）
+AMOUNT_TOLERANCE = Decimal("0.01")
 
 
 def can_transition(current, target):
@@ -73,6 +79,10 @@ def missing_identity_reasons(supplier_id, company_id, currency):
 def event_label(from_status, to_status):
     if from_status is None:
         return "财务审核通过，生成开票任务"
+    if from_status in ("partially_received", "completed") and to_status in PRE_INVOICE:
+        return "已通过的发票分配被取消，退回收票前节点"
+    if from_status == "completed" and to_status == "partially_received":
+        return "已通过的发票分配被取消，退回部分收票"
     return {
         "notify_pending": "子采购合同已全部保存到共享盘",
         "awaiting_invoice": "人工登记已发送通知",
@@ -80,3 +90,36 @@ def event_label(from_status, to_status):
         "completed": "任务完成",
         "superseded": "被新审核版本替代",
     }.get(to_status, STATUS_LABELS.get(to_status, to_status))
+
+
+def line_progress(expected_quantity, expected_amount, received_quantity, received_amount, closed):
+    """任务行状态（数据库设计第 6.1 节）：返回 (status, over_invoiced, closed_with_difference)。
+
+    已收齐 = 数量相等且金额相差不超过 0.01 元；超开 = 已收数量或金额超过应开值。
+    应开金额为空的行只能由人工按差异结束（closed）。
+    """
+    full = (
+        expected_quantity is not None
+        and expected_amount is not None
+        and received_quantity == expected_quantity
+        and abs(received_amount - expected_amount) <= AMOUNT_TOLERANCE
+    )
+    over = (expected_quantity is not None and received_quantity > expected_quantity) or (
+        expected_amount is not None and received_amount - expected_amount > AMOUNT_TOLERANCE
+    )
+    if full or over or closed:
+        status = "received"
+    elif received_quantity or received_amount:
+        status = "partial"
+    else:
+        status = "open"
+    return status, over, bool(closed and not full)
+
+
+def task_progress(line_statuses, base_status):
+    """全部有效任务行已结束 → completed；有收票 → partially_received；否则回到收票前节点 base_status。"""
+    if line_statuses and all(status == "received" for status in line_statuses):
+        return "completed"
+    if any(status in ("partial", "received") for status in line_statuses):
+        return "partially_received"
+    return base_status

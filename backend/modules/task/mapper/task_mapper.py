@@ -56,7 +56,12 @@ def counts(status_counts):
     open_count = (
         waiting + status_counts.get("awaiting_invoice", 0) + status_counts.get("partially_received", 0)
     )
-    return TaskCounts(tasks=sum(status_counts.values()), awaitingInvoice=open_count, needsAttention=waiting)
+    return TaskCounts(
+        tasks=sum(status_counts.values()),
+        awaitingInvoice=open_count,
+        completed=status_counts.get("completed", 0),
+        needsAttention=waiting,
+    )
 
 
 def lines(rows, names, currency):
@@ -94,41 +99,25 @@ def events(rows):
     ]
 
 
-def steps(status, documents_ready, notification_label):
-    reached = {
-        "notify": status in ("awaiting_invoice", "partially_received", "completed"),
-        "invoice": status in ("partially_received", "completed"),
-    }
-    live = status != "superseded"
-
-    def state(done, current):
-        return "done" if done else "current" if current and live else "waiting"
-
+def steps(status, documents_ready, notification_sent, notification_label):
+    """六个节点各按自身事实判断是否完成（发票可能先于合同或通知到达）；当前节点为第一个未完成的节点。"""
+    received = status in ("partially_received", "completed")
+    completed = status == "completed"
+    nodes = [
+        ("财务审核", "审核已通过", True),
+        ("资料准备", "原件已备齐" if documents_ready else "保存子采购合同到共享盘", documents_ready),
+        ("通知供应商", notification_label, notification_sent),
+        ("等待收票", "已收到发票" if received else "等待供应商开票", received),
+        ("发票比对", "全部任务行已结束" if completed else "收票后在发票比对页审核", completed),
+        ("完成", "已完成" if completed else "尚未完成", completed),
+    ]
+    live = status not in ("superseded", "completed")
+    current = next((index for index, node in enumerate(nodes) if not node[2]), None) if live else None
     return [
-        TaskStep(label="财务审核", description="审核已通过", state="done"),
         TaskStep(
-            label="资料准备",
-            description="原件已备齐" if documents_ready else "保存子采购合同到共享盘",
-            state=state(documents_ready, status == "documents_pending"),
-        ),
-        TaskStep(
-            label="通知供应商",
-            description=notification_label,
-            state=state(reached["notify"], status == "notify_pending"),
-        ),
-        TaskStep(
-            label="等待收票",
-            description="已收到发票" if reached["invoice"] else "等待供应商开票",
-            state=state(reached["invoice"], status == "awaiting_invoice"),
-        ),
-        TaskStep(
-            label="发票比对",
-            description="收票后核对",
-            state=state(status == "completed", status == "partially_received"),
-        ),
-        TaskStep(
-            label="完成",
-            description="已完成" if status == "completed" else "尚未完成",
-            state=state(status == "completed", False),
-        ),
+            label=label,
+            description=description,
+            state="done" if done else "current" if index == current else "waiting",
+        )
+        for index, (label, description, done) in enumerate(nodes)
     ]

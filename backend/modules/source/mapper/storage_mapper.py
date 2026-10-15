@@ -11,9 +11,15 @@ from decimal import Decimal, InvalidOperation, localcontext
 from sqlalchemy import Date, DateTime, Numeric, String
 
 from backend.core.errors import ApiError
+from backend.core.names import normalize_name
 
-from ..entity import customs_declarations, customs_lines, purchase_order_lines, purchase_orders
-from ..policy.names import normalize_name
+from ..entity import (
+    customs_declarations,
+    customs_lines,
+    parent_orders,
+    purchase_order_lines,
+    purchase_orders,
+)
 from .ns_fields import normalize, reference, text
 
 # 非列目标：供应商、申报公司引用
@@ -224,6 +230,19 @@ def map_customs(bundle, config, now):
     return documents
 
 
+# 子采购单关联母采购单的字段（币种取自母采购单，见 policy/currency_policy.py）
+PARENT_FIELD = "custrecord_swc_subpo_mainpo"
+
+
+def map_parent(header, currency):
+    """母采购单头 → source_parent_orders 列；汇率按列精度校验，不四舍五入。"""
+    return {
+        "order_no": checked_text(header.get("tranid"), parent_orders.c.order_no),
+        "currency": currency,
+        "exchange_rate": column_value(header.get("exchangerate"), parent_orders.c.exchange_rate),
+    }
+
+
 def map_purchases(bundle, config, now):
     spec, line_spec = config.purchase, config.purchase_line
     documents = []
@@ -257,6 +276,7 @@ def map_purchases(bundle, config, now):
                 "supplier": party(references, SUPPLIER_ID, SUPPLIER_NAME),
                 "company": company_ref(record, spec.company, config.company_record_type),
                 "customs_ns_id": reference(record.get(spec.customs)) or None,
+                "parent_ns_id": reference(record.get(PARENT_FIELD)) or None,
                 "lines": lines,
                 "raw": raw_payload(spec, line_spec, record_id, record, raw_lines),
             }

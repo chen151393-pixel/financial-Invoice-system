@@ -195,7 +195,7 @@ def test_list_groups_search_and_counts(ns, engine, app_services, approved):
     assert by_supplier.total == 1 and by_supplier.counts.needsAttention == 1
     group = by_supplier.groups[0]
     assert group.label == "上海 供应商（有限）公司" and group.tasks[0].orderNumbers == ["SUB-200"]
-    assert group.tasks[0].expectedAmount == "120.5" and group.counts.receivedInvoices is None
+    assert group.tasks[0].expectedAmount == "120.5" and group.counts.completed == 0
     by_declaration = tasks.browse(TaskListQuery(groupBy="declaration"))
     assert by_declaration.groups[0].label == "CD870"
     for keyword in ("CD870", "SUB-200", "上海"):

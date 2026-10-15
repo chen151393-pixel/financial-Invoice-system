@@ -1,4 +1,4 @@
-"""母采购单（由内部快照导入填充；同步不写入）。"""
+"""母采购单：同步时按子采购单关联读取单头（币种、汇率），子采购单币种取自这里。"""
 
 from sqlalchemy import (
     Boolean,
@@ -34,6 +34,7 @@ parent_orders = Table(
     Column("is_active", Boolean, nullable=False, server_default=text("1")),
     Column("raw_record_id", ID, ForeignKey("source_raw_records.id", name="fk_source_parent_raw")),
     *timestamps(),
+    Column("exchange_rate", Numeric(28, 12), comment="母采购汇率（NS exchangerate）"),
     UniqueConstraint("ns_account", "ns_internal_id", name="uq_source_parent_ns"),
     Index("ix_source_parent_no", "ns_account", "order_no"),
     comment="母采购单",

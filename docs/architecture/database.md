@@ -149,6 +149,7 @@ CREATE TABLE source_parent_orders (
   synced_at           DATETIME(6) NOT NULL,
   is_active           BOOL NOT NULL DEFAULT 1,
   raw_record_id       BIGINT UNSIGNED NULL,
+  exchange_rate       DECIMAL(28,12) NULL COMMENT '母采购汇率（NS exchangerate，迁移 0004）',
   -- 公共列
   PRIMARY KEY (id),
   UNIQUE KEY uq_source_parent_ns (ns_account, ns_internal_id),
@@ -189,7 +190,9 @@ CREATE TABLE source_purchase_orders (
   parent_relation_status  VARCHAR(24) NOT NULL DEFAULT 'unknown',
   supplier_id             BIGINT UNSIGNED NULL,
   company_id              BIGINT UNSIGNED NULL,
-  currency                VARCHAR(20) NULL,
+  currency                VARCHAR(20) NULL COMMENT '取自母采购单（迁移 0004）',
+  currency_source         VARCHAR(24) NOT NULL DEFAULT 'unresolved' COMMENT 'parent_order / unresolved（迁移 0004）',
+  currency_issue          VARCHAR(300) NULL COMMENT '币种待核实原因（迁移 0004）',
   total_amount            DECIMAL(24,6) NULL,
   detail_status           VARCHAR(24) NOT NULL DEFAULT 'pending' COMMENT '明细是否完整读取',
   source_modified_at      DATETIME(6) NULL,
@@ -681,13 +684,15 @@ CREATE TABLE sync_cursors (
 
 不做模糊相似度计算。以后取得 NS 供应商税号时，在 `source_suppliers` 增加税号列，销售方比对改为税号优先。
 
+- 发票未提供购买方（柠檬云 Excel 不含该列）时，购买方一项得 0 分，但不算作需要填写说明的不一致项（2026-10-15）。
+
 ### 5.3 不能人工通过的情况
 
 | 情况 | 原因 |
 | --- | --- |
 | 发票行已分配的数量或金额会超过发票行本身 | 同一张票不能重复使用 |
 | 发票为作废或红冲 | 不能作为收票依据 |
-| 发票币种与子采购币种不一致或未知 | 金额无法比较 |
+| 发票币种与子采购币种不一致或未知 | 金额无法比较。子采购单没有独立币种字段，币种取自母采购单；没有母采购单或母采购币种缺失时为"待核实"（`source_purchase_orders.currency_source = unresolved`），见 source 模块 README |
 | 子采购行内容在建议生成后已变化 | 比对依据过期，须重新比对 |
 | 子采购行没有有效任务行 | 不在已审核的应开范围内 |
 
@@ -714,7 +719,8 @@ documents_pending → notify_pending → awaiting_invoice → partially_received
 ```
 
 - 合同全部归档 → `notify_pending`；登记通知已发送 → `awaiting_invoice`。
-- 有第一条通过的分配 → `partially_received`；全部有效任务行 `received` → `completed`，写 `completed_at`。
+- 有第一条通过的分配 → `partially_received`；全部有效任务行 `received` → `completed`，写 `completed_at`。发票可能先于合同或通知到达，此时直接进入收票节点。
+- 取消已通过的分配后按实际收票退回（2026-10-15 补充）：仍有收票 → `partially_received`；没有收票 → 收票前节点（已登记通知 → `awaiting_invoice`；合同已全部归档 → `notify_pending`；否则 `documents_pending`）。
 - 每次状态变化写 `task_events`。
 
 ## 7. 整条链路的数据流
@@ -750,7 +756,7 @@ documents_pending → notify_pending → awaiting_invoice → partially_received
 - **新迁移链**（第 3 步已建立）：`backend/migrations`，配置 `backend/alembic.ini`，版本表 `schema_version`，基线 `0001_baseline` 一次创建第 4 节全部 24 张表。与设计稿的实现差异：
   - 发票行表名为 `invoice_items`（比对表列名 `invoice_item_id`），避免与过渡期仍在使用的旧表 `invoice_lines` 同名；
   - 生成列使用 `CASE` / `COALESCE`；`updated_at` 由 DAO 写入，不用 `ON UPDATE`（第 3 节）。
-- **后续迁移**：`0002` 增加 `source_purchase_orders.parent_order_no`；`0003` 增加 `task_tasks.review_revision`（task 不读取 review，审核版本随事件写入）、`task_notifications.sender_name`、`note`（人工发送的员工与登记说明）。
+- **后续迁移**：`0004` 增加 `source_parent_orders.exchange_rate`、`source_purchase_orders.currency_source`、`currency_issue`（子采购单币种取自母采购单）；`0002` 增加 `source_purchase_orders.parent_order_no`；`0003` 增加 `task_tasks.review_revision`（task 不读取 review，审核版本随事件写入）、`task_notifications.sender_name`、`note`（人工发送的员工与登记说明）。
 - **旧迁移链**：已移到 `backend/legacy_migrations/app`、`backend/legacy_migrations/business`（版本号、版本表不变，已部署的库不受影响），随第 4 步各模块切换删除，代码历史保留在 Git 中。
 - **命令**：`npm.cmd run db:upgrade` 先升级两条旧迁移链，再升级新迁移链；`python -m backend.manage schema-sql` 输出新表结构的 MySQL DDL 供审阅；正式启动时核对三条链都在最新版本。
 - **验证**：`backend/tests/test_schema_baseline.py` 在 SQLite 上验证建表、关键唯一约束、CHECK 约束与回退；提供 `BUSINESS_MIGRATION_TEST_SERVER_URL` 时在随机新建的 MySQL 库上执行同样的检查。

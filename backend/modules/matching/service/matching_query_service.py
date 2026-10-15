@@ -1,0 +1,264 @@
+"""发票比对查询：单张发票的比对视图、待审核队列、发票列表摘要、人工分配候选。"""
+
+from decimal import Decimal
+
+from sqlalchemy.exc import SQLAlchemyError
+
+from backend.core.errors import ApiError
+from backend.modules.invoice.public import read_invoices
+from backend.modules.source.public import purchase_lines
+from backend.modules.task.public import open_lines
+
+from ..dao import allocation_dao
+from ..mapper import allocation_mapper as mapper
+from ..policy import allocation_policy as rules
+from ..policy.comparison_policy import HIGH, MEDIUM, compare, text, tier
+from ..vo.matching_vo import (
+    Candidate,
+    Candidates,
+    Capability,
+    InvoiceMatching,
+    ItemView,
+    Queue,
+    QueueRow,
+    Summaries,
+)
+
+READ_ERROR = "发票比对读取失败，请检查业务数据库及迁移状态"
+TIERS = {"all": (None, None), "high": (HIGH, None), "medium": (MEDIUM, HIGH), "low": (None, MEDIUM)}
+
+
+def evaluate(row, invoice, item, line, task_line, used):
+    """返回 (当前比对项, 能力, 需填写说明的原因)。"""
+    checks = (row["checks"] or {}).get("items", [])
+    capabilities = {
+        "confirm": Capability(reason="只有待审核建议可以通过"),
+        "reject": Capability(reason="只有待审核建议可以驳回"),
+        "cancel": Capability(reason="只有已通过的分配可以取消"),
+    }
+    reasons = []
+    if row["status"] == "confirmed":
+        capabilities["cancel"] = Capability(allowed=True, reason="取消后任务收票进度按剩余分配重算")
+    if row["status"] != "proposed":
+        return checks, capabilities, reasons
+    block = rules.hard_block(invoice, line, task_line)
+    if not block and line["digest"] != (row["checks"] or {}).get("purchaseDigest"):
+        block = "子采购行内容在建议生成后已变化，比对依据过期，请驳回后重新生成建议"
+    if not block:
+        block = rules.capacity_block(item, *used, row["quantity"], row["amount"])
+    if line is not None and task_line is not None:
+        checks, _ = compare(invoice, item, line, *rules.remaining(task_line))
+        exceeds = rules.exceeds_expected(task_line, row["quantity"], row["amount"])
+        reasons = rules.note_reasons(checks, exceeds, False)
+    capabilities["confirm"] = Capability(
+        allowed=not block, reason=block or ("通过时需填写说明" if reasons else "无需填写说明，可直接通过")
+    )
+    capabilities["reject"] = Capability(allowed=True, reason="驳回后可重新生成建议或人工分配")
+    return checks, capabilities, reasons
+
+
+class MatchingQueryService:
+    def __init__(self, engine):
+        self.engine = engine
+
+    def _read(self, action):
+        try:
+            with self.engine.connect() as connection:
+                return action(connection)
+        except SQLAlchemyError:
+            raise ApiError(503, READ_ERROR) from None
+
+    @staticmethod
+    def _context(connection, rows):
+        line_ids = sorted({row["purchase_line_id"] for row in rows})
+        tasks = (
+            {line["purchase_line_id"]: line for line in open_lines(connection, line_ids)} if line_ids else {}
+        )
+        return purchase_lines(connection, line_ids), tasks
+
+    def _views(self, connection, invoice, rows):
+        lines, tasks = self._context(connection, rows)
+        items = {item["id"]: item for item in invoice["items"]}
+        result = {}
+        for row in rows:
+            confirmed = [
+                other
+                for other in rows
+                if other["invoice_item_id"] == row["invoice_item_id"]
+                and other["status"] == "confirmed"
+                and other["id"] != row["id"]
+            ]
+            used = (
+                sum((other["quantity"] for other in confirmed), Decimal(0)),
+                sum((other["amount"] for other in confirmed), Decimal(0)),
+            )
+            line, task_line = lines.get(row["purchase_line_id"]), tasks.get(row["purchase_line_id"])
+            checks, capabilities, reasons = evaluate(
+                row, invoice, items[row["invoice_item_id"]], line, task_line, used
+            )
+            purchase = mapper.purchase_side(row["purchase_line_id"], line, task_line)
+            result[row["id"]] = mapper.allocation_view(row, checks, purchase, capabilities, reasons)
+        return result
+
+    def invoice(self, invoice_id):
+        def action(connection):
+            found = read_invoices(connection, [invoice_id])
+            if not found:
+                raise ApiError(404, "发票不存在")
+            invoice = found[0]
+            rows = allocation_dao.by_invoices(connection, [invoice_id])
+            views = self._views(connection, invoice, rows)
+            items = []
+            for item in invoice["items"]:
+                own = [row for row in rows if row["invoice_item_id"] == item["id"]]
+                confirmed = [row for row in own if row["status"] == "confirmed"]
+                items.append(
+                    ItemView(
+                        id=str(item["id"]),
+                        lineNo=item["line_no"],
+                        item=item["item_name"],
+                        specification=item["specification"],
+                        unit=item["unit"],
+                        quantity=text(item["quantity"]),
+                        amount=text(item["amount_including_tax"]),
+                        confirmedQuantity=text(sum((row["quantity"] for row in confirmed), Decimal(0))),
+                        confirmedAmount=text(sum((row["amount"] for row in confirmed), Decimal(0))),
+                        allocations=[views[row["id"]] for row in own],
+                    )
+                )
+            normal = invoice["status"] == "normal"
+            return InvoiceMatching(
+                invoice=mapper.invoice_side(invoice),
+                items=items,
+                generate=Capability(
+                    allowed=normal,
+                    reason="为尚无建议的发票行重新比对已审核的子采购行"
+                    if normal
+                    else "作废、红冲或状态未知的发票不生成建议",
+                ),
+            )
+
+        return self._read(action)
+
+    def queue(self, query):
+        def action(connection):
+            total, rows = allocation_dao.queue(
+                connection,
+                tiers=TIERS[query.tier],
+                offset=(query.page - 1) * query.pageSize,
+                limit=query.pageSize,
+            )
+            invoices = {
+                invoice["id"]: invoice
+                for invoice in read_invoices(connection, [row["invoice_id"] for row in rows])
+            }
+            result = []
+            for invoice_id in dict.fromkeys(row["invoice_id"] for row in rows):
+                invoice = invoices[invoice_id]
+                own = [row for row in rows if row["invoice_id"] == invoice_id]
+                all_rows = allocation_dao.by_invoices(connection, [invoice_id])
+                views = self._views(connection, invoice, all_rows)
+                items = {item["id"]: item for item in invoice["items"]}
+                result.extend(
+                    QueueRow(
+                        allocation=views[row["id"]],
+                        invoiceId=str(invoice_id),
+                        invoiceNumber=invoice["invoice_no"],
+                        seller=invoice["seller_name"],
+                        itemName=items[row["invoice_item_id"]]["item_name"],
+                    )
+                    for row in own
+                )
+            order = {row["id"]: index for index, row in enumerate(rows)}
+            result.sort(key=lambda view: order[int(view.allocation.id)])
+            counts = allocation_dao.proposal_counts(connection, HIGH, MEDIUM)
+            pages = max(1, (total + query.pageSize - 1) // query.pageSize)
+            return Queue(
+                rows=result, total=total, page=query.page, pageSize=query.pageSize, pages=pages, counts=counts
+            )
+
+        return self._read(action)
+
+    def summaries(self, body):
+        invoice_ids = [int(value) for value in body.invoiceIds]
+
+        def action(connection):
+            invoices = {invoice["id"]: invoice for invoice in read_invoices(connection, invoice_ids)}
+            rows = allocation_dao.by_invoices(connection, invoice_ids)
+            result = []
+            for invoice_id in invoice_ids:
+                if invoice_id not in invoices:
+                    raise ApiError(404, "发票不存在")
+                own = [row for row in rows if row["invoice_id"] == invoice_id]
+                proposed = [row for row in own if row["status"] == "proposed"]
+                confirmed_items = {row["invoice_item_id"] for row in own if row["status"] == "confirmed"}
+                item_count = len(invoices[invoice_id]["items"])
+                if confirmed_items and len(confirmed_items) >= item_count:
+                    status, label = "confirmed", "已比对"
+                elif confirmed_items:
+                    status, label = "partial", "部分比对"
+                elif proposed:
+                    status, label = "proposed", "待审核建议"
+                else:
+                    status, label = "none", "未比对"
+                best = max(
+                    (row["confidence"] for row in proposed if row["confidence"] is not None), default=None
+                )
+                result.append(
+                    {
+                        "invoiceId": str(invoice_id),
+                        "status": status,
+                        "label": label,
+                        "tier": tier(best) if best is not None else None,
+                        "proposed": len(proposed),
+                        "confirmed": len(confirmed_items),
+                    }
+                )
+            return Summaries(rows=result)
+
+        return self._read(action)
+
+    def candidates(self, query):
+        """人工分配候选：全部未结束的有效任务行，按关键字（子采购单号、供应商、品名、报关单号）筛选。"""
+        invoice_id, item_id, keyword = (
+            int(query.invoiceId),
+            int(query.invoiceItemId),
+            query.keyword.strip().lower(),
+        )
+
+        def action(connection):
+            found = read_invoices(connection, [invoice_id])
+            item = next((row for row in found[0]["items"] if row["id"] == item_id), None) if found else None
+            if item is None:
+                raise ApiError(404, "发票行不存在或不属于该发票")
+            invoice = found[0]
+            task_lines = open_lines(connection)
+            lines = purchase_lines(connection, [line["purchase_line_id"] for line in task_lines])
+            rows = []
+            for task_line in task_lines:
+                line = lines.get(task_line["purchase_line_id"])
+                if line is None:
+                    continue
+                fields = (
+                    line["order_no"],
+                    line["supplier_name"],
+                    line["declaration_name"],
+                    line["item_name"],
+                    task_line["record_no"],
+                )
+                if keyword and not any(keyword in (value or "").lower() for value in fields):
+                    continue
+                checks, confidence = compare(invoice, item, line, *rules.remaining(task_line))
+                rows.append(
+                    Candidate(
+                        purchase=mapper.purchase_side(task_line["purchase_line_id"], line, task_line),
+                        checks=mapper.check_views(checks),
+                        confidence=text(confidence),
+                        tier=tier(confidence),
+                        block=rules.hard_block(invoice, line, task_line),
+                    )
+                )
+            rows.sort(key=lambda row: (-Decimal(row.confidence), int(row.purchase.purchaseLineId)))
+            return Candidates(rows=rows[:50], total=len(rows))
+
+        return self._read(action)

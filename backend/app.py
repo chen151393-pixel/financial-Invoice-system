@@ -17,16 +17,20 @@ from .integrations.wecom import WeComGroups
 from .manage import verify_database
 from .modules.business.public import (
     CustomsReconciliationSource,
-    PurchaseMatchingSource,
     SubpoContractSource,
     SupplierDirectory,
 )
 from .modules.identity.controller import create_router as identity_router
 from .modules.identity.service import IdentityService
-from .modules.invoice.controller import create_router as invoice_router
-from .modules.invoice.service import InvoiceService
-from .modules.matching.controller import create_router as matching_router
-from .modules.matching.service import MatchingService
+from .modules.invoice.controller.invoice_controller import create_router as invoice_router
+from .modules.invoice.public import InvoicesImported
+from .modules.invoice.service.import_service import ImportService
+from .modules.invoice.service.invoice_service import InvoiceService
+from .modules.matching.controller.matching_controller import create_router as matching_router
+from .modules.matching.public import AllocationChanged
+from .modules.matching.service.allocation_service import AllocationService
+from .modules.matching.service.matching_query_service import MatchingQueryService
+from .modules.matching.service.proposal_service import ProposalService, on_invoices_imported
 from .modules.reconciliation.controller import create_router as reconciliation_router
 from .modules.reconciliation.group_controller import create_router as supplier_group_router
 from .modules.reconciliation.group_service import SupplierGroupService
@@ -47,6 +51,7 @@ from .modules.task.controller.supplier_group_controller import create_router as 
 from .modules.task.controller.task_controller import create_router as task_router
 from .modules.task.service.document_service import DocumentService
 from .modules.task.service.notification_service import NotificationService
+from .modules.task.service.progress_service import on_allocation_changed
 from .modules.task.service.supplier_group_service import SupplierGroupService as TaskGroupService
 from .modules.task.service.task_generation_service import on_review_approved
 from .modules.task.service.task_service import TaskService
@@ -119,7 +124,6 @@ def create_app(settings=None, ns=None, engine=None, business_engine=None, wecom=
         business_engine, SupplierDirectory(business_engine), f"user:{settings.admin_user}", wecom=wecom
     )
     app.include_router(supplier_group_router(supplier_groups))
-    invoices = InvoiceService(business_engine)
     app.include_router(
         invoice_task_router(
             InvoiceTaskService(
@@ -131,10 +135,20 @@ def create_app(settings=None, ns=None, engine=None, business_engine=None, wecom=
             )
         )
     )
-    app.include_router(invoice_router(invoices))
+    # 发票导入 → matching 生成比对建议；比对通过 / 取消 → task 重算收票进度（均在发布方事务中）。
     app.include_router(
-        matching_router(MatchingService(invoices, PurchaseMatchingSource(business_engine), business_engine))
+        invoice_router(ImportService(business_engine, events), InvoiceService(business_engine))
     )
+    matching_queries = MatchingQueryService(business_engine)
+    app.include_router(
+        matching_router(
+            matching_queries,
+            AllocationService(business_engine, events, matching_queries),
+            ProposalService(business_engine),
+        )
+    )
+    events.subscribe(InvoicesImported, on_invoices_imported)
+    events.subscribe(AllocationChanged, on_allocation_changed)
     app.include_router(
         sync_router(ConnectionService(settings, ns), PullService(settings, ns, source_storage))
     )

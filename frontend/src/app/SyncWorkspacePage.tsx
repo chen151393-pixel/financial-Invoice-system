@@ -4,7 +4,7 @@ import { AppFrame } from "../shared/components/AppFrame";
 import { navigation } from "./navigation";
 import { paths } from "./paths";
 import { useViewNavigate } from "./useViewNavigate";
-import { InvoiceImport } from "../modules/invoice/InvoiceImport";
+import { InvoiceImportPage } from "../modules/invoice/pages/InvoiceImportPage";
 
 export default function SyncWorkspacePage() {
   const { pathname } = useLocation();
@@ -41,11 +41,11 @@ export default function SyncWorkspacePage() {
         source === "ns"
           ? "不修改 NS 源单据；子采购订单、报关单支持按页拉取并保存到 MySQL，暂不支持定时同步。"
           : source === "lemon"
-            ? "支持 Excel 文件导入；柠檬云 API 与附件同步尚未接入。导入不会自动匹配或写回 NS。"
+            ? "支持 Excel 文件导入；柠檬云 API 与附件同步尚未接入。导入后自动生成比对建议，需人工审核，不写回 NS。"
             : "NS 支持按页读取，子采购订单及报关单支持保存到 MySQL；定时同步与柠檬云接口待接入。"
       }
     >
-      <SyncPage source={source}>{source === "lemon" && <InvoiceImport />}</SyncPage>
+      <SyncPage source={source}>{source === "lemon" && <InvoiceImportPage />}</SyncPage>
     </AppFrame>
   );
 }

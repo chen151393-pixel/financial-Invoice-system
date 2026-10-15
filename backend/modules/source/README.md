@@ -21,12 +21,12 @@
 | | `pl_comparison_service.py`、`contract_service.py` | 采购报关联查、子采购合同下载（由 business 移入） |
 | dao | `document_dao.py` | 单头 + 明细保存规则（子采购单、报关单共用） |
 | | `purchase_order_dao.py`、`customs_declaration_dao.py`、`customs_purchase_link_dao.py` | 各表查询与写入 |
-| | `supplier_dao.py`、`company_dao.py`、`raw_record_dao.py`、`lock_dao.py` | 主数据、原始数据、同步锁 |
+| | `supplier_dao.py`、`company_dao.py`、`parent_order_dao.py`、`raw_record_dao.py` | 主数据、母采购单头、原始数据（同步锁在 `core/named_lock.py`） |
 | entity | 10 个文件，一张表一个 | 与迁移 `0001_baseline`、`0002` 一致（`test_schema_entities.py` 比对） |
 | mapper | `storage_mapper.py` | NS 记录 → 新表行；配置键 → 新列 |
 | | `ns_fields.py` | NS 字段取值、Decimal 安全转换 |
 | policy | `ns_config.py`、`relation_policy.py`、`local_relation_policy.py` | 字段映射配置、v3 完整性规则、本地行定位规则（由 business 移入） |
-| | `content_digest.py`、`names.py` | 内容摘要、名称规范化 |
+| | `content_digest.py`、`currency_policy.py` | 内容摘要、子采购单币种规则（名称规范化在 `core/names.py`） |
 
 ## 保存规则
 
@@ -36,6 +36,19 @@
 - **开票口径**：子采购行 `unit` / `quantity` 取配置键 `unit_name` / `quantity`。按 2026-10-10 的决定，`unit_name` 应映射到 NS `custrecord_swc_subpo_item_unit`（采购单位）；报关单位另存 `declared_unit`。
 - 供应商取子采购单上的 NS 供应商引用；采购公司取 `company_record_type` 记录（身份为 `类型:ID`）；申报主体记录类型未配置，身份前缀为 `declarant:`，与采购公司分开。
 - 原始数据（NS 单据正文、关联依据）存 `source_raw_records`，内容不变不重复保存。
+
+## 子采购单币种（2026-10-15 确认）
+
+2026-10-15 只读核对正式 NS 账户：子采购单（`customrecord_swc_subpo`）没有独立币种、汇率或独立结算字段（`custrecord_swc_subpo_item_ratewithrate` 是含税单价，不是汇率）。
+
+| 情况 | 处理 |
+| --- | --- |
+| 有母采购单（`custrecord_swc_subpo_mainpo`） | 同步时以固定 SuiteQL（`parent_headers`）读取母采购单头，币种取 `purchaseOrder.currency` 的三位代码，汇率 `exchangerate` 保存在 `source_parent_orders.exchange_rate` 作为换算依据；`currency_source = parent_order` |
+| 子采购独立结算或汇率换算 | NS 当前没有对应字段，暂不适用 |
+| 没有母采购单 | 待核实（需从合同或其他结算来源人工核实，人工核实入口尚未实现） |
+| 母采购单未读取到、币种缺失或无法识别为三位代码 | 待核实，原因写入 `currency_issue` |
+
+待核实的子采购行在发票比对中不能通过（保留金额确认限制）。币种参与报关单内容摘要：币种变化后已审核的报关单需重新审核。三位代码取自 NS 币种记录的 `symbol` 字段，部署后请在正式账户只读核对一次。
 
 ## 关联规则
 
@@ -53,6 +66,7 @@
 - `PlScriptQuery`、`PlScriptService`、`SubpoContractSource`。
 - 过渡期导出（仅供旧 business / reconciliation 使用，第 4e 步删除）：`PlReader`、`RelationReader` 等 NS 读取能力。
 - 报关单读取门面（第 4b 步加入，供 review 使用）：`DeclarationService`（索引、分页内容、账户锁 `locked`）、`snapshot`（锁内读取完整内容）、`digest`（重算内容摘要）。
+- 子采购行比对上下文（第 4d 步加入，供 matching 使用）：`purchase_lines(connection, line_ids)`——子采购单号、供应商与采购公司（含规范化名称）、品名、单位、数量金额、币种及来源、是否有效、内容摘要 `digest`（建议生成后来源变化即改变）。
 - 来源目录（第 4c 步加入，供 task 使用）：`SourceDirectory`（`service/directory_service.py`）——按 ID 批量取供应商、采购公司、子采购单号与行品名（含已停用记录，保证历史任务可显示），按名称 / 单号搜索 ID，有效供应商分页。
 
 ## 过渡期

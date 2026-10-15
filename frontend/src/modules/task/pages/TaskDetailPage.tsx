@@ -6,6 +6,7 @@ import { openLocalSession } from "../../identity/api";
 import { getTask, prepareTaskDocument, recordTaskNotification, saveTaskNotification } from "../api/task";
 import { TaskDocuments } from "../components/TaskDocuments";
 import { TaskHistory } from "../components/TaskHistory";
+import { TaskLines } from "../components/TaskLines";
 import { TaskNotification } from "../components/TaskNotification";
 import { sectionLabels, TaskOverview, type Section } from "../components/TaskOverview";
 import type { NotificationDraft, NotificationRecord, TaskDetail } from "../types/task";
@@ -162,12 +163,19 @@ export function TaskDetailPage({ id }: { id: string }) {
           />
         </div>
         {section === "invoices" && (
-          <Placeholder
-            title="等待关联供应商发票"
-            text="收票进度由发票比对结果自动汇总，比对接入后在此展示。"
-          />
+          <div className="itd-content">
+            <h3>收票进度</h3>
+            <p className="it-help">已收数量与含税金额由发票比对中已通过的分配汇总，不能手工修改。</p>
+            <TaskLines lines={detail.lines} />
+          </div>
         )}
-        {section === "comparison" && <Placeholder title="收票后进行比对" text={detail.compare.reason} />}
+        {section === "comparison" && (
+          <div className="itd-content">
+            <h3>发票比对</h3>
+            <p>{detail.compare.reason}</p>
+            <Link to={paths.matching}>前往比对审核队列</Link>
+          </div>
+        )}
         {section === "completion" && (
           <Placeholder
             title={detail.task.status === "completed" ? "任务已完成" : "任务尚未完成"}

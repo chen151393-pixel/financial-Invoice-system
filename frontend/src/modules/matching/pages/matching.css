@@ -1,0 +1,178 @@
+/* 发票比对页面：审核队列与单张发票比对。颜色、间距只用 tokens.css 中的变量。 */
+.matching-page {
+  display: grid;
+  gap: var(--space-control);
+  min-width: 0;
+}
+.matching-panel {
+  display: grid;
+  gap: var(--space-control);
+  padding: 18px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-panel);
+  min-width: 0;
+}
+.matching-heading,
+.matching-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-small) var(--space-control);
+}
+.matching-heading {
+  justify-content: space-between;
+}
+.matching-heading h2,
+.matching-heading h3 {
+  margin: 0;
+  font-size: 16px;
+}
+.matching-help {
+  margin: 0;
+  font-size: 12px;
+  color: var(--color-muted);
+  line-height: 1.7;
+}
+.matching-facts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: var(--space-small) var(--space-control);
+  margin: 0;
+}
+.matching-facts dt {
+  font-size: 12px;
+  color: var(--color-muted);
+}
+.matching-facts dd {
+  margin: 2px 0 0;
+  overflow-wrap: anywhere;
+}
+.matching-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-small);
+}
+.matching-tabs [aria-pressed="true"] {
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+  font-weight: 600;
+}
+.matching-item {
+  display: grid;
+  gap: var(--space-small);
+  padding: var(--space-control) 0;
+  border-top: 1px solid var(--color-border);
+}
+.matching-card {
+  display: grid;
+  gap: var(--space-small);
+  padding: var(--space-control);
+  border: 1px solid var(--color-table-border);
+  border-radius: var(--radius-control);
+  background: var(--color-canvas);
+}
+.matching-card[data-status="confirmed"] {
+  background: var(--color-table-purchase);
+}
+.matching-card[data-status="rejected"],
+.matching-card[data-status="cancelled"] {
+  opacity: 0.75;
+}
+.matching-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--color-table-border);
+  background: var(--color-surface);
+  font-size: 12px;
+  white-space: nowrap;
+}
+.matching-badge[data-tier="high"],
+.matching-ok {
+  color: var(--color-primary);
+}
+.matching-badge[data-tier="low"],
+.matching-warning {
+  color: var(--color-feedback);
+}
+.matching-table-wrap {
+  overflow-x: auto;
+  min-width: 0;
+}
+.matching-table-wrap:focus-visible,
+.matching-page :focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+.matching-table {
+  width: 100%;
+  min-width: 640px;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+.matching-table th,
+.matching-table td {
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--color-table-border);
+  text-align: left;
+  vertical-align: top;
+}
+.matching-table th {
+  background: var(--color-table-heading);
+  font-weight: 600;
+}
+.matching-table small {
+  display: block;
+  color: var(--color-muted);
+}
+.matching-form {
+  display: grid;
+  gap: var(--space-small);
+}
+.matching-form label {
+  display: grid;
+  gap: 4px;
+  font-size: 13px;
+}
+.matching-form input[type="text"],
+.matching-form input:not([type]),
+.matching-form textarea {
+  padding: 8px 10px;
+  border: 1px solid var(--color-input-border);
+  border-radius: var(--radius-control);
+  font: inherit;
+}
+.matching-form .matching-check {
+  display: flex;
+  align-items: center;
+  gap: var(--space-small);
+}
+.matching-reasons {
+  margin: 0;
+  padding-left: 18px;
+  font-size: 12px;
+  color: var(--color-feedback);
+}
+.matching-feedback {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: var(--radius-control);
+  background: var(--color-canvas);
+}
+.matching-feedback[role="alert"] {
+  color: var(--color-feedback);
+}
+.matching-empty {
+  padding: 32px 16px;
+  text-align: center;
+  color: var(--color-muted);
+}
+@media (max-width: 760px) {
+  .matching-panel {
+    padding: var(--space-control);
+  }
+  .matching-heading > * {
+    width: 100%;
+  }
+}

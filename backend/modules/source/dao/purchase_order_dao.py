@@ -94,3 +94,33 @@ def line_names(connection, line_ids):
         purchase_order_lines.c.specification,
     ).where(purchase_order_lines.c.id.in_(line_ids))
     return {row.id: dict(row._mapping) for row in connection.execute(query)}
+
+
+def line_context(connection, line_ids):
+    """子采购行及所属子采购单、供应商、采购公司（发票比对用；含已停用记录，以便判断来源变化）。"""
+    if not line_ids:
+        return []
+    query = (
+        select(
+            purchase_order_lines,
+            purchase_orders.c.order_no,
+            purchase_orders.c.parent_order_no,
+            purchase_orders.c.currency,
+            purchase_orders.c.currency_source,
+            purchase_orders.c.currency_issue,
+            purchase_orders.c.is_active.label("order_active"),
+            suppliers.c.name.label("supplier_name"),
+            suppliers.c.name_normalized.label("supplier_name_normalized"),
+            companies.c.name.label("company_name"),
+            companies.c.name_normalized.label("company_name_normalized"),
+        )
+        .select_from(
+            purchase_order_lines.join(
+                purchase_orders, purchase_orders.c.id == purchase_order_lines.c.purchase_order_id
+            )
+            .outerjoin(suppliers, suppliers.c.id == purchase_orders.c.supplier_id)
+            .outerjoin(companies, companies.c.id == purchase_orders.c.company_id)
+        )
+        .where(purchase_order_lines.c.id.in_(line_ids))
+    )
+    return [dict(row) for row in connection.execute(query).mappings()]

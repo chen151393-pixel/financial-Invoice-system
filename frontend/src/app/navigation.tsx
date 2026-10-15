@@ -28,7 +28,7 @@ export const navigation: readonly SidebarGroup<View>[] = [
       },
       {
         id: "match",
-        label: "自动匹配",
+        label: "发票比对",
         icon: <MenuIcon path="M3 6h5l8 12h5 M17 14l4 4-4 4 M3 18h5l3-4 M14 10l2-4h5 M17 2l4 4-4 4" />,
       },
     ],

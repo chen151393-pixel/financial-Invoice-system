@@ -128,7 +128,7 @@ export function TaskListPage() {
         </label>
       </div>
       <p className="it-help">
-        两种视图展示同一批任务。待开票包含待保存合同、待通知供应商、等待开票及部分收票的任务，待处理可与其重叠；已收票统计在发票比对接入后提供。按完整分组分页。
+        两种视图展示同一批任务。待开票包含待保存合同、待通知供应商、等待开票及部分收票的任务，待处理可与其重叠；收票进度由发票比对通过的分配自动汇总。按完整分组分页。
       </p>
       {state.kind === "loading" && (
         <div className="it-empty" role="status">

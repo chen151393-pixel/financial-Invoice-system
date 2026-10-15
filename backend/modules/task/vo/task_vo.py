@@ -1,4 +1,4 @@
-"""开票跟进响应：金额、数量为十进制字符串；未接入的收票统计为 null，不冒充零。"""
+"""开票跟进响应：金额、数量为十进制字符串。"""
 
 from typing import Literal
 
@@ -32,7 +32,7 @@ class TaskSummary(StrictModel):
 class TaskCounts(StrictModel):
     tasks: int
     awaitingInvoice: int
-    receivedInvoices: int | None = None
+    completed: int
     needsAttention: int
 
 

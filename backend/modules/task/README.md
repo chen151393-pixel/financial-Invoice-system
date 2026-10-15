@@ -8,7 +8,7 @@
 - 合同：从 NS 下载子采购合同并保存到共享盘，数据库只记录路径与 SHA-256。
 - 通知：保存通知版本、登记人工发送（企微自动发送未接入）。
 - 供应商默认企微群配置。
-- 收票进度（已收数量金额、部分收票、完成）由发票比对的 `AllocationChanged` 汇总，**第 4d 步接入**。
+- 收票进度（第 4d 步接入）：订阅 matching 的 `AllocationChanged`，按已通过分配的合计更新任务行已收与任务状态（`service/progress_service.py`）。
 
 ## 拥有的表
 
@@ -47,7 +47,12 @@ documents_pending → notify_pending → awaiting_invoice → partially_received
 任何未完成状态 → superseded
 ```
 
-- 合同全部归档 → `notify_pending`；登记人工发送 → `awaiting_invoice`。`partially_received`、`completed` 由第 4d 步的分配汇总驱动，不提供手动修改。
+- 合同全部归档 → `notify_pending`；登记人工发送 → `awaiting_invoice`。
+- `partially_received`、`completed` 只由已通过分配的汇总驱动，不提供手动修改；发票可能先于合同或通知到达，此时直接进入收票节点。
+- 取消已通过的分配后按实际收票退回：仍有收票 → `partially_received`；没有收票 → 收票前节点（已登记通知 → `awaiting_invoice`；合同已全部归档 → `notify_pending`；否则 `documents_pending`）。
+- 任务行（数据库设计第 6.1 节）：数量相等且金额相差不超过 0.01 元为已收齐；超过应开为超开；人工勾选"已开完"为按差异结束；三者都视为结束（`received`）。
+- 重新审核时，被替代任务行的已收进度带到同一子采购行的新任务行，新任务按进度直接进入相应节点。
+- 详情页六个节点各按自身事实显示（合同是否归档、通知是否登记、是否收票、是否完成），不因任务完成而标记未做的步骤。
 - 每次状态变化写 `task_events`。
 
 **合同**：事务外下载 → 短事务登记首次获取记录（来源与 SHA-256）→ 事务外写共享盘（按首次获取日期建文件夹，北京时间）→ 短事务标记已归档。再次获取到不同内容时拒绝覆盖；共享盘失败记为 `failed` 并可重试。
@@ -60,7 +65,8 @@ documents_pending → notify_pending → awaiting_invoice → partially_received
 
 ## 公开接口与依赖
 
-- 暂无 `public.py`（第 4d 步 matching 需要读取任务行时再加）。
+- `public.py`：`open_lines(connection, purchase_line_ids=None, lock=False)`——有效任务行（应开、已收、单位）及所属任务（供应商、采购公司、币种、报关单）；`lock=True` 时按"任务 → 任务行"顺序加锁，供 matching 审核分配使用。
+- 订阅：`ReviewApproved`（生成任务）、`AllocationChanged`（收票进度），均在 `app.py` 中登记。
 - 读取：`source.public.SourceDirectory`（供应商、采购公司、子采购单号、行品名、供应商分页）。不读取 review；审核数据只经事件取得。
 - 外部适配：`SubpoContractSource`（NS 合同）、`integrations/contract_archive.py`、`integrations/wecom.py`。
 - 订阅关系在 `app.py` 中登记：`events.subscribe(ReviewApproved, on_review_approved)`。

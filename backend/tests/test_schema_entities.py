@@ -17,6 +17,8 @@ MODULES = [
     "backend.modules.source.entity",
     "backend.modules.review.entity",
     "backend.modules.task.entity",
+    "backend.modules.invoice.entity",
+    "backend.modules.matching.entity",
 ]
 
 

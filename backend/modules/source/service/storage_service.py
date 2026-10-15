@@ -4,23 +4,26 @@ from datetime import datetime, timezone
 
 from sqlalchemy.exc import SQLAlchemyError
 
+from backend.core import named_lock
 from backend.core.database import check_business_database
 from backend.core.errors import ApiError
 
 from ..dao import (
     company_dao,
     customs_declaration_dao,
-    lock_dao,
+    parent_order_dao,
     purchase_order_dao,
     raw_record_dao,
     supplier_dao,
 )
 from ..entity import SOURCE_TABLES
-from ..mapper.storage_mapper import map_bundle, validate_storage_config
+from ..mapper.storage_mapper import map_bundle, map_parent, validate_storage_config
+from ..policy.currency_policy import resolve as resolve_currency
 from ..policy.ns_config import parse_config
 from . import link_service
 from .declaration_service import sync_lock_name
 from .ns_reader import PlReader
+from .parent_order_reader import read_parent_orders
 from .relation_matcher import require_relation_interfaces
 from .relation_reader import RelationReader
 
@@ -79,17 +82,18 @@ class StorageService:
         try:
             with self.engine.connect() as connection:
                 with connection.begin():
-                    acquired = lock_dao.acquire(connection, lock)
+                    acquired = named_lock.acquire(connection, lock)
                 if not acquired:
                     raise ApiError(409, "当前账户已有采购报关保存操作，请完成后再试")
                 try:
                     bundle = collect()
                     if read_relations:
                         bundle["relation_evidence"] = RelationReader(self.ns).collect(bundle, match=True)
+                        bundle["parent_orders"] = read_parent_orders(self.ns, bundle)
                     now = datetime.now(timezone.utc).replace(tzinfo=None)
                     documents = map_bundle(bundle, config, now)
                     with connection.begin():
-                        if not lock_dao.owns(connection, lock):
+                        if not named_lock.owns(connection, lock):
                             raise ApiError(409, "同步连接已失去占用，未保存，请重新读取")
                         counts = self._write(connection, account, bundle, documents, now)
                 finally:
@@ -98,7 +102,7 @@ class StorageService:
                         if connection.in_transaction():
                             connection.rollback()
                         with connection.begin():
-                            lock_dao.release(connection, lock)
+                            named_lock.release(connection, lock)
                     except SQLAlchemyError:
                         connection.invalidate()
         except SQLAlchemyError:
@@ -120,7 +124,7 @@ class StorageService:
                 connection, account, document, counts, now
             )
         saved_orders = [
-            self._save_purchase(connection, account, document, counts, now)
+            self._save_purchase(connection, account, document, bundle.get("parent_orders", {}), counts, now)
             for document in documents["purchase"]
         ]
         # 先失效改挂或明细已替换的旧关联，再按本次完整读取重建已同步报关单的关联。
@@ -171,8 +175,27 @@ class StorageService:
         add(counts["customs"], saved)
         return local_id
 
-    def _save_purchase(self, connection, account, document, counts, now):
+    @staticmethod
+    def _currency(connection, account, parent_ns_id, parents, now):
+        """子采购单币种取自母采购单；读取不到或无法识别时待核实（policy/currency_policy.py）。"""
+        header = parents.get(parent_ns_id) if parent_ns_id else None
+        currency, source, issue = resolve_currency(parent_ns_id, header)
+        values = {
+            "currency": currency,
+            "currency_source": source,
+            "currency_issue": issue,
+            "parent_relation_status": "no_parent" if not parent_ns_id else "linked" if header else "unknown",
+            "parent_order_id": None,
+        }
+        if header is not None:
+            values["parent_order_id"] = parent_order_dao.upsert(
+                connection, account, parent_ns_id, map_parent(header, currency), now
+            )
+        return values
+
+    def _save_purchase(self, connection, account, document, parents, counts, now):
         head = dict(document["head"])
+        head.update(self._currency(connection, account, document["parent_ns_id"], parents, now))
         head["supplier_id"] = (
             supplier_dao.upsert(connection, account, document["supplier"], now)
             if document["supplier"]

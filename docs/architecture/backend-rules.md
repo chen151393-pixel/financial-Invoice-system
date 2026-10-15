@@ -39,6 +39,9 @@ backend/
 | `core/dto.py` | `StrictModel`（禁止多余字段、严格类型） | 所有请求 DTO 继承它 |
 | `core/dependencies.py` | `Owner` 当前身份依赖 | 路由取当前身份只用它 |
 | `core/middleware.py` | 请求保护、统一错误响应 | 不在路由里自己捕获异常拼响应 |
+| `core/events.py` | 进程内同步事件总线 `EventBus` | 模块间写入只经事件（第 5.2 节） |
+| `core/named_lock.py` | MySQL 命名锁（SQLite 测试为空操作） | 覆盖"读取外部数据 → 保存"的互斥，如来源同步、发票导入 |
+| `core/names.py` | `normalize_name()` 名称规范化（数据库设计第 5.2 节） | 写入 `*_normalized` 列与比对前统一使用，不在模块里另写一套 |
 | `integrations/netsuite/` | NS 认证与请求 | 不在模块里直接发 NS 请求 |
 | `integrations/lemon/` | 柠檬云 open2 | 同上 |
 | `integrations/wecom.py` | 企微群查询 | 同上 |
@@ -46,7 +49,6 @@ backend/
 
 计划新增的公共能力（实施时再建，不预建）：
 
-- `core/events.py`：进程内同步事件总线（第 5.2 节）。
 - `core/scheduler.py`：定时调用 Service 的运行器（第 9 节）。
 
 ## 4. 模块内部结构

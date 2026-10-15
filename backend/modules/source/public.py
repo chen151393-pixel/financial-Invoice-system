@@ -14,6 +14,7 @@ from .service.declaration_service import DeclarationService, digest, snapshot
 from .service.directory_service import SourceDirectory
 from .service.ns_reader import PlReader
 from .service.pl_comparison_service import PlScriptService
+from .service.purchase_context import purchase_lines
 from .service.relation_matcher import require_relation_interfaces
 from .service.relation_reader import RelationReader
 
@@ -29,6 +30,8 @@ __all__ = [
     "snapshot",
     # 来源目录（task）：供应商、采购公司、子采购单号与行品名的只读查询
     "SourceDirectory",
+    # 子采购行比对上下文（matching）：purchase_lines(connection, line_ids) → {ID: 上下文含 digest}
+    "purchase_lines",
     # 过渡期导出：仅供旧 business / reconciliation 使用，第 4e 步删除
     "PlReader",
     "RelationReader",

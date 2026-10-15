@@ -137,8 +137,16 @@ class TaskService:
                 else prepare_reason or "获取子采购合同并保存到共享盘",
             ),
             notify=notification.send,
-            compare=Capability(reason="发票比对将在下一步接入，收票进度由比对结果自动汇总。"),
-            steps=task_mapper.steps(task["status"], ready, notification.statusLabel),
+            compare=Capability(
+                allowed=not superseded,
+                reason="在发票比对页审核比对建议；通过或取消后自动更新任务行已收与任务状态。",
+            ),
+            steps=task_mapper.steps(
+                task["status"],
+                ready,
+                bool(data["notifications"] and data["notifications"][0]["status"] == "sent"),
+                notification.statusLabel,
+            ),
             documents=documents,
             downloadEnvironment=self.contracts.environment if self.contracts else "",
             notification=notification,

@@ -24,9 +24,9 @@ React + TypeScript + Vite 前端，Python + FastAPI + SQLAlchemy + Alembic 后�
 | `/sync/ns` | NS 分页读取；子采购和报关可补齐来源并保存 | 没有持久定时同步队列；依赖来源接口及字段配置 |
 | `/pl-reconciliation`（默认首页） | 通过 NS 共用脚本实时查询采购报关依据 | 只读对照，页面查询不自动入库或审核 |
 | `/review`（原 `/finance-reconciliation`） | 已同步报关单与关联子采购逐级核对、整单人工审核，冻结子采购行的开票数量、单位与含税金额 | 来源变化后需重新审核 |
-| `/tasks`（原 `/invoice-followup`） | 审核通过自动按供应商×采购公司×币种生成任务、合同共享盘归档、供应商群配置、通知版本和人工发送登记 | 企微自动发送、任务收票与收齐判断未接入（架构第 4d 步） |
-| `/sync/lemon`、`/invoices` | Excel 预览、确认导入、发票查询 | 仅导入“采购固定资产”；柠檬云 API 未接入 |
-| `/matching?invoiceId=本地主键` | 发票与子采购的整票关联或数量分配 | 尚未绑定审核获批范围；确认不写 NS |
+| `/tasks`（原 `/invoice-followup`） | 审核通过自动按供应商×采购公司×币种生成任务、合同共享盘归档、供应商群配置、通知版本和人工发送登记 | 收票进度由发票比对通过的分配自动汇总，完成后任务自动结束；企微自动发送未接入 |
+| `/sync/lemon`、`/invoices` | Excel 预览、确认导入（导入后自动生成比对建议）、发票查询 | 仅导入“采购固定资产”；柠檬云 API 未接入 |
+| `/matching`、`/matching/:invoiceId` | 比对建议审核队列、逐项比对、人工通过 / 驳回 / 取消、人工分配；通过后自动更新任务收票进度 | 子采购币种待核实时不能通过；不写 NS |
 
 审核、匹配、人工通知登记是不同状态。NS 回写（预览、执行、未知结果保护、`recover` 恢复命令）已移至 `archive/writeback` 分支；主线保留 `ns_previews`、`ns_target_locks`、`ns_audit` 的表和数据，不再有代码读写。当前缺口和建议衔接顺序统一维护在[系统链路](docs/system-chain.md)，各模块规则见[文档索引](docs/README.md)。
 

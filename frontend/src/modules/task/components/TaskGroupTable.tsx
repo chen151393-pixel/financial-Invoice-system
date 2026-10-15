@@ -14,8 +14,11 @@ export function TaskCountList({ counts }: { counts: TaskCounts }) {
         </dd>
       </div>
       <div>
-        <dt>已收票</dt>
-        <dd>{counts.receivedInvoices === null ? "未接入" : `${counts.receivedInvoices} 张`}</dd>
+        <dt>已完成</dt>
+        <dd>
+          {counts.completed}
+          <small> 个任务</small>
+        </dd>
       </div>
       <div>
         <dt>待处理</dt>

@@ -36,3 +36,22 @@ def supersede(connection, task_ids, now):
             .where(task_lines.c.task_id.in_(task_ids))
             .values(status="superseded", updated_at=now)
         )
+
+
+def active_by_purchase_lines(connection, purchase_line_ids, *, lock=False):
+    """有效（未被替代）的任务行；lock 时在调用方事务中加锁（加锁顺序：任务之后）。"""
+    if not purchase_line_ids:
+        return []
+    query = (
+        select(task_lines)
+        .where(task_lines.c.active_purchase_line_id.in_(purchase_line_ids))
+        .order_by(task_lines.c.id)
+    )
+    if lock:
+        query = query.with_for_update()
+    return [dict(row) for row in connection.execute(query).mappings()]
+
+
+def update_progress(connection, line_id, values, now):
+    """values：received_quantity、received_amount、status、over_invoiced、closed_with_difference。"""
+    connection.execute(update(task_lines).where(task_lines.c.id == line_id).values(updated_at=now, **values))

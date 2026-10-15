@@ -185,7 +185,7 @@ documents_pending → notify_pending → awaiting_invoice → partially_received
 | 4a source ✅ | 新建 source 模块：NS 读取逻辑由 business 移入；同步保存写入 `source_*` 新表（主数据、明细、关联、依据状态、内容摘要）；采购报关联查改为 `POST /api/source/pl-comparison`；迁移 `0002` 增加 `parent_order_no` | 新表保存与读取测试通过；旧链路不受影响 |
 | 4b review ✅ | 新建 review 模块（审核记录、审核行、`ReviewApproved` 事件）；财务核对页改为 `/review`（旧地址跳转）并使用 `/api/review/*`；同步页保存改走 source 新表 | 新页面审核走新表；task 接入前审核通过暂不生成开票任务 |
 | 4c task ✅ | 新建 task 模块（任务、任务行、合同、通知、供应商群），订阅 `ReviewApproved` 生成任务；开票跟进页改为 `/tasks`（旧地址跳转）并使用 `/api/tasks/*`；source 增加只读门面 `SourceDirectory`；迁移 `0003` 增加任务审核版本与通知发送员工、登记说明 | 审核通过自动生成任务行；收票进度在 4d 接入 |
-| 4d invoice + matching | 原地重建发票与比对（置信度建议、人工通过、`AllocationChanged`）；发票、比对页切换 | 一张报关单从审核走到任务完成，无需手工改状态；MySQL 并发测试通过 |
+| 4d invoice + matching ✅ | 原地重建发票与比对（置信度建议、人工通过、`AllocationChanged`）；发票、比对页切换（`/matching`、`/matching/:invoiceId`）；source 同步读取母采购单头，子采购单币种取自母采购单（迁移 `0004`）；锁与名称规范化移入 `core/` | 一张报关单从审核走到任务完成，无需手工改状态（SQLite 测试与浏览器已验证）；MySQL 并发测试已编写，**待在 MySQL 上执行** |
 | 4e 切换收尾 | 删除 business、reconciliation、audit、旧迁移链、`create_app` 过渡参数、`source.public` 过渡期导出及第 6 节标注"移到第 4 步"的删除项 | 只剩一套实现，全部测试通过 |
 | 5 定时同步 | sync 模块切换新表；NS 报关和子采购定时拉取；柠檬云 open2 定时拉票并生成比对建议 | 无人操作时新报关单、新发票自动进入工作台 |
 | 以后 | 登录与角色、企微自动发送、NS 回写（从分支恢复） | 另行设计 |

@@ -38,6 +38,14 @@ purchase_orders = Table(
     Column("raw_record_id", ID, ForeignKey("source_raw_records.id", name="fk_source_purchase_raw")),
     *timestamps(),
     Column("parent_order_no", String(150), comment="母采购单号（来源文本）"),
+    Column(
+        "currency_source",
+        String(24),
+        nullable=False,
+        server_default="unresolved",
+        comment="币种来源：parent_order / unresolved",
+    ),
+    Column("currency_issue", String(300), comment="币种待核实原因"),
     UniqueConstraint("ns_account", "ns_internal_id", name="uq_source_purchase_ns"),
     Index("ix_source_purchase_no", "ns_account", "order_no"),
     Index("ix_source_purchase_pl", "ns_account", "pl_no"),
@@ -47,6 +55,9 @@ purchase_orders = Table(
     ),
     CheckConstraint(
         "detail_status IN ('pending','complete','failed')", name="ck_source_purchase_detail_status"
+    ),
+    CheckConstraint(
+        "currency_source IN ('parent_order','unresolved')", name="ck_source_purchase_currency_source"
     ),
     comment="子采购单",
     **table_options,

@@ -8,12 +8,12 @@ from contextlib import contextmanager
 
 from sqlalchemy.exc import SQLAlchemyError
 
+from backend.core import named_lock
 from backend.core.errors import ApiError
 
 from ..dao import (
     customs_declaration_dao,
     customs_purchase_link_dao,
-    lock_dao,
     purchase_order_dao,
     raw_record_dao,
 )
@@ -126,7 +126,7 @@ class DeclarationService:
         name = sync_lock_name(self.engine, account)
         with self.engine.connect() as connection:
             with connection.begin():
-                acquired = lock_dao.acquire(connection, name)
+                acquired = named_lock.acquire(connection, name)
             if not acquired:
                 raise ApiError(409, "此账套正在同步，请稍后重试")
             try:
@@ -137,6 +137,6 @@ class DeclarationService:
                     if connection.in_transaction():
                         connection.rollback()
                     with connection.begin():
-                        lock_dao.release(connection, name)
+                        named_lock.release(connection, name)
                 except SQLAlchemyError:
                     connection.invalidate()

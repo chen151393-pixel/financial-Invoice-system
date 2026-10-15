@@ -2,8 +2,9 @@
 
 from sqlalchemy import func, insert, select, update
 
+from backend.core.names import normalize_name
+
 from ..entity import suppliers
-from ..policy.names import normalize_name
 
 
 def upsert(connection, account, party, now):

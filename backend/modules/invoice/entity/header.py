@@ -1,0 +1,57 @@
+"""进项发票票头。"""
+
+from sqlalchemy import (
+    CheckConstraint,
+    Column,
+    Date,
+    ForeignKey,
+    Index,
+    Numeric,
+    String,
+    Table,
+    Text,
+    UniqueConstraint,
+)
+
+from backend.core.schema import ID, TIMESTAMP, schema_metadata, table_options, timestamps
+
+headers = Table(
+    "invoice_headers",
+    schema_metadata,
+    Column("id", ID, primary_key=True, autoincrement=True),
+    Column("source", String(24), nullable=False, comment="最近一次写入来源 lemon_open2 / lemon_excel"),
+    Column("lemon_account", String(100), nullable=False),
+    Column("external_id", String(190), comment="柠檬云 API 记录 ID"),
+    Column("invoice_code", String(50), comment="数电发票为空"),
+    Column("invoice_no", String(100), nullable=False),
+    Column(
+        "invoice_key",
+        String(160),
+        nullable=False,
+        comment="发票代码 + 号码，Excel 与 API 导入共用的去重键",
+    ),
+    Column("invoice_date", Date),
+    Column("invoice_type", String(100)),
+    Column("business_type", String(100), comment="例如：采购固定资产"),
+    Column("status", String(24), nullable=False, server_default="normal"),
+    Column("seller_name", String(255)),
+    Column("seller_name_normalized", String(255)),
+    Column("seller_tax_no", String(100), comment="票面信息，保存备用"),
+    Column("buyer_name", String(255)),
+    Column("buyer_name_normalized", String(255)),
+    Column("buyer_tax_no", String(100)),
+    Column("currency", String(20), nullable=False, server_default="CNY"),
+    Column("amount_excluding_tax", Numeric(18, 2)),
+    Column("tax_amount", Numeric(18, 2)),
+    Column("amount_including_tax", Numeric(18, 2)),
+    Column("remark", Text, comment="备注；比对子采购单号"),
+    Column("raw_record_id", ID, ForeignKey("invoice_raw_records.id", name="fk_invoice_raw")),
+    Column("imported_at", TIMESTAMP, nullable=False),
+    *timestamps(),
+    UniqueConstraint("lemon_account", "invoice_key", name="uq_invoice_key"),
+    Index("ix_invoice_date", "invoice_date"),
+    Index("ix_invoice_seller", "seller_name_normalized"),
+    CheckConstraint("status IN ('normal','red_offset','void','unknown')", name="ck_invoice_status"),
+    comment="进项发票",
+    **table_options,
+)

@@ -163,7 +163,17 @@ def evidence(customs_id="870", status="matched"):
     }
 
 
-def bundle(purchases, declarations, with_evidence=True):
+# 母采购单 PO-100 的单头（SuiteQL parent_headers）：子采购单币种取自这里。
+PARENT = {
+    "id": "100",
+    "tranid": "PO-100",
+    "currencyname": "人民币",
+    "currencysymbol": "CNY",
+    "exchangerate": "1",
+}
+
+
+def bundle(purchases, declarations, with_evidence=True, parents=None):
     return {
         "purchases": purchases,
         "customs": declarations,
@@ -177,6 +187,7 @@ def bundle(purchases, declarations, with_evidence=True):
             ]
             for customs_id, _, _ in declarations
         },
+        "parent_orders": {"100": PARENT} if parents is None else parents,
         "relation_evidence": {customs_id: evidence(customs_id) for customs_id, _, _ in declarations}
         if with_evidence
         else {},
@@ -364,6 +375,9 @@ def test_sync_page_reads_ns_and_relations_then_saves(ns, engine, monkeypatch):
 
     monkeypatch.setattr("backend.modules.source.service.storage_service.PlReader", FakeReader)
     monkeypatch.setattr("backend.modules.source.service.storage_service.RelationReader", FakeRelations)
+    monkeypatch.setattr(
+        "backend.modules.source.service.storage_service.read_parent_orders", lambda ns, data: {"100": PARENT}
+    )
     # 完整同步要求原始报关行与 v3 关联接口均已配置
     for key in ("finance_source_script", "finance_source_deploy", "pl_restlet_script", "pl_restlet_deploy"):
         setattr(ns.settings, key, "configured")
@@ -412,6 +426,9 @@ def test_http_pull_save_uses_source_storage(context, engine, monkeypatch):
 
     monkeypatch.setattr("backend.modules.source.service.storage_service.PlReader", FakeReader)
     monkeypatch.setattr("backend.modules.source.service.storage_service.RelationReader", FakeRelations)
+    monkeypatch.setattr(
+        "backend.modules.source.service.storage_service.read_parent_orders", lambda ns, data: {"100": PARENT}
+    )
     page = {"rows": [{"id": "870"}], "count": 1, "offset": 0, "hasMore": False, "nextOffset": None}
     monkeypatch.setattr(
         "backend.modules.sync.pull_service.PullService.pull", lambda self, kind, request: page
@@ -427,3 +444,42 @@ def test_http_pull_save_uses_source_storage(context, engine, monkeypatch):
     assert response.status_code == 200, response.text
     assert response.json()["storage"]["customs"]["created"] == 1
     assert declaration(engine)["relation_status"] == "complete"
+
+
+def test_currency_inherits_parent_order_and_keeps_exchange_rate(ns, engine):
+    save(ns, engine, bundle([purchase()], [customs()]))
+    order = rows(engine, "SELECT * FROM source_purchase_orders")[0]
+    assert (order["currency"], order["currency_source"], order["currency_issue"]) == (
+        "CNY",
+        "parent_order",
+        None,
+    )
+    assert order["parent_relation_status"] == "linked" and order["parent_order_id"]
+    parent = rows(engine, "SELECT * FROM source_parent_orders")[0]
+    assert (parent["order_no"], parent["currency"], Decimal(str(parent["exchange_rate"]))) == (
+        "PO-100",
+        "CNY",
+        Decimal("1"),
+    )
+
+
+@pytest.mark.parametrize(
+    ("parents", "status", "issue"),
+    [
+        ({}, "unknown", "母采购单未读取到"),
+        ({"100": {**PARENT, "currencysymbol": "", "currencyname": "某币种"}}, "linked", "某币种"),
+    ],
+)
+def test_currency_unresolved_when_parent_missing_or_unknown(ns, engine, parents, status, issue):
+    save(ns, engine, bundle([purchase()], [customs()], parents=parents))
+    order = rows(engine, "SELECT * FROM source_purchase_orders")[0]
+    assert order["currency"] is None and order["currency_source"] == "unresolved"
+    assert order["parent_relation_status"] == status and issue in order["currency_issue"]
+
+
+def test_currency_unresolved_without_parent_order(ns, engine):
+    order_id, head, lines = purchase()
+    head = {**head, "custrecord_swc_subpo_mainpo": None}
+    save(ns, engine, bundle([(order_id, head, lines)], [customs()]))
+    order = rows(engine, "SELECT * FROM source_purchase_orders")[0]
+    assert order["parent_relation_status"] == "no_parent" and "合同" in order["currency_issue"]

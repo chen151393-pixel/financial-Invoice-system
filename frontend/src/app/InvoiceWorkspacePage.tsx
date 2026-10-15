@@ -1,5 +1,5 @@
 import { Link } from "react-router";
-import { InvoiceList } from "../modules/invoice/InvoiceList";
+import { InvoiceListPage } from "../modules/invoice/pages/InvoiceListPage";
 import { AppFrame } from "../shared/components/AppFrame";
 import { navigation } from "./navigation";
 import { paths } from "./paths";
@@ -15,7 +15,7 @@ export default function InvoiceWorkspacePage() {
       title="进项发票"
       subtitle="查询已导入数据库的发票与票面商品明细"
       mode="live"
-      dataLabel="真实数据库 · 当前身份"
+      dataLabel="已导入的进项发票"
       notice={null}
       actions={
         <Link className="ui-button ui-button--primary" to={paths.syncLemon}>
@@ -23,7 +23,7 @@ export default function InvoiceWorkspacePage() {
         </Link>
       }
     >
-      <InvoiceList />
+      <InvoiceListPage />
     </AppFrame>
   );
 }
