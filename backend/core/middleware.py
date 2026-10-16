@@ -140,7 +140,7 @@ def register_error_handlers(app):
     async def validation_error(_request, _error):
         # 错误不回显密码、请求体和私有字段。
         for error in _error.errors():
-            if error["type"] in {"ns_query_scope", "sync_date_range"}:
+            if error["type"] in {"ns_query_scope", "sync_date_range", "lemon_dates"}:
                 # 此专用类型仅由查询DTO生成固定中文说明，不插入用户输入。
                 return JSONResponse({"error": error["msg"]}, status_code=400)
         return JSONResponse({"error": "请求字段缺失、类型错误或包含多余字段"}, status_code=400)

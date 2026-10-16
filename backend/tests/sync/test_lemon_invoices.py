@@ -283,3 +283,10 @@ def test_account_query_uses_authenticated_json_request(setup):
     response = setup.client.post(BASE + "/accounts/query", json={})
     assert response.status_code == 200 and len(response.json()["items"]) == 2
     assert "private" not in response.text
+
+
+def test_invalid_date_range_returns_safe_specific_reason(setup):
+    response = setup.client.post(BASE + "/invoices/pull-save", json=body(endDate="2026-09-01"))
+    assert response.status_code == 400
+    assert "起止日期须按先后顺序填写" in response.json()["error"]
+    assert setup.upstream.pulls == 0
