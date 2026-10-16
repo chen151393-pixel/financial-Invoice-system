@@ -3,7 +3,7 @@
 from backend.core.errors import ApiError
 
 from ..mapper.ns_fields import reference
-from ..mapper.storage_mapper import PARENT_FIELD
+from ..policy.parent_reference_policy import PARENT_FIELD
 
 BATCH = 300
 

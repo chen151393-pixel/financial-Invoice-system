@@ -21,6 +21,7 @@ from ..entity import (
     purchase_orders,
 )
 from ..policy.optional_field_policy import allows_missing
+from ..policy.parent_reference_policy import PARENT_FIELD
 from ..policy.unit_price_policy import normalize as normalize_unit_price
 from .ns_fields import normalize, reference, text
 
@@ -236,10 +237,6 @@ def map_customs(bundle, config, now):
     return documents
 
 
-# 子采购单关联母采购单的字段（币种取自母采购单，见 policy/currency_policy.py）
-PARENT_FIELD = "custrecord_swc_subpo_mainpo"
-
-
 def map_parent(header, currency):
     """母采购单头 → source_parent_orders 列；汇率按列精度校验，不四舍五入。"""
     return {
@@ -288,7 +285,3 @@ def map_purchases(bundle, config, now):
             }
         )
     return documents
-
-
-def map_bundle(bundle, config, now):
-    return {"customs": map_customs(bundle, config, now), "purchase": map_purchases(bundle, config, now)}

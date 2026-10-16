@@ -19,7 +19,8 @@ from ..dao import (
     supplier_dao,
 )
 from ..entity import SOURCE_TABLES
-from ..mapper.storage_mapper import map_bundle, map_parent, validate_storage_config
+from ..mapper.bundle_mapper import map_bundle
+from ..mapper.storage_mapper import map_parent, validate_storage_config
 from ..policy.currency_policy import resolve as resolve_currency
 from ..policy.ns_config import parse_config
 from ..policy.optional_field_policy import warnings as missing_field_warnings
@@ -30,6 +31,7 @@ from . import link_service
 from .declaration_service import sync_lock_name
 from .ns_reader import PlReader
 from .parent_order_reader import read_parent_orders
+from .parent_reference_service import verify_missing_parents
 from .relation_reader import RelationReader
 
 SYNC_KINDS = ("sub-purchase-orders", "customs-declarations")
@@ -114,6 +116,7 @@ class StorageService:
 
     def _save_locked(self, connection, collect, config, account, lock, read_relations, report):
         bundle = collect()
+        bundle["parent_reference_checks"] = verify_missing_parents(self.ns, bundle, config, report)
         if read_relations:
             report("补齐原始行、Packing 和逐行关联依据")
             bundle["relation_evidence"] = RelationReader(self.ns, report).collect(bundle, match=True)

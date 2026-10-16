@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 
 from backend.modules.review.public import ApprovedLine
 
-from ..dao import event_dao, task_dao, task_line_dao
+from ..dao import contract_job_dao, event_dao, task_dao, task_line_dao
 from ..policy.task_policy import group_key
 from .task_status_service import change_status
 
@@ -117,5 +117,8 @@ def _create(connection, event, key, lines, now, predecessors):
             "actor": event.approved_by,
         },
         now,
+    )
+    contract_job_dao.enqueue(
+        connection, task_id, [line.purchase_order_id for line in lines], event.approved_by, now
     )
     return task_id

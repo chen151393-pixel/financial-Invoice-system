@@ -1,5 +1,6 @@
 """应用装配：创建依赖、注册接口、管理生命周期。"""
 
+import asyncio
 from contextlib import asynccontextmanager
 from functools import partial
 
@@ -52,6 +53,7 @@ from .modules.task.controller.external_group_controller import create_router as 
 from .modules.task.controller.supplier_group_controller import create_router as task_group_router
 from .modules.task.controller.task_controller import create_router as task_router
 from .modules.task.service.closure_service import ClosureService
+from .modules.task.service.contract_worker import ContractWorker
 from .modules.task.service.document_service import DocumentService
 from .modules.task.service.external_group_service import ExternalGroupService
 from .modules.task.service.group_import_preview import GroupImportPreview
@@ -84,8 +86,11 @@ def create_app(settings=None, ns=None, engine=None, wecom=None, lemon=None, lemo
     async def lifespan(_app):
         try:
             verify_database(engine)
+            app.state.contract_worker.start()
             yield
         finally:
+            if hasattr(app.state, "contract_worker"):
+                await asyncio.to_thread(app.state.contract_worker.stop)
             if owns_lemon_invoices:
                 lemon_invoices.close()
             if owns_lemon:
@@ -157,6 +162,8 @@ def _register_business(app, settings, ns, contract_ns, wecom, engine, lemon_invo
     )
     archive = ContractArchive(settings.subpo_archive_root)
     task_queries = TaskService(engine, directory, SourceContracts(contract_ns), archive)
+    documents = DocumentService(engine, directory, SourceContracts(contract_ns), archive, task_queries)
+    app.state.contract_worker = ContractWorker(engine, documents)
     app.include_router(
         task_group_router(
             TaskGroupService(engine, directory, wecom), SupplierProfileService(engine, directory)
@@ -165,7 +172,7 @@ def _register_business(app, settings, ns, contract_ns, wecom, engine, lemon_invo
     app.include_router(
         task_router(
             task_queries,
-            DocumentService(engine, directory, SourceContracts(contract_ns), archive, task_queries),
+            documents,
             NotificationService(engine, task_queries),
             ClosureService(engine, task_queries),
         )

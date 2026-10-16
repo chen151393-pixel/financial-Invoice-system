@@ -36,6 +36,7 @@ TABLES = {
     "task_tasks",
     "task_lines",
     "task_documents",
+    "task_contract_jobs",
     "task_notifications",
     "task_events",
     "invoice_raw_records",

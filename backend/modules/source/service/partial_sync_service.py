@@ -77,7 +77,7 @@ class PartialSyncService:
             result.interrupted = True
             return False
         except ApiError as error:
-            result.mark(group, "failed", error.message)
+            result.mark(group, "failed", f"本关联组未保存；{error.message}")
             if error.status not in (404, 422, 502):
                 result.interrupted = True
                 return False

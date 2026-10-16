@@ -12,8 +12,9 @@ from sqlalchemy.exc import SQLAlchemyError
 from backend.core.errors import ApiError
 from backend.core.write_lock import transaction
 
-from ..dao import document_dao, task_dao, task_line_dao
+from ..dao import contract_job_dao, document_dao, task_dao, task_line_dao
 from .basis_guard import require_current
+from .contract_lock import BUSY_REASON, contract_lock
 from .task_status_service import change_status
 
 
@@ -29,8 +30,16 @@ class DocumentService:
     def prepare(self, task_id, order_id, actor):
         if actor.startswith("service:"):
             raise ApiError(403, "服务身份只读，不能获取或保存合同")
+        with contract_lock(self.engine, f"{task_id}:{order_id}") as acquired:
+            if not acquired:
+                raise ApiError(409, BUSY_REASON)
+            return self._prepare(task_id, order_id, actor)
+
+    def _prepare(self, task_id, order_id, actor):
         task, existing = self._check(task_id, order_id)
         if existing and existing["status"] == "archived":
+            with transaction(self.engine) as connection:
+                contract_job_dao.complete(connection, task_id, order_id, _now())
             return self.tasks.detail(task_id)
         names = self.directory.describe(
             supplier_ids=[task["supplier_id"]] if task["supplier_id"] else [], order_ids=[order_id]
@@ -51,7 +60,7 @@ class DocumentService:
         except ApiError as error:
             self._fail(record["id"], error.message)
             raise
-        self._archive(task_id, record["id"], path, filename, actor)
+        self._archive(task_id, record["id"], order_id, path, filename, actor)
         return self.tasks.detail(task_id)
 
     def _check(self, task_id, order_id):
@@ -121,7 +130,7 @@ class DocumentService:
             # 记录失败原因只用于展示；不能掩盖原始的共享盘错误。
             pass
 
-    def _archive(self, task_id, document_id, path, filename, actor):
+    def _archive(self, task_id, document_id, order_id, path, filename, actor):
         try:
             with transaction(self.engine) as connection:
                 require_current(connection, task_id)
@@ -139,6 +148,7 @@ class DocumentService:
                     },
                     now,
                 )
+                contract_job_dao.complete(connection, task_id, order_id, now)
                 require_current(connection, task_id)
                 order_ids = self.tasks.order_ids(task_line_dao.by_tasks(connection, [task_id]))
                 saved = document_dao.by_task(connection, task_id)

@@ -18,6 +18,7 @@ TABLES = ALL_TABLES - {
     "sync_lemon_runs",
     "task_external_groups",
     "task_group_imports",
+    "task_contract_jobs",
 }
 COMMENT_HEAD = "0015_sync_comments"
 

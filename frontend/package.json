@@ -11,7 +11,7 @@
     "preview": "vite preview",
     "lint": "eslint .",
     "typecheck": "tsc -p tsconfig.json",
-    "test": "node --experimental-strip-types --test tests/http.test.mjs tests/sync-range.test.mjs && node --test --test-concurrency=1 tests/pl-comparison.test.mjs tests/lemon-binding.test.mjs tests/lemon-invoices.test.mjs tests/sync-progress.test.mjs tests/supplier-profiles.test.mjs tests/external-groups.test.mjs tests/identity-routing.test.mjs",
+    "test": "node --experimental-strip-types --test tests/dev-config.test.mjs tests/http.test.mjs tests/sync-range.test.mjs && node --test --test-concurrency=1 tests/pl-comparison.test.mjs tests/lemon-binding.test.mjs tests/lemon-invoices.test.mjs tests/sync-progress.test.mjs tests/supplier-profiles.test.mjs tests/external-groups.test.mjs tests/identity-routing.test.mjs",
     "check:architecture": "node scripts/check-architecture.mjs",
     "format": "prettier --write . ../scripts/*.mjs",
     "format:check": "prettier --check . ../scripts/*.mjs"

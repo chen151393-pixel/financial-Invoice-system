@@ -6,7 +6,15 @@ from sqlalchemy.exc import SQLAlchemyError
 
 from backend.core.errors import ApiError
 
-from ..dao import document_dao, event_dao, notification_dao, supplier_group_dao, task_dao, task_line_dao
+from ..dao import (
+    contract_job_dao,
+    document_dao,
+    event_dao,
+    notification_dao,
+    supplier_group_dao,
+    task_dao,
+    task_line_dao,
+)
 from ..mapper import notification_mapper, task_mapper
 from ..policy.task_policy import SUPERSEDED_REASON, missing_identity_reasons
 from ..vo.capability import Capability
@@ -93,6 +101,7 @@ class TaskService:
                     "task": task,
                     "lines": task_line_dao.by_tasks(connection, [task_id]),
                     "documents": document_dao.by_task(connection, task_id),
+                    "contract_jobs": contract_job_dao.by_task(connection, task_id),
                     "notifications": notification_dao.history(connection, task_id),
                     "events": event_dao.by_task(connection, task_id),
                     "binding": supplier_group_dao.by_supplier(connection, task["supplier_id"])
@@ -110,7 +119,9 @@ class TaskService:
         task, lines = data["task"], data["lines"]
         names = self._names([task], lines)
         summary = task_mapper.summary(task, lines, names)
-        documents = self._documents(task, self.order_ids(lines), data["documents"], names)
+        documents = self._documents(
+            task, self.order_ids(lines), data["documents"], names, data["contract_jobs"]
+        )
         ready = bool(documents) and all(doc.status == "ready" for doc in documents)
         binding = data["binding"] if data["binding"] and data["binding"]["enabled"] else None
         group_reason = (
@@ -161,7 +172,7 @@ class TaskService:
             events=task_mapper.events(data["events"]),
         )
 
-    def _documents(self, task, order_ids, rows, names):
+    def _documents(self, task, order_ids, rows, names, jobs):
         saved = {row["purchase_order_id"]: row for row in rows}
         unavailable = (
             SUPERSEDED_REASON
@@ -175,6 +186,7 @@ class TaskService:
         result = []
         for order_id in order_ids:
             row = saved.get(order_id)
+            job = jobs.get(order_id) or {}
             number = names["orders"].get(order_id) or ""
             archived = bool(row and row["status"] == "archived")
             block = unavailable or ("子采购单编号缺失" if not number else "")
@@ -185,7 +197,7 @@ class TaskService:
                     status="ready"
                     if archived
                     else "failed"
-                    if row and row["status"] == "failed"
+                    if (row and row["status"] == "failed") or job.get("status") == "failed"
                     else "pending",
                     environment=row["ns_environment"]
                     if row
@@ -196,7 +208,9 @@ class TaskService:
                     downloadedAt=task_mapper.iso(row["created_at"]) if row else None,
                     archivePath=row["archive_path"] if row else None,
                     archivedAt=task_mapper.iso(row["archived_at"]) if row else None,
-                    error=(row["error_message"] or "") if row else "",
+                    error=""
+                    if archived
+                    else ((row or {}).get("error_message") or job.get("error_message") or ""),
                     prepare=Capability(
                         allowed=not archived and not block,
                         reason="已保存到共享盘" if archived else block or "获取子采购合同并保存到共享盘",

@@ -80,7 +80,6 @@ def load_settings(source=None):
         if source is not None
         else {
             **dotenv_values(ROOT / ".env", interpolate=False),
-            **dotenv_values(ROOT / ".env.local", interpolate=False),
             **os.environ,
         }
     )

@@ -25,7 +25,7 @@ React + TypeScript + Vite 前端，Python + FastAPI + SQLAlchemy + Alembic 后�
 | `/sync/ns` | NS 分页读取；子采购和报关可补齐来源并保存 | 没有持久定时同步队列；依赖来源接口及字段配置 |
 | `/pl-reconciliation`（默认首页） | 通过 NS 共用脚本实时查询采购报关依据 | 只读对照，页面查询不自动入库或审核 |
 | `/review`（原 `/finance-reconciliation`） | 已同步报关单与关联子采购逐级核对、整单人工审核，冻结子采购行的开票数量、单位与含税金额 | 来源变化后需重新审核 |
-| `/tasks`（原 `/invoice-followup`） | 审核通过自动按供应商×采购公司×币种生成任务、合同共享盘归档、供应商群配置、通知版本和人工发送登记 | 收票进度由发票比对通过的分配自动汇总，完成后任务自动结束；企微自动发送未接入 |
+| `/tasks`（原 `/invoice-followup`） | 审核通过自动按供应商×采购公司×币种生成任务、审核后自动下载合同并归档到共享盘、供应商群配置、通知版本和人工发送登记 | 收票进度由发票比对通过的分配自动汇总，完成后任务自动结束；企微自动发送未接入 |
 | `/suppliers`、`/suppliers/external-groups` | 供应商档案、七列外部群 Excel 导入预览、确认绑定及后续人工关联 | 群资料来自文件或企微查询；导入文件不代表实时核验，不发送通知 |
 | `/sync/lemon`、`/invoices` | Excel 预览/确认导入、API 手动拉票、发票查询 | 仅新增“采购固定资产”；已支持[账号绑定](docs/lemon-account-binding.md)与[选账套拉票](docs/lemon-invoice-sync-plan.md)，API 明细待补齐，完整明细才生成建议 |
 | `/matching`、`/matching/:invoiceId` | 比对建议审核队列、逐项比对、人工通过 / 驳回 / 取消、人工分配、版本复核与原子替换；通过后自动更新任务收票进度 | 子采购币种待核实时不能通过；不写 NS |
@@ -74,9 +74,11 @@ npm.cmd start
 
 Windows 下 Python 自动重载已关闭：当前 Uvicorn 重载会发送控制台 Ctrl+C，可能使 npm/Vite 一起退出。修改后端代码后手动重启；前端样式和组件仍可热更新。联动启动中一端异常退出会报告服务名和退出码，另一端继续运行；主动 Ctrl+C 才同时停止两端。
 
-开发时运行 `npm.cmd run dev`，同时启动前端与 Python 后端。启动器和 Vite 统一读取根目录配置，优先级为进程环境变量 > `.env.local` > `.env` > 默认值。`PORT` 是后端端口（未配置时 3333），`WEB_PORT` 是前端端口（未配置时 5173）。例如在已有 `.env.local` 中设置：
+开发时运行 `npm.cmd run dev`，同时启动前端与 Python 后端。启动器和 Vite 统一读取根目录配置，优先级为进程环境变量 > `.env` > 默认值；不再加载 `.env.local` 或其他模式环境文件。`PORT` 是后端端口（未配置时 3333），`WEB_PORT` 是前端端口（未配置时 5173）。例如在已有 `.env` 中设置：
 
 ```dotenv
 PORT=5174
 WEB_PORT=5173
 ```
+
+合同自动归档需先执行 `npm.cmd run db:upgrade` 升级至 `0021_task_contract_jobs`，再重启后端。新审核生成的任务自动进入持久队列；失败原因在开票资料中展示，可点击“保存到共享盘”重试。升级前已有任务不批量补下载，可在原任务页手动保存。Windows 直接运行必须将 `.env` 的 `NETSUITE_SUBPO_ARCHIVE_ROOT` 设置为实际可写的绝对目录或 UNC 路径；`/mnt/invoice-contracts` 仅适用于已挂载共享盘的 Linux 环境。

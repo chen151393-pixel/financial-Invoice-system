@@ -183,7 +183,7 @@ docker compose up -d app
 docker compose exec app sh -c 'cd /mnt/invoice-contracts && echo t > .probe && ls -l .probe && rm -f .probe'
 ```
 
-最后在任务详情点击“保存到共享盘”，确认 NAS 对应目录下出现 `下载日期/子采购单号+供应商.pdf`。该操作会只读调用 NS 获取合同，不写入 NS。
+升级至 `0021_task_contract_jobs` 并重启后，新财务审核生成的任务会自动下载归档；历史任务或自动归档失败时，在任务详情点击“保存到共享盘”重试，确认 NAS 对应目录下出现 `下载日期/子采购单号+供应商.pdf`。该操作会只读调用 NS 获取合同，不写入 NS。
 
 ### 验证状态与排查
 

@@ -975,3 +975,19 @@ MySQL 上另验证迁移升级、生成列唯一约束、两票争同一子采�
 开始请求时锁绑定行，检查同请求和未结束请求后持久写 running；外部 HTTP 在事务外执行。发票写入复用现有账本锁及 invoice 版本事件，完成回执与所有发票数据在同一事务提交。数据库结果不确定或重启保留 running，禁止自动复位。记录为持久审计依据，迁移 downgrade 拒绝删除。
 
 API 发票使用 `source=lemon_open2`，`lemon_account=open2:` 加 `SHA256(host|asid)`，`external_id=InvoiceId`；复用 invoice 现有票头、原始数据、不可变版本表，不另建平行发票表。无商品明细则完整性为 pending。Excel 固定命名空间尚未与真实 API 账套对齐，两个入口遇同代码/号码均拒绝跨渠道重复。接口及异常处置详见[接入说明](../lemon-invoice-sync-plan.md)。
+
+## 合同自动归档队列（0021，2026-10-16）
+
+新增 `task_contract_jobs`，归属 task 模块；审核生成新任务的事务中登记，不回填历史任务，不删除旧表数据。
+
+| 字段 | 类型 | 说明 |
+| --- | --- | --- |
+| id | BIGINT UNSIGNED | 自增主键 |
+| task_id | BIGINT UNSIGNED | 本模块 task_tasks 外键 |
+| purchase_order_id | BIGINT UNSIGNED | source 子采购单 ID，无跨模块外键 |
+| actor | VARCHAR(190) | 财务审核认证身份 |
+| status | VARCHAR(20) | pending / completed / failed |
+| error_message | VARCHAR(500) | 脱敏失败原因；完成后清空 |
+| created_at / updated_at | DATETIME(6) | UTC 时间 |
+
+唯一约束 `(task_id, purchase_order_id)`；检查约束限制状态；索引 `(status, id)` 支持有界消费。后台只处理已提交 pending，失败供人工重试；归档成功与作业完成在同一短事务更新。只读下载中断后允许继续，已有 PDF 通过原合同摘要保护避免覆盖。MySQL 消费者和单合同命名锁均不持有下载期间的数据库事务。详见 [task 模块](../../backend/modules/task/README.md#审核后自动归档2026-10-16)。

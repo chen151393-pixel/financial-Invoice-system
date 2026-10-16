@@ -17,6 +17,7 @@
 | --- | --- | --- |
 | controller | `pl_comparison_controller.py` | 采购报关联查接口 |
 | service | `storage_service.py` | 同步保存编排：账户锁、读取 NS、映射、写入 |
+| | `parent_reference_service.py` | 事务外核实 REST 缺失的母单引用，保留独立查询证据 |
 | | `link_service.py` | 保存后维护关联、依据状态、内容摘要；标记受影响但未同步的报关单 |
 | | `declaration_service.py` | 报关单完整内容读取、分页、审核用账户锁 |
 | | `ns_reader.py`、`relation_reader.py`、`relation_matcher.py` | 读取 NS 记录、关联依据、v3 整单关联（由 business 移入） |
@@ -25,7 +26,7 @@
 | | `purchase_order_dao.py`、`customs_declaration_dao.py`、`customs_purchase_link_dao.py` | 各表查询与写入 |
 | | `supplier_dao.py`、`company_dao.py`、`parent_order_dao.py`、`raw_record_dao.py` | 主数据、母采购单头、原始数据（同步锁在 `core/named_lock.py`） |
 | entity | 10 个文件，一张表一个 | 与迁移 `0001_baseline`、`0002` 一致（`test_schema_entities.py` 比对） |
-| mapper | `storage_mapper.py` | NS 记录 → 新表行；配置键 → 新列 |
+| mapper | `storage_mapper.py`、`bundle_mapper.py` | NS 记录 → 新表行；配置键 → 新列；逐单错误定位和原始证据保留 |
 | | `ns_fields.py` | NS 字段取值、Decimal 安全转换 |
 | policy | `ns_config.py`、`relation_policy.py`、`local_relation_policy.py` | 字段映射配置、v3 完整性规则、本地行定位规则（由 business 移入） |
 | | `content_digest.py`、`currency_policy.py` | 内容摘要、子采购单币种规则（名称规范化在 `core/names.py`） |
@@ -34,7 +35,7 @@
 
 - 按 NS 账套 + NS 内部 ID 识别单据；来源修改时间早于已保存版本、或记录类型变化时拒绝覆盖，整页回滚。
 - 明细按稳定行键（`<NS 行记录类型>:<行 ID>`）更新；本次未返回的明细置为无效，不删除。
-- 字段映射沿用服务器配置 `NETSUITE_PL_LOOKUP` 的 `storage_fields` 键名，对应新表列见 `mapper/storage_mapper.py` 的 `FIELDS`；默认缺字段、超长、精度不符时拒绝整页；规格型号缺失及单价展示精度例外见下节。
+- 字段映射沿用服务器配置 `NETSUITE_PL_LOOKUP` 的 `storage_fields` 键名，对应新表列见 `mapper/storage_mapper.py` 的 `FIELDS`；默认缺字段、超长、精度不符时拒绝整页；规格型号缺失、已核实无母单及单价展示精度例外见对应章节。
 - **开票口径**：子采购行 `unit` / `quantity` 取配置键 `unit_name` / `quantity`。按 2026-10-10 的决定，`unit_name` 应映射到 NS `custrecord_swc_subpo_item_unit`（采购单位）；报关单位另存 `declared_unit`。
 - 供应商取子采购单上的 NS 供应商引用；采购公司取 `company_record_type` 记录（身份为 `类型:ID`）；申报主体记录类型未配置，身份前缀为 `declarant:`，与采购公司分开。
 - 原始数据（NS 单据正文、关联依据）存 `source_raw_records`，内容不变不重复保存。
@@ -134,3 +135,16 @@
 此规则只用于这两类来源明细的单价：数量、行金额、单据总额、母单汇率和币种沿用原值及原有严格校验，不用处理后的单价乘数量反算金额。格式错误、非有限数值、浮点输入、整数位溢出（包括四舍五入进位后溢出）仍失败，不填零或截断。整页保存与逐关联组保存复用同一映射，无数据库迁移，无 NS 写入。
 
 审核摘要仍基于本地展示值；原始单价更精细的变化另存原始快照版本。重复相同来源不重复创建任务；本地单价或金额等有效依据变化仍走原有审核失效机制，已冻结任务金额不会被来源同步重算。`test_source_unit_price.py` 覆盖边界值、原值留存、金额数量校验，以及两种入口、两种保存模式下同步→审核→任务与重复同步；使用隔离 SQLite 和合成 NS 数据，不能代替 MySQL 并发或真实 NS 联调。
+
+
+## 缺失母单引用核实与错误定位（2026-10-16）
+
+对子采购类型 `customrecord_swc_subpo` 的既有映射 `parent_order_no → custrecord_swc_subpo_mainpo`，REST 响应缺少字段时，`parent_reference_service.py` 在事务外通过固定 SuiteQL `purchase_parent_links` 查询该单据的母单引用及显式空值状态。每次最多查询 300 个内部 ID，超出继续分批，没有累计数量上限；已返回母单字段的记录不增加查询。
+
+仅查询返回当前单据且明确确认母单为空，才允许基础数据保存：`parent_relation_status = no_parent`、`currency_source = unresolved`、币种为 NULL，页面沿用“待核实”展示。原始 REST 快照仍保留字段缺失，独立查询证据存入 `parentReferenceCheck`；数量、行金额和总额保留 NS 原值，不填默认币种、不换汇、不反算金额。缺少记录、身份重复或越界、查询失败或两次读取矛盾均保持失败，不能当作无母单；其他字段映射错误不放行。
+
+审核沿用既有规则，可保留待核实币种或由财务提供合同等依据人工核实，人工币种不回写 source；未核实币种仍不能确认发票匹配。同一报关单关联组的原子性不变，真实无母单不再阻断该组的基础保存。`mapper/bundle_mapper.py` 对字段映射错误补充实际出错单据的单号与内部编号，逐单结果明确“本关联组未保存”，避免把关联子单错误误认为入口单据自身错误。
+
+验证由 `test_source_parent_reference.py` 覆盖两类入口与两种保存模式、独立核实失败时旧数据保留、超过 300 条分批、原始金额与证据留存、人工币种及重复同步、同组无母单和实际错误单号。使用隔离 SQLite 与合成 NS 数据；没有数据库结构变更或 NS 写入。
+
+2026-10-16 使用修复后的服务只读复核正式 NS：2226、2246、2251、2266 均明确无母单；2235 仍关联母单 371689。此联调未修改 NS 或本地业务数据，实际入库行为由上述隔离测试验证。

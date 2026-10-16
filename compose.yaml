@@ -2,7 +2,7 @@ services:
   app:
     build: .
     network_mode: host
-    # 部署只加载 .env；.env.local 仅供本机直接运行后端时覆盖使用。
+    # 本机与部署统一只加载 .env，进程环境变量可覆盖。
     env_file:
       - path: .env
         required: false

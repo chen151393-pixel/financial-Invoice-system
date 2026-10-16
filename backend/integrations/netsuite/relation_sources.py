@@ -9,6 +9,12 @@ import httpx
 from backend.core.errors import ApiError
 
 QUERIES = {
+    # REST 省略空引用时，显式查询空值状态，不能把字段不可读当成无母单。
+    "purchase_parent_links": (
+        "SELECT id,custrecord_swc_subpo_mainpo AS parent_id,"
+        "CASE WHEN custrecord_swc_subpo_mainpo IS NULL THEN 'empty' ELSE 'present' END AS parent_state "
+        "FROM customrecord_swc_subpo WHERE id IN ({ids}) ORDER BY id"
+    ),
     "packing_by_customs": (
         "SELECT * FROM customrecord_swc_packinglist WHERE custrecord_swc_declare_record IN ({ids}) ORDER BY id"
     ),

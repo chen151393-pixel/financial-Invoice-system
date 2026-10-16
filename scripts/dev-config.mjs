@@ -5,7 +5,7 @@ import { parseEnv } from "node:util";
 // 仅在启动进程中读取配置，不向浏览器注入根目录中的凭证。
 export function readDevConfig(root, environment = process.env) {
   let values = {};
-  for (const name of [".env", ".env.local"]) {
+  for (const name of [".env"]) {
     try {
       values = { ...values, ...parseEnv(readFileSync(resolve(root, name), "utf8")) };
     } catch (error) {
