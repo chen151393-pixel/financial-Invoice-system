@@ -17,3 +17,16 @@ class InvoicesImported:
 
 
 __all__ = ["InvoicesImported", "lock_invoice", "read_invoices"]
+
+
+@dataclass(frozen=True)
+class InvoiceChanging:
+    invoice_ids: tuple[int, ...]
+
+
+@dataclass(frozen=True)
+class InvoiceChanged:
+    invoice_id: int
+    previous_version_id: int
+    version_id: int
+    status: str

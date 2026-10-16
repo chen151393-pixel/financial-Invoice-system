@@ -36,12 +36,19 @@ def make_engine(database_url):
 
 
 BUSINESS_TABLES = (
-    "purchase_orders",
-    "purchase_order_lines",
-    "customs_declarations",
-    "customs_declaration_lines",
-    "invoices",
-    "invoice_lines",
+    "schema_version",
+    "source_purchase_orders",
+    "source_purchase_order_lines",
+    "source_customs_declarations",
+    "source_customs_lines",
+    "review_records",
+    "review_purchase_bases",
+    "task_tasks",
+    "task_lines",
+    "invoice_headers",
+    "invoice_items",
+    "invoice_versions",
+    "matching_allocations",
 )
 
 
@@ -99,9 +106,8 @@ def make_business_engine(database_url):
 def check_business_database(engine, tables=BUSINESS_TABLES):
     """只检查可连接及所需表可见；不读取业务数据、不声明写入权限已验证。
 
-    默认检查旧六表；新链路（source 等）传入自己的表名，过渡期结束后旧默认值随旧模块删除。
+    默认检查新业务链的关键表；调用方可限定连接检查范围。
     """
-    legacy = tuple(tables) == BUSINESS_TABLES
     result = {
         "configured": engine is not None,
         "connected": False,
@@ -121,15 +127,9 @@ def check_business_database(engine, tables=BUSINESS_TABLES):
             "connected": True,
             "ready": not missing,
             "state": "schema_incomplete" if missing else "connected",
-            "message": (
-                ("业务库缺少基础表，请核对六表建库SQL" if legacy else "业务库缺少新表，请执行数据库迁移")
-                if missing
-                else (
-                    "MySQL连接成功，六张业务表可见；本次连接检查不写入数据"
-                    if legacy
-                    else "MySQL连接成功，所需业务表可见；本次连接检查不写入数据"
-                )
-            ),
+            "message": "业务库缺少新表，请执行数据库迁移"
+            if missing
+            else "MySQL连接成功，所需业务表可见；本次检查不写入数据",
             "missingTables": missing,
         }
     except SQLAlchemyError as error:
@@ -138,7 +138,7 @@ def check_business_database(engine, tables=BUSINESS_TABLES):
         message = {
             1045: "MySQL认证失败，请检查业务库用户名和密码",
             1044: "MySQL账户无权访问业务库，请检查授权",
-            1049: "业务数据库不存在，请先执行六表建库SQL",
+            1049: "业务数据库不存在，请先创建空数据库并执行迁移",
             2003: "无法连接MySQL，请检查服务、地址和端口",
         }.get(code, "MySQL连接或表检查失败，请检查业务库配置与权限")
         return {**result, "state": "connection_failed", "message": message}

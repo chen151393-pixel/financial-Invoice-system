@@ -137,7 +137,8 @@
 }
 .matching-form input[type="text"],
 .matching-form input:not([type]),
-.matching-form textarea {
+.matching-form textarea,
+.matching-form select {
   padding: 8px 10px;
   border: 1px solid var(--color-input-border);
   border-radius: var(--radius-control);
@@ -175,4 +176,11 @@
   .matching-heading > * {
     width: 100%;
   }
+}
+
+fieldset.matching-form {
+  min-width: 0;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-control);
+  padding: var(--space-control);
 }

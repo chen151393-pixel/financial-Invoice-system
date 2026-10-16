@@ -8,7 +8,7 @@ from contextlib import contextmanager
 
 from sqlalchemy.exc import SQLAlchemyError
 
-from backend.core import named_lock
+from backend.core import write_lock
 from backend.core.errors import ApiError
 
 from ..dao import (
@@ -123,20 +123,8 @@ class DeclarationService:
         产出的 connection 供调用方在同一事务中读取来源（snapshot）并写入自己的表。
         """
         self._require_engine()
-        name = sync_lock_name(self.engine, account)
-        with self.engine.connect() as connection:
-            with connection.begin():
-                acquired = named_lock.acquire(connection, name)
-            if not acquired:
-                raise ApiError(409, "此账套正在同步，请稍后重试")
-            try:
-                with connection.begin():
-                    yield connection
-            finally:
-                try:
-                    if connection.in_transaction():
-                        connection.rollback()
-                    with connection.begin():
-                        named_lock.release(connection, name)
-                except SQLAlchemyError:
-                    connection.invalidate()
+        with (
+            write_lock.locked(self.engine, sync_lock_name(self.engine, account)) as connection,
+            connection.begin(),
+        ):
+            yield connection

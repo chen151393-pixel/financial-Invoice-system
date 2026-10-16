@@ -1,9 +1,10 @@
 // 全部页面路径集中在此；页面和模块之间跳转只用这里的常量。
 export const paths = {
+  login: "/login",
   pl: "/pl-reconciliation",
   review: "/review",
   tasks: "/tasks",
-  supplierGroups: "/tasks/supplier-groups",
+  supplierGroups: "/suppliers",
   invoices: "/invoices",
   matching: "/matching",
   sync: "/sync",
@@ -16,6 +17,7 @@ export const legacyPaths = {
   finance: "/finance-reconciliation",
   invoiceFollowup: "/invoice-followup",
   supplierGroups: "/invoice-followup/supplier-groups",
+  taskSupplierGroups: "/tasks/supplier-groups",
 } as const;
 
 export const taskPath = (id: string) => `${paths.tasks}/${encodeURIComponent(id)}`;
@@ -23,7 +25,14 @@ export const matchingInvoicePath = (invoiceId: string) =>
   `${paths.matching}/${encodeURIComponent(invoiceId)}`;
 
 // 侧栏菜单项与页面路径的对应。
-export type View = "invoices" | "match" | "sync" | "pl" | "finance" | "invoice-followup";
+export type View =
+  | "invoices"
+  | "match"
+  | "sync"
+  | "pl"
+  | "finance"
+  | "invoice-followup"
+  | "supplier-profiles";
 
 const viewPaths: Record<View, string> = {
   invoices: paths.invoices,
@@ -32,6 +41,7 @@ const viewPaths: Record<View, string> = {
   pl: paths.pl,
   finance: paths.review,
   "invoice-followup": paths.tasks,
+  "supplier-profiles": paths.supplierGroups,
 };
 
 export function viewPath(view: View): string {

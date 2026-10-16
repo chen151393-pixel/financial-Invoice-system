@@ -19,7 +19,7 @@ class ImportRow(StrictModel):
     status: str
     amount: str
     lineCount: int
-    action: Literal["new", "unchanged", "conflict"]
+    action: Literal["new", "updated", "unchanged", "conflict"]
 
 
 class ImportResult(StrictModel):
@@ -29,6 +29,7 @@ class ImportResult(StrictModel):
     excludedCount: int
     businessType: str
     lineCount: int
+    updated: int = 0
     created: int
     unchanged: int
     conflicts: int

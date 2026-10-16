@@ -64,6 +64,7 @@ export type ImportResult = {
   businessType: string;
   lineCount: number;
   created: number;
+  updated: number;
   unchanged: number;
   conflicts: number;
   amount: string;
@@ -81,6 +82,6 @@ export type ImportResult = {
     status: string;
     amount: string;
     lineCount: number;
-    action: "new" | "unchanged" | "conflict";
+    action: "new" | "updated" | "unchanged" | "conflict";
   }[];
 };

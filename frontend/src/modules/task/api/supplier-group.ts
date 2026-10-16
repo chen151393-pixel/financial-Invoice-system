@@ -1,23 +1,19 @@
 import { http } from "../../../shared/api/http";
 import type {
   GroupBinding,
-  GroupList,
-  GroupPage,
-  GroupQuery,
   GroupSave,
-  SupplierOption,
+  SupplierProfileList,
+  SupplierProfileQuery,
+  SupplierGroupMatchQuery,
   WecomGroupPage,
-  WecomGroupQuery,
 } from "../types/supplier-group";
 
 const root = "/tasks/supplier-groups";
 
-export const querySupplierGroups = (query: GroupQuery) => http<GroupList>(`${root}/query`, "POST", query);
-
-export const querySuppliers = (keyword: string, page: number) =>
-  http<GroupPage<SupplierOption>>(`${root}/suppliers/query`, "POST", { keyword, page });
-
 export const saveSupplierGroup = (value: GroupSave) => http<GroupBinding>(`${root}/save`, "POST", value);
 
-export const queryWecomGroups = (query: WecomGroupQuery) =>
-  http<WecomGroupPage>(`${root}/wecom/query`, "POST", query);
+export const matchWecomGroups = (query: SupplierGroupMatchQuery) =>
+  http<WecomGroupPage>(`${root}/wecom/match`, "POST", query);
+
+export const querySupplierProfiles = (query: SupplierProfileQuery) =>
+  http<SupplierProfileList>(`${root}/profiles/query`, "POST", query);

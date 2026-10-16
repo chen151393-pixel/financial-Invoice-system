@@ -46,7 +46,7 @@ def test_unconfigured_password_does_not_allow_login(client, context, password):
         headers={"Origin": context.settings.origin},
         json={"username": "admin", "password": password},
     )
-    assert response.status_code == 503
+    assert response.status_code == (400 if not password else 503)
     assert "set-cookie" not in response.headers
     assert client.get("/api/ns/status").status_code == 401
 

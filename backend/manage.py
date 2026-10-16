@@ -1,10 +1,4 @@
-"""数据库部署与版本核验；正常启动不执行迁移。
-
-迁移分两部分：
-- 新迁移链 `backend/migrations`（版本表 `schema_version`）：按 docs/architecture/database.md 建立的新表结构。
-- 旧迁移链 `backend/legacy_migrations`（版本表 `alembic_version`、`business_alembic_version`）：
-  旧模块在架构第 4 步重建前仍在使用，随各模块切换删除。
-"""
+"""新表迁移与启动核验；只操作 schema_version 迁移链，不修改旧表。"""
 
 import argparse
 import json
@@ -17,11 +11,8 @@ from sqlalchemy.exc import SQLAlchemyError
 
 from .core.config import ROOT, load_settings
 from .core.database import check_business_database, make_business_engine
-from .legacy_migrations.bootstrap import bootstrap_application_tables
 
 SCHEMA_INI = ROOT / "backend" / "alembic.ini"
-LEGACY_APP_INI = ROOT / "backend" / "legacy_migrations" / "app.ini"
-LEGACY_BUSINESS_INI = ROOT / "backend" / "legacy_migrations" / "business.ini"
 OFFLINE_MYSQL_URL = "mysql+pymysql://unused@localhost/unused?charset=utf8mb4"
 
 
@@ -35,11 +26,6 @@ def _head(path):
     return ScriptDirectory.from_config(Config(str(path))).get_current_head()
 
 
-def migration_head():
-    """旧应用迁移链的最新版本（旧测试与旧启动核验使用）。"""
-    return _head(LEGACY_APP_INI)
-
-
 def schema_head():
     return _head(SCHEMA_INI)
 
@@ -50,22 +36,11 @@ def _version(connection, table):
     return connection.execute(text(f"SELECT version_num FROM {table}")).scalar()
 
 
-def verify_database(engine, *, business=False):
-    """启动时只核对迁移版本，不修改表或任务状态。"""
+def verify_database(engine):
+    """启动只核验版本；不自动建表、清除状态或释放业务锁。"""
     with engine.connect() as connection:
-        version = _version(connection, "alembic_version")
-        if version is None:
-            raise RuntimeError("请先运行 python -m backend.manage upgrade 初始化数据库")
-        if version != migration_head():
+        if _version(connection, "schema_version") != schema_head():
             raise RuntimeError("数据库版本不匹配，请运行 python -m backend.manage upgrade")
-        if business:
-            version = _version(connection, "business_alembic_version")
-            if version is None:
-                raise RuntimeError("业务迁移版本缺失，请运行 python -m backend.manage upgrade")
-            if version != _head(LEGACY_BUSINESS_INI):
-                raise RuntimeError("业务迁移版本不匹配，请运行 python -m backend.manage upgrade")
-            if _version(connection, "schema_version") != schema_head():
-                raise RuntimeError("新表结构版本不匹配，请运行 python -m backend.manage upgrade")
 
 
 def upgrade_schema(database_url, sql=False):
@@ -75,32 +50,14 @@ def upgrade_schema(database_url, sql=False):
     command.upgrade(_config(SCHEMA_INI, database_url), "head", sql=sql)
 
 
-def upgrade(database_url, sql=False):
-    """旧应用迁移链；隔离测试与旧模块使用。"""
-    command.upgrade(_config(LEGACY_APP_INI, database_url), "head", sql=sql)
-
-
-def upgrade_business(database_url, sql=False):
-    """旧业务迁移链；历史版本不重写。"""
-    if not database_url:
-        raise ValueError("尚未配置业务MySQL，不能执行迁移")
-    command.upgrade(_config(LEGACY_BUSINESS_INI, database_url), "head", sql=sql)
-
-
 def upgrade_unified(database_url):
-    """同一业务库：先升级两条旧迁移链（旧模块仍在使用），再升级新迁移链。"""
     engine = make_business_engine(database_url)
     if engine is None:
-        raise ValueError("请先配置业务MySQL，统一升级不使用旧DATABASE_URL")
+        raise ValueError("请先配置业务 MySQL")
     try:
-        result = check_business_database(engine)
-        if not result["ready"]:
+        result = check_business_database(engine, tables=())
+        if not result["connected"]:
             raise RuntimeError(result["message"])
-        upgrade_business(database_url)
-        if bootstrap_application_tables(engine):
-            command.stamp(_config(LEGACY_APP_INI, database_url), "head")
-        else:
-            upgrade(database_url)
         upgrade_schema(database_url)
     finally:
         engine.dispose()
@@ -110,23 +67,38 @@ def main():
     parser = argparse.ArgumentParser(description="业务库迁移与版本核验")
     parser.add_argument(
         "command",
-        choices=["upgrade", "schema-sql", "mysql-sql", "business-check", "business-upgrade", "business-sql"],
-        help="upgrade：升级全部迁移链；schema-sql：输出新表结构的 MySQL DDL 供审阅",
+        choices=[
+            "upgrade",
+            "schema-sql",
+            "mysql-sql",
+            "business-check",
+            "business-upgrade",
+            "business-sql",
+            "rebuild-ledger",
+        ],
+        help="upgrade：升级新迁移链；schema-sql：仅输出结构 DDL 供审阅，不能代替在线数据升级",
     )
     args = parser.parse_args()
-    if args.command == "schema-sql":
+    if args.command in ("schema-sql", "mysql-sql", "business-sql"):
         upgrade_schema(OFFLINE_MYSQL_URL, sql=True)
         return
-    if args.command == "mysql-sql":
-        upgrade(OFFLINE_MYSQL_URL, sql=True)
-        return
-    if args.command == "business-sql":
-        upgrade_business(OFFLINE_MYSQL_URL, sql=True)
-        return
     settings = load_settings()
+    if args.command == "rebuild-ledger":
+        from .app import create_events
+        from .modules.matching.service.rebuild_service import rebuild
+
+        engine = make_business_engine(settings.business_database_url)
+        if engine is None:
+            raise ValueError("请先配置业务 MySQL")
+        try:
+            verify_database(engine)
+            print(f"已从持久台账核对 {rebuild(engine, create_events())} 条有效任务行；没有自动核实待复核占用")
+        finally:
+            engine.dispose()
+        return
     if args.command in ("upgrade", "business-upgrade"):
         upgrade_unified(settings.business_database_url)
-        print("业务库全部迁移链升级完成，未拉取或写回NS")
+        print("业务库新迁移链升级完成，未拉取或写回NS")
         return
     if args.command == "business-check":
         engine = make_business_engine(settings.business_database_url)

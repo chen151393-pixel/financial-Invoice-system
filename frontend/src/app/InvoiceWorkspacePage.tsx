@@ -1,6 +1,6 @@
 import { Link } from "react-router";
 import { InvoiceListPage } from "../modules/invoice/pages/InvoiceListPage";
-import { AppFrame } from "../shared/components/AppFrame";
+import { AppFrame } from "./WorkspaceFrame";
 import { navigation } from "./navigation";
 import { paths } from "./paths";
 import { useViewNavigate } from "./useViewNavigate";

@@ -3,6 +3,9 @@
 from dataclasses import dataclass
 from decimal import Decimal
 
+from .service.basis_reader import basis_versions as basis_versions
+from .service.basis_reader import current_bases as current_bases
+
 
 @dataclass(frozen=True)
 class ApprovedLine:
@@ -18,6 +21,7 @@ class ApprovedLine:
     quantity: Decimal | None
     unit: str | None
     amount: Decimal | None
+    purchase_basis_id: int | None = None
 
 
 @dataclass(frozen=True)
@@ -35,3 +39,9 @@ class ReviewApproved:
 
 
 __all__ = ["ApprovedLine", "ReviewApproved"]
+
+
+@dataclass(frozen=True)
+class PurchaseBasisInvalidated:
+    purchase_line_ids: tuple[int, ...]
+    reason: str

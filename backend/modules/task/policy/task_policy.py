@@ -22,7 +22,7 @@ STATUS_REASONS = {
     "superseded": "请查看该报关单最新审核生成的任务。",
 }
 
-# 收票进度（partially_received、completed）只由发票比对的已通过分配汇总得出，不提供手动修改。
+# 收票进度由有效分配及当前差异结束决定汇总，不提供任意修改状态的接口。
 # 取消已通过的分配后按实际收票退回：仍有收票 → partially_received；没有收票 → 收票前的节点。
 PRE_INVOICE = ("documents_pending", "notify_pending", "awaiting_invoice")
 TRANSITIONS = {
@@ -30,11 +30,11 @@ TRANSITIONS = {
     "notify_pending": {"awaiting_invoice", "partially_received", "completed", "superseded"},
     "awaiting_invoice": {"partially_received", "completed", "superseded"},
     "partially_received": {"completed", "superseded", *PRE_INVOICE},
-    "completed": {"partially_received", *PRE_INVOICE},
+    "completed": {"partially_received", "superseded", *PRE_INVOICE},
     "superseded": set(),
 }
 
-# 新审核替代旧审核时，未完成的任务改为 superseded；已完成的任务保留，其任务行仍有效。
+# 依据换版时包括已完成任务在内均建立后继；旧任务与旧行保留为 superseded 历史。
 OPEN_STATUSES = ("documents_pending", "notify_pending", "awaiting_invoice", "partially_received")
 
 LINE_STATUS_LABELS = {
@@ -80,9 +80,9 @@ def event_label(from_status, to_status):
     if from_status is None:
         return "财务审核通过，生成开票任务"
     if from_status in ("partially_received", "completed") and to_status in PRE_INVOICE:
-        return "已通过的发票分配被取消，退回收票前节点"
+        return "收票依据变化，退回收票前节点"
     if from_status == "completed" and to_status == "partially_received":
-        return "已通过的发票分配被取消，退回部分收票"
+        return "收票依据变化，退回部分收票"
     return {
         "notify_pending": "子采购合同已全部保存到共享盘",
         "awaiting_invoice": "人工登记已发送通知",
@@ -107,7 +107,7 @@ def line_progress(expected_quantity, expected_amount, received_quantity, receive
     over = (expected_quantity is not None and received_quantity > expected_quantity) or (
         expected_amount is not None and received_amount - expected_amount > AMOUNT_TOLERANCE
     )
-    if full or over or closed:
+    if full or closed:
         status = "received"
     elif received_quantity or received_amount:
         status = "partial"

@@ -6,6 +6,9 @@ open_lines(connection, purchase_line_ids=None, lock=False)
     lock=True 时在调用方事务中按"任务 → 任务行"顺序加锁，供 matching 确认分配时使用。
 """
 
+from .service.task_line_reader import active_line_ids as active_line_ids
 from .service.task_line_reader import open_lines
 
 __all__ = ["open_lines"]
+
+from .service.task_line_reader import related_line_ids as related_line_ids

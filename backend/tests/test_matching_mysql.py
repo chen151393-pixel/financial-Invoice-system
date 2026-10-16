@@ -6,6 +6,7 @@ SQLite 为单连接，不能代替本测试声称并发正确。
 
 import os
 import threading
+from decimal import Decimal
 from uuid import uuid4
 
 import pytest
@@ -119,3 +120,85 @@ def test_concurrent_confirms_on_same_purchase_line_keep_totals(engine, world, re
     line = rows(engine, "SELECT * FROM task_lines ORDER BY purchase_line_id")[0]
     assert str(line["received_amount"]).rstrip("0").rstrip(".") == "100.5" and line["status"] == "received"
     assert task(engine)["status"] == "partially_received"
+
+
+def test_concurrent_reapproval_only_one_successor(ns, engine, world, reviewed):
+    save(ns, engine, bundle([purchase(amounts=("120.50", "20.00"))], [customs("870")]))
+    assert race(lambda: approve(world, "CD870"), lambda: approve(world, "CD870")) == ["ok", "ok"]
+    assert len(rows(engine, "SELECT id FROM task_tasks WHERE status<>'superseded'")) == 1
+    assert len(rows(engine, "SELECT id FROM review_purchase_bases WHERE status='active'")) == 2
+    assert len(rows(engine, "SELECT id FROM task_lines WHERE status<>'superseded'")) == 2
+
+
+def test_source_refresh_racing_confirmation_never_leaves_stale_valid_receipt(ns, engine, world, reviewed):
+    import_invoices(world, [invoice("26000000000000007004", [INK], remark="SUB-200")])
+    proposal = proposals(world, invoice_id(engine, "26000000000000007004"))[0]
+    results = race(
+        lambda: save(ns, engine, bundle([purchase(amounts=("120.50", "20.00"))], [customs("870")])),
+        lambda: world["allocations"].confirm(int(proposal.id), ConfirmBody(), USER),
+    )
+    assert results in (["ok", "ok"], [409, "ok"])
+    first = rows(engine, "SELECT * FROM task_lines ORDER BY purchase_line_id")[0]
+    assert first["requires_review"] and first["received_amount"] == 0
+    assert not rows(
+        engine, "SELECT id FROM matching_allocations WHERE status='confirmed' AND verification_status='valid'"
+    )
+
+
+def test_cancel_racing_invoice_refresh_has_no_lost_progress(engine, world, reviewed):
+    from backend.modules.matching.dto.matching_dto import CancelBody
+
+    number = "26000000000000007005"
+    import_invoices(world, [invoice(number, [INK], remark="SUB-200")])
+    proposal = proposals(world, invoice_id(engine, number))[0]
+    world["allocations"].confirm(int(proposal.id), ConfirmBody(), USER)
+    assert race(
+        lambda: world["allocations"].cancel(int(proposal.id), CancelBody(reason="撤回"), USER),
+        lambda: import_invoices(world, [invoice(number, [INK], remark="SUB-200 changed")]),
+    ) == ["ok", "ok"]
+    first = rows(engine, "SELECT * FROM task_lines ORDER BY purchase_line_id")[0]
+    assert first["received_amount"] == 0 and first["pending_amount"] == 0
+    assert (
+        rows(engine, "SELECT status FROM matching_allocations WHERE id=:id", id=int(proposal.id))[0]["status"]
+        == "cancelled"
+    )
+
+
+def test_reapproval_racing_cancel_and_invoice_refresh(ns, engine, world, reviewed):
+    from backend.modules.matching.dto.matching_dto import CancelBody
+    from backend.tests.test_ledger_versions import confirm_all
+
+    _, found = confirm_all(engine, world)
+    save(ns, engine, bundle([purchase(amounts=("120.50", "20.00"))], [customs("870")]))
+    assert race(
+        lambda: approve(world, "CD870"),
+        lambda: world["allocations"].cancel(int(found[0].id), CancelBody(reason="并发撤回"), USER),
+        lambda: import_invoices(
+            world, [invoice("26000000000000008801", [INK, FLUID], remark="SUB-200 修订")]
+        ),
+    ) == ["ok", "ok", "ok"]
+    active = rows(engine, "SELECT * FROM task_lines WHERE status<>'superseded' ORDER BY purchase_line_id")
+    assert len(active) == 2 and active[0]["expected_amount"] == Decimal("120.50")
+    assert active[0]["received_amount"] == 0 and active[0]["pending_amount"] == 0
+    assert active[1]["received_amount"] == 0 and active[1]["pending_amount"] == 20
+    assert len(rows(engine, "SELECT id FROM task_tasks WHERE status<>'superseded'")) == 1
+
+
+def test_mysql_subscriber_failure_rolls_back_version_and_receipts(engine, world, reviewed, monkeypatch):
+    from backend.modules.task.service import progress_service
+    from backend.tests.test_ledger_versions import confirm_all
+    from sqlalchemy.exc import SQLAlchemyError
+
+    confirm_all(engine, world)
+
+    def fail(*args):
+        raise SQLAlchemyError("isolated MySQL subscriber failure")
+
+    monkeypatch.setattr(progress_service, "apply_receipt", fail)
+    with pytest.raises(ApiError):
+        import_invoices(world, [invoice("26000000000000008801", [INK, FLUID], remark="SUB-200 修订")])
+    assert len(rows(engine, "SELECT id FROM invoice_versions")) == 1
+    assert task(engine)["status"] == "completed"
+    assert all(
+        r["verification_status"] == "valid" for r in rows(engine, "SELECT * FROM matching_allocations")
+    )

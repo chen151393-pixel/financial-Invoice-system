@@ -1,6 +1,6 @@
 # PL拉取、MySQL保存与页面操作
 
-> 当前前端：旧“记录校对与写回”和“PL 单联查”页面已移除，下文涉及这些页面的操作仅为历史说明。后端接口与配置继续保留；当前页面 `/pl-reconciliation` 只提供实时查询和导出。
+> 历史记录：下文保存于 2026-09 的页面、六表、配置和测试说明已随 4e 退役，`/api/business/*` 不再挂载，旧测试与实现可从 Git 历史查看。当前 `/pl-reconciliation` 保留实时查询与导出，来源持久化由 [source](../backend/modules/source/README.md) 与 [sync](../backend/modules/sync/README.md) 实现；启动和迁移见[后端说明](python-backend.md)。
 
 当前已实现页面、后端完整读取／事务保存、本地查询和重复拉取去重。保存验收使用假NS与独立MySQL 8.4.9；2026-09-14 本机已配置真实沙箱映射，通过只读联查和存储字段转换检查，本次未保存真实NS单据。不会创建NS已保存搜索，也不会写回NS。
 
@@ -70,7 +70,7 @@ npm.cmd start
 
 将这些字段合并到原 `NETSUITE_PL_LOOKUP` JSON对应记录块，保留 `type`、`pl`、`parent`、`company` 等配置；示例片段本身不是完整可运行配置。顶层再添加已经确认的 `company_record_type`。配置在 `.env`，修改后重启后端。
 
-最低必需映射：采购单 `order_no`；采购行 `declaration_name/quantity/unit_name/amount`；报关单 `declaration_no/declaration_date`；报关行 `declaration_name/specification/origin_place/quantity/unit_name`。完整允许字段见 `backend/modules/business/entity.py` 中 `STORAGE_FIELDS`，禁止配置主键、租户或本地外键。
+最低必需映射：采购单 `order_no`；采购行 `declaration_name/quantity/unit_name/amount`；报关单 `declaration_no/declaration_date`；报关行 `declaration_name/specification/origin_place/quantity/unit_name`。当时允许字段来自旧 `business` 实现的 `STORAGE_FIELDS`（现仅可从 Git 历史查看），禁止配置主键、租户或本地外键。
 
 映射已配置但源响应不含该字段时默认保存失败，避免拼错字段后清空原数据；明确返回null则保留NULL。未映射可选字段保存NULL，原始单头和全部明细仍保存在 `source_data`。
 
@@ -112,4 +112,4 @@ npm.cmd start
 
 2026-09-14 配置后复核：运行中的后端返回联查 `ready=true`、保存配置 `allowed=true`，MySQL六表可见；通过正式接口只读拉取 `PL2510280002` 的3条明细。使用已读取的真实完整样本和当前MySQL反射表结构验证了主从字段、Decimal金额、公司关联及两个报关空字段的转换，全程未写业务库。本次后端测试104项通过，6项独立MySQL测试因未配置专用测试库而跳过，后端lint通过；不代表已完成真实保存或MySQL 8.0并发验收。
 
-运行本组MySQL测试需先在专用实例创建六表测试库，库名以 `_pl_test` 结尾，再设置 `PL_STORAGE_TEST_URL` 执行 `pytest backend/tests/test_pl_storage.py`；测试仅清理自己随机身份的数据。禁止指向实际业务库。
+上述旧测试随 4e 退役；当前来源与账本验证见 `backend/tests/test_source_storage.py`、`test_ledger_versions.py` 和 `test_matching_mysql.py`。MySQL 测试通过 `BUSINESS_MIGRATION_TEST_SERVER_URL` 指向隔离实例并创建随机测试库，禁止指向实际业务库。

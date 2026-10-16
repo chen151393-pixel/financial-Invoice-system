@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 from backend.core.errors import ApiError
 
 from ..mapper.ns_fields import normalize, reference
-from .relation_matcher import collect_comparisons, require_relation_interfaces
+from .relation_matcher import collect_comparisons
 
 RAW_FIELDS = (
     "plId",
@@ -26,6 +26,10 @@ PACK_CUSTOMS = "custrecord_swc_declare_record"
 PACK_PL = "custrecord_swc_sublist_packingmain"
 PACK_SALES = "custrecord_swc_sublist_createdfrom"
 PACK_SALES_LINE = "custrecord_swc_so_lineid"
+UNAVAILABLE_RAW = {
+    "RAW_SUBLIST_UNAVAILABLE": "原始报关行子列表不可见",
+    "RAW_FIELDS_UNAVAILABLE": "原始报关行身份或来源字段不可见",
+}
 
 
 def source_id(value):
@@ -39,7 +43,7 @@ def read_originals(ns, customs):
     if not getattr(ns.settings, "finance_source_script", "") or not getattr(
         ns.settings, "finance_source_deploy", ""
     ):
-        return {}, "原始报关行只读接口尚未配置，原始行与Packing对应关系未完整读取。"
+        return {}, "精确追溯未完成：原始报关行接口未配置，不影响基础单据保存。"
     result = {}
     ids = list(customs)
     seen_rows = set()
@@ -48,53 +52,70 @@ def read_originals(ns, customs):
         data = ns.finance_source_query(batch)
         if (
             not isinstance(data, dict)
-            or data.get("complete") is not True
             or type(data.get("contractVersion")) is not int
             or data["contractVersion"] != 1
             or not isinstance(data.get("account"), str)
             or data.get("account", "").lower().replace("_", "-") != ns.settings.account
-            or not isinstance(data.get("declarations"), list)
         ):
             raise ApiError(502, "原始报关行接口未完整返回同账套来源，未保存本页")
-        batch_ids = set()
-        for declaration in data["declarations"]:
-            if not isinstance(declaration, dict):
-                raise ApiError(502, "原始报关单格式无效")
-            identity = declaration.get("id")
-            if identity not in batch or identity in batch_ids:
-                raise ApiError(502, "原始报关单范围不一致或重复")
-            batch_ids.add(identity)
-            if declaration.get("recordNumber") != customs[identity].get("name"):
-                raise ApiError(502, "原始报关单号与本次读取不一致")
-            rows = declaration.get("rows")
-            if not isinstance(rows, list) or len(rows) > 2000:
-                raise ApiError(502, "原始报关行不完整或超限")
-            for row in rows:
-                if (
-                    not isinstance(row, dict)
-                    or row.get("declarationId") != identity
-                    or not isinstance(row.get("id"), str)
-                    or not source_id(row["id"])
-                    or row["id"] in seen_rows
-                    or any(not isinstance(row.get(field), str) for field in RAW_FIELDS)
-                ):
-                    raise ApiError(502, "原始报关行身份、字段或归属无效")
-                for field in (
-                    "plId",
-                    "packingId",
-                    "companyId",
-                    "fulfillmentId",
-                    "itemId",
-                    "parentPurchaseId",
-                ):
-                    source_id(row[field])
-                seen_rows.add(row["id"])
-            if len(seen_rows) > 5000:
-                raise ApiError(422, "本次原始报关行超过5000行，请缩小范围")
-            result[identity] = rows
-        if batch_ids != set(batch):
-            raise ApiError(502, "原始报关单返回范围缺失")
+        error = data.get("error")
+        if (
+            data.get("complete") is False
+            and "declarations" not in data
+            and isinstance(error, dict)
+            and isinstance(error.get("code"), str)
+            and error["code"] in UNAVAILABLE_RAW
+        ):
+            # 仅降级已验证契约及账套的结构不可见错误；丢弃先前批次，避免部分原始行冒充完整来源。
+            return {}, f"精确追溯未完成：{UNAVAILABLE_RAW[error['code']]}，不影响基础单据保存。"
+        if data.get("complete") is not True or not isinstance(data.get("declarations"), list):
+            raise ApiError(502, "原始报关行接口未完整返回同账套来源，未保存本页")
+        result.update(validate_original_batch(data["declarations"], batch, customs, seen_rows))
     return result, ""
+
+
+def validate_original_batch(declarations, batch, customs, seen_rows):
+    """校验单批原始行的范围、身份和字段，跨批共享已见行集合。"""
+    result = {}
+    batch_ids = set()
+    for declaration in declarations:
+        if not isinstance(declaration, dict):
+            raise ApiError(502, "原始报关单格式无效")
+        identity = declaration.get("id")
+        if identity not in batch or identity in batch_ids:
+            raise ApiError(502, "原始报关单范围不一致或重复")
+        batch_ids.add(identity)
+        if declaration.get("recordNumber") != customs[identity].get("name"):
+            raise ApiError(502, "原始报关单号与本次读取不一致")
+        rows = declaration.get("rows")
+        if not isinstance(rows, list) or len(rows) > 2000:
+            raise ApiError(502, "原始报关行不完整或超限")
+        for row in rows:
+            if (
+                not isinstance(row, dict)
+                or row.get("declarationId") != identity
+                or not isinstance(row.get("id"), str)
+                or not source_id(row["id"])
+                or row["id"] in seen_rows
+                or any(not isinstance(row.get(field), str) for field in RAW_FIELDS)
+            ):
+                raise ApiError(502, "原始报关行身份、字段或归属无效")
+            for field in (
+                "plId",
+                "packingId",
+                "companyId",
+                "fulfillmentId",
+                "itemId",
+                "parentPurchaseId",
+            ):
+                source_id(row[field])
+            seen_rows.add(row["id"])
+        if len(seen_rows) > 5000:
+            raise ApiError(422, "本次原始报关行超过5000行，请缩小范围")
+        result[identity] = rows
+    if batch_ids != set(batch):
+        raise ApiError(502, "原始报关单返回范围缺失")
+    return result
 
 
 class RelationReader:
@@ -105,8 +126,6 @@ class RelationReader:
         customs = {source_id(identity): head for identity, head, _ in bundle["customs"]}
         if not customs:
             return {}
-        if match:
-            require_relation_interfaces(self.ns.settings)
         read_at = datetime.now(timezone.utc).isoformat()
         evidence = {
             identity: {
@@ -226,8 +245,9 @@ class RelationReader:
                     raise ApiError(502, "原始行与Packing的PL引用不一致，未保存本页")
                 value["rawPackingLinks"].append({"rawLineId": row["id"], "packingId": row["packingId"]})
             value["issues"] = list(dict.fromkeys(value["issues"]))
-            # collected 仅代表来源已读取，不表示汇总行归属/分摊已核实，也不开放审批。
+            # collected 仅代表来源已读取，不表示汇总行归属/分摊已核实或财务已审核。
             value["status"] = "partial" if value["issues"] else "collected"
-        if match:
+        # 原始来源缺失时跳过依赖它的 v3 追溯，独立读取的 Packing 等依据仍如实保存。
+        if match and not issue:
             collect_comparisons(self.ns, bundle, evidence)
         return normalize(evidence)

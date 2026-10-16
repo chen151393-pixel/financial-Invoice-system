@@ -1,6 +1,6 @@
 """子采购单与子采购行。"""
 
-from sqlalchemy import select
+from sqlalchemy import select, update
 
 from ..entity import companies, purchase_order_lines, purchase_orders, raw_records, suppliers
 from . import document_dao
@@ -96,13 +96,20 @@ def line_names(connection, line_ids):
     return {row.id: dict(row._mapping) for row in connection.execute(query)}
 
 
-def line_context(connection, line_ids):
+def line_context(connection, line_ids, *, lock=False):
     """子采购行及所属子采购单、供应商、采购公司（发票比对用；含已停用记录，以便判断来源变化）。"""
     if not line_ids:
         return []
     query = (
         select(
             purchase_order_lines,
+            purchase_orders.c.ns_account,
+            purchase_orders.c.supplier_id,
+            purchase_orders.c.company_id,
+            purchase_orders.c.parent_order_id,
+            purchase_orders.c.parent_relation_status,
+            purchase_orders.c.raw_record_id,
+            purchase_orders.c.currency_raw_record_id,
             purchase_orders.c.order_no,
             purchase_orders.c.parent_order_no,
             purchase_orders.c.currency,
@@ -123,4 +130,35 @@ def line_context(connection, line_ids):
         )
         .where(purchase_order_lines.c.id.in_(line_ids))
     )
+    if lock:
+        query = query.order_by(purchase_order_lines.c.id).with_for_update()
     return [dict(row) for row in connection.execute(query).mappings()]
+
+
+def inherited_orders(connection, parent_id, values, now):
+    ids = list(
+        connection.execute(
+            select(purchase_orders.c.id)
+            .where(purchase_orders.c.parent_order_id == parent_id)
+            .order_by(purchase_orders.c.id)
+        ).scalars()
+    )
+    if ids:
+        connection.execute(
+            update(purchase_orders).where(purchase_orders.c.id.in_(ids)).values(**values, updated_at=now)
+        )
+    return ids
+
+
+def all_line_ids(connection, order_ids):
+    return (
+        list(
+            connection.execute(
+                select(purchase_order_lines.c.id)
+                .where(purchase_order_lines.c.purchase_order_id.in_(order_ids))
+                .order_by(purchase_order_lines.c.id)
+            ).scalars()
+        )
+        if order_ids
+        else []
+    )

@@ -87,13 +87,15 @@ modules/task/
 
 - 使用 `react-router`。各模块在 `routes.tsx` 中导出路由，`app/router.tsx` 汇总；其他地方不能用 `location.pathname` 判断显示哪个页面。
 - 路径常量集中在 `app/paths.ts`，跨模块跳转只用这些常量。
+- 每个新增功能对应的独立页面必须登记语义明确的路由，支持直接访问和刷新；不能仅用组件状态在其他页面地址下切换。登录页独立使用纯 `/login`，不附加 next 等查询参数；未登录或会话失效时由守卫跳转，原地址保存在路由状态中，登录成功后返回站内原地址；直接打开登录页则进入默认首页。
 - 页面路径：
 
   | 模块 | 路径 |
   | --- | --- |
+  | identity | `/login`（账号密码登录） |
   | source | `/source/pl`（采购报关联查） |
   | review | `/review`（财务核对） |
-  | task | `/tasks`、`/tasks/:id`、`/tasks/supplier-groups` |
+  | task | `/tasks`、`/tasks/:id`、`/suppliers` |
   | invoice | `/invoices`、`/invoices/import` |
   | matching | `/matching`、`/matching/:invoiceId` |
   | sync | `/sync` |

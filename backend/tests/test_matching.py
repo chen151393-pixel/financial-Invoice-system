@@ -8,11 +8,9 @@ from decimal import Decimal
 from uuid import uuid4
 
 import pytest
-from backend.app import create_app
+from backend.app import create_app, create_events
 from backend.core.errors import ApiError
-from backend.core.events import EventBus
 from backend.modules.invoice.dto.import_dto import ImportBody
-from backend.modules.invoice.public import InvoicesImported
 from backend.modules.invoice.service.import_service import ImportService
 from backend.modules.matching.dto.matching_dto import (
     BatchBody,
@@ -24,14 +22,10 @@ from backend.modules.matching.dto.matching_dto import (
     RejectBody,
     SummaryBody,
 )
-from backend.modules.matching.public import AllocationChanged
 from backend.modules.matching.service.allocation_service import AllocationService
 from backend.modules.matching.service.matching_query_service import MatchingQueryService
-from backend.modules.matching.service.proposal_service import ProposalService, on_invoices_imported
-from backend.modules.review.public import ReviewApproved
+from backend.modules.matching.service.proposal_service import ProposalService
 from backend.modules.source.public import SourceDirectory
-from backend.modules.task.service.progress_service import on_allocation_changed
-from backend.modules.task.service.task_generation_service import on_review_approved
 from backend.modules.task.service.task_service import TaskService
 from backend.tests.invoice_files import invoice, workbook
 from backend.tests.test_source_storage import bundle, customs, purchase, rows, save
@@ -49,10 +43,7 @@ def world(engine):
     from backend.modules.review.service.review_service import ReviewService
     from backend.modules.source.public import DeclarationService
 
-    events = EventBus()
-    events.subscribe(ReviewApproved, on_review_approved)
-    events.subscribe(InvoicesImported, on_invoices_imported)
-    events.subscribe(AllocationChanged, on_allocation_changed)
+    events = create_events()
     queries = MatchingQueryService(engine)
     return {
         "review": ReviewService(engine, DeclarationService(engine), events),
@@ -161,7 +152,7 @@ def test_inconsistent_items_require_note_and_overinvoice_is_flagged(engine, worl
     saved = rows(engine, "SELECT exceeds_expected, review_note FROM matching_allocations")[0]
     assert saved["exceeds_expected"] and saved["review_note"] == "供应商多开两件，已确认"
     line = rows(engine, "SELECT * FROM task_lines ORDER BY purchase_line_id")[0]
-    assert line["status"] == "received" and line["over_invoiced"]
+    assert line["status"] == "partial" and line["over_invoiced"]
 
 
 def test_unresolved_currency_and_red_offset_block(ns, engine, world):
@@ -197,8 +188,9 @@ def test_capacity_and_stale_source_block(ns, engine, world, reviewed):
     with pytest.raises(ApiError, match="超过发票行本身"):
         world["allocations"].confirm(int(proposal.id), ConfirmBody(note="x"), USER)
     save(ns, engine, bundle([purchase(amounts=("99.00", "20.00"))], [customs("870")]))
-    stale = next(a for a in world["queries"].invoice(target).items[0].allocations if a.status == "proposed")
-    assert not stale.confirm.allowed and "已变化" in stale.confirm.reason
+    stale = next(a for a in world["queries"].invoice(target).items[0].allocations if a.status == "rejected")
+    assert not stale.confirm.allowed
+    assert "变化" in stale.reviewNote
 
 
 def test_manual_allocation_is_idempotent(engine, world, reviewed):
@@ -258,7 +250,7 @@ def test_queue_batch_and_service_identity(engine, world, reviewed):
 
 def test_http_matching_routes(context, ns, engine):
     save(ns, engine, bundle([purchase()], [customs("870")]))
-    app = create_app(context.settings, context.ns, context.engine, business_engine=engine)
+    app = create_app(context.settings, context.ns, engine)
     with TestClient(app) as client:
         assert client.post("/api/matching/queue", json={}).status_code == 401
         headers = {"Origin": context.settings.origin}

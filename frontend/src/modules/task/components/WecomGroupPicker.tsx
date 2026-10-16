@@ -2,28 +2,39 @@ import { useEffect, useState, type Ref } from "react";
 import { Button } from "../../../shared/components/Button";
 import { Pagination } from "../../../shared/components/Pagination";
 import { formatTime } from "./format";
-import type { WecomGroup, WecomGroupPage, WecomGroupQuery } from "../types/supplier-group";
+import type {
+  WecomGroup,
+  WecomGroupPage,
+  SupplierGroupMatchQuery,
+  SupplierOption,
+} from "../types/supplier-group";
 
 export function WecomGroupPicker({
+  supplier,
+  selectedId,
   search: load,
   onChoose,
   disabled,
   inputRef,
 }: {
-  search: (query: WecomGroupQuery) => Promise<WecomGroupPage>;
+  supplier: SupplierOption;
+  selectedId?: string;
+  search: (query: SupplierGroupMatchQuery) => Promise<WecomGroupPage>;
   onChoose: (group: WecomGroup) => void;
   disabled: boolean;
   inputRef: Ref<HTMLInputElement>;
 }) {
   const [input, setInput] = useState("");
-  const [query, setQuery] = useState<WecomGroupQuery | null>(null);
+  const [query, setQuery] = useState<SupplierGroupMatchQuery>({
+    supplierId: supplier.supplierId,
+    keyword: "",
+    page: 1,
+    refresh: false,
+  });
   const [state, setState] = useState<
-    | { kind: "idle" | "loading" }
-    | { kind: "error"; message: string }
-    | { kind: "ready"; data: WecomGroupPage }
-  >({ kind: "idle" });
+    { kind: "loading" } | { kind: "error"; message: string } | { kind: "ready"; data: WecomGroupPage }
+  >({ kind: "loading" });
   useEffect(() => {
-    if (!query) return;
     let active = true;
     void load(query).then(
       (data) => {
@@ -40,11 +51,15 @@ export function WecomGroupPicker({
   }, [query, load]);
   function search(refresh = false) {
     setState({ kind: "loading" });
-    setQuery({ keyword: input, page: 1, refresh });
+    setQuery({ supplierId: supplier.supplierId, keyword: input, page: 1, refresh });
   }
   const busy = disabled || state.kind === "loading";
   return (
-    <section className="sg-lookup" aria-label="查询企微外部群">
+    <section className="sg-lookup" aria-label="匹配企微外部群">
+      <h3>匹配外部群与群主</h3>
+      <p className="it-help">
+        按“{supplier.supplierName}”推荐候选群；名称相似不代表同一供应商，请核对后选择。
+      </p>
       <form
         className="sg-row"
         onSubmit={(event) => {
@@ -53,37 +68,38 @@ export function WecomGroupPicker({
         }}
       >
         <label>
-          企微群名称
+          群名、群主或群 ID（可选）
           <input
             ref={inputRef}
             type="search"
             value={input}
             disabled={busy}
             onChange={(event) => setInput(event.target.value)}
-            placeholder="输入完整群名或部分名称"
+            placeholder="留空按供应商名称匹配，或输入简称查找"
           />
         </label>
         <Button type="submit" disabled={busy}>
-          查询企微群
+          查找外部群
         </Button>
         <Button disabled={busy} onClick={() => search(true)}>
           重新拉取
         </Button>
       </form>
-      {state.kind === "idle" && (
-        <p className="it-help">输入群名后查询，选择正确的群；群 ID 和群主信息由企微自动提供。</p>
-      )}
       {query && input !== query.keyword && <p className="it-help">群名已修改，点击查询生效。</p>}
       {state.kind === "loading" && <p role="status">正在从企微查询客户群，首次拉取可能需要一些时间…</p>}
       {state.kind === "error" && (
         <p role="alert" className="sg-feedback">
-          {state.message}
+          {state.message}{" "}
+          <Button disabled={busy} onClick={() => search()}>
+            重新查询
+          </Button>
         </p>
       )}
       {state.kind === "ready" && (
         <>
           <p className="it-help">
-            查询“{query?.keyword}”：共 {state.data.total} 个群。重名时请核对群主、人数及创建时间。
+            查询“{query.keyword || supplier.supplierName}”：共 {state.data.total}{" "}
+            个候选群。重名时请核对群主、人数及创建时间，系统不会自动绑定。
           </p>
           {state.data.unavailableCount > 0 && (
             <p className="sg-feedback" role="status">
@@ -92,15 +108,18 @@ export function WecomGroupPicker({
             </p>
           )}
           {state.data.items.length === 0 ? (
-            <p>没有找到对应的企微群。请核对群名，或联系管理员确认群主在应用可见范围内。</p>
+            <p>
+              没有匹配的外部群。可输入供应商简称、群名或群主重新查找；仍找不到时，请管理员核对应用可见范围。
+            </p>
           ) : (
             <ul className="sg-options">
               {state.data.items.map((group) => (
                 <li key={group.chatId}>
                   <span>
                     <strong>{group.groupName}</strong>
+                    <small>{group.matchReason}</small>
                     <small>
-                      群主：{group.employee} · {group.memberCount} 人
+                      群主：{group.employee}（{group.userid}）· {group.memberCount} 人
                     </small>
                     <small>
                       创建时间：
@@ -108,8 +127,12 @@ export function WecomGroupPicker({
                     </small>
                     <small>群标识：{group.chatId}</small>
                   </span>
-                  <Button disabled={disabled} onClick={() => onChoose(group)}>
-                    选择此群
+                  <Button
+                    disabled={disabled}
+                    aria-pressed={selectedId === group.chatId}
+                    onClick={() => onChoose(group)}
+                  >
+                    {selectedId === group.chatId ? "已选择" : "选择此群"}
                   </Button>
                 </li>
               ))}
@@ -125,7 +148,7 @@ export function WecomGroupPicker({
             disabled={disabled}
             onPageChange={(page) => {
               setState({ kind: "loading" });
-              setQuery((previous) => (previous ? { ...previous, page, refresh: false } : null));
+              setQuery((previous) => ({ ...previous, page, refresh: false }));
             }}
             onPageSizeChange={() => {}}
           />

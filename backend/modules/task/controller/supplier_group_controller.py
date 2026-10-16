@@ -4,12 +4,22 @@ from fastapi import APIRouter
 
 from backend.core.dependencies import Owner
 
-from ..dto.supplier_group_dto import GroupQuery, GroupSave, WecomGroupQuery
-from ..vo.supplier_group_vo import GroupBinding, GroupList, SupplierList, WecomGroupList
+from ..dto.supplier_group_dto import (
+    GroupQuery,
+    GroupSave,
+    SupplierGroupMatch,
+    SupplierProfileQuery,
+    WecomGroupQuery,
+)
+from ..vo.supplier_group_vo import GroupBinding, GroupList, SupplierList, SupplierProfileList, WecomGroupList
 
 
-def create_router(service):
+def create_router(service, profiles):
     router = APIRouter(prefix="/api/tasks/supplier-groups", tags=["供应商群配置"])
+
+    @router.post("/profiles/query", response_model=SupplierProfileList)
+    def profile_list(body: SupplierProfileQuery, owner: Owner):
+        return profiles.browse(body, owner)
 
     @router.post("/query", response_model=GroupList)
     def browse(body: GroupQuery, owner: Owner):
@@ -22,6 +32,10 @@ def create_router(service):
     @router.post("/wecom/query", response_model=WecomGroupList)
     def wecom_groups(body: WecomGroupQuery, owner: Owner):
         return service.search_wecom(body, owner)
+
+    @router.post("/wecom/match", response_model=WecomGroupList)
+    def match_groups(body: SupplierGroupMatch, owner: Owner):
+        return service.match_wecom(body, owner)
 
     @router.post("/save", response_model=GroupBinding)
     def save(body: GroupSave, owner: Owner):

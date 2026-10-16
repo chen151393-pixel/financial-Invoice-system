@@ -8,10 +8,9 @@ import hashlib
 from alembic import context
 from backend.core.config import load_settings
 from backend.core.database import make_business_engine, make_engine
+from backend.migrations.version_table import VERSION_TABLE, widen_schema_version
 from sqlalchemy import text
 from sqlalchemy.engine import make_url
-
-VERSION_TABLE = "schema_version"
 
 config = context.config
 database_url = config.attributes.get("database_url") or load_settings().business_database_url
@@ -41,6 +40,7 @@ else:
                     raise RuntimeError("已有迁移正在执行，请稍后重试")
                 connection.commit()
             try:
+                widen_schema_version(connection)
                 context.configure(connection=connection, version_table=VERSION_TABLE)
                 with context.begin_transaction():
                     context.run_migrations()

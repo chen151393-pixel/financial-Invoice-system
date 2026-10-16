@@ -14,6 +14,7 @@ export type Check = {
 };
 
 export type PurchaseSide = {
+  purchaseBasisId: string | null;
   purchaseLineId: string;
   orderNo: string;
   supplier: string;
@@ -34,6 +35,14 @@ export type PurchaseSide = {
 };
 
 export type Allocation = {
+  invoiceVersionId: string | null;
+  currentInvoiceVersionId: string | null;
+  purchaseBasisId: string | null;
+  purchaseQuantity: string | null;
+  verificationStatus: string;
+  verificationIssues: string[];
+  reverify: Capability;
+  replace: Capability;
   id: string;
   invoiceItemId: string;
   purchaseLineId: string;
@@ -62,6 +71,7 @@ export type Allocation = {
 };
 
 export type InvoiceItem = {
+  active: boolean;
   id: string;
   lineNo: string | null;
   item: string | null;
@@ -76,6 +86,8 @@ export type InvoiceItem = {
 
 export type InvoiceMatching = {
   invoice: {
+    versionId: string | null;
+    detailStatus: string;
     id: string;
     number: string;
     date: string | null;
@@ -110,7 +122,7 @@ export type QueueQuery = { tier: "all" | "high" | "medium" | "low"; page: number
 
 export type MatchingSummary = {
   invoiceId: string;
-  status: "none" | "proposed" | "partial" | "confirmed";
+  status: "none" | "proposed" | "partial" | "confirmed" | "needs_review";
   label: string;
   tier: Tier | null;
   proposed: number;
@@ -125,7 +137,17 @@ export type Candidate = {
   block: string;
 };
 
-export type ConfirmBody = { note: string; closesPurchaseLine: boolean };
+export type Conversion = {
+  conversionNumerator: string;
+  conversionDenominator: string;
+  conversionEvidence: string;
+};
+export type ConfirmBody = Partial<Conversion> & {
+  note: string;
+  closesPurchaseLine?: boolean;
+  invoiceVersionId?: string | null;
+  purchaseBasisId?: string | null;
+};
 export type ManualBody = ConfirmBody & {
   requestId: string;
   invoiceId: string;

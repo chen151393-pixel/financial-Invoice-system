@@ -2,7 +2,10 @@
 
 from datetime import UTC
 
+from backend.modules.source.public import unit_label
+
 from ..policy.task_policy import LINE_STATUS_LABELS, STATUS_LABELS, STATUS_REASONS, event_label
+from ..vo.capability import Capability
 from ..vo.task_vo import TaskCounts, TaskEvent, TaskLine, TaskStep, TaskSummary
 
 UNKNOWN_SUPPLIER = "供应商待确认"
@@ -45,6 +48,7 @@ def summary(task, lines, names):
         reason=STATUS_REASONS[task["status"]],
         createdAt=iso(task["created_at"]),
         reviewRevision=task["review_revision"],
+        predecessorTaskIds=[str(i) for i in task["predecessor_task_ids"] or []],
         orderNumbers=order_numbers(lines, names),
         lineCount=len(lines),
         expectedAmount=expected_total(lines),
@@ -71,17 +75,36 @@ def lines(rows, names, currency):
         result.append(
             TaskLine(
                 id=str(row["id"]),
+                purchaseBasisId=str(row["purchase_basis_id"]) if row["purchase_basis_id"] else None,
+                ledgerSha256=row["ledger_sha256"],
+                requiresReview=row["requires_review"],
+                pendingQuantity=text(row["pending_quantity"]),
+                pendingAmount=text(row["pending_amount"]),
+                close=Capability(
+                    allowed=row["status"] in ("open", "partial")
+                    and not row["requires_review"]
+                    and bool(row["ledger_sha256"]),
+                    reason="存在待复核依据或占用，先核实"
+                    if row["requires_review"]
+                    else "该行已结束或被替代，无需登记"
+                    if row["status"] not in ("open", "partial")
+                    else "账本尚未就绪，请刷新后核实"
+                    if not row["ledger_sha256"]
+                    else "按当前依据与账本登记差异结束",
+                ),
                 order=names["orders"].get(row["purchase_order_id"]) or "",
                 name=item.get("declaration_name") or item.get("item_name") or "",
                 specification=item.get("specification") or "",
                 quantity=text(row["expected_quantity"]),
-                unit=row["unit"] or "",
+                unit=unit_label(row["unit"], names.get("units")),
                 amount=text(row["expected_amount"]),
                 currency=currency or "",
                 receivedQuantity=text(row["received_quantity"]),
                 receivedAmount=text(row["received_amount"]),
                 status=row["status"],
-                statusLabel=LINE_STATUS_LABELS[row["status"]],
+                statusLabel="按差异结束"
+                if row["closed_with_difference"]
+                else LINE_STATUS_LABELS[row["status"]],
             )
         )
     return result
@@ -92,7 +115,12 @@ def events(rows):
         TaskEvent(
             at=iso(row["occurred_at"]),
             actor=row["actor"],
-            label=event_label(row["from_status"], row["to_status"]),
+            label={
+                "difference_closed": "人工按差异结束",
+                "evidence_linked": "关联报关审核证据",
+                "migration_review_required": "历史依据待复核",
+            }.get(row["event_type"])
+            or event_label(row["from_status"], row["to_status"]),
             reason=row["reason"] or "",
         )
         for row in rows

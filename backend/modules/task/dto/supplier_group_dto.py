@@ -22,6 +22,14 @@ class GroupQuery(StrictModel):
     pageSize: int = Field(default=20, ge=1, le=50)
 
 
+class SupplierProfileQuery(StrictModel):
+    keyword: Annotated[str, StringConstraints(strip_whitespace=True, max_length=120)] = ""
+    account: str = Field(default="", max_length=100)
+    status: Literal["all", "enabled", "disabled", "unbound"] = "all"
+    page: int = Field(default=1, ge=1)
+    pageSize: int = Field(default=20, ge=1, le=50)
+
+
 class GroupFields(StrictModel):
     groupName: Name
     chatId: WecomId
@@ -34,6 +42,14 @@ class GroupSave(StrictModel):
     supplierId: SupplierId
     revision: int = Field(ge=0, description="当前配置版本，新增时为 0")
     enabled: bool = True
+
+
+class SupplierGroupMatch(StrictModel):
+    supplierId: SupplierId
+    keyword: Annotated[str, StringConstraints(strip_whitespace=True, max_length=120)] = ""
+    page: int = Field(default=1, ge=1)
+    pageSize: int = Field(default=20, ge=1, le=50)
+    refresh: bool = False
 
 
 class WecomGroupQuery(StrictModel):

@@ -2,7 +2,7 @@
 # 忽略不等于删除，且不影响已经被 Git 跟踪的文件。
 
 # 安装依赖：由依赖清单重建，保留 package-lock.json。
-/node_modules
+node_modules/
 /.pnp
 .pnp.*
 .yarn/*
@@ -12,11 +12,11 @@
 !.yarn/versions
 
 # 测试报告与覆盖率产物。
-/coverage
+coverage/
 .coverage
 .coverage.*
 /coverage.xml
-/htmlcov/
+htmlcov/
 
 # 本地独立 NS 共用脚本及其专用测试：仍有调用方，不是无用文件。
 /SuiteScripts
@@ -68,3 +68,16 @@ yarn-error.log*
 # 本地工作产物与临时输出；需要交付的文件应转入明确的受管目录。
 /outputs/
 /work/
+
+# 后端隔离测试、诊断及临时工作目录；不是正式迁移或测试源码。
+/backend/.tmp/
+/backend/work/
+
+# 浏览器测试的本地报告和截图，不包含 tests/ 中的测试夹具。
+/playwright-report/
+/test-results/
+/frontend/playwright-report/
+/frontend/test-results/
+
+# 本地 AI 工具记忆与运行状态，不包含项目共享的 .agents/skills。
+/.workbuddy/

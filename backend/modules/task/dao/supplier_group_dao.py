@@ -13,13 +13,26 @@ def by_supplier(connection, supplier_id, *, lock=False):
     return dict(row) if row else None
 
 
+def by_suppliers(connection, supplier_ids):
+    query = select(supplier_groups).where(supplier_groups.c.supplier_id.in_(supplier_ids))
+    return {row["supplier_id"]: dict(row) for row in connection.execute(query).mappings()}
+
+
 def page(connection, *, status, keyword, supplier_ids, offset, limit):
     """status：all / enabled / disabled；关键字匹配群名或供应商（调用方先按名称查出供应商 ID）。"""
     where = []
     if status != "all":
         where.append(supplier_groups.c.enabled.is_(status == "enabled"))
     if keyword:
-        matches = [supplier_groups.c.group_name.like(f"%{keyword}%")]
+        matches = [
+            column.contains(keyword, autoescape=True)
+            for column in (
+                supplier_groups.c.group_name,
+                supplier_groups.c.chat_id,
+                supplier_groups.c.owner_name,
+                supplier_groups.c.owner_userid,
+            )
+        ]
         if supplier_ids:
             matches.append(supplier_groups.c.supplier_id.in_(supplier_ids))
         where.append(or_(*matches))
@@ -32,6 +45,27 @@ def page(connection, *, status, keyword, supplier_ids, offset, limit):
         .limit(limit)
     )
     return total, [dict(row) for row in connection.execute(query).mappings()]
+
+
+def supplier_ids(connection, *, enabled=None, keyword=""):
+    query = select(supplier_groups.c.supplier_id)
+    if enabled is not None:
+        query = query.where(supplier_groups.c.enabled.is_(enabled))
+    if keyword:
+        query = query.where(
+            or_(
+                *(
+                    column.contains(keyword, autoescape=True)
+                    for column in (
+                        supplier_groups.c.group_name,
+                        supplier_groups.c.chat_id,
+                        supplier_groups.c.owner_name,
+                        supplier_groups.c.owner_userid,
+                    )
+                )
+            )
+        )
+    return list(connection.execute(query).scalars())
 
 
 def insert_group(connection, values, now):

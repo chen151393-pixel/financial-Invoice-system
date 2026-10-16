@@ -52,4 +52,4 @@ class InvoiceService:
             raise ApiError(503, "发票详情读取失败，请检查业务数据库") from None
         if not found:
             raise ApiError(404, "发票不存在")
-        return invoice_mapper.detail(found[0], item_rows)
+        return invoice_mapper.detail(found[0], [row for row in item_rows if row["is_active"]])

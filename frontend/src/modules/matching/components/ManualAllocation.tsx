@@ -1,3 +1,4 @@
+import { ConversionFields, defaultConversion } from "./ConversionFields";
 import { useState } from "react";
 import { Button } from "../../../shared/components/Button";
 import { tierLabels, type Candidate, type InvoiceItem, type ManualBody } from "../types/matching";
@@ -10,17 +11,24 @@ type Search =
 
 export function ManualAllocation({
   invoiceId,
+  invoiceVersionId,
   item,
   busy,
   search,
   onCreate,
+  replacements,
 }: {
   invoiceId: string;
+  invoiceVersionId: string | null;
   item: InvoiceItem;
   busy: boolean;
   search: (keyword: string) => Promise<{ rows: Candidate[]; total: number }>;
-  onCreate: (body: ManualBody) => Promise<boolean>;
+  replacements: { id: string; label: string }[];
+  onCreate: (body: ManualBody, replaceId: string, reason: string) => Promise<boolean>;
 }) {
+  const [replaceId, setReplaceId] = useState("");
+  const [reason, setReason] = useState("");
+  const [conversion, setConversion] = useState(defaultConversion);
   const [keyword, setKeyword] = useState("");
   const [state, setState] = useState<Search>({ kind: "idle" });
   const [chosen, setChosen] = useState<Candidate | null>(null);
@@ -28,7 +36,6 @@ export function ManualAllocation({
     quantity: item.quantity ?? "",
     amount: item.amount ?? "",
     note: "",
-    closes: false,
   });
   // 同一次填写沿用同一请求标识：提交结果不明时重试不会重复分配。
   const [requestId, setRequestId] = useState(() => crypto.randomUUID());
@@ -43,6 +50,37 @@ export function ManualAllocation({
   }
   return (
     <div className="matching-form">
+      {replacements.length > 0 && (
+        <label>
+          分配方式
+          <select
+            value={replaceId}
+            disabled={busy}
+            onChange={(e) => {
+              setReplaceId(e.target.value);
+              setRequestId(crypto.randomUUID());
+            }}
+          >
+            <option value="">新增分配</option>
+            {replacements.map((row) => (
+              <option key={row.id} value={row.id}>
+                替换记录 {row.id} · {row.label}
+              </option>
+            ))}
+          </select>
+        </label>
+      )}
+      {replaceId && (
+        <label>
+          替换原因（新分配失败时原占用保持不变）
+          <textarea
+            value={reason}
+            maxLength={300}
+            disabled={busy}
+            onChange={(e) => setReason(e.target.value)}
+          />
+        </label>
+      )}
       <p className="matching-help">
         从已审核的应开范围中选择子采购行，按实际开票填写本次分配的数量与含税金额；保存后直接通过并更新任务收票进度。
       </p>
@@ -96,21 +134,37 @@ export function ManualAllocation({
           共 {state.total} 条，仅显示置信度最高的 {state.rows.length} 条，请输入关键字缩小范围。
         </p>
       )}
+      {replaceId && (
+        <p className="matching-help">候选显示替换前的剩余应开。提交时会先扣除原分配，再核算新分配。</p>
+      )}
       {chosen && (
         <form
           className="matching-form"
           onSubmit={(event) => {
             event.preventDefault();
-            void onCreate({
-              requestId,
-              invoiceId,
-              invoiceItemId: item.id,
-              purchaseLineId: chosen.purchase.purchaseLineId,
-              quantity: form.quantity,
-              amount: form.amount,
-              note: form.note,
-              closesPurchaseLine: form.closes,
-            }).then((saved) => saved && setChosen(null));
+            void onCreate(
+              {
+                requestId,
+                invoiceId,
+                invoiceItemId: item.id,
+                purchaseLineId: chosen.purchase.purchaseLineId,
+                quantity: form.quantity,
+                amount: form.amount,
+                note: form.note,
+                ...conversion,
+                invoiceVersionId,
+                purchaseBasisId: chosen.purchase.purchaseBasisId,
+              },
+              replaceId,
+              reason,
+            ).then((saved) => {
+              if (!saved) return;
+              setChosen(null);
+              setReplaceId("");
+              setReason("");
+              setRequestId(crypto.randomUUID());
+              setState({ kind: "idle" });
+            });
           }}
         >
           <ChecksTable checks={chosen.checks} caption="与所选子采购行逐项比对" />
@@ -132,17 +186,9 @@ export function ManualAllocation({
               />
             </label>
           </div>
-          <label className="matching-check">
-            <input
-              type="checkbox"
-              checked={form.closes}
-              disabled={busy}
-              onChange={(e) => setForm({ ...form, closes: e.target.checked })}
-            />
-            该子采购行已开完（金额有差异也按已开完结束）
-          </label>
+          <ConversionFields value={conversion} onChange={setConversion} busy={busy} />
           <label>
-            审核说明（有不一致项、超开或按差异结束时必填）
+            审核说明（有不一致项或超开时必填）
             <textarea
               rows={2}
               maxLength={300}
@@ -151,8 +197,8 @@ export function ManualAllocation({
               onChange={(e) => setForm({ ...form, note: e.target.value })}
             />
           </label>
-          <Button type="submit" variant="primary" disabled={busy}>
-            {busy ? "保存中…" : "保存并通过"}
+          <Button type="submit" variant="primary" disabled={busy || !!chosen.block}>
+            {busy ? "保存中…" : replaceId ? "替换并通过" : "保存并通过"}
           </Button>
         </form>
       )}

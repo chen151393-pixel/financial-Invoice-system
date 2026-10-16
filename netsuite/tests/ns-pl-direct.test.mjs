@@ -339,6 +339,7 @@ test("direct使用实际配置的物理字段直接读取，PL及CD查询保持�
     assert.equal(p.amount, "913");
     assert.equal(p.unit, "台");
     assert.equal(p.price, "91.30");
+    assert.equal(p.declaration, "BG001");
     const c = r.groups[0].customsRows[0].values;
     assert.equal(c.quantity, "5");
     assert.equal(c.amount, "132.74");
@@ -371,6 +372,7 @@ test("direct使用实际配置的物理字段直接读取，PL及CD查询保持�
     assert.match(customsExcelRow, /<c r="P2"[^>]*><v>0\.64<\/v>/);
     assert.match(customsExcelRow, /<c r="Q2"[^>]*>.*?<t[^>]*>US Dollar<\/t>/);
     const purchaseExcelRow = excel.match(/<row r="3"[^>]*>.*?<\/row>/)[0];
+    assert.match(purchaseExcelRow, /<c r="A3"[^>]*t="inlineStr"><is><t[^>]*>BG001<\/t>/);
     for (const column of ["P", "Q"])
       assert.match(purchaseExcelRow, new RegExp(`<c r="${column}3"[^>]*><is><t[^>]*><\\/t><\\/is><\\/c>`));
   }

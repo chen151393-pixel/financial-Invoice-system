@@ -42,7 +42,7 @@ flowchart TD
 
 ### 2.2 接本地查询时应调整：当前分组多加了报关单 ID
 
-位置：[pl_service.py](../../backend/modules/business/pl_service.py#L73)、[报关侧分组](../../backend/modules/business/pl_service.py#L99)。
+位置：pl_service.py（旧实现已退役，参见 Git 历史）、报关侧分组（旧实现已退役，参见 Git 历史）。
 
 当前分组为“报关单 ID / PL 单号 / 公司”。使用现有假数据扩展出同一 PL、同一公司下的两张报关单，实际返回 `20 / PL001 / 3` 和 `21 / PL001 / 3` 两组。它符合现有实时联查说明，但不符合图片中只以 PL 和公司归组的目标。
 
@@ -50,7 +50,7 @@ flowchart TD
 
 ### 2.3 接本地查询时应调整：先读完 NS 再分页会重复请求并切开分组
 
-位置：[逐条详情读取](../../backend/modules/business/pl_service.py#L26)、[内存分页](../../backend/modules/business/pl_service.py#L114)。
+位置：逐条详情读取（旧实现已退役，参见 Git 历史）、内存分页（旧实现已退役，参见 Git 历史）。
 
 当前缓存只存在于单次请求内。假数据构造 58 条展示行后，第 1 页显示 50 行，第 2 页显示 8 行；两次请求各读取 62 次 NS 详情，同一个分组出现在两页。每次还会执行各类 ID 查询。超过 300 次详情读取时直接拒绝返回。
 
@@ -58,7 +58,7 @@ flowchart TD
 
 ### 2.4 接本地查询时应补齐：仅有报关数据也要显示
 
-位置：[沿采购单找报关单](../../backend/modules/business/pl_service.py#L47)、[当前限制提示](../../backend/modules/business/pl_service.py#L110)。
+位置：沿采购单找报关单（旧实现已退役，参见 Git 历史）、当前限制提示（旧实现已退役，参见 Git 历史）。
 
 当前实时实现只能发现采购单引用的报关单。假数据中报关记录仍存在，但移除采购单查询结果后，返回 0 行并附带限制提示。这是代码已经说明的限制，不是静默报错。
 

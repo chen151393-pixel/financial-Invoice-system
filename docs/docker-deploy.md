@@ -1,6 +1,6 @@
 # Linux ECS Docker 部署（SSH 隧道访问）
 
-本配置用于先在 Linux ECS 上运行 `develop` 分支，并通过 SSH 隧道从自己的电脑访问。它不是公网网站配置：Compose 使用 Linux 的 host 网络，后端只监听服务器的 `127.0.0.1:3000`，不发布公网端口。当前正式前端没有远程登录表单；公网域名部署需要另行完成 HTTPS 和远程身份入口，不能直接把本机免登录模式暴露到公网。
+本配置用于先在 Linux ECS 上运行 `develop` 分支，并通过 SSH 隧道从自己的电脑访问。它不是公网网站配置：Compose 使用 Linux 的 host 网络，后端只监听服务器的 `127.0.0.1:3000`，不发布公网端口。正式前端已统一接入账号密码登录；公网域名部署仍需配置 HTTPS 和对应 APP_ORIGIN。
 
 `Dockerfile` 用 Node 22 构建正式 Vite 前端，前端构建只使用 `frontend/` 目录，再把 `frontend/dist` 和 Python 后端放入 Python 3.11 运行镜像。运行时复用 `python -m backend`，保持单进程会话与原有数据库迁移规则；镜像不包含 `.env`、`.env.local`、数据库和私钥。正式运行统一读取业务 MySQL 连接，所有模块共用一个连接池。两条历史迁移链在同一库登记；启动不会自动迁移或初始化数据库。
 
@@ -43,7 +43,6 @@ mkdir -p data secrets
 HOST=127.0.0.1
 PORT=3000
 APP_ORIGIN=http://localhost:3000
-LOCAL_BROWSER_ACCESS=true
 ADMIN_PASSWORD=替换为独立密码
 BUSINESS_MYSQL_HOST=127.0.0.1
 BUSINESS_MYSQL_PORT=3306
@@ -53,7 +52,7 @@ BUSINESS_MYSQL_PASSWORD='替换为实际数据库密码'
 NETSUITE_WRITE_ENABLED=false
 ```
 
-`APP_ORIGIN`、浏览器地址和 SSH 隧道的本地端口必须一致。本机免登录入口要求实际连接来自服务器回环地址，并核对 Host 和 Origin。端口 3000 已被占用时，先确认占用进程，再同步修改 `PORT`、`APP_ORIGIN` 和隧道端口。
+`APP_ORIGIN`、浏览器地址和 SSH 隧道的本地端口必须一致。所有浏览器都使用工作台账号密码登录，写请求校验 Origin；本机免密入口已禁用。端口 3000 已被占用时，先确认占用进程，再同步修改 `PORT`、`APP_ORIGIN` 和隧道端口。
 
 如需连接服务器本机 MySQL，在环境文件中填写实际的 `BUSINESS_MYSQL_*` 配置；host 网络下 `127.0.0.1` 指向 ECS 本机。业务库必须已经存在且基础表经过核对；`upgrade` 统一升级两条历史迁移链，不能初始化空库。旧 `DATABASE_URL` 不覆盖业务连接。NS 私钥放在服务器 `secrets/` 中，并把 `NETSUITE_PRIVATE_KEY_PATH` 设置为容器内路径，例如 `/run/secrets/ns-private.pem`。按实际权限保护该文件。使用合同归档或其他本地文件路径时，还需在 Compose 中为对应路径配置明确的数据挂载；合同共享盘见下方[合同仅保存到共享盘](#合同仅保存到共享盘)。
 

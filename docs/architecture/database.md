@@ -2,7 +2,7 @@
 
 状态：**v2 初版已确认（2026-10-10）；第 3 步建立基线迁移 `backend/migrations/versions/0001_baseline.py`，各模块在第 4 步切换到新表**。初版不迁移旧模块测试数据；本次在已有 v2 结构上追加版本与证据设计，保留 v2 台账。原增量方案已归档到[历史方案](../history/database-incremental.md)。总体规则见[后端规则](backend-rules.md)第 8 节。
 
-**2026-10-15 修订口径**：当前实现基线为 `test/e7422b7`，已有 24 张表及迁移 `0001`—`0004`。第 4 节保留当前表结构说明，第 5、6 节描述修订后的目标规则；新增字段、两张版本表及当前差距集中列在第 10 节，均须以后续迁移和代码实现，不能据本文认定已上线。原“不迁移”仅指旧模块测试数据；本次补强必须保留已进入 v2 新表的审核、分配和审计。
+**2026-10-15 修订口径**：本次修订起点为 `test/e7422b7` 的 24 张表及迁移 `0001`—`0004`；当前工作区已完成第 10 节 A—D，追加 `0005`—`0009`，共 26 张业务表；另以 `0010`—`0015` 补齐字段中文备注，保留原类型、约束和数据。第 4 节保留初版表结构说明，新增字段与两张版本表见第 10 节；当前逐字段解释见[表设计与字段字典](../mysql/current-data-dictionary.md)。2026-10-16 追加 `0016_sync_lemon_bindings`，共 27 张业务表；open2 已有账号绑定已实现，发票拉取、定时同步与目标环境部署尚待核对或接入，不能据代码认定已上线。原“不迁移”仅指旧模块测试数据；本次补强保留已进入 v2 新表的审核、分配和审计。
 
 ## 1. 已确认的决定
 
@@ -17,7 +17,7 @@
 | 发票比对 | 建议全部人工审核；名称等可解释差异允许说明通过，身份、币种、版本、单位换算与发票额度必须符合硬条件 |
 | 币种 | 子采购继承同账套明确关联的母采购币种；本期柠檬云人民币进项票在适配时明确写入 CNY；不做跨币种换算 |
 | 完成 | 人工通过时可按差异结束子采购行；全部结束后任务自动完成 |
-| 超开 | 允许人工通过并说明；只记录超开标记，不自动视为全部开完（待实施修订） |
+| 超开 | 允许人工通过并说明；只记录超开标记，不自动视为全部开完（已实施） |
 | 金额容差 | 每行 0.01 元 |
 | 置信度分档 | 80 分以上高，50–79 中，50 以下低 |
 | 供应商比对 | NS 子采购单上没有纳税人识别号，**先按名称比对**；主数据表不设税号列，以后有来源时再加 |
@@ -28,7 +28,7 @@
 | --- | --- |
 | 财务、采购共用数据 | 数据按组织共享，只按 **NS 账套**（正式 / 沙箱）区分；操作人记录在 `*_by` 字段 |
 | 报关单与子采购单多对多 | 独立的关联表，单头级和行级关系都是普通行 |
-| 审核冻结范围 | 审核行不可修改；计划由 `review_purchase_bases` 管理跨报关单的子采购行依据版本，任务引用当前依据 |
+| 审核冻结范围 | 审核行不可修改；`review_purchase_bases` 管理跨报关单的子采购行依据版本，任务引用当前依据 |
 | 只生成一次 | 任务行对"有效的子采购行"加唯一约束（生成列） |
 | 多单一票、一票多单 | 分配表一行 = 一条发票行分给一条子采购行的数量和金额 |
 | 收票进度不能手工改 | 已收值只由已通过的分配汇总得出；任务行上的汇总值是缓存，可按分配表重算 |
@@ -57,7 +57,7 @@
 
 ## 4. 表结构
 
-以下为当前 24 张表。第 10 节计划新增 `review_purchase_bases`、`invoice_versions`，实施后共 26 张；旧迁移和已有业务记录均保留。
+以下为基线 24 张表。第 10 节已新增 `review_purchase_bases`、`invoice_versions`，另见第 11 节账号绑定表，当前共 27 张；已执行的 v2 迁移与业务记录保留，旧模块迁移代码已退役。
 
 ```text
 source   10：suppliers、companies、raw_records、parent_orders、parent_order_lines、
@@ -673,7 +673,7 @@ CREATE TABLE sync_cursors (
 | 含税金额 | 15 | 本次分配金额符合双方剩余范围；整行结束时尾差不超过 0.01 元 | — |
 
 - 置信度 = 各项得分之和（0–100）；80 以上为高，50–79 为中，50 以下为低。
-- 数量、金额按本次分配评估，正常分次收票或一票分多单不因整票不等于整单剩余值而被判不一致；该项为待实施评分修订。
+- 数量、金额按本次分配评估，正常分次收票或一票分多单不因整票不等于整单剩余值而被判不一致；该评分规则已实施。
 - 子采购单位为空时标记待核实；不同单位须有第 10.5 节的换算依据。评分不替代硬校验。
 - 可解释的不一致项降低置信度，人工通过时填写说明；硬条件不满足时，即使高分或填写说明也不能通过。
 - 全部建议都要人工审核，系统不自动通过；高置信度建议可在页面上批量通过，仍记录操作人。
@@ -697,7 +697,7 @@ CREATE TABLE sync_cursors (
 | --- | --- |
 | 发票行已分配的数量或金额会超过发票行本身 | 同一张票不能重复使用 |
 | 发票为作废或红冲 | 不能作为收票依据 |
-| 发票状态未知或明细尚不完整 | 保存来源并补全，不能以未知状态直接确认（待实施统一校验） |
+| 发票状态未知或明细尚不完整 | 保存来源并补全，不能以未知状态直接确认（已统一校验） |
 | 发票币种与有效审核依据的币种不一致或未知 | 本期柠檬云通道固定 CNY；子采购继承母单币种，真实无母单等异常经财务有据核实后冻结于 review；读源失败须重试，不能伪装成正常继承 |
 | 子采购来源、有效审核依据或发票版本已变化 | 旧建议过期；确认时重新加锁核实，不能只比较最新采购行摘要 |
 | 单位缺失或不同单位没有有效换算依据 | 不能直接累计不同口径数量；不靠说明文字跳过 |
@@ -730,7 +730,7 @@ documents_pending → notify_pending → awaiting_invoice → partially_received
 - 有第一条通过的分配 → `partially_received`；全部有效任务行 `received` → `completed`，写 `completed_at`。发票可能先于合同或通知到达，此时直接进入收票节点。
 - 取消已通过的分配后按实际收票退回（2026-10-15 补充）：仍有收票 → `partially_received`；没有收票 → 收票前节点（已登记通知 → `awaiting_invoice`；合同已全部归档 → `notify_pending`；否则 `documents_pending`）。
 - 每次状态变化写 `task_events`。
-- 待实施补强：发票失效、待复核及差异结束失效也触发重算；`requires_review` 为独立标记，存在待复核问题时不能显示完成。合同、通知节点始终按各自实际记录展示。
+- 已实现补强：发票失效、待复核及差异结束失效也触发重算；`requires_review` 为独立标记，存在待复核问题时不能显示完成。合同、通知节点始终按各自实际记录展示。
 - 原任务因撤销回退时清除当前 `completed_at`，原完成事件保留；依据换版时保留旧任务的历史完成时间与替代事件。
 
 ## 7. 整条链路的数据流
@@ -747,7 +747,7 @@ documents_pending → notify_pending → awaiting_invoice → partially_received
 | 8 人工比对 | 财务通过 / 驳回 | `matching_allocations` → `confirmed` / `rejected`；→ 事件 `AllocationChanged` |
 | 9 更新进度 | 事件 `AllocationChanged` | 按已通过分配重新汇总 `task_lines`；任务状态；`task_events` |
 
-该表为目标链路；其中依据版本、发票版本、换算与失效事件待按第 10 节补强，不能视为本次文档修改已实现。
+该表为业务链路；依据版本、发票版本、换算与失效事件已按第 10 节 A—D 接入当前工作区。定时同步和 open2 仍待接入，目标库是否已执行迁移须另行核对。
 
 ## 8. 主要查询
 
@@ -766,18 +766,37 @@ documents_pending → notify_pending → awaiting_invoice → partially_received
 
 - **初次 v2 切换**：新表从空表开始，不迁移旧模块测试数据。**本次补强**：已有 v2 记录按第 10.8 节准确回填或标记待复核，不能清库重建或删除既有占用。
 - **新迁移链**（第 3 步已建立）：`backend/migrations`，配置 `backend/alembic.ini`，版本表 `schema_version`，基线 `0001_baseline` 一次创建第 4 节全部 24 张表。与设计稿的实现差异：
-  - 发票行表名为 `invoice_items`（比对表列名 `invoice_item_id`），避免与过渡期仍在使用的旧表 `invoice_lines` 同名；
+  - 发票行表名为 `invoice_items`（比对表列名 `invoice_item_id`），避免与数据库中保留的旧表 `invoice_lines` 同名；
   - 生成列使用 `CASE` / `COALESCE`；`updated_at` 由 DAO 写入，不用 `ON UPDATE`（第 3 节）。
 - **后续迁移**：`0004` 增加 `source_parent_orders.exchange_rate`、`source_purchase_orders.currency_source`、`currency_issue`（子采购单币种取自母采购单）；`0002` 增加 `source_purchase_orders.parent_order_no`；`0003` 增加 `task_tasks.review_revision`（task 不读取 review，审核版本随事件写入）、`task_notifications.sender_name`、`note`（人工发送的员工与登记说明）。
-- **旧迁移链**：已移到 `backend/legacy_migrations/app`、`backend/legacy_migrations/business`（版本号、版本表不变，已部署的库不受影响），随第 4 步各模块切换删除，代码历史保留在 Git 中。
-- **命令**：`npm.cmd run db:upgrade` 先升级两条旧迁移链，再升级新迁移链；`python -m backend.manage schema-sql` 输出新表结构的 MySQL DDL 供审阅；正式启动时核对三条链都在最新版本。
-- **验证**：`backend/tests/test_schema_baseline.py` 在 SQLite 上验证建表、关键唯一约束、CHECK 约束与回退；提供 `BUSINESS_MIGRATION_TEST_SERVER_URL` 时在随机新建的 MySQL 库上执行同样的检查。
-- **旧表**：代码不删除数据库中的旧表。全部模块切换完成后提供旧表清单，由管理员确认后手工删除；也可以直接新建空库使用。
+- **旧迁移链**：4e 已从代码移除，历史保留在 Git；不删除数据库中的旧表、旧版本表和记录。
+- **命令**：`npm.cmd run db:upgrade` 仅在线升级新迁移链（含 v2 基线回填）；`python -m backend.manage schema-sql` 输出新表结构的 MySQL DDL 供审阅，不包含数据回填；正式启动只核对 `schema_version` 在最新版本。
+- **验证**：`backend/tests/test_schema_baseline.py` 在 SQLite 上验证建表、关键唯一约束、CHECK 约束与向前升级；提供 `BUSINESS_MIGRATION_TEST_SERVER_URL` 时在随机新建的 MySQL 库上执行同样的检查。
+- **旧表**：代码不删除数据库中的旧表。管理员须先确认实际库清单、保留需求及回写未知结果，再决定是否手工处理；也可以直接新建空库使用。代码侧历史表清单见下方。
 - **实施顺序**（架构第 4 步，每个模块一个 PR，按依赖顺序）：source → review → task → invoice → matching → sync。每个模块切换时同时改为分层目录，在 `entity/` 中定义本模块的表并由测试比对与迁移结果一致，调整调用它的门面；之后的模块从新表读取。
 
-## 10. 2026-10-15 修订与补强（待实施）
+### 9.1 4e 退役表核对清单
 
-本节是修订后的实施契约，不是迁移执行记录。`e7422b7` 已提供母单币种继承、Excel 人民币导入、人工分配、取消回退与基础收票汇总；以下新增表、版本绑定、换算和冲正仍需编码与验收。旧章节与本节不一致时，以本节及第 5、6 节修订规则为目标，当前代码能力以模块 README 的“当前实现”部分为准。
+下表依据退役代码与历史迁移整理，供管理员对照实际库。2026-10-15，经管理员确认旧数据不迁移、后续重新拉取后，已对本机 `127.0.0.1:3306/financial_invoice_business` 完成备份和手工清理：删除清单中实际存在的 21 张旧业务及旧版本表，共 2,487 条记录。
+
+清理后保留 31 张表：在用新结构 27 张（含 `schema_version`）、`unit_dictionary` 及 `ns_previews`、`ns_target_locks`、`ns_audit`。保留表的记录数未变化，迁移版本仍为 `0009_matching_ledger_versions`。整库备份和执行结果位于仓库本机目录 `outputs/legacy-cleanup/20261015-175905-review/`（`before-cleanup.sql`、`execution-result.json`）。
+
+本次清理是管理员确认后的本机手工操作；应用代码和迁移仍不自动删除旧表。本次未在其他环境执行旧表清理或验证其状态，其他环境须分别核对与确认。
+
+| 旧用途 | 历史表名 |
+| --- | --- |
+| 来源与关联 | `purchase_orders`、`purchase_order_lines`、`customs_declarations`、`customs_declaration_lines`、`parent_purchase_orders`、`parent_purchase_order_lines`、`customs_reconciliation_results` |
+| 旧发票与匹配 | `invoices`、`invoice_lines`、`invoice_purchase_allocations`、`invoice_purchase_link_batches`、`invoice_purchase_link_pairs` |
+| 财务审核与任务 | `finance_reviews`、`finance_review_snapshots`、`finance_review_audit`、`finance_invoice_tasks`、`finance_task_documents`、`finance_task_notifications` |
+| 通知群 | `finance_supplier_groups`、`finance_supplier_group_history`、`finance_wecom_group_directory` |
+| 旧迁移版本 | `alembic_version`、`business_alembic_version` |
+| 归档回写（特别保留） | `ns_previews`、`ns_target_locks`、`ns_audit`；必须人工确认无 executing / unknown 记录后才可另行处理 |
+
+当前 `source_*`、`review_*`、`task_*`、`invoice_raw_records`、`invoice_headers`、`invoice_items`、`invoice_versions`、`matching_allocations`、`schema_version` 属于在用结构，不属于本清单。
+
+## 10. 2026-10-15 修订与补强（A—D 已实现，E 待接入）
+
+本节规定补强契约。当前分支已实现 A—D，并新增 `0005`—`0009` 分模块迁移；4e 删除旧实现，保留旧数据库表。E open2 和真实目标环境部署尚未完成。新字段与调用方整体切换，原 `0001`—`0004` 不修改；既有 v2 数据回填和无法还原证据的待复核处理见迁移测试。
 
 ### 10.1 币种来源、同步与核实
 
@@ -794,7 +813,7 @@ documents_pending → notify_pending → awaiting_invoice → partially_received
 
 同步依次完成：子单母单引用 ID 提取 → 按 ID 去重批量读取母单及币种字典 → 事务内保存母单原始快照、母子外键和继承值 → 刷新相关审核摘要。母单显示编号只用于展示，不能反查同名记录建立关系。金额继续保存子采购含税原值，不使用母单汇率或报关币种改算金额。
 
-已有 `source_parent_orders.currency/exchange_rate`、`source_purchase_orders.parent_order_id/currency/currency_source/currency_issue` 复用。待补充母单币种内部 ID、继承所依据的 `source_raw_records.id`；NS 币种 ID 与 ISO 编码的转换依据同账套字典，不写死“ID 1 永远是 CNY”。母单汇率保留供追溯，本期不参与跨币种匹配。
+已有 `source_parent_orders.currency/exchange_rate`、`source_purchase_orders.parent_order_id/currency/currency_source/currency_issue` 复用。已补充母单币种内部 ID、继承所依据的 `source_raw_records.id`；NS 币种 ID 与 ISO 编码的转换依据同账套字典，不写死“ID 1 永远是 CNY”。母单汇率保留供追溯，本期不参与跨币种匹配。
 
 人工核实属于 review：财务核对页针对真实缺失的子采购填写币种、合同或证据引用及说明；后端取得操作者与时间，确认时核实该证据仍对应当前子单和金额口径。同一子采购单全部行使用同一核实币种。核实内容随审核原子保存到依据版本，不能改写 NS 字段、source 原始币种或既存审核行。已审核但缺币种的历史记录，需要新审核版本；读取失败不能用人工输入绕过。
 
@@ -884,7 +903,7 @@ documents_pending → notify_pending → awaiting_invoice → partially_received
 
 ### 10.7 门面、事件与事务契约
 
-以下为待实施契约；现有事件不删除，随调用方一并升级，不通过导入其他模块 DAO 实现。
+以下契约已由门面和同步订阅实现，不通过导入其他模块 DAO 实现。事件传稳定 ID，订阅方在同一事务通过门面读取冻结版本与摘要。
 
 | 事件 / 门面 | 关键数据 | 处理顺序 |
 | --- | --- | --- |
@@ -892,7 +911,7 @@ documents_pending → notify_pending → awaiting_invoice → partially_received
 | review 的 `ReviewApproved` | 审核 ID、每行的依据 ID / revision / hash、冻结口径、替代关系 | app 显式登记 task 先生成 / 换版，matching 再核实承接并发布汇总；都在同一事务，不能依赖未声明的注册顺序 |
 | review 的 `PurchaseBasisInvalidated` | 依据 ID、问题与来源摘要 | matching 记录复核问题并汇总；task 限制新匹配与完成 |
 | invoice 的 `InvoiceChanged` | 发票 ID、旧新版本 ID、变化类型、受影响逻辑行 | matching 处理过期建议和确认复核，发布最新汇总 |
-| matching 的 `AllocationChanged` | 事件 ID；每行当前依据 ID、有效采购数量和金额、待复核标记、`ledger_sha256` | task 用绝对合计更新投影并重算，不把同一事件作为增量重复相加 |
+| matching 的 `AllocationChanged` | 每行当前依据 ID、有效采购数量和金额、待复核标记、`ledger_sha256` | task 用绝对合计更新投影并重算，不把同一事件作为增量重复相加 |
 | review 的只读门面 | 当前依据、冻结版本、是否可分配及原因；接受调用方 Connection 与锁定选项 | matching 确认时验证当前依据；task 仅消费事件，不查询 matching 的表 |
 
 `ledger_sha256` 由 matching 对该子采购行所有曾确认分配（含已取消历史）的稳定 ID、两端版本、数量金额、确认状态与核实问题排序计算，不包含查询时间或未确认建议。生成 / 驳回建议不改变收票账本，也不使差异结束失效。task 保存此摘要；差异结束请求须携带相同摘要。同步事件与加锁保证同一事务中的汇总顺序；修复缓存时由 matching 从台账重新发布绝对合计，不以旧 task 缓存修复台账。
@@ -915,4 +934,24 @@ A—D 是同一兼容版本的开发里程碑：锁规范、版本字段和全�
 
 最低验证包括：同账套母单继承与跨账套同 ID 隔离；无母单和读取失败；CNY 固定规则及外币不匹配；母单改币种触发全部相关审核失效；审核过期请求；重复报关；已完成后增加 / 减少应开；不同单位及换算证据过期；一票多单与一单多票的数量金额守恒；取消 / 作废 / 红冲后的任务与差异结束回退；发票重排和新版本不重复占用；提交结果不明与重启后的台账重算。
 
-MySQL 上另验证迁移升级、生成列唯一约束、两票争同一子采购行、同一票被并发分配、重审与取消 / 导入并发、订阅方异常整单回滚。SQLite 可用于规则测试，不能替代 MySQL 并发验收。本次文档修订未运行这些业务测试、未执行迁移，也未触发 NS 写入。
+MySQL 上另验证迁移升级、生成列唯一约束、两票争同一子采购行、同一票被并发分配、重审与取消 / 导入并发、订阅方异常整单回滚。SQLite 可用于规则测试，不能替代 MySQL 并发验收。隔离测试覆盖规则、向前迁移、版本表扩宽、容量竞争、重审/来源变更/取消与导入交错执行；未触发真实 NS 写入或部署业务库。具体验收以本次运行结果为准。
+
+## 11. 柠檬云已有账号绑定（2026-10-16）
+
+迁移 `0016_sync_lemon_bindings` 新增 `sync` 所属的 `sync_lemon_bindings`，不修改旧迁移。
+
+| 字段 | 类型与约束 | 含义 |
+| --- | --- | --- |
+| id | BIGINT 主键 | 绑定记录 ID |
+| scope_key | VARCHAR(64)，唯一 | 官方环境、应用编号与认证 owner 的 SHA-256，隔离绑定范围 |
+| owner | VARCHAR(190)，非空 | 服务端认证管理员身份 |
+| mobile | VARCHAR(32)，非空 | 本次绑定的已有账号手机号 |
+| status | VARCHAR(20)，非空，CHECK | unbound、binding、unknown、bound |
+| verified_at | DATETIME，可空 | 最近明确成功或官方查询核实时间，UTC |
+| created_at / updated_at | DATETIME，非空 | 创建与更新时刻，UTC |
+
+不保存密码、授权码和令牌。等待授权／确认只在单进程短期上下文中，最多 10 分钟，不扩张数据库持久状态。外部请求前以 scope、手机号和原状态条件更新争用执行权；外部请求在事务外执行。网络结果不明留 unknown，进程中断留 binding；重启不清锁、不自动重发，使用官方查询核实。此表不代表已经获得发票账套权限，也不改变现有 Excel 命名空间。详情见[账号绑定说明](../lemon-account-binding.md)。
+
+### 既有单位字典展示兼容（2026-10-16）
+
+`unit_dictionary(unit_id, unit_name, enabled)` 由管理员维护，归 source 模块只读访问，其他模块通过 source 门面读取。该历史非前缀表只用于将数字编号显示为启用的单位名称，不属于 `schema_metadata` 新迁移链；缺表时显示来源原值，不自动建表或填充猜测字典。既有数据、冻结依据和比对规则不因展示名称改变。后续显式迁移且替换全部调用方后再退出兼容。

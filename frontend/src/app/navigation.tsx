@@ -58,4 +58,14 @@ export const navigation: readonly SidebarGroup<View>[] = [
       },
     ],
   },
+  {
+    label: "基础资料",
+    items: [
+      {
+        id: "supplier-profiles",
+        label: "供应商档案",
+        icon: <MenuIcon path="M4 21V3h12v18 M16 9h4v12 M8 7h4 M8 11h4 M8 15h4 M2 21h20" />,
+      },
+    ],
+  },
 ];

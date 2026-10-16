@@ -44,7 +44,7 @@ export function SyncOverview() {
             <span className="sync-overview__logo sync-overview__logo--lemon">柠</span>
             <div>
               <h2>柠檬云发票</h2>
-              <small>Excel 发票导入 · API 待接入</small>
+              <small>账号授权绑定 · Excel 发票导入</small>
             </div>
             <span className="sync-overview__badge">文件导入</span>
           </div>

@@ -1,8 +1,16 @@
 # 网站调用 NS 查询 JSON 接口
 
+## 最新统一部署包（2026-10-15）
+
+当前累计更新请使用[PL联查最新部署包.zip](../outputs/pl-lookup-example/PL联查最新部署包.zip)，步骤与验收见[最新部署说明](../outputs/pl-lookup-example/PL联查最新部署说明.md)。完整包包含 `pl_decimal.js`、`pl_trace.js`、`pl_snapshot.js`、`pl_query_service.js`、`pl_excel.js`、`pl_client.js`，无需叠加旧增量包。已完整部署10月14日累计包的环境，本次只需覆盖 **`pl_trace.js`、`pl_query_service.js`**，无需改Suitelet、RESTlet、Excel、Client入口或配置。
+
+服务版本 `2026-10-15-purchase-declaration-1`：追溯组装采购行时补齐对应报关行的真实报关单号，页面和Excel现有首列同步显示；缺失留空，同一采购拆到不同报关行时分别使用各自行单号。不按PL或相邻行猜测，不改变来源匹配、金额数量校验和分摊，不回写NS。旧快照不重算，部署后刷新并重新查询再导出。
+
+5项针对性用例及修改文件定向ESLint通过。完整PL测试175项中169项通过，6项既有失败经还原本次源码变更后复现，详情见部署说明；未上传NS或验收真实下载。下方历次更新保留为历史记录，当前累计部署清单以最新说明为准。
+
 ## 财务核对v3更新（2026-09-23）
 
-两个正式页面独立导航：采购报关联查 `/pl-reconciliation` 调用 `POST /api/source/pl-comparison` 保留平铺来源对照；财务核对 `/finance-reconciliation` 调用 `POST /api/reconciliation/query`，由reconciliation模块复用原business只读NS服务。财务核对使用已确认的三级展开，整单审核通过`POST /api/reconciliation/approve`保存到应用库，执行`npm.cmd run db:upgrade`增加三张审核表。详见[审核规则和表字段](../backend/modules/reconciliation/README.md)。
+两个正式页面独立导航：采购报关联查 `/pl-reconciliation` 调用 `POST /api/source/pl-comparison` 保留平铺来源对照；财务核对 `/finance-reconciliation` 调用 `POST /api/reconciliation/query`，由reconciliation模块复用原business只读NS服务。财务核对使用已确认的三级展开，整单审核通过`POST /api/reconciliation/approve`保存到应用库，执行`npm.cmd run db:upgrade`增加三张审核表。详见审核规则和表字段（旧实现已退役，参见 Git 历史）。
 
 本次**本地代码已实现，NS端尚未上传**。部署包`outputs/finance-review-v3.zip`包含新版`pl_restlet.js`、`pl_trace.js`及说明。更新前核对现有共用查询服务版本；二者覆盖同一`pl_lookup`目录的对应文件，保持现有部署、配置、角色、账户不变。追溯脚本仅增加已确定关系的`customsIndex`，不改变配对或分摊算法。若NS仍是旧版本，网站可以查到原行，但不能按相邻行自动嵌套或整单审核。
 

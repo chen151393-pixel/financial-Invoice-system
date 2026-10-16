@@ -30,6 +30,14 @@ export interface CustomsLine {
   purchaseLines: PurchaseLine[];
 }
 export interface ComparisonGroup {
+  currencyEvidenceSummary?: string[];
+  currencyChecks: {
+    purchaseOrderId: string;
+    orderNumber: string;
+    currency: string;
+    allowed: boolean;
+    reason: string;
+  }[];
   id: string;
   contentSha256: string;
   account: string;
@@ -75,3 +83,5 @@ export type ComparisonState =
   | { kind: "idle" }
   | { kind: "loading" }
   | { kind: "error"; message: string };
+
+export type CurrencyEvidence = { purchaseOrderId: string; currency: string; reference: string; note: string };

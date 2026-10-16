@@ -6,6 +6,7 @@ export interface GroupFields {
   userid: string;
 }
 export interface SupplierOption {
+  binding?: GroupBinding | null;
   account: string;
   supplierId: string;
   supplierName: string;
@@ -39,6 +40,7 @@ export interface GroupList extends GroupPage<GroupBinding> {
   manage: { allowed: boolean; reason: string };
 }
 export interface WecomGroup extends GroupFields {
+  matchReason: string;
   memberCount: number;
   createdAt: string | null;
 }
@@ -49,4 +51,18 @@ export interface WecomGroupQuery {
   keyword: string;
   page: number;
   refresh: boolean;
+}
+
+export interface SupplierGroupMatchQuery extends WecomGroupQuery {
+  supplierId: string;
+}
+
+export interface SupplierProfile extends SupplierOption {
+  nsInternalId: string;
+}
+export interface SupplierProfileQuery extends Omit<GroupQuery, "status"> {
+  status: GroupQuery["status"] | "unbound";
+}
+export interface SupplierProfileList extends GroupPage<SupplierProfile> {
+  manage: GroupList["manage"];
 }

@@ -11,6 +11,7 @@ from ..mapper import notification_mapper, task_mapper
 from ..policy.task_policy import SUPERSEDED_REASON, missing_identity_reasons
 from ..vo.capability import Capability
 from ..vo.task_vo import TaskDetail, TaskDocument, TaskGroup, TaskList
+from .basis_guard import reason as basis_reason
 
 READ_ERROR = "开票任务读取失败，请检查业务数据库及迁移状态"
 
@@ -88,6 +89,7 @@ class TaskService:
                 if task is None:
                     raise ApiError(404, "开票任务不存在")
                 return {
+                    "basis_reason": basis_reason(connection, task_id),
                     "task": task,
                     "lines": task_line_dao.by_tasks(connection, [task_id]),
                     "documents": document_dao.by_task(connection, task_id),
@@ -121,6 +123,12 @@ class TaskService:
             task, summary, data["notifications"], attachments, binding, group_reason
         )
         superseded = task["status"] == "superseded"
+        block = data["basis_reason"]
+        if block and not superseded:
+            for document in documents:
+                document.prepare = Capability(allowed=False, reason=block)
+            notification.edit = Capability(allowed=False, reason=block)
+            notification.record = Capability(allowed=False, reason=block)
         prepare_reason = next((doc.prepare.reason for doc in documents if not doc.prepare.allowed), "")
         return TaskDetail(
             task=summary,
@@ -129,7 +137,7 @@ class TaskService:
             sourceStatus="superseded" if superseded else "current",
             sourceMessage=SUPERSEDED_REASON
             if superseded
-            else "任务按财务审核通过时冻结的应开数量和金额跟进。",
+            else block or "任务按财务审核通过时冻结的应开数量和金额跟进。",
             prepare=Capability(
                 allowed=any(doc.prepare.allowed for doc in documents),
                 reason="子采购合同已保存到共享盘"
@@ -138,8 +146,8 @@ class TaskService:
             ),
             notify=notification.send,
             compare=Capability(
-                allowed=not superseded,
-                reason="在发票比对页审核比对建议；通过或取消后自动更新任务行已收与任务状态。",
+                allowed=not superseded and not block,
+                reason=block or "在发票比对页审核比对建议；通过或取消后自动更新任务行已收与任务状态。",
             ),
             steps=task_mapper.steps(
                 task["status"],

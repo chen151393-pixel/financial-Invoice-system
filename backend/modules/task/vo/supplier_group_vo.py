@@ -36,15 +36,33 @@ class SupplierItem(StrictModel):
     supplierName: str
 
 
+class SupplierOption(SupplierItem):
+    binding: GroupBinding | None = None
+
+
 class SupplierList(StrictModel):
-    items: list[SupplierItem]
+    items: list[SupplierOption]
     total: int
     page: int
     pageSize: int
     pages: int
 
 
+class SupplierProfile(SupplierOption):
+    nsInternalId: str
+
+
+class SupplierProfileList(StrictModel):
+    items: list[SupplierProfile]
+    total: int
+    page: int
+    pageSize: int
+    pages: int
+    manage: Capability
+
+
 class WecomGroupItem(GroupItem):
+    matchReason: str = ""
     memberCount: int
     createdAt: str | None
 

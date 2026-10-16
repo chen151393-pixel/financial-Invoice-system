@@ -24,7 +24,7 @@
   font: inherit;
 }
 .fr-preview :is(input, button, summary, [tabindex]):focus-visible,
-.fr-dialog :is(button, textarea):focus-visible {
+.fr-dialog :is(button, input, textarea):focus-visible {
   outline: 2px solid var(--color-primary);
   outline-offset: 3px;
 }
@@ -518,7 +518,9 @@
   font-size: 12px;
   margin-left: 5px;
 }
-.fr-note-label textarea {
+.fr-note-label textarea,
+.fr-currency-fields input,
+.fr-currency-fields textarea {
   display: block;
   width: 100%;
   resize: vertical;
@@ -592,4 +594,36 @@
   margin: 0 0 12px;
   color: var(--color-muted);
   font-size: 12px;
+}
+
+.fr-currency-evidence fieldset {
+  border: 1px solid var(--color-border);
+  margin-block: var(--space-layout);
+  padding: var(--space-control);
+}
+.fr-currency-fields {
+  display: grid;
+  gap: var(--space-control);
+}
+.fr-currency-fields label {
+  display: grid;
+  gap: var(--space-small);
+}
+.fr-currency-fields input,
+.fr-currency-fields textarea {
+  max-width: 100%;
+  min-width: 0;
+}
+
+.fr-currency-fields {
+  margin-top: var(--space-control);
+}
+.fr-currency-fields input,
+.fr-currency-fields textarea {
+  box-sizing: border-box;
+  font: inherit;
+  margin-top: 0;
+}
+.fr-currency-evidence fieldset {
+  border-radius: var(--radius-control);
 }

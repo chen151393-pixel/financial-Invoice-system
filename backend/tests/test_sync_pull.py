@@ -242,3 +242,40 @@ def test_date_filter_failure_does_not_retry_without_filter(sync_api):
     assert len(calls) == 1
     assert 'created ON_OR_AFTER "2026-09-01"' in calls[0]["query_params"]["q"]
     assert "rows" not in response.json()
+
+
+@pytest.mark.parametrize("operation", ["pull", "pull-save"])
+@pytest.mark.parametrize("dates", [{}, {"startDate": "2026-09-01"}, {"endDate": "2026-09-30"}])
+def test_range_pull_requires_dates_before_external_calls(sync_api, operation, dates):
+    client, headers, context, calls = sync_api
+    response = client.post(
+        f"/api/ns/sync/customs-declarations/{operation}",
+        headers=headers,
+        json={"requireDateRange": True, **dates},
+    )
+    assert response.status_code == 400
+    assert "开始日期和结束日期" in response.json()["error"]
+    assert calls == []
+    assert not context.ns.writes
+
+
+def test_range_pages_keep_server_date_filter(sync_api):
+    client, headers, context, calls = sync_api
+    for offset in (0, 20):
+        response = client.post(
+            "/api/ns/sync/customs-declarations/pull",
+            headers=headers,
+            json={
+                "offset": offset,
+                "requireDateRange": True,
+                "startDate": "2026-09-01",
+                "endDate": "2026-09-30",
+            },
+        )
+        assert response.status_code == 200
+        assert response.json()["dateRange"]["startDate"] == "2026-09-01"
+    queries = [call[3]["query_params"] for call in calls if call[2] is None]
+    assert [q["offset"] for q in queries] == [0, 20]
+    assert queries[0]["q"] == queries[1]["q"]
+    assert "created ON_OR_AFTER" in queries[0]["q"]
+    assert not context.ns.writes

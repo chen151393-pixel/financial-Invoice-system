@@ -29,19 +29,38 @@ def on_allocation_changed(connection, event):
     lines = task_line_dao.active_by_purchase_lines(connection, list(receipts), lock=True)
     for line in lines:
         receipt = receipts[line["purchase_line_id"]]
-        apply_receipt(connection, line, receipt.quantity, receipt.amount, receipt.closed, now)
+        if receipt.purchase_basis_id != line["purchase_basis_id"]:
+            continue
+        closed = bool(
+            line["closure_event_id"]
+            and line["ledger_sha256"] == receipt.ledger_sha256
+            and not receipt.requires_review
+        )
+        apply_receipt(connection, line, receipt.quantity, receipt.amount, closed, now, receipt)
     for task in tasks.values():
         refresh_task(connection, task, event.actor, event.reason, now)
 
 
-def apply_receipt(connection, line, quantity, amount, closed, now):
+def apply_receipt(connection, line, quantity, amount, closed, now, receipt=None):
     status, over, closed_with_difference = line_progress(
         line["expected_quantity"], line["expected_amount"], quantity, amount, closed
     )
+    extra = {}
+    if receipt is not None:
+        extra = {
+            "ledger_sha256": receipt.ledger_sha256,
+            "requires_review": receipt.requires_review,
+            "pending_quantity": receipt.pending_quantity,
+            "pending_amount": receipt.pending_amount,
+            "closure_event_id": line["closure_event_id"] if closed else None,
+        }
+        if receipt.requires_review:
+            status, closed_with_difference = ("partial" if quantity or amount else "open"), False
     task_line_dao.update_progress(
         connection,
         line["id"],
         {
+            **extra,
             "received_quantity": quantity,
             "received_amount": amount,
             "status": status,

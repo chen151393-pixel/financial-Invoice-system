@@ -1,4 +1,13 @@
 /** 同域请求与错误解析，业务模块不自行创建第二套请求客户端。 */
+const unauthorizedListeners = new Set<() => void>();
+
+export function onUnauthorized(listener: () => void) {
+  unauthorizedListeners.add(listener);
+  return () => {
+    unauthorizedListeners.delete(listener);
+  };
+}
+
 export class HttpError extends Error {
   readonly status: number;
 
@@ -27,6 +36,7 @@ export async function http<T>(path: string, method = "GET", value?: unknown): Pr
     }
     throw error;
   }
+  if (response.status === 401) unauthorizedListeners.forEach((listener) => listener());
   const fallback = response.ok
     ? "服务返回的数据为空或格式异常，请联系管理员检查接口响应"
     : response.status >= 500

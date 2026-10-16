@@ -9,28 +9,14 @@ from backend.core.errors import ApiError
 
 from ..dao import supplier_group_dao
 from ..dto.supplier_group_dto import GroupFields
-from ..mapper.task_mapper import iso
+from ..mapper.supplier_group_mapper import binding
+from ..policy.supplier_group_policy import match_group
 from ..vo.capability import Capability
-from ..vo.supplier_group_vo import GroupBinding, GroupList, SupplierList, WecomGroupList
+from ..vo.supplier_group_vo import GroupList, SupplierList, WecomGroupList
 
 
 def _pages(total, page_size):
     return max(1, (total + page_size - 1) // page_size)
-
-
-def _binding(row, supplier):
-    return GroupBinding(
-        groupName=row["group_name"],
-        chatId=row["chat_id"],
-        employee=row["owner_name"],
-        userid=row["owner_userid"],
-        account=supplier.get("ns_account", ""),
-        supplierId=str(row["supplier_id"]),
-        supplierName=supplier.get("name") or "供应商待确认",
-        revision=row["version"],
-        enabled=row["enabled"],
-        updatedAt=iso(row["updated_at"]),
-    )
 
 
 class SupplierGroupService:
@@ -64,7 +50,7 @@ class SupplierGroupService:
             raise ApiError(503, "群配置读取失败，请检查业务数据库及迁移状态") from None
         suppliers = self.directory.describe(supplier_ids=[row["supplier_id"] for row in rows])["suppliers"]
         return GroupList(
-            items=[_binding(row, suppliers.get(row["supplier_id"], {})) for row in rows],
+            items=[binding(row, suppliers.get(row["supplier_id"], {})) for row in rows],
             total=total,
             page=query.page,
             pageSize=query.pageSize,
@@ -74,9 +60,19 @@ class SupplierGroupService:
 
     def supplier_options(self, query):
         result = self.directory.suppliers(query.account, query.keyword, query.page, query.pageSize)
+        try:
+            with self.engine.connect() as connection:
+                bindings = supplier_group_dao.by_suppliers(connection, [row["id"] for row in result["items"]])
+        except SQLAlchemyError:
+            raise ApiError(503, "供应商绑定读取失败，请重新查询") from None
         return SupplierList(
             items=[
-                {"account": row["ns_account"], "supplierId": str(row["id"]), "supplierName": row["name"]}
+                {
+                    "account": row["ns_account"],
+                    "supplierId": str(row["id"]),
+                    "supplierName": row["name"],
+                    "binding": binding(bindings[row["id"]], row) if row["id"] in bindings else None,
+                }
                 for row in result["items"]
             ],
             total=result["total"],
@@ -119,6 +115,37 @@ class SupplierGroupService:
             pages=_pages(len(selected), query.pageSize),
         )
 
+    def match_wecom(self, query, actor):
+        self._authorize(actor)
+        supplier_id = int(query.supplierId)
+        supplier = self.directory.describe(supplier_ids=[supplier_id])["suppliers"].get(supplier_id)
+        if not supplier or not supplier["active"]:
+            raise ApiError(404, "供应商不存在或已停用，请重新选择")
+        catalog = self._wecom().groups(refresh=query.refresh)
+        ranked = []
+        for group in catalog["items"]:
+            match = match_group(supplier["name"], group, query.keyword)
+            if match is not None:
+                ranked.append((match[0], {**group, "matchReason": match[1]}))
+        ranked.sort(key=lambda row: (row[0], row[1]["groupName"], row[1]["userid"], row[1]["chatId"]))
+        selected = ranked[(query.page - 1) * query.pageSize : query.page * query.pageSize]
+        return WecomGroupList(
+            unavailableCount=catalog["unavailableCount"],
+            items=[
+                {
+                    **group,
+                    "createdAt": datetime.fromtimestamp(group["createdAt"], UTC).isoformat()
+                    if group["createdAt"] is not None
+                    else None,
+                }
+                for _, group in selected
+            ],
+            total=len(ranked),
+            page=query.page,
+            pageSize=query.pageSize,
+            pages=_pages(len(ranked), query.pageSize),
+        )
+
     def save(self, body, actor):
         self._authorize(actor)
         supplier_id = int(body.supplierId)
@@ -157,7 +184,7 @@ class SupplierGroupService:
             raise ApiError(409, "该供应商已有配置，请重新查询后编辑") from None
         except SQLAlchemyError:
             raise ApiError(503, "群配置未能保存，请重新查询核实结果") from None
-        return _binding(saved, supplier)
+        return binding(saved, supplier)
 
     def _live_group(self, chat_id):
         # 外部查询在数据库事务之外；群名和群主只取企微当前返回值。

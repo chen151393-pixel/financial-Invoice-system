@@ -152,7 +152,13 @@ class Open2LemonSource(LemonInvoiceSource):
         return None
 
     def pull_window(
-        self, date_start: date, date_end: date, *, tenant: str, rows: int = 100, now: Optional[datetime] = None
+        self,
+        date_start: date,
+        date_end: date,
+        *,
+        tenant: str,
+        rows: int = 100,
+        now: Optional[datetime] = None,
     ) -> list[InvoiceRecord]:
         """拉取一个日期窗口内的全部进项发票，补齐明细并映射为 storage 就绪结构。
 

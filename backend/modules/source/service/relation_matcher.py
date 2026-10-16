@@ -8,23 +8,12 @@ from ..policy.relation_policy import incomplete_reason, source_digest
 from .pl_comparison_service import PlScriptService
 
 
-def require_relation_interfaces(settings):
-    mapping = settings.pl_lookup
-    if mapping["customs"]["type"] != "customrecord_swc_declare_record":
-        return
-    if not all(
-        getattr(settings, key, "")
-        for key in (
-            "finance_source_script",
-            "finance_source_deploy",
-            "pl_restlet_script",
-            "pl_restlet_deploy",
-        )
-    ):
-        raise ApiError(503, "完整同步需要配置同账套的原始报关行接口和v3关联查询接口；未保存不完整单据")
-
-
 def collect_comparisons(ns, bundle, evidence):
+    if not all(getattr(ns.settings, key, "") for key in ("pl_restlet_script", "pl_restlet_deploy")):
+        for value in evidence.values():
+            value["status"] = "partial"
+            value["issues"].append("精确追溯未完成：v3关联查询接口未配置，不影响基础单据保存。")
+        return
     service = PlScriptService(ns)
     for identity, head, detail in bundle["customs"]:
         if not head.get("name"):
@@ -49,7 +38,7 @@ def collect_comparisons(ns, bundle, evidence):
         if returned != children:
             raise ApiError(502, "NS关联查询与本次子采购单范围不一致；本页未保存，请重新读取")
         value = evidence[identity]
-        # 依据读取缺失时保留已确认的嵌套关系，但不能将整张单据标记为可审核。
+        # 追溯缺失不能标为 matched；财务能否审核由 review 的独立规则决定。
         if value["issues"]:
             raw["reviewIssues"] = list(dict.fromkeys([*raw["reviewIssues"], *value["issues"]]))
         payload = {"version": 3, "group": raw}

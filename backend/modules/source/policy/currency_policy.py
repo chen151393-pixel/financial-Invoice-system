@@ -13,11 +13,45 @@ import re
 PARENT = "parent_order"
 UNRESOLVED = "unresolved"
 
+# 只接受明确的币种名称，不按内部 ID、地区或“元”等模糊简称推断。
+CURRENCY_NAMES = {
+    "人民币": "CNY",
+    "人民币元": "CNY",
+    "美元": "USD",
+    "欧元": "EUR",
+    "英镑": "GBP",
+    "日元": "JPY",
+    "港元": "HKD",
+    "港币": "HKD",
+    "澳大利亚元": "AUD",
+    "澳元": "AUD",
+    "加拿大元": "CAD",
+    "加元": "CAD",
+    "新加坡元": "SGD",
+    "瑞士法郎": "CHF",
+    "新台币": "TWD",
+    "CHINESE YUAN": "CNY",
+    "US DOLLAR": "USD",
+    "EURO": "EUR",
+    "BRITISH POUND": "GBP",
+    "JAPANESE YEN": "JPY",
+    "HONG KONG DOLLAR": "HKD",
+    "AUSTRALIAN DOLLAR": "AUD",
+    "CANADIAN DOLLAR": "CAD",
+    "SINGAPORE DOLLAR": "SGD",
+    "SWISS FRANC": "CHF",
+    "NEW TAIWAN DOLLAR": "TWD",
+}
+
 
 def currency_code(header):
-    """母采购单头中的三位币种代码；无法识别时返回空。"""
+    """取母单的明确币种代码／名称；保留旧快照代码支持，冲突或未知时待核实。"""
     symbol = str(header.get("currencysymbol") or "").strip().upper()
-    return symbol if re.fullmatch(r"[A-Z]{3}", symbol) else ""
+    name = str(header.get("currencyname") or "").strip().upper()
+    named_code = name if name in CURRENCY_NAMES.values() else CURRENCY_NAMES.get(name, "")
+    if symbol and (not re.fullmatch(r"[A-Z]{3}", symbol) or (named_code and symbol != named_code)):
+        return ""
+    return symbol or named_code
 
 
 def resolve(parent_id, header):
@@ -30,5 +64,5 @@ def resolve(parent_id, header):
     if not code:
         name = str(header.get("currencyname") or "").strip()
         detail = f"（NS 返回：{name}）" if name else ""
-        return None, UNRESOLVED, f"母采购单币种缺失或无法识别为三位代码{detail}，待核实"
+        return None, UNRESOLVED, f"母采购单币种缺失、无法识别或代码与名称冲突{detail}，待核实"
     return code, PARENT, None

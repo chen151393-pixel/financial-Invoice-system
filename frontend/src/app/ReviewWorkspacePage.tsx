@@ -1,6 +1,6 @@
 import { Link } from "react-router";
 import { ReviewPage } from "../modules/review/pages/ReviewPage";
-import { AppFrame } from "../shared/components/AppFrame";
+import { AppFrame } from "./WorkspaceFrame";
 import { navigation } from "./navigation";
 import { paths } from "./paths";
 import { useViewNavigate } from "./useViewNavigate";

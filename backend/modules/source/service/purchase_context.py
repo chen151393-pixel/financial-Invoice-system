@@ -7,8 +7,15 @@ import hashlib
 import json
 
 from ..dao import purchase_order_dao
+from ..policy.content_digest import canonical
 
 FIELDS = (
+    "ns_account",
+    "supplier_id",
+    "company_id",
+    "parent_order_id",
+    "parent_relation_status",
+    "source_line_key",
     "purchase_order_id",
     "order_no",
     "parent_order_no",
@@ -30,18 +37,22 @@ FIELDS = (
 
 
 def line_digest(context):
-    content = {key: context[key] for key in FIELDS} | {"active": context["active"]}
+    content = {key: canonical(context[key]) for key in FIELDS} | {"active": context["active"]}
     return hashlib.sha256(
         json.dumps(content, ensure_ascii=False, sort_keys=True, default=str).encode()
     ).hexdigest()
 
 
-def purchase_lines(connection, line_ids):
+def purchase_lines(connection, line_ids, *, lock=False):
     """{子采购行 ID: 比对上下文}；active 为子采购单与行均有效。"""
     result = {}
-    for row in purchase_order_dao.line_context(connection, sorted(set(line_ids))):
+    for row in purchase_order_dao.line_context(connection, sorted(set(line_ids)), lock=lock):
         context = {key: row[key] for key in FIELDS}
         context["active"] = bool(row["is_active"] and row["order_active"])
         context["digest"] = line_digest(context)
+        context["source_refs"] = {
+            "purchase_raw_record_id": row["raw_record_id"],
+            "currency_raw_record_id": row["currency_raw_record_id"],
+        }
         result[row["id"]] = context
     return result

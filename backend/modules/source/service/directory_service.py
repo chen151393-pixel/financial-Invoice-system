@@ -9,6 +9,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from backend.core.errors import ApiError
 
 from ..dao import company_dao, purchase_order_dao, supplier_dao
+from ..dao.unit_dictionary_dao import unit_names
 
 SEARCH_LIMIT = 500
 
@@ -36,6 +37,7 @@ class SourceDirectory:
                 "companies": company_dao.names(connection, sorted(set(company_ids))),
                 "orders": purchase_order_dao.numbers(connection, sorted(set(order_ids))),
                 "lines": purchase_order_dao.line_names(connection, sorted(set(line_ids))),
+                "units": unit_names(connection),
             }
 
         return self._read(read)
@@ -51,11 +53,25 @@ class SourceDirectory:
 
         return self._read(read)
 
-    def suppliers(self, account, keyword, page, page_size):
-        """有效供应商分页：{total, items: [{id, ns_account, name}]}。"""
+    def suppliers(
+        self, account, keyword, page, page_size, *, include_ids=None, exclude_ids=(), matching_ids=()
+    ):
+        """有效供应商分页；可按 ID 集合包含/排除，matching_ids 与名称关键词取并集。
+
+        返回 {total, items: [{id, ns_account, ns_internal_id, name}]}，不暴露来源表。
+        """
 
         def read(connection):
-            total, rows = supplier_dao.page(connection, account, keyword, (page - 1) * page_size, page_size)
+            total, rows = supplier_dao.page(
+                connection,
+                account,
+                keyword,
+                (page - 1) * page_size,
+                page_size,
+                include_ids=include_ids,
+                exclude_ids=exclude_ids,
+                matching_ids=matching_ids,
+            )
             return {"total": total, "items": rows}
 
         return self._read(read)

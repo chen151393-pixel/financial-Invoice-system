@@ -29,6 +29,13 @@ CUSTOMS_LINE_FIELDS = (
     "currency",
 )
 ORDER_FIELDS = (
+    "ns_account",
+    "supplier_id",
+    "company_id",
+    "parent_order_id",
+    "parent_relation_status",
+    "currency_source",
+    "currency_issue",
     "ns_internal_id",
     "order_no",
     "order_date",

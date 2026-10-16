@@ -11,7 +11,7 @@
 | NS 网络请求 | HTTPX 客户端，连接池与超时控制，禁止跟随重定向和自动写入重试 |
 | M2M | PyJWT＋cryptography，PS256/384/512 或匹配的 ES256/384/512 |
 | 数据库 | SQLAlchemy 2＋PyMySQL，MySQL 8.0；本地验证可使用 SQLite |
-| 表结构迁移 | Alembic：新迁移链 `backend/migrations/`（版本表 `schema_version`）；旧迁移链 `backend/legacy_migrations/`（第 4 步删除） |
+| 表结构迁移 | Alembic：新迁移链 `backend/migrations/`（版本表 `schema_version`）；旧迁移链代码已删除，旧库表不动 |
 | 运行服务 | Uvicorn，默认一个进程、端口 3000 |
 
 文中的 NS 指 NetSuite；M2M 指机器对机器认证；Token 指访问令牌。框架名称、接口路径、字段名和配置项保留原文，以便与代码对应。
@@ -44,13 +44,12 @@ BUSINESS_MYSQL_DATABASE=financial_invoice_business
 BUSINESS_MYSQL_USER=你的数据库用户名
 BUSINESS_MYSQL_PASSWORD='你的数据库密码'
 ADMIN_USERNAME=admin
-LOCAL_BROWSER_ACCESS=true
-# 原密码登录API需要此项；本机自动进入不使用该密码。
+# 所有浏览器均需账号密码登录；填写非空密码后重启后端。
 ADMIN_PASSWORD=
 NETSUITE_WRITE_ENABLED=false
 ```
 
-前端已移除登录表单和退出按钮。设置 `LOCAL_BROWSER_ACCESS=true` 后，页面通过 `POST /api/session/local` 自动建立原管理员身份的会话；要求服务器绑定本机地址、APP_ORIGIN为本机地址，并校验实际来源IP、Host及Origin。未启用时页面显示连接错误，不自动绕过后端。原密码登录API继续保留，使用该API时 `ADMIN_PASSWORD` 必须为非空值并校验用户名、密码、来源和失败次数。NS 侧已经配置的客户端标识（Client ID）、证书标识（Certificate ID）、角色和证书映射直接复用。服务器还需填写：
+所有业务页面统一显示账号密码登录入口，登录后继续原页面，右上角提供退出。账号读取 `ADMIN_USERNAME`（默认 admin），`ADMIN_PASSWORD` 必须为非空值，无默认密码；后端校验账号、密码、来源及失败次数。本机免密入口 `POST /api/session/local` 保留一个版本并固定拒绝，旧 `LOCAL_BROWSER_ACCESS` 配置不再读取。NS 侧已经配置的客户端标识（Client ID）、证书标识（Certificate ID）、角色和证书映射直接复用。服务器还需填写：
 
 - NETSUITE_ACCOUNT_ID（账户标识）、NETSUITE_CLIENT_ID（客户端标识）、NETSUITE_CERTIFICATE_ID（证书标识）。
 - NETSUITE_PRIVATE_KEY_PATH：服务器私钥路径，不放前端或公开目录。Windows 路径建议使用正斜线。
@@ -101,13 +100,17 @@ BUSINESS_MYSQL_USER=你的数据库用户名
 BUSINESS_MYSQL_PASSWORD='你的数据库密码'
 ```
 
-分项密码使用原文；若使用完整 URL，删除分项配置并对密码进行 URL 编码。旧 `DATABASE_URL` 不覆盖业务连接，仅支持显式历史迁移与隔离测试。账户、网络和 TLS 由部署环境管理。
+分项密码使用原文；若使用完整 URL，删除分项配置并对密码进行 URL 编码。旧 `DATABASE_URL` 已不读取；隔离测试通过显式 engine 注入。账户、网络和 TLS 由部署环境管理。
 
-已有库核对基础表与发票扩展后运行 `npm.cmd run db:upgrade`。该命令在同一库先升级两条旧迁移链（`backend/legacy_migrations/business`、`backend/legacy_migrations/app`，版本表 `business_alembic_version`、`alembic_version`），再升级新迁移链 `backend/migrations`（版本表 `schema_version`）；`db:business:upgrade` 是兼容入口。启动只核对版本，不执行迁移、同步、NS 写入或状态恢复。迁移账号需要建表及索引权限，运行账号需要业务读写及三个版本表读取权限。
+创建空 MySQL 数据库并配置连接后运行 `npm.cmd run db:upgrade`，只执行新迁移链和 `schema_version`；已有新库同样向前升级。`db:business:upgrade` 为兼容别名。启动只核验新版本，不要求旧六表、旧版本表，不自动迁移、同步或清除状态。运行账号读取 schema_version，迁移账号另需 DDL 权限。
 
-目标库尚无应用版本表时，部署工具按当前实体定义补齐应用表；仅允许接管结构一致的既有 `finance_supplier_groups`。先比较既有结构，再创建缺失表，核对最终字段、主键、索引、唯一约束、外键及 InnoDB 引擎后才登记应用版本。已有应用版本表则正常执行历史增量迁移。发现其他未登记历史表或结构差异时停止，不能盲目 stamp 或删表重试。MySQL DDL 不能整批回滚，中途失败须检查实际结构后处理。
+新迁移链的 MySQL 版本字段使用 `VARCHAR(128)`，以容纳完整迁移名。升级工具在迁移锁内自动扩宽已存在的短 `schema_version.version_num` 字段，保留版本值和业务记录，不缩短已有较长字段，不修改两张旧版本表。如果此前已经因版本名过长而中断，MySQL 可能保留该步已经执行的 DDL；须先核对实际字段与版本记录，不能直接删表或盲目重跑。
 
-共用连接池不自动合并所有事务。保留现有审核、审计、任务同事务及匹配、占用同事务；跨用例事务仍由 Service 显式传递同一个 Connection。
+`0010`—`0015` 是分模块中文备注迁移：覆盖 26 张业务表、422 个字段，不更改数据或字段约束。SQL 快照位于 `backend/migrations/comments_20261015/`，部署时须随迁移文件一起打包；快照独立于运行时实体，后续业务改动不能改写这些历史文件。SQLite 不支持列备注，执行时只推进版本；MySQL 的备注由 `INFORMATION_SCHEMA.COLUMNS.COLUMN_COMMENT` 与 `TABLES.TABLE_COMMENT` 查看。已有库执行 `npm.cmd run db:upgrade` 后生效；仍处于更早版本的库会先执行原有迁移，不能把整个升级视为只补备注。
+
+`0005`—`0009` 分模块增加依据、任务后继、发票版本和分配复核字段。已有 v2 历史保留，无法从原快照准确恢复的标记待复核，原占用不释放；新版本迁移拒绝降级删除证据。结构 SQL（`db:sql:mysql` / `schema-sql`）仅供审阅，不执行数据回填，部署必须在线运行 upgrade。MySQL DDL 不能整体回滚，中断后应核对实际字段和版本，不能盲目重跑或 stamp。
+
+关联写共用账本命名锁和发布方事务。需要修复任务投影时可运行 `python -m backend.manage rebuild-ledger`，由 matching 按持久台账发布绝对合计；不会自动核实待复核记录。正常启动不运行该修复。
 
 ## 历史应用库数据
 
@@ -137,7 +140,7 @@ TLS_KEY_PATH=C:/secure/tls/private.key
 
 ## 写入约束与恢复
 
-当前本机浏览器自动建立管理员会话，无需输入密码；owner仍为 `user:ADMIN_USERNAME`，不会改变原数据归属。远程地址不允许使用本机入口，转发头不作为本机证明；公网部署必须关闭LOCAL_BROWSER_ACCESS并另行提供经过认证的访问入口，当前前端不提供远程登录表单。服务调用仍使用独立 SERVICE_API_KEY（至少32位）；浏览器使用HttpOnly／SameSite=Strict会话Cookie，变更请求继续校验Origin。生产 HTTPS 下的 Cookie 设置 `Secure` 属性。NS 访问令牌和私钥不会返回浏览器。
+本机和远程浏览器均通过账号密码登录；owner 仍为 `user:ADMIN_USERNAME`，不会改变原数据归属。会话有效期 8 小时，退出立即撤销，后端重启需要重新登录；业务请求收到 401 时页面回到登录界面。公网部署须配置真实 HTTPS APP_ORIGIN，浏览器地址和 APP_ORIGIN 必须一致。服务调用仍使用独立 SERVICE_API_KEY（至少32位）；浏览器使用HttpOnly／SameSite=Strict会话Cookie，变更请求继续校验Origin。生产 HTTPS 下的 Cookie 设置 `Secure` 属性。NS 访问令牌和私钥不会返回浏览器。
 
 NS 回写（预览、执行、未知结果保护、`recover` 恢复命令）已移至 `archive/writeback` 分支；主线保留 `ns_previews`、`ns_target_locks`、`ns_audit` 的表和数据，不再有代码读写。
 
@@ -150,14 +153,15 @@ NS 回写（预览、执行、未知结果保护、`recover` 恢复命令）已�
 | 接口 | 用途 |
 | --- | --- |
 | GET /api/health | 不暴露配置的健康检查 |
-| POST /api/session/local | 仅本机同源浏览器自动建立会话 |
-| POST /api/session；DELETE /api/session | 保留的密码登录／退出API，当前前端不调用 |
+| GET /api/session | 检查登录状态，无会话返回 401 |
+| POST /api/session；DELETE /api/session | 全系统账号密码登录／退出 |
+| POST /api/session/local | 旧客户端兼容入口，固定拒绝免密登录；一个版本后移除 |
 | GET /api/ns/status；POST /api/ns/connect | 配置状态／M2M 验证 |
 | GET /api/openapi.json | 登录后读取接口协议 |
 
 `npm.cmd test` 构建前端并运行 Python 测试，不使用真实 NS 凭证。`npm.cmd run lint:api` 检查代码，`npm.cmd run db:sql:mysql` 输出 MySQL 迁移 SQL 供审阅。测试覆盖签名、访问令牌缓存、防重定向、登录、防跨站请求伪造（CSRF）和权限隔离。
 
-真实 MySQL 8.0 集成测试为可选项：通过进程环境变量 MYSQL_TEST_URL 指向一个 **预先创建、没有表、名称以 ns_test_ 开头** 的专用 MySQL 8.0 测试库，再运行 `npm.cmd run test:api`。测试不会自动删除该库；没有提供连接配置时明确跳过，SQL 编译检查不能替代真实数据库联调。
+真实 MySQL 测试设置 `BUSINESS_MIGRATION_TEST_SERVER_URL=mysql+pymysql://测试用户@127.0.0.1:端口/mysql` 后运行 `npm.cmd run test:api`。测试随机创建专用数据库并在结束后删除，仅可使用隔离测试实例。未配置时跳过，不以 SQLite 声称并发通过。
 
 技术依据：[FastAPI 同步路由与线程池](https://fastapi.tiangolo.com/async/)、[SQLAlchemy 的 MySQL 与 PyMySQL 支持](https://docs.sqlalchemy.org/en/20/dialects/mysql.html)、[PyJWT 使用说明](https://pyjwt.readthedocs.io/en/stable/usage.html)、[Alembic 数据库迁移教程](https://alembic.sqlalchemy.org/en/latest/tutorial.html)。
 

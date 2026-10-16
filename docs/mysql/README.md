@@ -2,11 +2,15 @@
 
 ## 当前代码与迁移入口
 
-截至 2026-09-24，基础来源为[八张业务表](eight-table-relations.md)，另有[报关关联结果](customs-reconciliation-results.md)、发票数量分配及整票关联表。业务迁移代码 head 为 `0007_invoice_purchase_links`：`0004` 增加数量分配，`0005` 将报关依据移入独立表，`0006` 增加审核匹配预留字段，`0007` 增加整票关系。预留审核字段不表示匹配已经绑定财务审核，当前边界见[匹配模块](../../backend/modules/matching/README.md)。
+需要查看每张表用途和字段含义，先读[当前表设计与字段字典](current-data-dictionary.md)：按当前工作区实体与迁移整理 26 张业务表、422 个字段，另说明 `schema_version`。其中已定义但未接入的表单独标注；不代表已核实目标数据库部署状态。
 
-正式运行统一读取 `BUSINESS_DATABASE_URL` / `BUSINESS_MYSQL_*`，应用表和来源/匹配表共用业务库。`npm.cmd run db:upgrade` 协调两条历史迁移链，保留各自版本表，`db:business:upgrade` 是兼容入口。迁移仍依赖已有基础表与所需发票扩展，不是空库初始化入口；已有库不要重跑下方历史六表脚本。见[数据库边界](../project-structure.md)及[历史应用记录迁移](../python-backend.md#历史应用库合入业务库)。
+2026-10-15 的 4e 切换后，当前结构以[架构数据库设计](../architecture/database.md)为准。迁移统一位于 `backend/migrations`，从 `0001_baseline` 到 `0015_sync_comments`，版本表为 `schema_version`。`npm.cmd run db:upgrade` 支持空库初始化，也支持既存 v2 表的在线升级；`db:business:upgrade` 是同一入口的兼容别名。
 
-历史正式来源导入、补拉和验收记录见[历史实施记录](../history/implementation-notes.md)。NS 按页拉取并保存已接入；持久定时同步未实现，具体来源接口要求见[同步模块](../../backend/modules/sync/README.md)。
+运行读取 `BUSINESS_DATABASE_URL` / `BUSINESS_MYSQL_*`。旧六表及双迁移链已退出代码，升级不会删除数据库中的旧表和数据。既存 v2 升级会保守补记版本与待复核状态，历史证据不会被当前数据冒充；操作与限制见[后端启动说明](../python-backend.md)。
+
+`0010`—`0015` 按 source、review、task、invoice、matching、sync 补齐 26 张业务表的 422 个字段中文备注，并补充缺失的表备注；不改变字段类型、默认值、索引或业务数据。实体备注同步维护，旧迁移文件保持不变。MySQL 执行备注 DDL；SQLite 仅推进迁移版本。
+
+下方内容是历史方案，不是当前初始化入口。请勿用历史 SQL 代替上述统一迁移。来源导入与历史验收记录见[历史实施记录](../history/implementation-notes.md)，当前同步能力见[同步模块](../../backend/modules/sync/README.md)。
 
 ## 历史六表初始化设计
 

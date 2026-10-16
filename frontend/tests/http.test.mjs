@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { http, HttpError } from "../src/shared/api/http.ts";
+import { http, HttpError, onUnauthorized } from "../src/shared/api/http.ts";
 
 test("明确的业务拒绝保留HTTP状态供表单恢复", async (t) => {
   t.mock.method(globalThis, "fetch", async () =>
@@ -73,4 +73,32 @@ test("读取响应时断线也显示中文", async (t) => {
     },
   }));
   await assert.rejects(http("/session/local"), /无法连接服务或连接已中断/);
+});
+
+test("会话失效通知可取消订阅，403和网络失败不触发重新登录", async (t) => {
+  let notified = 0;
+  const unsubscribe = onUnauthorized(() => {
+    notified += 1;
+  });
+  const mock = t.mock.method(globalThis, "fetch", async () =>
+    Response.json({ error: "请先登录" }, { status: 401 }),
+  );
+  try {
+    await assert.rejects(http("/invoices"), /请先登录/);
+    assert.equal(notified, 1);
+    mock.mock.mockImplementation(async () => Response.json({ error: "请求来源不匹配" }, { status: 403 }));
+    await assert.rejects(http("/invoices"), /请求来源不匹配/);
+    assert.equal(notified, 1);
+    mock.mock.mockImplementation(async () => {
+      throw new TypeError("network");
+    });
+    await assert.rejects(http("/invoices"), /无法连接/);
+    assert.equal(notified, 1);
+    unsubscribe();
+    mock.mock.mockImplementation(async () => Response.json({ error: "请先登录" }, { status: 401 }));
+    await assert.rejects(http("/invoices"), /请先登录/);
+    assert.equal(notified, 1);
+  } finally {
+    unsubscribe();
+  }
 });

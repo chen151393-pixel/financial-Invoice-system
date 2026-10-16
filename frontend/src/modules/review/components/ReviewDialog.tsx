@@ -1,8 +1,9 @@
+import { CurrencyEvidenceForm } from "./CurrencyEvidenceForm";
 import { Link } from "react-router";
 import { paths } from "../../../app/paths";
 import { useEffect, useRef, useState } from "react";
 import { Button } from "../../../shared/components/Button";
-import type { ComparisonGroup, PurchaseLine } from "../types";
+import type { ComparisonGroup, PurchaseLine, CurrencyEvidence } from "../types";
 
 function useDialog() {
   const ref = useRef<HTMLDialogElement>(null);
@@ -29,10 +30,11 @@ export function ReviewDialog({
   busy: boolean;
   error: string;
   onClose: () => void;
-  onApprove: (note: string) => void;
+  onApprove: (note: string, evidence: CurrencyEvidence[]) => void;
 }) {
   const ref = useDialog();
   const [note, setNote] = useState("");
+  const [evidence, setEvidence] = useState<CurrencyEvidence[]>([]);
   const approved = group.review.status === "approved";
   const reviewLines = [
     ...group.customsLines.flatMap((row) =>
@@ -113,6 +115,19 @@ export function ReviewDialog({
             开票口径为子采购的采购数量、单位和含税金额；金额缺失的行审核后只能人工按差异结束。
           </p>
         )}
+        {group.currencyEvidenceSummary?.map((evidence) => (
+          <p key={evidence} className="fr-status-note">
+            已核实结算币种 · {evidence}
+          </p>
+        ))}
+        {!approved && (
+          <CurrencyEvidenceForm
+            checks={group.currencyChecks ?? []}
+            value={evidence}
+            onChange={setEvidence}
+            busy={busy}
+          />
+        )}
         {approved ? (
           <dl className="fr-record">
             <div>
@@ -159,7 +174,11 @@ export function ReviewDialog({
           {approved ? "关闭" : "取消"}
         </Button>
         {!approved && (
-          <Button variant="primary" disabled={busy || !group.review.allowed} onClick={() => onApprove(note)}>
+          <Button
+            variant="primary"
+            disabled={busy || !group.review.allowed}
+            onClick={() => onApprove(note, evidence)}
+          >
             {busy ? "保存中…" : "整单审核通过"}
           </Button>
         )}

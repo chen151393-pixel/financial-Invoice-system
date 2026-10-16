@@ -1,35 +1,24 @@
 # Python 后端目录说明
 
-真实入口是 `app.py:create_app`，启动命令保持 `python -m backend`。应用工厂只装配依赖、注册路由与管理生命周期。
+入口 `app.py:create_app` 只装配依赖、登记事件订阅与生命周期，启动命令 `python -m backend`。
 
-全仓配置、正式前端与原型的区别见[目录与架构地图](../docs/project-structure.md)；专题和模块文档见[文档索引](../docs/README.md)。
+| 目录 | 职责 |
+| --- | --- |
+| `core/` | 配置、连接、事件总线、命名锁、错误、身份依赖与静态托管 |
+| `modules/identity` | 会话与认证身份 |
+| `modules/source`、`modules/sync` | NS 来源读取、保存、分页同步；PL 实时查询 |
+| `modules/review` | 财务审核、冻结开票依据和币种证据 |
+| `modules/task` | 后继任务、合同、通知、供应商群、差异结束 |
+| `modules/invoice` | Excel 导入、不可变发票版本、稳定逻辑行 |
+| `modules/matching` | 建议、分配、换算、复核、占用与有效收票台账 |
+| `integrations/` | NS、企微、共享盘等外部适配 |
+| `migrations/` | 唯一迁移链 `0001`—`0009`，版本表 `schema_version` |
+| `tests/` | 规则、API、事务、迁移及 MySQL 并发验证 |
 
-整体调用链、统一数据库及待衔接部分见[系统整体链路与实现关系](../docs/system-chain.md)。以下按 2026-09-24 当前工作区整理，代码已接入不代表真实环境已经迁移或验收。
+跨模块只经 `public.py` 读取，通过同步事件写入。订阅全部登记在 `app.py:create_events`；审核事件先生成任务，再由 matching 重算绝对合计。相关写操作先取得业务库级账本锁，再按来源、依据、任务、任务行、发票、分配顺序加行锁。外部调用不放在数据库事务内。
 
-```text
-backend/
-├── core/                    配置、连接、元数据、错误、身份依赖、HTTP中间件、静态文件
-├── modules/
-│   ├── identity/            登录与会话
-│   ├── source/              新：NS 来源读取与保存到新表（分层目录），采购报关联查
-│   ├── business/            旧：旧表来源保存与读取，第 4e 步删除
-│   ├── sync/                连接、M2M验证、分页拉取与调用业务保存
-│   ├── invoice/             Excel发票导入、去重、冲突检查与查询
-│   ├── matching/            候选比对、整票关联与数量分配
-│   ├── reconciliation/      财务审核、开票任务、合同归档与人工通知登记
-│   └── audit/               事务内审核审计；保留的历史回写表定义
-├── integrations/            NS认证、HTTP与合同来源适配、共享盘归档
-├── migrations/              应用表迁移：审核、开票任务及其资料（含历史回写表）
-├── legacy_migrations/       旧迁移链（app、business）及旧应用表首次建表；第 4 步删除
-└── tests/                   API、状态、数据库及架构依赖检查
-```
+4e 已删除旧 business、reconciliation、audit 实现、旧迁移链和过渡导入；旧表和数据仍留在数据库，代码不负责删除。PL 前端仍可用，归属 source。NS 回写仍在 `archive/writeback` 分支，主线不写 NS。
 
-模块只为实际职责建层。invoice、matching、reconciliation 已注册正式接口；exception、dashboard 尚无正式后端模块。当前匹配仍直接使用发票与子采购来源，尚未接入审核获批范围；开票任务尚未关联实际收票。NS 回写（预览、执行、未知结果保护、`recover` 恢复命令）已移至 `archive/writeback` 分支；主线保留 `ns_previews`、`ns_target_locks`、`ns_audit` 的表和数据，不再有代码读写。供应商通知已有本地草稿与人工发送登记，自动发送未接入。
+统一使用 `BUSINESS_DATABASE_URL` / `BUSINESS_MYSQL_*`；`create_app(engine=...)` 仅供隔离测试/预览注入。`npm.cmd run db:upgrade` 支持空库及已有新表升级，启动只核验版本。`python -m backend.manage rebuild-ledger` 从持久台账重新发布合计，不自动恢复待复核占用。
 
-正式运行统一读取 `BUSINESS_DATABASE_URL` / `BUSINESS_MYSQL_*`，所有模块复用一个 MySQL 连接池。`npm.cmd run db:upgrade` 在同一库协调两条历史迁移链及各自版本表，`db:business:upgrade` 是兼容入口。SQLite 和显式引擎注入仅供隔离测试、预览与历史迁移。共用连接池不等于所有调用自动共用事务：原有审核/审计/任务、匹配/占用的事务边界保留。业务增量迁移依赖已有基础表，不是空库初始化入口。
-
-旧导入兼容入口 `config.py`、`netsuite.py`、`workflow.py`、`auth.py` 已删除，代码直接引用 `core`、`modules`、`integrations`。`database.py` 仍是 Alembic 和应用表导入工具使用的元数据登记入口，在架构方案第 3 步数据库收口时并入 `core`。
-
-数据库迁移继续使用 `manage.py`，正常启动仅检查迁移版本，不清除任务。配置和部署见[后端配置说明](../docs/python-backend.md)，架构见[架构设计 v2](../docs/architecture/README.md)。
-
-运行 `npm.cmd run check` 完成当前格式、类型、依赖、lint、构建与测试检查。真实MySQL并发和真实NS联调需要单独环境，不由本地通过的检查替代。
+部署见[后端配置](../docs/python-backend.md)，设计见[架构](../docs/architecture/README.md)，业务流见[系统链路](../docs/system-chain.md)。检查入口 `npm.cmd run check`；MySQL 测试设置 `BUSINESS_MIGRATION_TEST_SERVER_URL`，仅在随机新建隔离库运行。

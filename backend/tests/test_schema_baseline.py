@@ -8,11 +8,12 @@ from uuid import uuid4
 
 import pytest
 from alembic import command
+from alembic.script import ScriptDirectory
 from backend.core.database import make_engine
 from backend.manage import SCHEMA_INI, _config, schema_head, upgrade_schema
 from sqlalchemy import create_engine, inspect, text
 from sqlalchemy.engine import make_url
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy.exc import IntegrityError, OperationalError
 
 TABLES = {
     "source_suppliers",
@@ -26,6 +27,8 @@ TABLES = {
     "source_customs_lines",
     "source_customs_purchase_links",
     "review_records",
+    "review_purchase_bases",
+    "invoice_versions",
     "review_lines",
     "task_supplier_groups",
     "task_tasks",
@@ -39,6 +42,7 @@ TABLES = {
     "matching_allocations",
     "sync_runs",
     "sync_cursors",
+    "sync_lemon_bindings",
 }
 NOW = "2026-10-10 00:00:00"
 
@@ -51,7 +55,9 @@ def _url(engine):
 def schema_engine(request, tmp_path):
     if request.param == "sqlite":
         engine = make_engine(f"sqlite:///{tmp_path / 'schema.sqlite'}")
-        upgrade_schema(_url(engine))
+        command.upgrade(
+            _config(SCHEMA_INI, _url(engine)), getattr(request.module, "INITIAL_REVISION", "head")
+        )
         yield engine
         engine.dispose()
         return
@@ -73,7 +79,9 @@ def schema_engine(request, tmp_path):
             )
             created = True
         engine = create_engine(url.set(database=database))
-        upgrade_schema(_url(engine))
+        command.upgrade(
+            _config(SCHEMA_INI, _url(engine)), getattr(request.module, "INITIAL_REVISION", "head")
+        )
         yield engine
     finally:
         if engine is not None:
@@ -240,7 +248,9 @@ def test_header_level_link_cannot_be_duplicated(schema_engine):
 
 
 def test_check_constraint_rejects_unknown_status(schema_engine):
-    with pytest.raises(IntegrityError):
+    mysql = schema_engine.dialect.name == "mysql"
+    # PyMySQL 将 MySQL 的 CHECK 约束错误 3819 映射为 OperationalError。
+    with pytest.raises(OperationalError if mysql else IntegrityError) as error:
         with schema_engine.begin() as connection:
             insert(
                 connection,
@@ -252,19 +262,22 @@ def test_check_constraint_rejects_unknown_status(schema_engine):
                 started_by="admin",
                 started_at=NOW,
             )
+    if mysql:
+        assert error.value.orig.args[0] == 3819
 
 
-def test_downgrade_removes_only_new_tables(tmp_path):
+def test_downgrade_refuses_to_erase_version_evidence(tmp_path):
     engine = make_engine(f"sqlite:///{tmp_path / 'schema.sqlite'}")
     try:
         with engine.begin() as connection:
             connection.execute(text("CREATE TABLE invoice_lines (id INTEGER PRIMARY KEY)"))
+            connection.execute(text("INSERT INTO invoice_lines VALUES (77)"))
         upgrade_schema(_url(engine))
-        command.downgrade(_config(SCHEMA_INI, _url(engine)), "base")
+        with pytest.raises(RuntimeError, match="版本证据不可丢弃"):
+            command.downgrade(_config(SCHEMA_INI, _url(engine)), "base")
         with engine.connect() as connection:
-            names = set(inspect(connection).get_table_names())
-        assert not TABLES & names
-        assert "invoice_lines" in names  # 同库中的旧表不受影响
+            assert TABLES <= set(inspect(connection).get_table_names())
+            assert connection.execute(text("SELECT id FROM invoice_lines")).scalar_one() == 77
     finally:
         engine.dispose()
 
@@ -276,3 +289,7 @@ def test_offline_mysql_ddl_is_generated(capsys):
     assert "DEFAULT CURRENT_TIMESTAMP(6)" in sql
     assert "GENERATED ALWAYS AS (CASE WHEN status <> 'superseded' THEN purchase_line_id END) STORED" in sql
     assert "BIGINT UNSIGNED NOT NULL AUTO_INCREMENT" in sql
+    # MySQL 真正限制 VARCHAR 长度；SQLite 迁移成功无法覆盖长版本名截断问题。
+    assert "version_num VARCHAR(128) NOT NULL" in sql
+    revisions = ScriptDirectory.from_config(_config(SCHEMA_INI, None)).walk_revisions()
+    assert max(len(step.revision) for step in revisions) <= 128

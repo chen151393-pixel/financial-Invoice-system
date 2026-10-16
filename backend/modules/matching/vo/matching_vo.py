@@ -23,6 +23,7 @@ class Check(StrictModel):
 
 
 class PurchaseSide(StrictModel):
+    purchaseBasisId: str | None = None
     purchaseLineId: str
     orderNo: str
     supplier: str
@@ -43,6 +44,14 @@ class PurchaseSide(StrictModel):
 
 
 class AllocationView(StrictModel):
+    invoiceVersionId: str | None
+    currentInvoiceVersionId: str | None
+    purchaseBasisId: str | None
+    purchaseQuantity: str | None
+    verificationStatus: str
+    verificationIssues: list[str]
+    reverify: Capability
+    replace: Capability
     id: str
     invoiceItemId: str
     purchaseLineId: str
@@ -71,6 +80,7 @@ class AllocationView(StrictModel):
 
 
 class ItemView(StrictModel):
+    active: bool
     id: str
     lineNo: str | None
     item: str | None
@@ -84,6 +94,8 @@ class ItemView(StrictModel):
 
 
 class InvoiceSide(StrictModel):
+    versionId: str | None
+    detailStatus: str
     id: str
     number: str
     date: str | None
@@ -121,7 +133,7 @@ class Queue(StrictModel):
 
 class SummaryRow(StrictModel):
     invoiceId: str
-    status: Literal["none", "proposed", "partial", "confirmed"]
+    status: Literal["none", "proposed", "partial", "confirmed", "needs_review"]
     label: str
     tier: Tier | None
     proposed: int

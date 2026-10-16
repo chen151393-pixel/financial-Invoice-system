@@ -11,12 +11,15 @@ from sqlalchemy.exc import SQLAlchemyError
 from backend.core.errors import ApiError
 from backend.modules.source.public import digest as source_digest
 from backend.modules.source.public import snapshot as source_snapshot
+from backend.modules.source.public import unit_names
 
-from ..dao import review_line_dao, review_record_dao
+from ..dao import purchase_basis_dao, review_line_dao, review_record_dao
 from ..mapper import declaration_mapper
 from ..policy.review_policy import NO_PURCHASE_REASON, approve_block_reason, status
 from ..public import ReviewApproved
 from ..vo.review_vo import ReviewList
+from .basis_reader import current_bases
+from .purchase_basis_service import freeze, same_evidence
 
 
 class ReviewService:
@@ -26,7 +29,13 @@ class ReviewService:
     def _actives(self, declaration_ids):
         try:
             with self.engine.connect() as connection:
-                return review_record_dao.active_by_declarations(connection, declaration_ids)
+                found = review_record_dao.active_by_declarations(connection, declaration_ids)
+                required = purchase_basis_dao.required_declarations(
+                    connection, [r["id"] for r in found.values()]
+                )
+                for row in found.values():
+                    row["basis_required"] = row["id"] in required
+                return found
         except SQLAlchemyError:
             raise ApiError(503, "审核记录读取失败，请检查数据库及迁移状态") from None
 
@@ -34,7 +43,9 @@ class ReviewService:
         index = self.declarations.index(query.account, query.keyword)
         actives = self._actives([row["id"] for row in index])
         states = {
-            row["id"]: status(row["content_sha256"], row["order_count"], actives.get(row["id"]))
+            row["id"]: ("pending", True)
+            if (actives.get(row["id"]) or {}).get("basis_required")
+            else status(row["content_sha256"], row["order_count"], actives.get(row["id"]))
             for row in index
         }
         counts = {"all": len(index), "pending": 0, "approved": 0, "blocked": 0}
@@ -64,6 +75,15 @@ class ReviewService:
         )
 
     def _declaration(self, content, state_changed, actives):
+        try:
+            with self.engine.connect() as connection:
+                content = {
+                    **content,
+                    "bases": current_bases(connection, [r["id"] for r in content["purchase_lines"]]),
+                    "unit_names": unit_names(connection),
+                }
+        except SQLAlchemyError:
+            raise ApiError(503, "审核依据读取失败，请检查数据库及迁移状态") from None
         state, changed = state_changed
         active = actives.get(content["declaration"]["id"])
         reason = NO_PURCHASE_REASON if state == "blocked" else ""
@@ -88,9 +108,18 @@ class ReviewService:
         current = source_digest(content)
         stored = content["declaration"]["content_sha256"]
         active = review_record_dao.active(connection, declaration_id, lock=True)
-        if active and active["content_sha256"] == body.contentSha256 == current:
+        basis_required = (
+            bool(purchase_basis_dao.required_declarations(connection, [active["id"]])) if active else False
+        )
+        if (
+            active
+            and same_evidence(connection, declaration_mapper.review_lines(content), body)
+            and active["content_sha256"] == body.contentSha256 == current
+        ):
             return  # 同一内容已审核：重复提交只返回已有结果
         state, _ = status(current, len(content["orders"]), active)
+        if basis_required or body.currencyEvidence:
+            state = "pending"
         reason = approve_block_reason(state, current if stored == current else None, body.contentSha256)
         if reason:
             raise ApiError(409, reason)
@@ -112,7 +141,9 @@ class ReviewService:
             },
             now,
         )
-        rows = declaration_mapper.review_lines(content)
+        rows = freeze(
+            connection, content, declaration_mapper.review_lines(content), body, review_id, actor, now
+        )
         ids = review_line_dao.insert_lines(connection, review_id, rows, now)
         self.events.publish(
             connection,
@@ -134,4 +165,6 @@ class ReviewService:
         state = status(
             content["declaration"]["content_sha256"], len(content["orders"]), actives.get(declaration_id)
         )
+        if (actives.get(declaration_id) or {}).get("basis_required"):
+            state = ("pending", True)
         return self._declaration(content, state, actives)

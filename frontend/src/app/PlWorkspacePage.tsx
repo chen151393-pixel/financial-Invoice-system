@@ -1,5 +1,5 @@
-import { PlReconciliationPage } from "../modules/reconciliation/pages/PlReconciliationPage";
-import { AppFrame } from "../shared/components/AppFrame";
+import { PlReconciliationPage } from "../modules/source/pages/PlReconciliationPage";
+import { AppFrame } from "./WorkspaceFrame";
 import { navigation } from "./navigation";
 import { useViewNavigate } from "./useViewNavigate";
 

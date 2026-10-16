@@ -4,19 +4,22 @@
 AllocationChanged，task 订阅后重算收票进度；任何一步失败整体回滚。
 """
 
+import hashlib
 from datetime import datetime, timezone
 
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 
 from backend.core.errors import ApiError
-from backend.modules.invoice.public import lock_invoice, read_invoices
-from backend.modules.source.public import purchase_lines
+from backend.core.write_lock import transaction
+from backend.modules.invoice.public import lock_invoice
+from backend.modules.review.public import current_bases
 from backend.modules.task.public import open_lines
 
 from ..dao import allocation_dao
+from ..dto.matching_dto import ConfirmBody
 from ..policy import allocation_policy as rules
-from ..policy.comparison_policy import HIGH, compare
-from ..public import AllocationChanged, LineReceipt
+from ..policy.comparison_policy import HIGH
+from . import approval_service, ledger_service
 
 
 def _now():
@@ -34,74 +37,35 @@ class AllocationService:
 
     def _run(self, action):
         try:
-            with self.engine.begin() as connection:
+            with transaction(self.engine) as connection:
                 return action(connection)
         except IntegrityError:
             raise ApiError(409, "该发票行与子采购行已有有效记录，请刷新后核对") from None
         except SQLAlchemyError:
             raise ApiError(503, "比对结果暂无法确认，请刷新后查看；同一请求重复提交不会重复分配") from None
 
-    def _context(self, connection, allocation):
-        """锁定并读取审核所需的全部上下文。"""
-        purchase_line_id, invoice_id = allocation["purchase_line_id"], allocation["invoice_id"]
-        task_lines = open_lines(connection, [purchase_line_id], lock=True)
-        lock_invoice(connection, invoice_id)
-        found = read_invoices(connection, [invoice_id])
-        item = (
-            next((row for row in found[0]["items"] if row["id"] == allocation["invoice_item_id"]), None)
-            if found
-            else None
-        )
-        if item is None:
-            raise ApiError(404, "发票行不存在或不属于该发票")
-        invoice = found[0]
-        line = purchase_lines(connection, [purchase_line_id]).get(purchase_line_id)
-        return invoice, item, line, task_lines[0] if task_lines else None
-
     def _publish(self, connection, purchase_line_id, actor, reason):
-        totals = allocation_dao.confirmed_by_purchase_lines(connection, [purchase_line_id])
-        quantity, amount, closed = totals.get(purchase_line_id, (0, 0, False))
-        receipt = LineReceipt(
-            purchase_line_id=purchase_line_id, quantity=quantity, amount=amount, closed=closed
-        )
-        self.events.publish(connection, AllocationChanged(receipts=(receipt,), actor=actor, reason=reason))
+        ledger_service.publish(connection, [purchase_line_id], self.events, actor, reason)
 
-    def _approve(self, connection, allocation, note, closes_line, actor, now):
-        """通过一条分配（建议或人工新建）：校验硬性条件、容量与说明，更新并发布事件。"""
-        invoice, item, line, task_line = self._context(connection, allocation)
-        block = rules.hard_block(invoice, line, task_line)
-        if (
-            not block
-            and allocation["checks"]
-            and line["digest"] != allocation["checks"].get("purchaseDigest")
-        ):
-            block = "子采购行内容在建议生成后已变化，比对依据过期，请重新生成建议"
-        if not block:
-            used = allocation_dao.confirmed_by_item(connection, item["id"], exclude_id=allocation["id"])
-            block = rules.capacity_block(item, *used, allocation["quantity"], allocation["amount"])
-        if block:
-            raise ApiError(409, block)
-        checks, _ = compare(invoice, item, line, *rules.remaining(task_line))
-        exceeds = rules.exceeds_expected(task_line, allocation["quantity"], allocation["amount"])
-        reasons = rules.note_reasons(checks, exceeds, closes_line)
-        if reasons and not note:
-            raise ApiError(400, "请填写审核说明：" + "、".join(reasons))
-        allocation_dao.update_status(
-            connection,
-            allocation["id"],
-            {
-                "status": "confirmed",
-                "exceeds_expected": exceeds,
-                "closes_purchase_line": closes_line,
-                "reviewed_by": actor,
-                "reviewed_at": now,
-                "review_note": note or None,
-            },
-            now,
-        )
-        self._publish(
-            connection, allocation["purchase_line_id"], actor, f"发票 {invoice['invoice_no']} 比对通过"
-        )
+    def _approve(self, connection, allocation, body, actor, now, *, reverify=False):
+        return approval_service.approve(self, connection, allocation, body, actor, now, reverify=reverify)
+
+    def replace(self, allocation_id, body, actor):
+        from .replacement_service import replace
+
+        return replace(self, allocation_id, body, actor)
+
+    def reverify(self, allocation_id, body, actor):
+        _require_user(actor)
+
+        def action(connection):
+            current = allocation_dao.get(connection, allocation_id)
+            if not current or current["status"] != "confirmed":
+                raise ApiError(409, "只有已确认分配可以重新核实")
+            self._approve(connection, current, body, actor, _now(), reverify=True)
+            return current["invoice_id"]
+
+        return self.queries.invoice(self._run(action))
 
     def confirm(self, allocation_id, body, actor):
         _require_user(actor)
@@ -110,12 +74,12 @@ class AllocationService:
             allocation = allocation_dao.get(connection, allocation_id)
             if allocation is None:
                 raise ApiError(404, "比对记录不存在")
-            current = allocation_dao.get(connection, allocation_id, lock=True)
+            current = allocation_dao.get(connection, allocation_id)
             if current["status"] == "confirmed" and current["reviewed_by"] == actor:
                 return current["invoice_id"]  # 同一操作重复提交，返回原结果
             if current["status"] != "proposed":
                 raise ApiError(409, f"该记录{rules.STATUS_LABELS[current['status']]}，请刷新后核对")
-            self._approve(connection, current, body.note.strip(), body.closesPurchaseLine, actor, _now())
+            self._approve(connection, current, body, actor, _now())
             return current["invoice_id"]
 
         return self.queries.invoice(self._run(action))
@@ -124,7 +88,7 @@ class AllocationService:
         _require_user(actor)
 
         def action(connection):
-            current = allocation_dao.get(connection, allocation_id, lock=True)
+            current = allocation_dao.get(connection, allocation_id)
             if current is None:
                 raise ApiError(404, "比对记录不存在")
             if current["status"] == "proposed":
@@ -146,9 +110,10 @@ class AllocationService:
             allocation = allocation_dao.get(connection, allocation_id)
             if allocation is None:
                 raise ApiError(404, "比对记录不存在")
+            current_bases(connection, [allocation["purchase_line_id"]], lock=True)
             open_lines(connection, [allocation["purchase_line_id"]], lock=True)
             lock_invoice(connection, allocation["invoice_id"])
-            current = allocation_dao.get(connection, allocation_id, lock=True)
+            current = allocation_dao.get(connection, allocation_id)
             if current["status"] == "cancelled":
                 return current["invoice_id"]
             if current["status"] != "confirmed":
@@ -170,38 +135,46 @@ class AllocationService:
         """人工新建分配并直接通过（置信度为空）；requestId 保证重复提交只生效一次。"""
         _require_user(actor)
 
-        def action(connection):
-            existing = allocation_dao.by_request(connection, str(body.requestId))
-            if existing is not None:
-                return existing["invoice_id"]
-            invoice_id, item_id = int(body.invoiceId), int(body.invoiceItemId)
-            purchase_line_id = int(body.purchaseLineId)
-            # 先按顺序加锁（任务 → 任务行 → 发票），再写入分配。
-            open_lines(connection, [purchase_line_id], lock=True)
-            lock_invoice(connection, invoice_id)
-            now = _now()
-            allocation_id = allocation_dao.insert_allocation(
-                connection,
-                {
-                    "invoice_id": invoice_id,
-                    "invoice_item_id": item_id,
-                    "purchase_line_id": purchase_line_id,
-                    "quantity": body.quantity,
-                    "amount": body.amount,
-                    "status": "proposed",
-                    "confidence": None,
-                    "checks": None,
-                    "proposed_by": actor,
-                    "proposed_at": now,
-                    "request_id": str(body.requestId),
-                },
-                now,
-            )
-            allocation = allocation_dao.get(connection, allocation_id)
-            self._approve(connection, allocation, body.note.strip(), body.closesPurchaseLine, actor, now)
-            return invoice_id
+        return self.queries.invoice(self._run(lambda connection: self._manual(connection, body, actor)))
 
-        return self.queries.invoice(self._run(action))
+    def _manual(self, connection, body, actor):
+        fingerprint = hashlib.sha256((actor + body.model_dump_json()).encode()).hexdigest()
+        existing = allocation_dao.by_request(connection, str(body.requestId))
+        if existing is not None:
+            _verify_replay(existing, body, actor, fingerprint)
+            return existing["invoice_id"]
+        invoice_id, item_id = int(body.invoiceId), int(body.invoiceItemId)
+        purchase_line_id = int(body.purchaseLineId)
+        # 先按顺序加锁（任务 → 任务行 → 发票），再写入分配。
+        current_bases(connection, [purchase_line_id], lock=True)
+        open_lines(connection, [purchase_line_id], lock=True)
+        lock_invoice(connection, invoice_id)
+        now = _now()
+        allocation_id = allocation_dao.insert_allocation(
+            connection,
+            {
+                "invoice_id": invoice_id,
+                "invoice_item_id": item_id,
+                "purchase_line_id": purchase_line_id,
+                "quantity": body.quantity,
+                "amount": body.amount,
+                "status": "proposed",
+                "confidence": None,
+                "checks": None,
+                "proposed_by": actor,
+                "proposed_at": now,
+                "request_id": str(body.requestId),
+            },
+            now,
+        )
+        allocation = allocation_dao.get(connection, allocation_id)
+        self._approve(connection, allocation, body, actor, now)
+        saved = allocation_dao.get(connection, allocation_id)
+        history = saved["verification_history"]
+        history[0]["requestFingerprint"] = fingerprint
+        allocation_dao.update_status(connection, allocation_id, {"verification_history": history}, now)
+        self._publish(connection, purchase_line_id, actor, "人工分配证据已保存")
+        return invoice_id
 
     def confirm_batch(self, body, actor):
         """批量通过高置信度且无需说明的建议；逐条独立事务，返回通过与跳过数量及原因。"""
@@ -217,9 +190,8 @@ class AllocationService:
                     raise ApiError(409, "置信度未达到高档，请逐条审核")
                 self._approve(
                     connection,
-                    allocation_dao.get(connection, allocation_id, lock=True),
-                    "",
-                    False,
+                    allocation_dao.get(connection, allocation_id),
+                    ConfirmBody(),
                     actor,
                     _now(),
                 )
@@ -230,3 +202,35 @@ class AllocationService:
             except ApiError as error:
                 skipped.append({"id": str(allocation_id), "reason": error.message})
         return {"confirmed": confirmed, "skipped": skipped}
+
+
+def _verify_replay(existing, body, actor, fingerprint):
+    expected = (
+        int(body.invoiceId),
+        int(body.invoiceItemId),
+        int(body.purchaseLineId),
+        body.quantity,
+        body.amount,
+        actor,
+    )
+    actual = tuple(
+        existing[k]
+        for k in (
+            "invoice_id",
+            "invoice_item_id",
+            "purchase_line_id",
+            "quantity",
+            "amount",
+            "proposed_by",
+        )
+    )
+    original = next(
+        (
+            h.get("requestFingerprint")
+            for h in existing["verification_history"] or []
+            if h.get("requestFingerprint")
+        ),
+        None,
+    )
+    if actual != expected or (original and original != fingerprint):
+        raise ApiError(409, "请求编号已用于其他分配，不能复用")

@@ -10,7 +10,13 @@ def by_keys(connection, account, keys):
     if not keys:
         return {}
     query = (
-        select(headers.c.id, headers.c.invoice_key, headers.c.source, raw_records.c.payload_sha256)
+        select(
+            headers.c.id,
+            headers.c.invoice_key,
+            headers.c.source,
+            headers.c.current_version_id,
+            raw_records.c.payload_sha256,
+        )
         .select_from(headers.outerjoin(raw_records, raw_records.c.id == headers.c.raw_record_id))
         .where(headers.c.lemon_account == account, headers.c.invoice_key.in_(keys))
     )
@@ -62,7 +68,7 @@ def page(connection, query):
     line_count = (
         select(func.count())
         .select_from(items)
-        .where(items.c.invoice_id == headers.c.id)
+        .where(items.c.invoice_id == headers.c.id, items.c.is_active.is_(True))
         .correlate(headers)
         .scalar_subquery()
     )

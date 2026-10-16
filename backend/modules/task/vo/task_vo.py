@@ -23,6 +23,7 @@ class TaskSummary(StrictModel):
     statusLabel: str
     reason: str
     createdAt: str
+    predecessorTaskIds: list[str]
     reviewRevision: int
     orderNumbers: list[str]
     lineCount: int
@@ -56,6 +57,12 @@ class TaskList(StrictModel):
 
 
 class TaskLine(StrictModel):
+    purchaseBasisId: str | None
+    ledgerSha256: str | None
+    requiresReview: bool
+    pendingQuantity: str
+    pendingAmount: str
+    close: Capability
     id: str
     order: str
     name: str

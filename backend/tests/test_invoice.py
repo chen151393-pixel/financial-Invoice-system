@@ -62,7 +62,7 @@ def test_reimport_same_content_is_unchanged(engine, imports, published):
     assert len(rows(engine, "SELECT id FROM invoice_headers")) == 3 and len(published) == 1
 
 
-def test_conflicting_content_rejects_whole_batch(engine, imports):
+def test_changed_content_creates_immutable_version(engine, imports):
     first = workbook([invoice("26000000000000009001", [("墨水", "个", "10", "100.00", "13.00")])])
     run(imports, first, "a.xlsx")
     changed = workbook(
@@ -72,15 +72,13 @@ def test_conflicting_content_rejects_whole_batch(engine, imports):
         ]
     )
     preview = imports.process(ImportBody(filename="b.xlsx", content=changed), USER)
-    assert preview.conflicts == 1 and not preview.allowed
-    with pytest.raises(ApiError, match="冲突") as error:
-        imports.process(
-            ImportBody(filename="b.xlsx", content=changed, previewToken=preview.previewToken),
-            USER,
-            commit=True,
-        )
-    assert error.value.status == 409
-    assert len(rows(engine, "SELECT id FROM invoice_headers")) == 1
+    assert preview.updated == 1 and preview.allowed
+    saved = imports.process(
+        ImportBody(filename="b.xlsx", content=changed, previewToken=preview.previewToken), USER, commit=True
+    )
+    assert saved.updated == 1 and saved.created == 1
+    assert len(rows(engine, "SELECT id FROM invoice_headers")) == 2
+    assert len(rows(engine, "SELECT id FROM invoice_versions")) == 3
 
 
 def test_only_fixed_asset_purchases_are_imported(engine, imports):
@@ -134,7 +132,7 @@ def test_list_filters_amounts_and_detail(engine, imports):
 
 
 def test_http_import_and_list(context, engine):
-    app = create_app(context.settings, context.ns, context.engine, business_engine=engine)
+    app = create_app(context.settings, context.ns, engine)
     with TestClient(app) as client:
         assert client.get("/api/invoices").status_code == 401
         headers = {"Origin": context.settings.origin}
@@ -156,3 +154,17 @@ def test_http_import_and_list(context, engine):
         listed = client.get("/api/invoices?page_size=2", headers=headers).json()
         assert listed["total"] == 3 and len(listed["rows"]) == 2
         assert client.get("/api/invoices/0", headers=headers).status_code == 400
+
+
+def test_stale_preview_cannot_overwrite_a_newer_version(imports, engine):
+    first = workbook([invoice("26000000000000009991", [("墨水", "个", "1", "10.00", "1.30")])])
+    run(imports, first, "a.xlsx")
+    stale = workbook([invoice("26000000000000009991", [("墨水", "个", "1", "20.00", "2.60")])])
+    preview = imports.process(ImportBody(filename="b.xlsx", content=stale), USER)
+    latest = workbook([invoice("26000000000000009991", [("墨水", "个", "1", "30.00", "3.90")])])
+    run(imports, latest, "c.xlsx")
+    with pytest.raises(ApiError, match="版本已变化"):
+        imports.process(
+            ImportBody(filename="b.xlsx", content=stale, previewToken=preview.previewToken), USER, commit=True
+        )
+    assert len(rows(engine, "SELECT id FROM invoice_versions")) == 2

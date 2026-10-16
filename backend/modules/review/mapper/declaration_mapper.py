@@ -6,6 +6,8 @@ from collections import defaultdict
 from datetime import UTC
 from decimal import Decimal
 
+from backend.modules.source.public import unit_label
+
 from ..policy.review_policy import CHANGED_WARNING, STATUS_LABELS
 from ..public import ApprovedLine
 from ..vo.review_vo import CustomsLine, Declaration, PurchaseLine, ReviewState
@@ -41,8 +43,8 @@ def line_bindings(content):
     }
 
 
-def purchase_line(order, row):
-    declared = f"{text(row['declared_quantity'])} {text(row['declared_unit'])}".strip()
+def purchase_line(order, row, basis=None, unit_names=None):
+    declared = f"{text(row['declared_quantity'])} {unit_label(row['declared_unit'], unit_names)}".strip()
     note = "开票口径：子采购数量、单位与含税金额，审核通过后冻结为应开数量和金额。"
     if declared:
         note += f"报关数量 {declared}。"
@@ -56,10 +58,10 @@ def purchase_line(order, row):
         child=text(order["order_no"]),
         supplier=text(order["supplier_name"]),
         quantity=text(row["quantity"]),
-        unit=text(row["unit"]),
+        unit=unit_label(row["unit"], unit_names),
         price=text(row["unit_price"]),
         amount=text(row["amount"]),
-        currency=text(order["currency"]),
+        currency=text(basis["currency"] if basis and basis["allowed"] else order["currency"]),
         scope="order",
         note=note,
     )
@@ -87,7 +89,14 @@ def declaration(content, state, changed, active_review, allowed, reason):
     bound = line_bindings(content)
     by_customs = defaultdict(list)
     for row in content["purchase_lines"]:
-        by_customs[bound.get(row["id"])].append(purchase_line(orders[row["purchase_order_id"]], row))
+        by_customs[bound.get(row["id"])].append(
+            purchase_line(
+                orders[row["purchase_order_id"]],
+                row,
+                content.get("bases", {}).get(row["id"]),
+                content.get("unit_names"),
+            )
+        )
     customs_lines = [
         CustomsLine(
             id=f"customs-{row['id']}",
@@ -95,7 +104,7 @@ def declaration(content, state, changed, active_review, allowed, reason):
             name=text(row["declaration_name"]),
             model=text(row["specification"]),
             quantity=text(row["declared_quantity"]),
-            unit=text(row["declared_unit"]),
+            unit=unit_label(row["declared_unit"], content.get("unit_names")),
             price=text(row["unit_price"]),
             amount=text(row["amount"]),
             currency=text(row["currency"]),
@@ -106,6 +115,18 @@ def declaration(content, state, changed, active_review, allowed, reason):
     ]
     return Declaration(
         id=str(head["id"]),
+        currencyEvidenceSummary=_currency_evidence(content, orders),
+        currencyChecks=[
+            {
+                "purchaseOrderId": str(o["id"]),
+                "orderNumber": o["order_no"] or "",
+                "currency": o["currency"] or "",
+                "allowed": not o["currency"] and o["parent_relation_status"] != "unknown",
+                "reason": o["currency_issue"] or "币种取自母采购单，无需人工填写",
+            }
+            for o in content["orders"]
+            if not o["currency"]
+        ],
         contentSha256=head["content_sha256"] or "",
         account=head["ns_account"],
         recordNumber=text(head["record_no"]),
@@ -168,6 +189,7 @@ def approved_lines(rows, ids):
     return tuple(
         ApprovedLine(
             review_line_id=line_id,
+            purchase_basis_id=row.get("purchase_basis_id"),
             purchase_order_id=row["purchase_order_id"],
             purchase_line_id=row["purchase_line_id"],
             supplier_id=row["supplier_id"],
@@ -179,4 +201,14 @@ def approved_lines(rows, ids):
             amount=row["amount"],
         )
         for row, line_id in zip(rows, ids)
+    )
+
+
+def _currency_evidence(content, orders):
+    return list(
+        dict.fromkeys(
+            f"{orders[b['purchase_order_id']]['order_no']}：{b['currency']}，证据 {b['currency_evidence']['reference']}；{b['currency_evidence']['note']}"
+            for b in content.get("bases", {}).values()
+            if b["allowed"] and b["currency_source"] == "manual_verified"
+        )
     )

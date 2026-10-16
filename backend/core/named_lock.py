@@ -7,10 +7,15 @@ def _mysql(connection):
     return connection.dialect.name == "mysql"
 
 
-def acquire(connection, name):
+def acquire(connection, name, timeout=0):
     if not _mysql(connection):
         return True
-    return connection.execute(text("SELECT GET_LOCK(:name, 0)"), {"name": name}).scalar() == 1
+    return (
+        connection.execute(
+            text("SELECT GET_LOCK(:name, :timeout)"), {"name": name, "timeout": timeout}
+        ).scalar()
+        == 1
+    )
 
 
 def owns(connection, name):

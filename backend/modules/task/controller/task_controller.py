@@ -7,13 +7,13 @@ from fastapi import APIRouter, Path
 from backend.core.dependencies import Owner
 
 from ..dto.notification_dto import NotificationDraft, NotificationRecord
-from ..dto.task_dto import TaskListQuery
+from ..dto.task_dto import ClosureRequest, TaskListQuery
 from ..vo.task_vo import TaskDetail, TaskList
 
 Id = Annotated[int, Path(ge=1, le=2**63 - 1)]
 
 
-def create_router(tasks, documents, notifications):
+def create_router(tasks, documents, notifications, closures):
     router = APIRouter(prefix="/api/tasks", tags=["开票跟进"])
 
     @router.post("/query", response_model=TaskList)
@@ -35,5 +35,9 @@ def create_router(tasks, documents, notifications):
     @router.post("/{task_id}/notification/record", response_model=TaskDetail)
     def record_notification(task_id: Id, body: NotificationRecord, owner: Owner):
         return notifications.record(task_id, body, owner)
+
+    @router.post("/{task_id}/lines/{line_id}/close", response_model=TaskDetail)
+    def close(task_id: Id, line_id: Id, body: ClosureRequest, owner: Owner):
+        return closures.close(task_id, line_id, body, owner)
 
     return router

@@ -1,3 +1,4 @@
+import type { CurrencyEvidence } from "../types";
 import { useEffect, useRef, useState } from "react";
 import { Pagination } from "../../../shared/components/Pagination";
 import { openLocalSession } from "../../identity/api";
@@ -51,13 +52,13 @@ export function ReviewPage() {
     };
   }, [query, refresh]);
 
-  async function approve(note: string) {
+  async function approve(note: string, evidence: CurrencyEvidence[]) {
     if (!review || submitLock.current) return;
     submitLock.current = true;
     setSubmitting(true);
     setApprovalError("");
     try {
-      const approved = await approveDeclaration(review.id, review.contentSha256, note);
+      const approved = await approveDeclaration(review.id, review.contentSha256, note, evidence);
       setReview(approved);
       setNotice(
         `${approved.recordNumber} 审核结果已保存，并按供应商自动生成开票任务，可前往「开票跟进」查看。`,
@@ -121,7 +122,7 @@ export function ReviewPage() {
           onClose={() => {
             if (!submitting) setReview(null);
           }}
-          onApprove={(note) => void approve(note)}
+          onApprove={(note, evidence) => void approve(note, evidence)}
         />
       )}
     </>

@@ -55,3 +55,13 @@ def active_by_purchase_lines(connection, purchase_line_ids, *, lock=False):
 def update_progress(connection, line_id, values, now):
     """values：received_quantity、received_amount、status、over_invoiced、closed_with_difference。"""
     connection.execute(update(task_lines).where(task_lines.c.id == line_id).values(updated_at=now, **values))
+
+
+def active_line_ids(connection):
+    return list(
+        connection.execute(
+            select(task_lines.c.purchase_line_id)
+            .where(task_lines.c.status != "superseded")
+            .order_by(task_lines.c.purchase_line_id)
+        ).scalars()
+    )

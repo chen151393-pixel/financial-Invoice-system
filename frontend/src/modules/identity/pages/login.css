@@ -1,0 +1,185 @@
+.identity-access {
+  display: grid;
+  place-items: center;
+  min-height: 100dvh;
+  padding: calc(var(--space-layout) * 2) var(--space-layout);
+}
+.identity-access__content {
+  width: min(100%, 456px);
+  min-width: 0;
+}
+.identity-access__brand {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-control);
+  margin-bottom: var(--space-layout);
+  font-size: 18px;
+}
+.identity-access__mark {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: var(--radius-panel);
+  background: var(--color-primary);
+  color: var(--color-surface);
+  font-size: 24px;
+  font-weight: 800;
+}
+.identity-login {
+  padding: calc(var(--space-layout) + var(--space-small));
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-panel);
+  background: var(--color-surface);
+}
+.identity-login__heading {
+  margin-bottom: var(--space-layout);
+}
+.identity-login__heading h1 {
+  margin: 0 0 var(--space-small);
+  font-size: 24px;
+  line-height: 1.4;
+}
+.identity-login__heading p,
+.identity-login__state p,
+.identity-login__help,
+.identity-access__note {
+  margin: 0;
+  color: var(--color-muted);
+  font-size: 13px;
+  line-height: 1.7;
+  overflow-wrap: anywhere;
+}
+.identity-login__form {
+  display: grid;
+  gap: var(--space-layout);
+}
+.identity-login__field {
+  display: grid;
+  gap: var(--space-small);
+  min-width: 0;
+}
+.identity-login__field label {
+  font-size: 14px;
+  font-weight: 600;
+}
+.identity-login__field input {
+  width: 100%;
+  min-width: 0;
+  min-height: 48px;
+  padding: var(--space-control);
+  border: 1px solid var(--color-input-border);
+  border-radius: var(--radius-control);
+  background: var(--color-surface);
+  color: var(--color-text);
+  caret-color: var(--color-primary);
+  font: inherit;
+  transition: border-color 120ms ease-out;
+}
+.identity-login__field input::placeholder {
+  color: var(--color-muted);
+  opacity: 1;
+}
+.identity-login__field input:hover:not(:disabled) {
+  border-color: var(--color-muted);
+}
+.identity-login__field input:disabled {
+  background: var(--color-canvas);
+  color: var(--color-muted);
+}
+.identity-login__field input:focus-visible,
+.identity-login__feedback:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 3px;
+}
+.identity-login__password {
+  position: relative;
+  min-width: 0;
+}
+.identity-login__password input {
+  padding-right: 68px;
+}
+.identity-login__visibility.ui-button {
+  position: absolute;
+  inset: 2px 2px 2px auto;
+  min-width: 56px;
+  border: 0;
+  background: transparent;
+  color: var(--color-primary);
+  font-size: 13px;
+}
+.identity-login__visibility.ui-button:hover:not(:disabled) {
+  background: var(--color-canvas);
+}
+.identity-login__visibility.ui-button:focus-visible {
+  outline-offset: -3px;
+}
+.identity-login__submit.ui-button {
+  min-height: 48px;
+  font-weight: 600;
+  transition: filter 120ms ease-out;
+}
+.identity-login__submit.ui-button:hover:not(:disabled) {
+  filter: brightness(0.94);
+}
+.identity-login__feedback {
+  margin: 0 0 var(--space-layout);
+  padding: var(--space-control);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-control);
+  background: var(--color-canvas);
+  color: var(--color-feedback);
+  font-size: 13px;
+  line-height: 1.7;
+  overflow-wrap: anywhere;
+}
+.identity-login__help {
+  margin-top: var(--space-layout);
+  padding-top: var(--space-layout);
+  border-top: 1px solid var(--color-border);
+}
+.identity-access__note {
+  margin-top: var(--space-layout);
+  text-align: center;
+}
+.identity-login__state {
+  display: grid;
+  justify-items: start;
+  gap: var(--space-control);
+  min-height: 220px;
+  align-content: center;
+}
+.identity-login__state strong {
+  font-size: 14px;
+}
+.identity-login__spinner {
+  width: 24px;
+  height: 24px;
+  border: 2px solid var(--color-border);
+  border-top-color: var(--color-primary);
+  border-radius: 50%;
+  animation: identity-login-spin 800ms linear infinite;
+}
+@keyframes identity-login-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@media (max-width: 760px) {
+  .identity-access {
+    padding: var(--space-layout);
+  }
+  .identity-login {
+    padding: var(--space-layout);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .identity-login__spinner {
+    animation: none;
+  }
+  .identity-login__field input,
+  .identity-login__submit.ui-button {
+    transition: none;
+  }
+}

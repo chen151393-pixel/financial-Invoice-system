@@ -1,6 +1,15 @@
-import type { TaskLine } from "../types/task";
+import { DifferenceClosure } from "./DifferenceClosure";
+import type { ClosureRequest, TaskLine } from "../types/task";
 
-export function TaskLines({ lines }: { lines: TaskLine[] }) {
+export function TaskLines({
+  lines,
+  busy = false,
+  onClose,
+}: {
+  lines: TaskLine[];
+  busy?: boolean;
+  onClose?: (lineId: string, body: ClosureRequest) => Promise<boolean>;
+}) {
   return (
     <details className="it-source-lines">
       <summary>审核冻结的应开明细（{lines.length} 行）</summary>
@@ -22,7 +31,9 @@ export function TaskLines({ lines }: { lines: TaskLine[] }) {
               <th>应开数量</th>
               <th>应开金额</th>
               <th>已收数量 / 金额</th>
+              <th>待复核数量 / 金额（原口径）</th>
               <th>状态</th>
+              {onClose && <th>操作</th>}
             </tr>
           </thead>
           <tbody>
@@ -42,7 +53,22 @@ export function TaskLines({ lines }: { lines: TaskLine[] }) {
                 <td>
                   {line.receivedQuantity} / {line.receivedAmount}
                 </td>
+                <td>
+                  {line.requiresReview
+                    ? `${line.pendingQuantity} / ${line.pendingAmount}（需复核）`
+                    : "无待复核占用"}
+                </td>
                 <td>{line.statusLabel}</td>
+                {onClose && (
+                  <td>
+                    <DifferenceClosure
+                      key={`${line.id}:${line.ledgerSha256}`}
+                      line={line}
+                      busy={busy}
+                      onClose={onClose}
+                    />
+                  </td>
+                )}
               </tr>
             ))}
           </tbody>

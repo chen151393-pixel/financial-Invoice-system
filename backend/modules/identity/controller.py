@@ -21,16 +21,18 @@ def create_router(service, settings):
             path="/",
         )
 
+    @router.get("")
+    def session(owner: Owner):
+        return {"authenticated": True}
+
     @router.post("/local")
-    def local_session(request: Request, response: Response):
-        token = service.open_local_session(
+    def local_session(request: Request):
+        return service.open_local_session(
             origin=request.headers.get("origin"),
             host=request.headers.get("host", ""),
             ip=request.client.host if request.client else "unknown",
             session_token=request.cookies.get("ns_session"),
         )
-        set_session_cookie(response, token)
-        return {"authenticated": True}
 
     @router.post("")
     def login(request: Request, response: Response, body: Login):

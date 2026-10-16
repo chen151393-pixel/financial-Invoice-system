@@ -151,7 +151,7 @@ flowchart LR
 | 现有匹配界面属于 `/demo` 原型 | 可复用布局思路；正式页面必须从后端读取真实数据，不能沿用模拟置信度和成功状态 |
 | 业务 MySQL 与应用数据库分离 | 发票、匹配、占用、确认幂等及本次审计在同一个业务 MySQL 事务中提交 |
 
-现状依据：[业务库说明](mysql/README.md)、[六表结构](mysql/business-schema.sql)、[NS 同步模块](../backend/modules/sync/README.md)、[业务模块](../backend/modules/business/README.md)。这些代码和文档不等于已经核验实际数据库结构，实施前还需只读检查目标业务库。
+现状依据：[业务库说明](mysql/README.md)、[六表结构](mysql/business-schema.sql)、[NS 同步模块](../backend/modules/sync/README.md)、业务模块（旧实现已退役，参见 Git 历史）。这些代码和文档不等于已经核验实际数据库结构，实施前还需只读检查目标业务库。
 
 ## 3. 第一步：核实柠檬云接口与真实样例
 

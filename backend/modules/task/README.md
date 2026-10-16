@@ -2,9 +2,7 @@
 
 架构 v2 第 4c 步新建。财务审核通过后按 供应商 × 采购公司 × 币种 生成开票任务，跟进合同归档、供应商通知与收票进度。表结构见[数据库设计](../../../docs/architecture/database.md)第 4.3、6 节。
 
-**2026-10-15 修订边界**：下文记录 `e7422b7` 的当前实现。数据库第 10.3、10.6 节的依据版本、后继任务和差异结束失效仍待实施；修订后包括已完成任务也可因依据换版被替代。超开仅作标记，不能替代数量与金额的完成条件；原实现“任一超开即结束”须调整。
-
-目标行为：相同依据复用任务；从应开 100 增到 120 时，由 matching 按兼容有效分配重算剩余 20，不跳过已完成行或复制旧缓存。差异结束绑定当前依据和账本摘要，撤销、失效或换版后重新判断；合同与通知分别按真实记录展示。现有取消分配后回退能力继续保留。
+4d 补强已接入全局依据、任务后继与差异结束。包括已完成任务在内，依据变化时整体替代并按台账重算；兼容分配承接，口径不兼容保留待复核占用。
 
 ## 职责
 
@@ -40,21 +38,21 @@
 **生成（数据库设计第 7 节第 3 步）**
 
 - 分组键：供应商 + 采购公司 + 币种；任一身份缺失时按子采购单隔离，不凭名称合并。
-- 同一子采购行只有一条有效任务行（生成列唯一约束）：已在其他报关单任务或已完成任务中的行跳过；整组都跳过时不建任务。
-- 新审核替代旧审核：旧审核的未完成任务及其任务行置为 `superseded`，写状态历史；已完成的任务保留。
+- 同一子采购行只有一条有效任务行（生成列唯一约束）：同依据复用原任务行并追加报关证据事件；变化则建立后继任务，未变行不遗漏。
+- 新审核替代旧审核：按受影响采购行定位旧任务（含已完成），写替代历史；新任务保存 predecessor_task_ids。
 - 订阅方在审核事务中执行，失败时整个审核回滚；不调用外部系统。
 
 **状态（数据库设计第 6.2 节）**
 
 ```text
 documents_pending → notify_pending → awaiting_invoice → partially_received → completed
-任何未完成状态 → superseded
+任何当前任务状态 → superseded
 ```
 
 - 合同全部归档 → `notify_pending`；登记人工发送 → `awaiting_invoice`。
 - `partially_received`、`completed` 只由已通过分配的汇总驱动，不提供手动修改；发票可能先于合同或通知到达，此时直接进入收票节点。
 - 取消已通过的分配后按实际收票退回：仍有收票 → `partially_received`；没有收票 → 收票前节点（已登记通知 → `awaiting_invoice`；合同已全部归档 → `notify_pending`；否则 `documents_pending`）。
-- 任务行（数据库设计第 6.1 节）：数量相等且金额相差不超过 0.01 元为已收齐；超过应开为超开；人工勾选"已开完"为按差异结束；三者都视为结束（`received`）。
+- 任务行（数据库设计第 6.1 节）：数量相等且金额相差不超过 0.01 元为已收齐；超开单独标记，不能自动结束；显式差异结束绑定当前依据和账本摘要。
 - 重新审核时，被替代任务行的已收进度带到同一子采购行的新任务行，新任务按进度直接进入相应节点。
 - 详情页六个节点各按自身事实显示（合同是否归档、通知是否登记、是否收票、是否完成），不因任务完成而标记未做的步骤。
 - 每次状态变化写 `task_events`。
@@ -65,20 +63,35 @@ documents_pending → notify_pending → awaiting_invoice → partially_received
 
 **身份**：`service:` 身份只读，所有写操作返回 403。
 
-**来源变化**：任务按审核时冻结的应开值跟进；来源变化不阻断任务，财务重新审核后旧任务被替代。
+**来源变化**：任务按审核时冻结的应开值跟进；来源关键变化时阻止继续推进合同、通知和新分配，保留待复核占用；财务重新审核后建立后继任务。
 
 ## 公开接口与依赖
 
 - `public.py`：`open_lines(connection, purchase_line_ids=None, lock=False)`——有效任务行（应开、已收、单位）及所属任务（供应商、采购公司、币种、报关单）；`lock=True` 时按"任务 → 任务行"顺序加锁，供 matching 审核分配使用。
 - 订阅：`ReviewApproved`（生成任务）、`AllocationChanged`（收票进度），均在 `app.py` 中登记。
-- 读取：`source.public.SourceDirectory`（供应商、采购公司、子采购单号、行品名、供应商分页）。不读取 review；审核数据只经事件取得。
+- 读取：`source.public.SourceDirectory`（供应商、采购公司、子采购单号、行品名、供应商分页）。通过 `review.public.current_bases` 核对当前依据；任务生成仍只经审核事件取得冻结值。
 - 外部适配：`SubpoContractSource`（NS 合同）、`integrations/contract_archive.py`、`integrations/wecom.py`。
 - 订阅关系在 `app.py` 中登记：`events.subscribe(ReviewApproved, on_review_approved)`。
 
-## 过渡期
-
-旧 `reconciliation` 模块的开票任务、群配置接口与旧表仍在，前端已不调用，第 4e 步删除。旧任务不迁移，旧地址 `/invoice-followup*` 跳转到 `/tasks`。旧供应商群配置不迁移，需在新页面重新维护。
-
 ## 验证
 
-`backend/tests/test_task.py`（SQLite，source 与 review 真实保存）：生成与冻结值、重新审核替代、已完成行跳过、分组与隔离、订阅方失败回滚、列表搜索统计、详情、合同归档与拒绝覆盖、通知版本与登记、只读、供应商群、HTTP。并发与锁须在 MySQL 上验证。
+`backend/tests/test_task.py`（SQLite，source 与 review 真实保存）：生成与冻结值、重新审核替代、已完成后换版、分组与隔离、订阅方失败回滚、列表搜索统计、详情、合同归档与拒绝覆盖、通知版本与登记、只读、供应商群、HTTP。合同/通知失败保护见 `test_task_evidence.py`，新链路与 MySQL 并发见 matching 测试。
+
+## 差异结束
+
+`POST /api/tasks/{taskId}/lines/{lineId}/close` 接收 `requestId`、`purchaseBasisId`、`ledgerSha256`、`reason`。后端核对当前版本和账本，禁止待复核时结束；追加结构化 `difference_closed` 事件。请求编号唯一，重复提交返回原结果；台账/依据变化后旧决定不再适用。
+
+`closure_service.py` 管理该事务，`basis_guard.py` 在合同/通知推进前复核来源；`progress_service.py` 只消费 matching 发布的绝对合计。待复核占用按原分配口径展示，不作为当前有效收票。
+
+## 单位名称展示（2026-10-16）
+
+开票任务行的单位通过 source 只读门面解析为单位名称，仅影响展示，不修改原始编号、数量金额或审核／比对结论。字典缺失、停用及未知编号保留原值，规则与兼容表归属见 [source 单位说明](../source/README.md)；验证见 `backend/tests/test_unit_display.py`。
+
+## 供应商档案（2026-10-16）
+
+- 独立页面 `/suppliers`，供应商来自子采购同步产生的 source 主数据；不另建供应商副本。新增 `POST /api/tasks/supplier-groups/profiles/query`：供应商/群/群主关键词、NS 环境、全部/未绑定/启用/停用筛选和后端分页，返回供应商 NS ID 及当前群绑定。
+- `SupplierProfileService` 经 `SourceDirectory.suppliers` 读取来源，task DAO 仅查询群绑定并提供 ID 条件；source DAO 不访问 task 表。绑定继续写入 `task_supplier_groups`，不新增表。
+- 新增 `POST /api/tasks/supplier-groups/wecom/match`，请求 `supplierId/keyword/page/pageSize/refresh`。名称取自服务端：规范化同名、包含全称、去企业后缀后包含（至少 4 字）依次推荐；不猜测地域或品牌。手填关键词支持群名、群主姓名/ID、群 ID，返回匹配依据；同名多个群全部保留，由用户选定。
+- 保存仍使用 `/save`，提交 `supplierId/chatId/revision/enabled`；群名和群主由企微重新查询，不接受前端伪造。仅停用原群可离线完成，已有乐观版本保护保留。此页不发送通知。
+- `/query`、`/suppliers/query`、`/wecom/query` 暂留一版本兼容原维护客户端；新页面仅使用档案查询和名称匹配，下一版本确认外部调用方迁移后再删除旧接口。
+- 新验证：`backend/tests/test_supplier_profiles.py` 覆盖候选排名/歧义、分页、权限、真实保存、绑定状态筛选、环境隔离与旧版本拒绝；渠道使用假实现，不代表真实企微已联调。

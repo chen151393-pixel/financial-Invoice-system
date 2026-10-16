@@ -7,9 +7,8 @@ from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 
 import pytest
-from backend.app import create_app
+from backend.app import create_app, create_events
 from backend.core.errors import ApiError
-from backend.core.events import EventBus
 from backend.integrations.contract_archive import ContractArchive
 from backend.modules.review.dto.review_dto import ApproveRequest, DeclarationListQuery
 from backend.modules.review.public import ApprovedLine, ReviewApproved
@@ -63,8 +62,7 @@ class FakeWecom:
 
 @pytest.fixture
 def app_services(engine, tmp_path):
-    events = EventBus()
-    events.subscribe(ReviewApproved, on_review_approved)
+    events = create_events()
     directory = SourceDirectory(engine)
     contracts = FakeContracts()
     tasks = TaskService(engine, directory, contracts, ContractArchive(tmp_path / "share"))
@@ -123,16 +121,6 @@ def test_reapproval_supersedes_open_task_and_regenerates(ns, engine, app_service
     lines = rows(engine, "SELECT task_id, status, expected_amount FROM task_lines ORDER BY id")
     assert [line["status"] for line in lines] == ["superseded", "superseded", "open", "open"]
     assert Decimal(str(lines[2]["expected_amount"])) == Decimal("99")
-
-
-def test_completed_task_lines_stay_active_and_are_skipped(ns, engine, app_services, approved):
-    # 收票完成由发票比对驱动（第 4d 步），此处直接置为已完成以验证"只生成一次"。
-    with engine.begin() as connection:
-        connection.exec_driver_sql("UPDATE task_tasks SET status = 'completed'")
-        connection.exec_driver_sql("UPDATE task_lines SET status = 'received'")
-    save(ns, engine, bundle([purchase(amounts=("99.00", "20.00"))], [customs("870")]))
-    approve(app_services, "CD870")
-    assert [t["status"] for t in task_rows(engine)] == ["completed"]
 
 
 def line(review_line_id, purchase_line_id, order_id, supplier_id=7, company_id=3, currency="CNY"):
@@ -321,7 +309,7 @@ def test_supplier_group_save_and_prefill(engine, app_services, approved):
 
 def test_http_task_routes(context, ns, engine, tmp_path):
     save(ns, engine, bundle([purchase()], [customs("870")]))
-    app = create_app(context.settings, context.ns, context.engine, business_engine=engine, wecom=FakeWecom())
+    app = create_app(context.settings, context.ns, engine, wecom=FakeWecom())
     with TestClient(app) as client:
         assert client.post("/api/tasks/query", json={}).status_code == 401
         headers = {"Origin": context.settings.origin}

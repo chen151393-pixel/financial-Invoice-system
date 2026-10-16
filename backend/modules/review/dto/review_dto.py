@@ -2,7 +2,7 @@
 
 from typing import Literal
 
-from pydantic import Field
+from pydantic import Field, field_validator
 
 from backend.core.dto import StrictModel
 
@@ -15,6 +15,22 @@ class DeclarationListQuery(StrictModel):
     pageSize: int = Field(default=20, ge=1, le=50)
 
 
+class CurrencyEvidence(StrictModel):
+    purchaseOrderId: str = Field(pattern=r"^[1-9][0-9]*$")
+    currency: str = Field(pattern=r"^[A-Z]{3}$")
+    reference: str = Field(min_length=1, max_length=500)
+    note: str = Field(min_length=1, max_length=300)
+
+    @field_validator("reference", "note")
+    @classmethod
+    def nonblank(cls, value):
+        if not value.strip():
+            raise ValueError("核实证据和说明不能为空")
+        return value.strip()
+
+
 class ApproveRequest(StrictModel):
     contentSha256: str = Field(pattern=r"^[0-9a-f]{64}$")
     note: str = Field(default="", max_length=300)
+
+    currencyEvidence: list[CurrencyEvidence] = Field(default_factory=list, max_length=300)

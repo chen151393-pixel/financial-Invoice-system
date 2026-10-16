@@ -6,5 +6,5 @@ from backend.core.dto import StrictModel
 
 
 class Login(StrictModel):
-    username: str = Field(max_length=190)
-    password: str = Field(max_length=1000)
+    username: str = Field(min_length=1, max_length=190)
+    password: str = Field(min_length=1, max_length=1000)

@@ -1,9 +1,10 @@
+import { ConversionFields, defaultConversion } from "./ConversionFields";
 import { useState } from "react";
 import { Button } from "../../../shared/components/Button";
 import { tierLabels, type Allocation, type ConfirmBody } from "../types/matching";
 import { ChecksTable } from "./ChecksTable";
 
-type Mode = "confirm" | "reject" | "cancel" | null;
+type Mode = "confirm" | "reject" | "cancel" | "reverify" | null;
 const time = (value: string | null) =>
   value ? new Date(value).toLocaleString("zh-CN", { timeZone: "Asia/Shanghai" }) : "";
 
@@ -11,20 +12,22 @@ export function AllocationCard({
   allocation,
   busy,
   onConfirm,
+  onReverify,
   onReject,
   onCancel,
 }: {
   allocation: Allocation;
   busy: boolean;
   onConfirm: (body: ConfirmBody) => void;
+  onReverify?: (body: ConfirmBody) => void;
   onReject: (note: string) => void;
   onCancel: (reason: string) => void;
 }) {
   const [mode, setMode] = useState<Mode>(null);
   const [note, setNote] = useState("");
-  const [closes, setCloses] = useState(false);
+  const [conversion, setConversion] = useState(defaultConversion);
   const purchase = allocation.purchase;
-  const noteRequired = allocation.noteReasons.length > 0 || closes;
+  const noteRequired = allocation.noteReasons.length > 0 || mode === "reverify";
   return (
     <article
       className="matching-card"
@@ -41,7 +44,8 @@ export function AllocationCard({
           {allocation.closesPurchaseLine && <span className="matching-badge">按差异结束</span>}
         </div>
         <span>
-          分配 {allocation.quantity} · 含税 {allocation.amount}
+          发票数量 {allocation.quantity} · 采购数量 {allocation.purchaseQuantity ?? "待核实"} · 含税{" "}
+          {allocation.amount}
         </span>
       </div>
       {purchase && (
@@ -78,6 +82,13 @@ export function AllocationCard({
           </div>
         </dl>
       )}
+      {allocation.verificationIssues?.length > 0 && (
+        <ul className="matching-reasons" aria-label="待复核原因">
+          {allocation.verificationIssues.map((issue) => (
+            <li key={issue}>{issue}</li>
+          ))}
+        </ul>
+      )}
       <details>
         <summary>逐项比对</summary>
         <ChecksTable checks={allocation.checks} caption="发票行与子采购行逐项比对" />
@@ -105,6 +116,9 @@ export function AllocationCard({
           <p className="matching-help">{allocation.confirm.reason}</p>
         </>
       )}
+      {allocation.status === "confirmed" && allocation.verificationStatus !== "valid" && (
+        <p className="matching-help">{allocation.reverify.reason}</p>
+      )}
       {mode === null ? (
         <div className="matching-row">
           {allocation.status === "proposed" && (
@@ -121,6 +135,15 @@ export function AllocationCard({
               </Button>
             </>
           )}
+          {onReverify && allocation.status === "confirmed" && allocation.verificationStatus !== "valid" && (
+            <Button
+              disabled={busy || !allocation.reverify.allowed}
+              title={allocation.reverify.reason}
+              onClick={() => setMode("reverify")}
+            >
+              重新核实分配
+            </Button>
+          )}
           {allocation.status === "confirmed" && (
             <Button disabled={busy || !allocation.cancel.allowed} onClick={() => setMode("cancel")}>
               取消分配
@@ -132,26 +155,25 @@ export function AllocationCard({
           className="matching-form"
           onSubmit={(event) => {
             event.preventDefault();
-            if (mode === "confirm") onConfirm({ note, closesPurchaseLine: closes });
+            const body = {
+              note,
+              ...conversion,
+              invoiceVersionId: allocation.currentInvoiceVersionId,
+              purchaseBasisId: purchase?.purchaseBasisId,
+            };
+            if (mode === "confirm") onConfirm(body);
+            else if (mode === "reverify") onReverify?.(body);
             else if (mode === "reject") onReject(note);
             else onCancel(note);
           }}
         >
-          {mode === "confirm" && (
-            <label className="matching-check">
-              <input
-                type="checkbox"
-                checked={closes}
-                disabled={busy}
-                onChange={(e) => setCloses(e.target.checked)}
-              />
-              该子采购行已开完（金额有差异也按已开完结束）
-            </label>
+          {(mode === "confirm" || mode === "reverify") && (
+            <ConversionFields value={conversion} onChange={setConversion} busy={busy} />
           )}
           <label>
             {mode === "cancel"
               ? "取消原因（必填）"
-              : mode === "confirm" && noteRequired
+              : (mode === "confirm" || mode === "reverify") && noteRequired
                 ? "审核说明（必填）"
                 : "说明（选填）"}
             <textarea
@@ -166,11 +188,13 @@ export function AllocationCard({
             <Button type="submit" variant="primary" disabled={busy}>
               {busy
                 ? "提交中…"
-                : mode === "confirm"
-                  ? "确认通过"
-                  : mode === "reject"
-                    ? "确认驳回"
-                    : "确认取消"}
+                : mode === "reverify"
+                  ? "确认重新核实"
+                  : mode === "confirm"
+                    ? "确认通过"
+                    : mode === "reject"
+                      ? "确认驳回"
+                      : "确认取消"}
             </Button>
             <Button disabled={busy} onClick={() => setMode(null)}>
               返回

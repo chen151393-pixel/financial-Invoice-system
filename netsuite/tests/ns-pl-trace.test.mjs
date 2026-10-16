@@ -497,8 +497,11 @@ test("同一采购原始行对应多条报关行：先按来源拆分，再分�
     detail[0].summaryKey = "129";
     const g = group(
       ctx(detail, [packing(1, { quantity: "3" })], { headerIds: crossHeader ? ["74", "75"] : ["74"] }),
-      [customs(129), customs(130, { parentId: crossHeader ? "75" : "74" })],
-      [purchase(1, [purchaseSource(1, { quantity: "3", amount: "10.00" })])],
+      [
+        customs(129, { declaration: "31012026051414568" }),
+        customs(130, { parentId: crossHeader ? "75" : "74", declaration: "22312026004485511" }),
+      ],
+      [purchase(1, [purchaseSource(1, { quantity: "3", amount: "10.00" })], { declaration: "旧采购单号" })],
     );
     assert.equal(rows(g).length, 2);
     assert.deepEqual(
@@ -506,6 +509,10 @@ test("同一采购原始行对应多条报关行：先按来源拆分，再分�
       ["3.33", "6.67"],
     );
     assert.equal(amountSum(g), "10.00");
+    assert.deepEqual(
+      rows(g).map((r) => r.values.declaration),
+      ["31012026051414568", "22312026004485511"],
+    );
     assert.deepEqual(
       g.flatMap((x) => x.displayOrder.map((d) => d.side)),
       ["customs", "purchase", "customs", "purchase"],
@@ -1040,4 +1047,40 @@ test("移除供应商匹配后出现多个来源候选仍不任意选一条", ()
     g[0].displayOrder.map((r) => r.side),
     ["customs", "customs", "purchase"],
   );
+});
+
+
+test("采购行继承对应报关真实单号：未填写不补CD号，分摊依据不足仍保留单号", () => {
+  for (const declaration of [undefined, null, "", "31012026051414568"]) {
+    for (const sourceQuantity of ["63", null]) {
+      const original = purchase(1, [purchaseSource(1)], { declaration: "不能沿用的采购原值" });
+      const before = clone(original);
+      const summaries = [customs(129, { declaration })];
+      const result = group(
+        ctx([source(1, { sourceQuantity })], [packing(1)]),
+        summaries,
+        [original],
+      );
+      const values = rows(result)[0].values;
+      assert.equal(values.declaration, declaration ?? null);
+      assert.equal(values.quantity, sourceQuantity === null ? null : "63");
+      assert.equal(values.amount, sourceQuantity === null ? null : "12065.76");
+      assert.deepEqual(original, before);
+      assert.deepEqual(result[0].customsRows, clone(summaries));
+    }
+  }
+});
+
+test("同一报关行下多条来源合并采购后仍补齐真实单号，歧义不新增采购展示行", () => {
+  const details = [source(1), source(2)];
+  const packs = [packing(1), packing(2)];
+  const purchases = [1, 2].map((id) => purchase(id, [purchaseSource(id, { childKey: "same-child" })]));
+  const summaries = [customs(129, { declaration: "22312026004485511" })];
+  const merged = group(ctx(details, packs), summaries, purchases);
+  assert.equal(rows(merged).length, 1);
+  assert.equal(rows(merged)[0].values.declaration, "22312026004485511");
+  assert.equal(rows(merged)[0].values.quantity, "126");
+  assert.equal(rows(merged)[0].values.amount, "24131.52");
+  const ambiguous = group(ctx(details, packs), [...summaries, customs(130)], purchases);
+  assert.equal(rows(ambiguous).length, 0);
 });

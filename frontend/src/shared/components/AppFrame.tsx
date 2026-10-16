@@ -13,6 +13,7 @@ export function AppFrame<Id extends string>({
   children,
   notice,
   dataLabel,
+  sessionActions,
 }: {
   groups: readonly SidebarGroup<Id>[];
   activeId: Id;
@@ -24,6 +25,7 @@ export function AppFrame<Id extends string>({
   children: ReactNode;
   notice?: string | null;
   dataLabel?: string;
+  sessionActions?: ReactNode;
 }) {
   return (
     <div className="platform-frame app-shell">
@@ -42,9 +44,12 @@ export function AppFrame<Id extends string>({
       <main className="platform-frame__main">
         <header className="platform-frame__topbar">
           <span>发票对账平台 / {title}</span>
-          <span className="platform-frame__badge">
-            {dataLabel ?? (mode === "live" ? "实时数据 · 只读查询" : "数据源接入状态")}
-          </span>
+          <div className="platform-frame__account">
+            <span className="platform-frame__badge">
+              {dataLabel ?? (mode === "live" ? "实时数据 · 只读查询" : "数据源接入状态")}
+            </span>
+            {sessionActions}
+          </div>
         </header>
         <div className="platform-frame__content">
           <div className="platform-frame__heading">

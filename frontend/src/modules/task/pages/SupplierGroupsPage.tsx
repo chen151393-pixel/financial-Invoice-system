@@ -1,215 +1,137 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Button } from "../../../shared/components/Button";
 import { Pagination } from "../../../shared/components/Pagination";
-import { openLocalSession } from "../../identity/api";
+import { matchWecomGroups, saveSupplierGroup } from "../api/supplier-group";
 import { SupplierGroupEditor } from "../components/SupplierGroupEditor";
-import { formatTime } from "../components/format";
-import {
-  querySupplierGroups,
-  querySuppliers,
-  queryWecomGroups,
-  saveSupplierGroup,
-} from "../api/supplier-group";
-import type { GroupBinding, GroupList, GroupQuery } from "../types/supplier-group";
+import { SupplierProfilesTable } from "../components/SupplierProfilesTable";
+import { useSupplierProfiles } from "../hooks/useSupplierProfiles";
+import type { SupplierProfile, SupplierProfileQuery } from "../types/supplier-group";
 import "./task.css";
 import "./supplier-groups.css";
 
 export function SupplierGroupsPage() {
-  const [query, setQuery] = useState<GroupQuery>({
-    keyword: "",
-    account: "",
-    status: "all",
-    page: 1,
-    pageSize: 20,
-  });
-  const [keyword, setKeyword] = useState("");
-  const [refresh, setRefresh] = useState(0);
-  const [state, setState] = useState<
-    { kind: "loading" } | { kind: "error"; message: string } | { kind: "ready"; data: GroupList }
-  >({ kind: "loading" });
-  const [editor, setEditor] = useState<GroupBinding | null | undefined>(undefined);
-  const [feedback, setFeedback] = useState<{ error: boolean; message: string } | null>(null);
-  useEffect(() => {
-    let active = true;
-    async function load() {
-      try {
-        await openLocalSession();
-        const data = await querySupplierGroups(query);
-        if (active) setState({ kind: "ready", data });
-      } catch (error) {
-        if (active)
-          setState({ kind: "error", message: error instanceof Error ? error.message : "配置读取失败" });
-      }
-    }
-    void load();
-    return () => {
-      active = false;
-    };
-  }, [query, refresh]);
-  function change(patch: Partial<GroupQuery>) {
-    setState({ kind: "loading" });
-    setQuery((previous) => ({ ...previous, page: 1, ...patch }));
-  }
-  function reload() {
-    setState({ kind: "loading" });
-    setRefresh((value) => value + 1);
-  }
+  const { query, state, change, reload } = useSupplierProfiles();
+  const [editor, setEditor] = useState<SupplierProfile | null>(null);
+  const [feedback, setFeedback] = useState("");
+  const trigger = useRef<HTMLElement | null>(null);
+  const feedbackElement = useRef<HTMLParagraphElement>(null);
+  const restoreFocus = useRef(false);
   const busy = state.kind === "loading";
+  useEffect(() => {
+    if (editor || !restoreFocus.current) return;
+    restoreFocus.current = false;
+    if (feedback) feedbackElement.current?.focus();
+    else trigger.current?.focus();
+  }, [editor, feedback]);
+  function close() {
+    restoreFocus.current = true;
+    setEditor(null);
+  }
   return (
     <div className="it-page sg-page">
       <p className="it-help">
-        选择系统供应商，按名称查询并选择对应的企微群。新通知自动带出默认群；已保存的通知保留原内容。
+        供应商来自已同步子采购订单。手动维护默认外部群，群主由企微自动读取；开票任务按供应商身份使用对应绑定。
       </p>
       {feedback && (
-        <p role={feedback.error ? "alert" : "status"} className="sg-feedback">
-          {feedback.message}
+        <p ref={feedbackElement} tabIndex={-1} role="status" className="sg-feedback">
+          {feedback}
         </p>
       )}
-      {state.kind === "ready" && (
-        <div className="sg-row sg-between">
-          <Button
-            variant="primary"
-            disabled={!state.data.manage.allowed || editor !== undefined}
-            onClick={() => {
-              setFeedback(null);
-              setEditor(null);
-            }}
-          >
-            新增配置
-          </Button>
-          <span className="it-help">{state.data.manage.reason}</span>
-        </div>
-      )}
-      {editor !== undefined && (
+      {editor && (
         <SupplierGroupEditor
+          key={editor.supplierId}
           initial={editor}
-          loadSuppliers={querySuppliers}
-          searchWecom={queryWecomGroups}
+          searchWecom={matchWecomGroups}
           save={saveSupplierGroup}
-          onClose={() => setEditor(undefined)}
+          onClose={close}
           onSaved={() => {
-            setEditor(undefined);
-            setFeedback({ error: false, message: "供应商群配置已保存。新通知将使用启用的默认群。" });
+            close();
+            setFeedback("供应商档案已保存。后续新通知将带出启用的默认群，已保存通知保持原内容。");
             reload();
           }}
         />
       )}
       <form
+        key={JSON.stringify(query)}
         className="it-search"
         onSubmit={(event) => {
           event.preventDefault();
-          change({ keyword });
+          const form = new FormData(event.currentTarget);
+          change({
+            keyword: String(form.get("keyword") || ""),
+            account: String(form.get("account") || ""),
+            status: String(form.get("status")) as SupplierProfileQuery["status"],
+          });
         }}
       >
         <label className="it-search__keyword">
-          供应商 / 企微群 / 群主
+          供应商 / 外部群 / 群主
           <input
             type="search"
-            value={keyword}
-            onChange={(event) => setKeyword(event.target.value)}
-            placeholder="输入名称或 ID"
+            name="keyword"
+            defaultValue={query.keyword}
+            placeholder="输入供应商名称、群名或群主"
           />
         </label>
         <label>
-          配置状态
-          <select
-            value={query.status}
-            disabled={busy}
-            onChange={(event) => change({ status: event.target.value as GroupQuery["status"] })}
-          >
-            <option value="all">全部状态</option>
-            <option value="enabled">启用</option>
-            <option value="disabled">停用</option>
+          NS 环境
+          <input name="account" defaultValue={query.account} placeholder="全部环境" />
+        </label>
+        <label>
+          绑定状态
+          <select name="status" defaultValue={query.status}>
+            <option value="all">全部供应商</option>
+            <option value="unbound">未绑定</option>
+            <option value="enabled">已绑定 · 启用</option>
+            <option value="disabled">已绑定 · 停用</option>
           </select>
         </label>
-        <Button type="submit" disabled={busy}>
+        <Button type="submit" variant="primary" disabled={busy}>
           查询
         </Button>
         <Button disabled={busy} onClick={reload}>
           刷新
         </Button>
       </form>
-      {keyword !== query.keyword && <p className="it-help">查询条件已修改，点击查询生效。</p>}
       {state.kind === "loading" && (
         <div className="it-empty" role="status">
-          正在读取供应商群配置…
+          正在读取供应商档案…
         </div>
       )}
       {state.kind === "error" && (
         <div className="it-empty" role="alert">
-          <h2>群配置暂时无法加载</h2>
+          <h2>供应商档案暂时无法加载</h2>
           <p>{state.message}</p>
           <Button onClick={reload}>重新加载</Button>
         </div>
       )}
       {state.kind === "ready" && (
         <>
-          <p className="it-help">
-            当前查询：{query.keyword || "全部关键词"} · 共 {state.data.total} 条配置
-          </p>
+          <div className="sg-row sg-between">
+            <p className="it-help">
+              当前查询：{query.keyword || "全部关键词"} · 共 {state.data.total} 家供应商
+            </p>
+            <p className="it-help">{state.data.manage.reason}</p>
+          </div>
           {state.data.items.length === 0 ? (
             <div className="it-empty">
-              <h2>没有符合条件的供应商群配置</h2>
-              <p>点击“新增配置”，选择供应商并查询对应的企微群。</p>
+              <h2>没有符合条件的供应商</h2>
+              <p>可调整查询条件；供应商尚未出现时，请先同步相应子采购订单。</p>
             </div>
           ) : (
-            <div
-              className="it-table-wrap sg-table"
-              role="region"
-              aria-label="供应商群配置，可横向滚动"
-              // eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex -- 宽表支持键盘聚焦滚动。
-              tabIndex={0}
-            >
-              <table>
-                <thead>
-                  <tr>
-                    <th scope="col">供应商 / NS 环境</th>
-                    <th scope="col">企微外部群</th>
-                    <th scope="col">群主</th>
-                    <th scope="col">状态 / 更新时间</th>
-                    <th scope="col">操作</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {state.data.items.map((item) => (
-                    <tr key={JSON.stringify([item.account, item.supplierId])}>
-                      <td>
-                        <strong>{item.supplierName}</strong>
-                        <span className="it-secondary">
-                          {item.account} · {item.supplierId}
-                        </span>
-                      </td>
-                      <td>
-                        {item.groupName}
-                        <span className="it-secondary">{item.chatId}</span>
-                      </td>
-                      <td>
-                        {item.employee}
-                        <span className="it-secondary">{item.userid}</span>
-                      </td>
-                      <td>
-                        {item.enabled ? "启用" : "停用"}
-                        <span className="it-secondary">{formatTime(item.updatedAt)}</span>
-                      </td>
-                      <td>
-                        <Button
-                          disabled={!state.data.manage.allowed || editor !== undefined}
-                          onClick={() => {
-                            setFeedback(null);
-                            setEditor(item);
-                          }}
-                        >
-                          修改
-                        </Button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+            <SupplierProfilesTable
+              items={state.data.items}
+              disabled={!state.data.manage.allowed || editor !== null}
+              onEdit={(item) => {
+                trigger.current =
+                  document.activeElement instanceof HTMLElement ? document.activeElement : null;
+                setFeedback("");
+                setEditor(item);
+              }}
+            />
           )}
           <Pagination
-            label="供应商群配置分页"
+            label="供应商档案分页"
             total={state.data.total}
             page={state.data.page}
             pageCount={state.data.pages}

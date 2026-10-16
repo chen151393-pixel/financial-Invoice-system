@@ -105,7 +105,7 @@ export function TaskNotification({
               </dd>
             </dl>
           )}
-          <Link to={paths.supplierGroups}>维护供应商群配置</Link>
+          <Link to={paths.supplierGroups}>维护供应商档案</Link>
           <dl className="itn-facts">
             <dt>供应商</dt>
             <dd>{detail.task.supplier}</dd>

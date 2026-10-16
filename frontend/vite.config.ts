@@ -29,7 +29,7 @@ export default defineConfig(({ command, mode }) => {
             port: webPort,
             strictPort: true,
             proxy: {
-              // 保留浏览器 Host，供后端校验本机会话的请求来源。
+              // 保留浏览器 Host，保持代理前后的浏览器请求来源一致。
               "/api": { target: `http://127.0.0.1:${apiPort}`, changeOrigin: false },
             },
           }

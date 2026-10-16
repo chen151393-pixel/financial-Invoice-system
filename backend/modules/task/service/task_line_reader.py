@@ -9,3 +9,18 @@ def open_lines(connection, purchase_line_ids=None, *, lock=False):
         task_dao.by_ids(connection, sorted({line["task_id"] for line in found}), lock=True)
         task_line_dao.active_by_purchase_lines(connection, purchase_line_ids, lock=True)
     return task_dao.open_lines(connection, purchase_line_ids)
+
+
+def related_line_ids(connection, line_ids):
+    tasks = {row["task_id"] for row in task_line_dao.active_by_purchase_lines(connection, line_ids)}
+    return sorted(
+        {
+            row["purchase_line_id"]
+            for row in task_line_dao.by_tasks(connection, list(tasks))
+            if row["status"] != "superseded"
+        }
+    )
+
+
+def active_line_ids(connection):
+    return task_line_dao.active_line_ids(connection)

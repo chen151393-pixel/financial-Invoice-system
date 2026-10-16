@@ -1,35 +1,31 @@
 import { useEffect, useRef, useState } from "react";
 import { Button } from "../../../shared/components/Button";
 import type {
-  GroupBinding,
   GroupFields,
-  GroupPage,
   GroupSave,
   SupplierOption,
   WecomGroupPage,
-  WecomGroupQuery,
+  SupplierGroupMatchQuery,
 } from "../types/supplier-group";
-import { GroupLookup } from "./GroupLookup";
 import { WecomGroupPicker } from "./WecomGroupPicker";
 
 export function SupplierGroupEditor({
   initial,
-  loadSuppliers,
   searchWecom,
   save: submit,
   onSaved,
   onClose,
 }: {
-  initial: GroupBinding | null;
-  loadSuppliers: (keyword: string, page: number) => Promise<GroupPage<SupplierOption>>;
-  searchWecom: (query: WecomGroupQuery) => Promise<WecomGroupPage>;
+  initial: SupplierOption;
+  searchWecom: (query: SupplierGroupMatchQuery) => Promise<WecomGroupPage>;
   save: (value: GroupSave) => Promise<unknown>;
   onSaved: () => void;
   onClose: () => void;
 }) {
-  const [supplier, setSupplier] = useState<SupplierOption | null>(initial);
-  const [group, setGroup] = useState<GroupFields | null>(initial);
-  const [enabled, setEnabled] = useState(initial?.enabled ?? true);
+  const supplier = initial;
+  const [group, setGroup] = useState<GroupFields | null>(initial.binding ?? null);
+  const binding = initial.binding;
+  const [enabled, setEnabled] = useState(initial.binding?.enabled ?? true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const heading = useRef<HTMLHeadingElement>(null);
@@ -38,6 +34,7 @@ export function SupplierGroupEditor({
     heading.current?.focus();
   }, []);
   async function save() {
+    if (busy) return;
     setBusy(true);
     setError("");
     try {
@@ -45,7 +42,7 @@ export function SupplierGroupEditor({
         supplierId: supplier?.supplierId ?? "",
         chatId: group?.chatId ?? "",
         enabled,
-        revision: initial?.revision ?? 0,
+        revision: binding?.revision ?? 0,
       });
       onSaved();
     } catch (reason) {
@@ -58,47 +55,47 @@ export function SupplierGroupEditor({
     <section className="sg-editor" aria-labelledby="sg-editor-title">
       <div className="sg-row sg-between">
         <h2 id="sg-editor-title" ref={heading} tabIndex={-1}>
-          {initial ? "修改供应商群配置" : "新增供应商群配置"}
+          维护供应商档案
         </h2>
         <Button disabled={busy} onClick={onClose}>
           取消
         </Button>
       </div>
-      <p className="it-help">每个供应商配置一个默认通知群。查询并选择企微群，系统自动获取群及群主信息。</p>
+      <p className="it-help">
+        系统按供应商名称推荐外部群；核对后选择，群主信息自动带入。每个供应商保留一个默认通知群。
+      </p>
       {supplier && (
         <p className="sg-selection">
           <strong>{supplier.supplierName}</strong> · {supplier.account} · 供应商 ID：{supplier.supplierId}
         </p>
       )}
-      {!initial && (
-        <details open={!supplier}>
-          <summary>选择供应商</summary>
-          <GroupLookup
-            label="查询系统供应商"
-            load={loadSuppliers}
-            disabled={busy}
-            render={(item) => (
-              <>
-                {item.supplierName}
-                <small>
-                  {item.account} · {item.supplierId}
-                </small>
-              </>
-            )}
-            onChoose={(item) => {
-              setSupplier(item);
-              groupInput.current?.focus();
-            }}
-          />
-        </details>
+      {binding && (
+        <p className="it-help">
+          已有绑定：{binding.groupName}（{binding.enabled ? "启用" : "停用"}
+          ）。保存将更新此配置，不会新增重复绑定。
+        </p>
       )}
-      <WecomGroupPicker search={searchWecom} onChoose={setGroup} disabled={busy} inputRef={groupInput} />
+      {supplier ? (
+        <WecomGroupPicker
+          key={supplier.supplierId}
+          supplier={supplier}
+          selectedId={group?.chatId}
+          search={searchWecom}
+          onChoose={setGroup}
+          disabled={busy}
+          inputRef={groupInput}
+        />
+      ) : (
+        <p className="it-help">选择供应商后将自动查找匹配的企微外部群。</p>
+      )}
       {group && (
         <div className="sg-selection">
           <p>
             <strong>已选择：{group.groupName}</strong>
           </p>
-          <p>群主：{group.employee}</p>
+          <p>
+            群主：{group.employee} · {group.userid}
+          </p>
           <details>
             <summary>查看群标识（自动获取）</summary>
             <p>外部群 ID：{group.chatId}</p>

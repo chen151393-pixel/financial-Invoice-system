@@ -24,6 +24,7 @@ export interface TaskSummary {
   reason: string;
   createdAt: string;
   reviewRevision: number;
+  predecessorTaskIds: string[];
   orderNumbers: string[];
   lineCount: number;
   expectedAmount: string | null;
@@ -61,6 +62,12 @@ export interface TaskList {
 }
 
 export interface TaskLine {
+  purchaseBasisId: string | null;
+  ledgerSha256: string | null;
+  requiresReview: boolean;
+  pendingQuantity: string;
+  pendingAmount: string;
+  close: Capability;
   id: string;
   order: string;
   name: string;
@@ -153,3 +160,10 @@ export interface TaskNotification extends NotificationDraft {
   send: Capability;
   history: NotificationEvent[];
 }
+
+export type ClosureRequest = {
+  requestId: string;
+  purchaseBasisId: string;
+  ledgerSha256: string;
+  reason: string;
+};

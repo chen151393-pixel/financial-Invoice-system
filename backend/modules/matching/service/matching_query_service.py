@@ -6,13 +6,15 @@ from sqlalchemy.exc import SQLAlchemyError
 
 from backend.core.errors import ApiError
 from backend.modules.invoice.public import read_invoices
-from backend.modules.source.public import purchase_lines
+from backend.modules.review.public import current_bases
+from backend.modules.source.public import purchase_lines, unit_label, unit_names
 from backend.modules.task.public import open_lines
 
 from ..dao import allocation_dao
 from ..mapper import allocation_mapper as mapper
 from ..policy import allocation_policy as rules
 from ..policy.comparison_policy import HIGH, MEDIUM, compare, text, tier
+from ..policy.confirmation_policy import evaluate
 from ..vo.matching_vo import (
     Candidate,
     Candidates,
@@ -26,35 +28,6 @@ from ..vo.matching_vo import (
 
 READ_ERROR = "发票比对读取失败，请检查业务数据库及迁移状态"
 TIERS = {"all": (None, None), "high": (HIGH, None), "medium": (MEDIUM, HIGH), "low": (None, MEDIUM)}
-
-
-def evaluate(row, invoice, item, line, task_line, used):
-    """返回 (当前比对项, 能力, 需填写说明的原因)。"""
-    checks = (row["checks"] or {}).get("items", [])
-    capabilities = {
-        "confirm": Capability(reason="只有待审核建议可以通过"),
-        "reject": Capability(reason="只有待审核建议可以驳回"),
-        "cancel": Capability(reason="只有已通过的分配可以取消"),
-    }
-    reasons = []
-    if row["status"] == "confirmed":
-        capabilities["cancel"] = Capability(allowed=True, reason="取消后任务收票进度按剩余分配重算")
-    if row["status"] != "proposed":
-        return checks, capabilities, reasons
-    block = rules.hard_block(invoice, line, task_line)
-    if not block and line["digest"] != (row["checks"] or {}).get("purchaseDigest"):
-        block = "子采购行内容在建议生成后已变化，比对依据过期，请驳回后重新生成建议"
-    if not block:
-        block = rules.capacity_block(item, *used, row["quantity"], row["amount"])
-    if line is not None and task_line is not None:
-        checks, _ = compare(invoice, item, line, *rules.remaining(task_line))
-        exceeds = rules.exceeds_expected(task_line, row["quantity"], row["amount"])
-        reasons = rules.note_reasons(checks, exceeds, False)
-    capabilities["confirm"] = Capability(
-        allowed=not block, reason=block or ("通过时需填写说明" if reasons else "无需填写说明，可直接通过")
-    )
-    capabilities["reject"] = Capability(allowed=True, reason="驳回后可重新生成建议或人工分配")
-    return checks, capabilities, reasons
 
 
 class MatchingQueryService:
@@ -74,7 +47,21 @@ class MatchingQueryService:
         tasks = (
             {line["purchase_line_id"]: line for line in open_lines(connection, line_ids)} if line_ids else {}
         )
-        return purchase_lines(connection, line_ids), tasks
+        lines = purchase_lines(connection, line_ids)
+        bases = current_bases(connection, line_ids)
+        units = unit_names(connection)
+        for key, line in lines.items():
+            basis = bases.get(key)
+            line.update(
+                unit_display=unit_label(line["unit"], units),
+                currency=basis["currency"] if basis else None,
+                basis_reason=basis["reason"] if basis else "缺少有效开票依据",
+                basis_id=basis["id"] if basis else None,
+                currency_issue="已按人工证据核实"
+                if basis and basis["currency_source"] == "manual_verified"
+                else line["currency_issue"],
+            )
+        return lines, tasks
 
     def _views(self, connection, invoice, rows):
         lines, tasks = self._context(connection, rows)
@@ -97,7 +84,13 @@ class MatchingQueryService:
                 row, invoice, items[row["invoice_item_id"]], line, task_line, used
             )
             purchase = mapper.purchase_side(row["purchase_line_id"], line, task_line)
-            result[row["id"]] = mapper.allocation_view(row, checks, purchase, capabilities, reasons)
+            result[row["id"]] = mapper.allocation_view(
+                {**row, "current_invoice_version_id": invoice["current_version_id"]},
+                checks,
+                purchase,
+                capabilities,
+                reasons,
+            )
         return result
 
     def invoice(self, invoice_id):
@@ -114,6 +107,7 @@ class MatchingQueryService:
                 confirmed = [row for row in own if row["status"] == "confirmed"]
                 items.append(
                     ItemView(
+                        active=item["is_active"],
                         id=str(item["id"]),
                         lineNo=item["line_no"],
                         item=item["item_name"],
@@ -191,9 +185,15 @@ class MatchingQueryService:
                     raise ApiError(404, "发票不存在")
                 own = [row for row in rows if row["invoice_id"] == invoice_id]
                 proposed = [row for row in own if row["status"] == "proposed"]
-                confirmed_items = {row["invoice_item_id"] for row in own if row["status"] == "confirmed"}
-                item_count = len(invoices[invoice_id]["items"])
-                if confirmed_items and len(confirmed_items) >= item_count:
+                confirmed_items = {
+                    row["invoice_item_id"]
+                    for row in own
+                    if row["status"] == "confirmed" and row["verification_status"] == "valid"
+                }
+                item_count = sum(item["is_active"] for item in invoices[invoice_id]["items"])
+                if any(row["status"] == "confirmed" and row["verification_status"] != "valid" for row in own):
+                    status, label = "needs_review", "待复核占用"
+                elif confirmed_items and len(confirmed_items) >= item_count:
                     status, label = "confirmed", "已比对"
                 elif confirmed_items:
                     status, label = "partial", "部分比对"
@@ -232,8 +232,8 @@ class MatchingQueryService:
             if item is None:
                 raise ApiError(404, "发票行不存在或不属于该发票")
             invoice = found[0]
-            task_lines = open_lines(connection)
-            lines = purchase_lines(connection, [line["purchase_line_id"] for line in task_lines])
+            task_lines = self._candidate_tasks(connection, invoice_id)
+            lines, _ = self._context(connection, task_lines)
             rows = []
             for task_line in task_lines:
                 line = lines.get(task_line["purchase_line_id"])
@@ -252,7 +252,7 @@ class MatchingQueryService:
                 rows.append(
                     Candidate(
                         purchase=mapper.purchase_side(task_line["purchase_line_id"], line, task_line),
-                        checks=mapper.check_views(checks),
+                        checks=mapper.check_views(checks, line.get("unit_display")),
                         confidence=text(confidence),
                         tier=tier(confidence),
                         block=rules.hard_block(invoice, line, task_line),
@@ -262,3 +262,16 @@ class MatchingQueryService:
             return Candidates(rows=rows[:50], total=len(rows))
 
         return self._read(action)
+
+    @staticmethod
+    def _candidate_tasks(connection, invoice_id):
+        # 同票原占用所在行即使已经收齐，也必须能选择原子替换。
+        existing_ids = sorted(
+            {
+                row["purchase_line_id"]
+                for row in allocation_dao.by_invoices(connection, [invoice_id])
+                if row["status"] == "confirmed"
+            }
+        )
+        rows = open_lines(connection) + open_lines(connection, existing_ids)
+        return list({row["purchase_line_id"]: row for row in rows}.values())

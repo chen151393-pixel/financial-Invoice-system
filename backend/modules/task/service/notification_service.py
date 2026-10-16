@@ -5,9 +5,11 @@ from datetime import UTC, datetime, timezone
 from sqlalchemy.exc import SQLAlchemyError
 
 from backend.core.errors import ApiError
+from backend.core.write_lock import transaction
 
 from ..dao import notification_dao, supplier_group_dao, task_dao
 from ..policy.notification_policy import edit_block, record_block
+from .basis_guard import require_current
 from .task_status_service import change_status
 
 
@@ -23,7 +25,8 @@ class NotificationService:
         if actor.startswith("service:"):
             raise ApiError(403, "服务身份只读，不能保存或登记通知")
         try:
-            with self.engine.begin() as connection:
+            with transaction(self.engine) as connection:
+                require_current(connection, task_id)
                 task = task_dao.get(connection, task_id, lock=True)
                 if task is None:
                     raise ApiError(404, "开票任务不存在")

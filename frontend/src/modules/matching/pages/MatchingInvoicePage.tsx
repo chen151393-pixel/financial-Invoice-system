@@ -11,6 +11,8 @@ import {
   generateProposals,
   getInvoiceMatching,
   rejectAllocation,
+  reverifyAllocation,
+  replaceAllocation,
 } from "../api";
 import { AllocationCard } from "../components/AllocationCard";
 import { ManualAllocation } from "../components/ManualAllocation";
@@ -146,10 +148,11 @@ export function MatchingInvoicePage({ invoiceId }: { invoiceId: string }) {
           <div key={item.id} className="matching-item">
             <div className="matching-heading">
               <h3>
+                {!item.active && "【历史明细】"}
                 {item.lineNo}. {item.item ?? "—"} {item.specification && `· ${item.specification}`}
               </h3>
               <span>
-                {item.quantity ?? "—"} {item.unit ?? ""} · 含税 {item.amount ?? "—"} · 已通过{" "}
+                {item.quantity ?? "—"} {item.unit ?? ""} · 含税 {item.amount ?? "—"} · 已占用（含待复核）{" "}
                 {item.confirmedQuantity} / {item.confirmedAmount}
               </span>
             </div>
@@ -158,11 +161,14 @@ export function MatchingInvoicePage({ invoiceId }: { invoiceId: string }) {
             )}
             {item.allocations.map((allocation) => (
               <AllocationCard
-                key={`${allocation.id}:${allocation.status}`}
+                key={`${allocation.id}:${allocation.status}:${allocation.verificationStatus}:${allocation.currentInvoiceVersionId}`}
                 allocation={allocation}
                 busy={busy}
                 onConfirm={(body) =>
                   void act(() => confirmAllocation(allocation.id, body), "已通过，任务收票进度已更新。")
+                }
+                onReverify={(body) =>
+                  void act(() => reverifyAllocation(allocation.id, body), "已重新核实，任务收票进度已更新。")
                 }
                 onReject={(note) => void act(() => rejectAllocation(allocation.id, note), "已驳回该建议。")}
                 onCancel={(reason) =>
@@ -176,10 +182,21 @@ export function MatchingInvoicePage({ invoiceId }: { invoiceId: string }) {
             {manualItem === item.id && (
               <ManualAllocation
                 invoiceId={invoiceId}
+                invoiceVersionId={invoice.versionId}
                 item={item}
                 busy={busy}
                 search={(keyword) => findCandidates(invoiceId, item.id, keyword)}
-                onCreate={(body: ManualBody) => act(() => createAllocation(body), "人工分配已保存并通过。")}
+                replacements={items.flatMap((row) =>
+                  row.allocations
+                    .filter((a) => a.replace.allowed)
+                    .map((a) => ({ id: a.id, label: `${a.purchase?.orderNo ?? ""} · ${a.amount}` })),
+                )}
+                onCreate={(body: ManualBody, replaceId: string, reason: string) =>
+                  act(
+                    () => (replaceId ? replaceAllocation(replaceId, body, reason) : createAllocation(body)),
+                    replaceId ? "已替换原占用，新分配已通过。" : "人工分配已保存并通过。",
+                  )
+                }
               />
             )}
           </div>

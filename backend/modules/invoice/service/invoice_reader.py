@@ -3,6 +3,8 @@
 from ..dao import header_dao, item_dao
 
 HEADER_FIELDS = (
+    "current_version_id",
+    "detail_status",
     "id",
     "invoice_no",
     "invoice_date",
@@ -16,6 +18,7 @@ HEADER_FIELDS = (
     "remark",
 )
 ITEM_FIELDS = (
+    "is_active",
     "id",
     "invoice_id",
     "line_no",

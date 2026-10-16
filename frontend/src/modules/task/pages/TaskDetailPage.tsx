@@ -3,13 +3,19 @@ import { Link } from "react-router";
 import { paths } from "../../../app/paths";
 import { Button } from "../../../shared/components/Button";
 import { openLocalSession } from "../../identity/api";
-import { getTask, prepareTaskDocument, recordTaskNotification, saveTaskNotification } from "../api/task";
+import {
+  closeTaskLine,
+  getTask,
+  prepareTaskDocument,
+  recordTaskNotification,
+  saveTaskNotification,
+} from "../api/task";
 import { TaskDocuments } from "../components/TaskDocuments";
 import { TaskHistory } from "../components/TaskHistory";
 import { TaskLines } from "../components/TaskLines";
 import { TaskNotification } from "../components/TaskNotification";
 import { sectionLabels, TaskOverview, type Section } from "../components/TaskOverview";
-import type { NotificationDraft, NotificationRecord, TaskDetail } from "../types/task";
+import type { ClosureRequest, NotificationDraft, NotificationRecord, TaskDetail } from "../types/task";
 import "./task.css";
 import "./task-detail.css";
 
@@ -89,6 +95,22 @@ export function TaskDetailPage({ id }: { id: string }) {
     setFeedback({ error: false, text: "已保存人工发送登记，任务进入等待收票。" });
   }
 
+  async function closeLine(lineId: string, body: ClosureRequest) {
+    if (busy) return false;
+    setBusy(lineId);
+    setFeedback(null);
+    try {
+      setState({ kind: "ready", data: await closeTaskLine(id, lineId, body) });
+      setFeedback({ error: false, text: "差异结束决定已登记。" });
+      return true;
+    } catch (error) {
+      setFeedback({ error: true, text: error instanceof Error ? error.message : "登记失败，请刷新后核实" });
+      return false;
+    } finally {
+      setBusy(null);
+    }
+  }
+
   if (state.kind === "loading")
     return (
       <div className="it-page itd-page">
@@ -122,6 +144,17 @@ export function TaskDetailPage({ id }: { id: string }) {
       <Link className="itd-back" to={paths.tasks}>
         ← 返回全部任务
       </Link>
+      {detail.task.predecessorTaskIds?.length > 0 && (
+        <p>
+          前序任务：
+          {detail.task.predecessorTaskIds.map((previous) => (
+            <Link key={previous} to={`${paths.tasks}/${previous}`}>
+              {" "}
+              #{previous}{" "}
+            </Link>
+          ))}
+        </p>
+      )}
       <TaskOverview detail={detail} section={section} onNavigate={navigate} />
       <section className="itd-panel" id={`task-${section}`} aria-label="任务资料与记录">
         <div className="itd-tabs" role="group" aria-label="任务内容切换">
@@ -166,7 +199,7 @@ export function TaskDetailPage({ id }: { id: string }) {
           <div className="itd-content">
             <h3>收票进度</h3>
             <p className="it-help">已收数量与含税金额由发票比对中已通过的分配汇总，不能手工修改。</p>
-            <TaskLines lines={detail.lines} />
+            <TaskLines lines={detail.lines} busy={!!busy} onClose={closeLine} />
           </div>
         )}
         {section === "comparison" && (
@@ -179,7 +212,7 @@ export function TaskDetailPage({ id }: { id: string }) {
         {section === "completion" && (
           <Placeholder
             title={detail.task.status === "completed" ? "任务已完成" : "任务尚未完成"}
-            text="全部任务行结束（已收齐、人工按差异结束或超开）后，任务自动完成。"
+            text="全部任务行已收齐或按当前依据人工登记差异结束后，任务自动完成。超开仍需核对数量和金额。"
           />
         )}
         {section === "history" && <TaskHistory detail={detail} />}

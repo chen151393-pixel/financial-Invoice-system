@@ -1,6 +1,6 @@
 """供应商主数据：按 NS 身份新增或更新名称。"""
 
-from sqlalchemy import func, insert, select, update
+from sqlalchemy import func, insert, or_, select, update
 
 from backend.core.names import normalize_name
 
@@ -58,16 +58,26 @@ def ids_like(connection, keyword, limit):
     return list(connection.execute(query).scalars())
 
 
-def page(connection, account, keyword, offset, limit):
+def page(connection, account, keyword, offset, limit, *, include_ids=None, exclude_ids=(), matching_ids=()):
     """有效供应商分页（供应商群配置选择用）。"""
     conditions = [suppliers.c.is_active.is_(True)]
     if account:
         conditions.append(suppliers.c.ns_account == account)
     if keyword:
-        conditions.append(suppliers.c.name.like(f"%{keyword}%"))
+        conditions.append(
+            or_(
+                suppliers.c.name.contains(keyword, autoescape=True),
+                suppliers.c.ns_internal_id.contains(keyword, autoescape=True),
+                suppliers.c.id.in_(matching_ids),
+            )
+        )
+    if include_ids is not None:
+        conditions.append(suppliers.c.id.in_(include_ids))
+    if exclude_ids:
+        conditions.append(suppliers.c.id.not_in(exclude_ids))
     total = connection.execute(select(func.count()).select_from(suppliers).where(*conditions)).scalar()
     query = (
-        select(suppliers.c.id, suppliers.c.ns_account, suppliers.c.name)
+        select(suppliers.c.id, suppliers.c.ns_account, suppliers.c.name, suppliers.c.ns_internal_id)
         .where(*conditions)
         .order_by(suppliers.c.name, suppliers.c.id)
         .offset(offset)

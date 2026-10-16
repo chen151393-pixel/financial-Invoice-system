@@ -13,8 +13,15 @@ def iso(value):
     return value.replace(tzinfo=UTC).isoformat() if value else None
 
 
-def check_views(checks):
-    return [Check(**{key: check[key] for key in Check.model_fields}) for check in checks or []]
+def check_views(checks, purchase_unit=None):
+    result = []
+    for check in checks or []:
+        values = {key: check[key] for key in Check.model_fields}
+        if check["key"] == "unit" and purchase_unit and purchase_unit != check["purchaseValue"]:
+            values["purchaseValue"] = purchase_unit
+            values["note"] = f"{values['note'] or ''}采购单位原值：{check['purchaseValue']}。"
+        result.append(Check(**values))
+    return result
 
 
 def purchase_side(purchase_line_id, line, task_line):
@@ -22,12 +29,13 @@ def purchase_side(purchase_line_id, line, task_line):
     line = line or {}
     return PurchaseSide(
         purchaseLineId=str(purchase_line_id),
+        purchaseBasisId=str(line["basis_id"]) if line.get("basis_id") else None,
         orderNo=line.get("order_no") or "",
         supplier=line.get("supplier_name") or "",
         company=line.get("company_name") or "",
         item=line.get("declaration_name") or line.get("item_name") or "",
         specification=line.get("specification") or "",
-        unit=line.get("unit") or "",
+        unit=line.get("unit_display", line.get("unit")) or "",
         currency=line.get("currency") or "",
         currencyNote=line.get("currency_issue") or ("取自母采购单" if line.get("currency") else ""),
         expectedQuantity=text(task_line["expected_quantity"]) if task_line else None,
@@ -44,15 +52,32 @@ def purchase_side(purchase_line_id, line, task_line):
 def allocation_view(row, checks, purchase, capabilities, note_reasons):
     return AllocationView(
         id=str(row["id"]),
+        invoiceVersionId=str(row["invoice_version_id"]) if row["invoice_version_id"] else None,
+        currentInvoiceVersionId=str(row["current_invoice_version_id"])
+        if row.get("current_invoice_version_id")
+        else None,
+        purchaseBasisId=str(row["purchase_basis_id"]) if row["purchase_basis_id"] else None,
+        purchaseQuantity=text(row["purchase_quantity"]),
+        verificationStatus=row["verification_status"],
+        verificationIssues=[
+            issue.get("reason", "待复核") if isinstance(issue, dict) else str(issue)
+            for issue in row["verification_issues"] or []
+        ],
         invoiceItemId=str(row["invoice_item_id"]),
         purchaseLineId=str(row["purchase_line_id"]),
         quantity=text(row["quantity"]),
         amount=text(row["amount"]),
         status=row["status"],
-        statusLabel=STATUS_LABELS[row["status"]],
+        statusLabel=(
+            {"needs_review": "已确认 · 待复核", "invalid": "已确认 · 已失效"}.get(
+                row["verification_status"], STATUS_LABELS[row["status"]]
+            )
+            if row["status"] == "confirmed"
+            else STATUS_LABELS[row["status"]]
+        ),
         confidence=text(row["confidence"]),
         tier=tier(row["confidence"]),
-        checks=check_views(checks),
+        checks=check_views(checks, purchase.unit),
         exceedsExpected=row["exceeds_expected"],
         closesPurchaseLine=row["closes_purchase_line"],
         proposedBy=row["proposed_by"],
@@ -72,6 +97,8 @@ def allocation_view(row, checks, purchase, capabilities, note_reasons):
 def invoice_side(invoice):
     return InvoiceSide(
         id=str(invoice["id"]),
+        versionId=str(invoice["current_version_id"]) if invoice["current_version_id"] else None,
+        detailStatus=invoice["detail_status"],
         number=invoice["invoice_no"],
         date=invoice["invoice_date"].isoformat() if invoice["invoice_date"] else None,
         seller=invoice["seller_name"],

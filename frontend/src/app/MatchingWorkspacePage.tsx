@@ -1,7 +1,7 @@
 import { Link, Navigate, useParams, useSearchParams } from "react-router";
 import { MatchingInvoicePage } from "../modules/matching/pages/MatchingInvoicePage";
 import { MatchingQueuePage } from "../modules/matching/pages/MatchingQueuePage";
-import { AppFrame } from "../shared/components/AppFrame";
+import { AppFrame } from "./WorkspaceFrame";
 import { navigation } from "./navigation";
 import { matchingInvoicePath, paths } from "./paths";
 import { useViewNavigate } from "./useViewNavigate";

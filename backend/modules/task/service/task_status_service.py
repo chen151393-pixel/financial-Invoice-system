@@ -11,7 +11,15 @@ def change_status(connection, task, target, actor, reason, now):
     if not can_transition(task["status"], target):
         raise ApiError(409, "任务状态已变化，请刷新后核对")
     task_dao.set_status(
-        connection, task["id"], target, now, completed_at=now if target == "completed" else None
+        connection,
+        task["id"],
+        target,
+        now,
+        completed_at=now
+        if target == "completed"
+        else task["completed_at"]
+        if target == "superseded"
+        else None,
     )
     event_dao.append(
         connection,

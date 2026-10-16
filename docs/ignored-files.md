@@ -32,7 +32,9 @@
 | `data/` | 历史应用 SQLite 数据库及本地业务状态 | 未导入统一业务库前删除会丢失审核、任务及历史回写状态；目录整理不删除它 |
 | `.wrangler/`、`.vercel` | 已删除原型的本地部署工具状态 | 核实无本地绑定数据后可清理 |
 | `compose.override.yaml` | 部署服务器本地的 Compose 覆盖，如合同共享盘挂载，见 [Docker 部署](docker-deploy.md#合同仅保存到共享盘) | 删除后容器失去共享盘挂载，合同保存失败；按服务器实际挂载维护 |
-| `outputs/`、`work/` | 本地导出、检查结果或临时工作文件 | 逐项核对是否需交付或归档，不能仅凭目录名删除 |
+| `outputs/`、`work/`、`backend/work/`、`backend/.tmp/` | 本地导出、检查结果或临时工作文件 | 逐项核对是否需交付或归档，不能仅凭目录名删除 |
+| `.workbuddy/` | 本地 AI 工具记忆与运行状态，可能包含会话信息 | 不随源码提交，不自动删除；共享技能仍保留 |
+| `playwright-report/`、`test-results/`（根目录或 `frontend/`） | 浏览器测试报告及截图 | 按需重新运行测试生成，不包含 `tests/` 中的夹具 |
 | `SuiteScripts/` | 延续原仓库的本地独立 NS 脚本管理方式 | 网站 RESTlet 与部分 Node 测试仍依赖其共用模块；应单独管理和交付 |
 | `netsuite/tests/ns-pl-lookup.test.mjs` | 延续原有独立脚本测试的忽略约定（由 `netsuite/.gitignore` 忽略） | 本地专项测试可能仍有用途，不纳入自动删除范围 |
 
@@ -44,12 +46,11 @@
 | --- | --- |
 | `package.json`、`package-lock.json`、`backend/requirements.in`、`requirements.txt` | 项目安装与依赖版本依据 |
 | `frontend/`、`backend/`、`netsuite/`、`scripts/` | 正式实现、工具及测试；虚构测试样例也需随代码保存 |
-| `backend/migrations/`、`backend/legacy_migrations/` | 新迁移链与旧迁移链；旧链随架构第 4 步各模块切换删除 |
+| `backend/migrations/` | 新迁移链；旧链代码已随 4e 删除，数据库旧表保留 |
 | `docs/mysql/*.sql` | 建表与字段设计资料；SQL 文件不是本地数据库文件，不应统一忽略 |
 | `frontend/public/` | 前端静态资源 |
 | `.agents/skills/frontend-design/` | 项目技能及随附许可证；本次未发现删除依据 |
 | `AGENTS.md`、`design.md`、模块 README 与架构文档 | 项目约束、设计基准和实现说明 |
-| `backend/database.py` | Alembic 与应用表导入工具的元数据登记入口；数据库收口时并入 core |
 
 不能用 `*.sql`、`*.xls`、`*.xlsx` 或“所有隐藏目录”之类宽泛规则判断无用文件：其中可能包含必要的设计脚本、虚构测试夹具、项目工具配置。实际业务导出应放在已忽略的本地输出目录，不能借测试夹具目录保存真实单据。
 
@@ -57,7 +58,7 @@
 
 确认无需入库的是依赖安装结果、构建产物、缓存、运行配置、私钥和本地业务数据；其中只有可重新生成的部分适合按需清理。未确认有可直接删除的业务源码目录，原型与兼容入口仍有使用或兼容约定。
 
-本次在原有规则上补充 TypeScript 缓存、Python 优化字节码、覆盖率产物和 Windows 文件夹元数据，并将注释整理为中文分类。没有新增全局 `*.log`、数据库扩展名或业务文件类型的宽泛忽略规则。
+忽略规则覆盖 TypeScript 缓存、Python 字节码、覆盖率产物、Windows 文件夹元数据、后端临时目录和本地工具记录，并按中文用途分类。所有层级的 node_modules 和 coverage 均忽略；源码、迁移及测试夹具继续提交。没有新增全局 `*.log`、数据库扩展名或业务文件类型的宽泛忽略规则。
 
 可在项目根目录检查具体规则：
 

@@ -2,9 +2,9 @@
 
 架构 v2 第 4b 步新建。财务按 source 模块已保存的报关单与关联子采购明细整单审核；审核通过后保存审核记录，冻结开票口径的审核行，并发布 `ReviewApproved` 事件。表结构见[数据库设计](../../../docs/architecture/database.md)（`review_records`、`review_lines`）。
 
-**2026-10-15 方案修订（待实施）**：数据库第 10 节计划新增 `review_purchase_bases`，按子采购行管理跨报关单的有效依据版本，`review_lines` 引用该版本。同内容复用，关键内容变化重审；不能仅按某张报关单的旧审核 ID 决定全局任务是否更新。该表、只读依据门面与失效事件尚未实现，下文描述当前代码。
+4d 已增加 `review_purchase_bases`、只读门面 `current_bases` / `basis_versions` 和 `PurchaseBasisInvalidated`。按全局子采购行冻结依据，同内容复用，来源关键变化重审；所有受影响报关记录进入待审核。
 
-异常币种在财务核对时凭合同或结算证据核实，币种、证据引用、来源摘要、操作者和时间随新审核版本保存；普通有母单子采购自动继承，无需逐票选择。人工核实不改 source / NS。已有缺币种审核不能原地补写；母单读取失败应先重试。后续 `ReviewApproved` 扩展依据 ID 与版本，matching 通过公开门面在确认事务中验证当前依据。
+异常币种在财务核对时凭合同或结算证据核实，币种、证据引用、来源摘要、操作者和时间随新审核版本保存；普通有母单子采购自动继承，无需逐票选择。人工核实不改 source / NS。已有缺币种审核不能原地补写；母单读取失败应先重试。`ReviewApproved` 已携带依据 ID，matching 通过公开门面在确认事务中验证当前依据。
 
 ## 职责
 
@@ -51,12 +51,22 @@
 
 只通过 `backend.modules.source.public` 读取来源：`DeclarationService`（索引、分页内容、账户锁）、`snapshot`、`digest`。不读写 source 的 DAO 或表。
 
-## 过渡期
+## 4e 切换
 
-- 旧 `reconciliation` 模块的审核接口与旧表仍保留，前端已不再调用；第 4e 步删除。
+- 旧 `reconciliation` 审核实现与接口已删除，数据库旧表仍保留。
 - 自第 4c 步起，`app.py` 登记 task 模块订阅 `ReviewApproved`，审核通过即生成开票任务。review 不读取 task，响应中不返回任务数。
-- 历史审核数据不迁移，新链路需重新审核。
+- 旧模块历史审核不迁移；既有 v2 审核按迁移保留冻结值并补记依据，证据不可还原时待复核。
 
 ## 验证
 
 `backend/tests/test_review.py`（SQLite，source 真实保存合成 NS 数据）：状态与计数、筛选分页、冻结行与事件、幂等、过期页面、来源变化重审、不可审核、服务身份、订阅方失败回滚、HTTP 校验。账户锁与并发须在 MySQL 上验证。
+
+## 币种核实接口
+
+审核请求可带 `currencyEvidence: [{purchaseOrderId, currency, reference, note}]`。币种使用三位大写代码，证据引用和说明非空。同一订单全部审核行使用同一证据；已有来源币种或母单尚未读取时拒绝人工覆盖。原子冻结时保存认证身份、时间和来源摘要，相同证据重试不追加审核。
+
+`purchase_basis_service.py` 负责冻结/失效，`basis_reader.py` 供调用方核对当前来源，`purchase_basis_dao.py` 只操作 review 表。迁移 `0006` 为既有审核复制原冻结值，不能恢复的来源证据标待复核。
+
+## 单位名称展示（2026-10-16）
+
+财务核对响应中的报关单位、子采购单位及报关数量说明通过 source 只读门面解析为单位名称，仅影响展示，不修改原始编号、数量金额或审核／比对结论。字典缺失、停用及未知编号保留原值，规则与兼容表归属见 [source 单位说明](../source/README.md)；验证见 `backend/tests/test_unit_display.py`。

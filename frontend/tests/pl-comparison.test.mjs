@@ -31,7 +31,7 @@ before(async () => {
   ({ CustomsRows } = await server.ssrLoadModule("/src/modules/review/components/CustomsRows.tsx"));
   ({ ReviewDialog } = await server.ssrLoadModule("/src/modules/review/components/ReviewDialog.tsx"));
   ({ PlSourceComparison } = await server.ssrLoadModule(
-    "/src/modules/reconciliation/components/PlSourceComparison.tsx",
+    "/src/modules/source/components/PlSourceComparison.tsx",
   ));
   ({ viewPath } = await server.ssrLoadModule("/src/app/paths.ts"));
   ({ navigation } = await server.ssrLoadModule("/src/app/navigation.tsx"));
@@ -326,4 +326,44 @@ test("空结果仍有总条数，禁用翻页和跳转；加载时禁用所有�
   assert.match(html, /没有符合条件的报关单/);
   assert.match(html, /aria-label="报关单分页"/);
   assert.match(html, /共 0 条/);
+});
+
+test("币种证据只对后端允许的缺失项开放，已有证据可以完整展示", async () => {
+  const { CurrencyEvidenceForm } = await server.ssrLoadModule(
+    "/src/modules/review/components/CurrencyEvidenceForm.tsx",
+  );
+  const checks = [{ purchaseOrderId: "1", orderNumber: "SUB-1", allowed: false, reason: "母单尚未读取" }];
+  const blocked = renderToStaticMarkup(
+    createElement(CurrencyEvidenceForm, { checks, value: [], busy: false, onChange() {} }),
+  );
+  assert.match(blocked, /母单尚未读取/);
+  assert.match(blocked, /fieldset disabled/);
+  assert.doesNotMatch(blocked, /type="checkbox"/);
+  const allowed = renderToStaticMarkup(
+    createElement(CurrencyEvidenceForm, {
+      checks: [{ ...checks[0], allowed: true }],
+      value: [{ purchaseOrderId: "1", currency: "CNY", reference: "合同第3页", note: "原件核实" }],
+      busy: false,
+      onChange() {},
+    }),
+  );
+  assert.match(allowed, /value="CNY"/);
+  assert.match(allowed, /合同第3页/);
+  assert.match(allowed, /核实说明/);
+});
+
+test("任务差异结束遵循后端待复核限制并展示原因", async () => {
+  const { DifferenceClosure } = await server.ssrLoadModule(
+    "/src/modules/task/components/DifferenceClosure.tsx",
+  );
+  const html = renderToStaticMarkup(
+    createElement(DifferenceClosure, {
+      line: { id: "1", close: { allowed: false, reason: "先处理待复核占用" } },
+      busy: false,
+      onClose() {},
+    }),
+  );
+  assert.match(html, /disabled/);
+  assert.match(html, /先处理待复核占用/);
+  assert.match(html, /按差异结束/);
 });

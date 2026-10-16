@@ -6,8 +6,6 @@ from pathlib import Path
 from urllib.parse import urlsplit
 
 from dotenv import dotenv_values
-from sqlalchemy.engine import make_url
-from sqlalchemy.exc import ArgumentError
 
 from .database import business_database_url
 
@@ -38,9 +36,7 @@ class Settings:
     origin: str = "http://localhost:3000"
     admin_user: str = "admin"
     admin_password: str = field(default="", repr=False)
-    local_browser_access: bool = False
     service_key: str = field(default="", repr=False)
-    database_url: str = field(default="", repr=False)
     business_database_url: str = field(default="", repr=False)
     wecom_corp_id: str = field(default="", repr=False)
     wecom_secret: str = field(default="", repr=False)
@@ -50,6 +46,10 @@ class Settings:
     tls_cert: str = ""
     tls_key: str = field(default="", repr=False)
     web_root: Path = ROOT / "frontend" / "dist"
+    lemon_app_id: str = ""
+    lemon_app_secret: str = field(default="", repr=False)
+    lemon_host: str = "https://open2.ningmengyun.com"
+    lemon_redirect_uri: str = ""
 
     @property
     def token_url(self):
@@ -110,14 +110,6 @@ def load_settings(source=None):
         raise ValueError("APP_ORIGIN 必须是完整 origin，不含路径")
     if url.scheme != "https" and url.hostname not in ("localhost", "127.0.0.1", "::1"):
         raise ValueError("非本机入口必须使用 HTTPS")
-    local_access = get("LOCAL_BROWSER_ACCESS", "false")
-    if local_access not in ("true", "false"):
-        raise ValueError("LOCAL_BROWSER_ACCESS 必须为 true 或 false")
-    if local_access == "true" and (
-        url.hostname not in ("localhost", "127.0.0.1", "::1")
-        or get("HOST", "127.0.0.1") not in ("localhost", "127.0.0.1", "::1")
-    ):
-        raise ValueError("免登录浏览器入口只允许本机地址与本机监听")
     private_key = Path(get("NETSUITE_PRIVATE_KEY_PATH")) if get("NETSUITE_PRIVATE_KEY_PATH") else None
     if private_key:
         private_key = (ROOT / private_key).resolve()
@@ -135,27 +127,6 @@ def load_settings(source=None):
     ):
         raise ValueError("NS 写入字段配置无效")
     business_url = business_database_url(env)
-    # 正式运行只读业务库配置；旧连接仅供显式隔离测试及历史库迁移。
-    db_url = business_url or get("DATABASE_URL")
-    if not db_url and get("DATABASE_PATH"):
-        raise ValueError("DATABASE_PATH 属于旧 Node 后端，请设置业务MySQL；旧数据不会自动迁移")
-    if db_url:
-        try:
-            parsed = make_url(db_url)
-            if parsed.drivername not in ("mysql+pymysql", "sqlite") or not parsed.database:
-                raise ValueError()
-            if parsed.drivername == "mysql+pymysql" and (not parsed.host or not parsed.username):
-                raise ValueError()
-            if parsed.drivername == "sqlite":
-                db_file = (ROOT / parsed.database).resolve()
-                if db_file.is_relative_to(ROOT / "frontend"):
-                    raise ValueError()
-                parsed = parsed.set(database=str(db_file))
-            else:
-                parsed = parsed.update_query_dict({"charset": "utf8mb4"})
-            db_url = parsed.render_as_string(hide_password=False)
-        except (ValueError, TypeError, ArgumentError):
-            raise ValueError("DATABASE_URL 仅供历史迁移及隔离测试，须为MySQL或非公开目录的SQLite") from None
     types = [v.strip() for v in get("NETSUITE_RECORD_TYPES").split(",") if v.strip()]
     if any(not re.fullmatch(r"[A-Za-z][A-Za-z0-9_]{0,99}", v) for v in types):
         raise ValueError("NETSUITE_RECORD_TYPES 格式错误")
@@ -218,9 +189,7 @@ def load_settings(source=None):
         origin=origin,
         admin_user=get("ADMIN_USERNAME", "admin"),
         admin_password=get("ADMIN_PASSWORD"),
-        local_browser_access=local_access == "true",
         service_key=get("SERVICE_API_KEY"),
-        database_url=db_url,
         business_database_url=business_url,
         wecom_corp_id=get("WECOM_CORP_ID"),
         wecom_secret=get("WECOM_SECRET"),
@@ -231,4 +200,8 @@ def load_settings(source=None):
         port=int(get("PORT", "3000")),
         tls_cert=get("TLS_CERT_PATH"),
         tls_key=get("TLS_KEY_PATH"),
+        lemon_app_id=get("LEMON_OPEN2_APP_KEY").strip(),
+        lemon_app_secret=get("LEMON_OPEN2_APP_SECRET"),
+        lemon_host=get("LEMON_OPEN2_HOST", "https://open2.ningmengyun.com").rstrip("/"),
+        lemon_redirect_uri=get("LEMON_OPEN2_REDIRECT_URI").strip(),
     )

@@ -1,15 +1,18 @@
 """调用NS既有业务规则并核验查询JSON完整性。"""
 
 from pydantic import ValidationError
+from sqlalchemy.exc import SQLAlchemyError
 
 from backend.core.errors import ApiError
 
+from ..dao.unit_dictionary_dao import unit_names
+from ..policy.unit_policy import unit_label
 from ..vo.pl_comparison import ScriptComparisonResult
 
 
 class PlScriptService:
-    def __init__(self, ns):
-        self.ns = ns
+    def __init__(self, ns, engine=None):
+        self.ns, self.engine = ns, engine
 
     def query(self, criteria):
         data = self.ns.pl_script_query(criteria.model_dump())
@@ -69,4 +72,17 @@ class PlScriptService:
                 row.missingCells = [
                     index for index in required if row.cells[index].strip() in {"", "未填写", "待确认", "—"}
                 ]
+        names = self._unit_names()
+        for group in result.groups:
+            for row in group.rows:
+                row.cells[12] = unit_label(row.cells[12], names)
         return result
+
+    def _unit_names(self):
+        if self.engine is None:
+            return {}
+        try:
+            with self.engine.connect() as connection:
+                return unit_names(connection)
+        except SQLAlchemyError:
+            raise ApiError(503, "单位字典读取失败，请检查数据库连接") from None

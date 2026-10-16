@@ -98,7 +98,9 @@ class FileTokenStore(TokenStore):
 
 
 class LemonOpen2Auth:
-    def __init__(self, settings: LemonOpen2Settings, store: TokenStore, client: Optional[httpx.Client] = None):
+    def __init__(
+        self, settings: LemonOpen2Settings, store: TokenStore, client: Optional[httpx.Client] = None
+    ):
         self.settings = settings
         self.store = store
         self.client = client or httpx.Client(timeout=20, follow_redirects=False, trust_env=False)

@@ -13,7 +13,9 @@ from decimal import Decimal
 from sqlalchemy.exc import SQLAlchemyError
 
 from backend.core.errors import ApiError
+from backend.core.write_lock import transaction
 from backend.modules.invoice.public import read_invoices
+from backend.modules.review.public import current_bases
 from backend.modules.source.public import purchase_lines
 from backend.modules.task.public import open_lines
 
@@ -59,10 +61,14 @@ def generate(connection, invoice_ids, actor):
     taken = allocation_dao.active_item_ids(connection, item_ids)
     task_lines = open_lines(connection)
     contexts = purchase_lines(connection, [line["purchase_line_id"] for line in task_lines])
+    bases = current_bases(connection, list(contexts))
+    for line_id, line in contexts.items():
+        basis = bases.get(line_id)
+        line.update(currency=basis["currency"] if basis else None)
     now, created = _now(), 0
     for invoice in invoices:
         for item in invoice["items"]:
-            if item["id"] in taken:
+            if item["id"] in taken or not item["is_active"] or invoice["detail_status"] != "complete":
                 continue
             best = best_candidate(invoice, item, task_lines, contexts)
             if best is None:
@@ -74,6 +80,8 @@ def generate(connection, invoice_ids, actor):
                     "invoice_id": invoice["id"],
                     "invoice_item_id": item["id"],
                     "purchase_line_id": task_line["purchase_line_id"],
+                    "purchase_basis_id": task_line["purchase_basis_id"],
+                    "invoice_version_id": invoice["current_version_id"],
                     "quantity": item["quantity"] if item["quantity"] is not None else Decimal(0),
                     "amount": item["amount_including_tax"] or Decimal(0),
                     "status": "proposed",
@@ -102,7 +110,7 @@ class ProposalService:
         if actor.startswith("service:"):
             raise ApiError(403, "服务身份只读，不能生成比对建议")
         try:
-            with self.engine.begin() as connection:
+            with transaction(self.engine) as connection:
                 return generate(connection, invoice_ids, actor)
         except SQLAlchemyError:
             raise ApiError(503, "比对建议生成失败，请稍后重试") from None

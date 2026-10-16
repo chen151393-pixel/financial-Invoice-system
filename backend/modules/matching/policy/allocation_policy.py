@@ -28,12 +28,16 @@ def remaining(task_line):
 
 def hard_block(invoice, line, task_line):
     """不可绕过的条件；返回原因，可以通过时返回空字符串。"""
-    if invoice["status"] in ("void", "red_offset"):
-        return "发票为作废或红冲，不能作为收票依据"
+    if invoice["status"] != "normal":
+        return "发票为作废、红冲或状态未知，不能作为收票依据"
+    if invoice.get("detail_status") != "complete":
+        return "发票明细未完整或身份待核实，不能确认分配"
     if line is None or not line["active"]:
         return "子采购行已停用或不存在，不能分配"
     if task_line is None:
         return "子采购行没有有效任务行，不在已审核的应开范围内"
+    if line.get("basis_reason"):
+        return line["basis_reason"]
     if not line["currency"]:
         return f"子采购币种待核实：{line['currency_issue'] or '来源未提供币种'}"
     if invoice["currency"] != line["currency"]:

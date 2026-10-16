@@ -3,10 +3,10 @@ from types import SimpleNamespace
 
 import pytest
 from backend.core.config import load_settings
+from backend.core.database import make_engine
 from backend.core.errors import ApiError
-from backend.database import make_engine
 from backend.integrations.netsuite.client import NetSuite
-from backend.manage import upgrade
+from backend.manage import upgrade_schema
 
 
 class FakeNS:
@@ -57,9 +57,10 @@ def env():
 
 @pytest.fixture
 def context(tmp_path, env):
-    settings = load_settings({**env, "DATABASE_URL": f"sqlite:///{tmp_path / 'test.sqlite'}"})
-    upgrade(settings.database_url)
-    engine = make_engine(settings.database_url)
+    settings = load_settings(env)
+    database_url = f"sqlite:///{tmp_path / 'test.sqlite'}"
+    upgrade_schema(database_url)
+    engine = make_engine(database_url)
     ns = FakeNS(settings)
     yield SimpleNamespace(settings=settings, engine=engine, ns=ns)
     engine.dispose()

@@ -5,6 +5,7 @@ import { Button } from "../../../shared/components/Button";
 import type { ImportResult } from "../types/invoice";
 
 const ACTIONS = {
+  updated: ["追加新版本", "新版本已保存"],
   new: ["新增 · 待比对", "已入库 · 已生成比对建议"],
   unchanged: ["重复 · 跳过", "重复 · 跳过"],
   conflict: ["冲突 · 需核实", "冲突 · 需核实"],
@@ -31,8 +32,8 @@ export function ImportResultView({
         </p>
         <p>
           本次范围 {result.invoiceCount} 张发票 / {result.lineCount} 行明细 ·{" "}
-          {result.saved ? "已新增" : "待新增"} {result.created} 张 · 重复 {result.unchanged} 张 · 冲突{" "}
-          {result.conflicts} 张
+          {result.saved ? "已新增" : "待新增"} {result.created} 张 · 新版本 {result.updated} 张 · 重复{" "}
+          {result.unchanged} 张 · 冲突 {result.conflicts} 张
         </p>
         <p>本次范围价税合计：{result.amount}（人民币）</p>
       </div>

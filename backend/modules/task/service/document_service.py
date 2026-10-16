@@ -10,8 +10,10 @@ from datetime import UTC, datetime, timezone
 from sqlalchemy.exc import SQLAlchemyError
 
 from backend.core.errors import ApiError
+from backend.core.write_lock import transaction
 
 from ..dao import document_dao, task_dao, task_line_dao
+from .basis_guard import require_current
 from .task_status_service import change_status
 
 
@@ -58,6 +60,7 @@ class DocumentService:
                 task = task_dao.get(connection, task_id)
                 if task is None:
                     raise ApiError(404, "开票任务不存在")
+                require_current(connection, task_id)
                 order_ids = self.tasks.order_ids(task_line_dao.by_tasks(connection, [task_id]))
                 existing = document_dao.get(connection, task_id, order_id)
         except SQLAlchemyError:
@@ -77,7 +80,8 @@ class DocumentService:
 
     def _register(self, task_id, order_id, order_no, contract, digest):
         try:
-            with self.engine.begin() as connection:
+            with transaction(self.engine) as connection:
+                require_current(connection, task_id)
                 task = task_dao.get(connection, task_id, lock=True)
                 if task["status"] == "superseded":
                     raise ApiError(409, "任务已被新审核版本替代，文件未入库")
@@ -109,7 +113,7 @@ class DocumentService:
 
     def _fail(self, document_id, message):
         try:
-            with self.engine.begin() as connection:
+            with transaction(self.engine) as connection:
                 document_dao.update_document(
                     connection, document_id, {"status": "failed", "error_message": message[:500]}, _now()
                 )
@@ -119,7 +123,8 @@ class DocumentService:
 
     def _archive(self, task_id, document_id, path, filename, actor):
         try:
-            with self.engine.begin() as connection:
+            with transaction(self.engine) as connection:
+                require_current(connection, task_id)
                 task = task_dao.get(connection, task_id, lock=True)
                 now = _now()
                 document_dao.update_document(
@@ -134,6 +139,7 @@ class DocumentService:
                     },
                     now,
                 )
+                require_current(connection, task_id)
                 order_ids = self.tasks.order_ids(task_line_dao.by_tasks(connection, [task_id]))
                 saved = document_dao.by_task(connection, task_id)
                 archived = {row["purchase_order_id"] for row in saved if row["status"] == "archived"}

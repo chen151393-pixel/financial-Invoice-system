@@ -21,8 +21,7 @@ def test_business_config_unifies_database_and_preserves_password(env):
     assert url.host == "127.0.0.1" and url.port == 3306
     assert url.database == "financial_invoice_business"
     assert url.query["charset"] == "utf8mb4"
-    assert settings.database_url == settings.business_database_url
-    assert load_settings(env).database_url == ""
+    assert not hasattr(settings, "database_url")
     assert secret not in repr(settings)
     assert load_settings(env).business_database_url == ""
 
@@ -55,8 +54,8 @@ def test_business_config_is_authoritative_and_ignores_legacy_connection(env, leg
             "BUSINESS_DATABASE_URL": "mysql+pymysql://business@127.0.0.1:3306/application",
         }
     )
-    assert settings.database_url == settings.business_database_url
-    assert make_url(settings.database_url).username == "business"
+    assert not hasattr(settings, "database_url")
+    assert make_url(settings.business_database_url).username == "business"
 
 
 def test_runtime_without_business_configuration_does_not_fall_back_to_sqlite(env):
@@ -73,7 +72,7 @@ def test_check_missing_tables_then_ready_without_business_data_access(monkeypatc
     engine.connect.return_value.__exit__ = Mock(return_value=False)
     result = database.check_business_database(engine)
     assert result["state"] == "schema_incomplete" and result["connected"]
-    assert len(result["missingTables"]) == 5 and not result["ready"]
+    assert len(result["missingTables"]) == len(database.BUSINESS_TABLES) and not result["ready"]
     inspector.get_table_names.return_value = list(database.BUSINESS_TABLES)
     assert database.check_business_database(engine)["ready"]
     assert inspector.method_calls == [("get_table_names", (), {}), ("get_table_names", (), {})]

@@ -1,0 +1,10 @@
+.identity-session-menu [role="alert"] {
+  color: var(--color-feedback);
+}
+.identity-session-menu {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-small);
+  overflow-wrap: anywhere;
+}

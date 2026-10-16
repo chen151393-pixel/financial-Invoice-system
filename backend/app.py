@@ -1,6 +1,7 @@
 """应用装配：创建依赖、注册接口、管理生命周期。"""
 
 from contextlib import asynccontextmanager
+from functools import partial
 
 from fastapi import FastAPI
 
@@ -11,63 +12,57 @@ from .core.events import EventBus
 from .core.frontend import create_router as frontend_router
 from .core.middleware import RequestGuard, register_error_handlers
 from .integrations.contract_archive import ContractArchive
+from .integrations.lemon.existing_account import LemonExistingAccount
 from .integrations.netsuite.client import NetSuite
 from .integrations.netsuite.subpo_contract import connection_settings
 from .integrations.wecom import WeComGroups
 from .manage import verify_database
-from .modules.business.public import (
-    CustomsReconciliationSource,
-    SubpoContractSource,
-    SupplierDirectory,
-)
 from .modules.identity.controller import create_router as identity_router
 from .modules.identity.service import IdentityService
 from .modules.invoice.controller.invoice_controller import create_router as invoice_router
-from .modules.invoice.public import InvoicesImported
+from .modules.invoice.public import InvoiceChanged, InvoiceChanging, InvoicesImported
 from .modules.invoice.service.import_service import ImportService
 from .modules.invoice.service.invoice_service import InvoiceService
 from .modules.matching.controller.matching_controller import create_router as matching_router
 from .modules.matching.public import AllocationChanged
+from .modules.matching.service import ledger_service
 from .modules.matching.service.allocation_service import AllocationService
 from .modules.matching.service.matching_query_service import MatchingQueryService
 from .modules.matching.service.proposal_service import ProposalService, on_invoices_imported
-from .modules.reconciliation.controller import create_router as reconciliation_router
-from .modules.reconciliation.group_controller import create_router as supplier_group_router
-from .modules.reconciliation.group_service import SupplierGroupService
-from .modules.reconciliation.service import ReconciliationService
-from .modules.reconciliation.task_controller import create_router as invoice_task_router
-from .modules.reconciliation.task_service import InvoiceTaskService
 from .modules.review.controller.review_controller import create_router as review_router
-from .modules.review.public import ReviewApproved
+from .modules.review.public import PurchaseBasisInvalidated, ReviewApproved
+from .modules.review.service.purchase_basis_service import on_source_changed
 from .modules.review.service.review_service import ReviewService
 from .modules.source.controller.pl_comparison_controller import create_router as source_pl_router
-from .modules.source.public import DeclarationService, PlScriptService, SourceDirectory
+from .modules.source.public import DeclarationService, PlScriptService, SourceChanged, SourceDirectory
 from .modules.source.public import SubpoContractSource as SourceContracts
 from .modules.source.service.storage_service import StorageService as SourceStorageService
 from .modules.sync.controller import create_router as sync_router
+from .modules.sync.controller.lemon_binding_controller import create_router as lemon_binding_router
 from .modules.sync.pull_service import PullService
 from .modules.sync.service import ConnectionService
+from .modules.sync.service.lemon_binding_service import LemonBindingService
 from .modules.task.controller.supplier_group_controller import create_router as task_group_router
 from .modules.task.controller.task_controller import create_router as task_router
+from .modules.task.service.closure_service import ClosureService
 from .modules.task.service.document_service import DocumentService
 from .modules.task.service.notification_service import NotificationService
 from .modules.task.service.progress_service import on_allocation_changed
 from .modules.task.service.supplier_group_service import SupplierGroupService as TaskGroupService
+from .modules.task.service.supplier_profile_service import SupplierProfileService
 from .modules.task.service.task_generation_service import on_review_approved
 from .modules.task.service.task_service import TaskService
 
 
-def create_app(settings=None, ns=None, engine=None, business_engine=None, wecom=None):
+def create_app(settings=None, ns=None, engine=None, wecom=None, lemon=None):
     settings = settings or load_settings()
-    # 正式运行只有一个业务库连接池。显式注入连接仅供隔离测试和预览；
-    # business_engine 只给旧模块测试分开注入旧业务表，架构第 4 步各模块重建后删除。
-    owns_engine = engine is None and business_engine is None
-    engine = engine if engine is not None else business_engine
+    owns_engine = engine is None
     if engine is None:
         if not settings.business_database_url:
             raise ValueError("请配置 BUSINESS_DATABASE_URL 或 BUSINESS_MYSQL_*，正式运行统一使用业务MySQL")
         engine = make_business_engine(settings.business_database_url)
-    business_engine = business_engine if business_engine is not None else engine
+    owns_lemon = lemon is None
+    lemon = lemon or LemonExistingAccount(settings)
     owns_ns, owns_wecom = ns is None, wecom is None
     wecom = wecom or WeComGroups(settings)
     ns = ns or NetSuite(settings)
@@ -76,9 +71,11 @@ def create_app(settings=None, ns=None, engine=None, business_engine=None, wecom=
     @asynccontextmanager
     async def lifespan(_app):
         try:
-            verify_database(engine, business=owns_engine)
+            verify_database(engine)
             yield
         finally:
+            if owns_lemon:
+                lemon.close()
             if owns_wecom:
                 wecom.close()
             if owns_ns:
@@ -94,64 +91,9 @@ def create_app(settings=None, ns=None, engine=None, business_engine=None, wecom=
     app.add_middleware(RequestGuard, secure=settings.origin.startswith("https://"))
     register_error_handlers(app)
     app.include_router(identity_router(identity, settings))
-    events = EventBus()
-    pl_comparison = PlScriptService(ns)
-    app.include_router(source_pl_router(pl_comparison))
-    # 新链路（架构第 4 步）：source 保存与读取新表，review 审核写新表，task 订阅审核通过生成任务。
-    source_storage = SourceStorageService(ns, business_engine)
-    declarations = DeclarationService(business_engine)
-    app.include_router(review_router(ReviewService(business_engine, declarations, events)))
-    directory = SourceDirectory(business_engine)
-    archive = ContractArchive(settings.subpo_archive_root)
-    task_queries = TaskService(business_engine, directory, SourceContracts(contract_ns), archive)
-    app.include_router(task_group_router(TaskGroupService(business_engine, directory, wecom)))
-    app.include_router(
-        task_router(
-            task_queries,
-            DocumentService(business_engine, directory, SourceContracts(contract_ns), archive, task_queries),
-            NotificationService(business_engine, task_queries),
-        )
-    )
-    events.subscribe(ReviewApproved, on_review_approved)
-    app.include_router(
-        reconciliation_router(
-            ReconciliationService(
-                settings, pl_comparison, engine, CustomsReconciliationSource(business_engine)
-            )
-        )
-    )
-    supplier_groups = SupplierGroupService(
-        business_engine, SupplierDirectory(business_engine), f"user:{settings.admin_user}", wecom=wecom
-    )
-    app.include_router(supplier_group_router(supplier_groups))
-    app.include_router(
-        invoice_task_router(
-            InvoiceTaskService(
-                engine,
-                CustomsReconciliationSource(business_engine),
-                SubpoContractSource(contract_ns),
-                ContractArchive(settings.subpo_archive_root),
-                supplier_groups=supplier_groups,
-            )
-        )
-    )
-    # 发票导入 → matching 生成比对建议；比对通过 / 取消 → task 重算收票进度（均在发布方事务中）。
-    app.include_router(
-        invoice_router(ImportService(business_engine, events), InvoiceService(business_engine))
-    )
-    matching_queries = MatchingQueryService(business_engine)
-    app.include_router(
-        matching_router(
-            matching_queries,
-            AllocationService(business_engine, events, matching_queries),
-            ProposalService(business_engine),
-        )
-    )
-    events.subscribe(InvoicesImported, on_invoices_imported)
-    events.subscribe(AllocationChanged, on_allocation_changed)
-    app.include_router(
-        sync_router(ConnectionService(settings, ns), PullService(settings, ns, source_storage))
-    )
+    app.state.lemon_binding = LemonBindingService(settings, engine, lemon)
+    app.include_router(lemon_binding_router(app.state.lemon_binding))
+    _register_business(app, settings, ns, contract_ns, wecom, engine)
 
     @app.get("/api/health", tags=["基础设施"])
     def health():
@@ -163,3 +105,56 @@ def create_app(settings=None, ns=None, engine=None, business_engine=None, wecom=
 
     app.include_router(frontend_router(settings))
     return app
+
+
+def create_events():
+    """关联写的订阅次序：任务生成/换版先于匹配重算，订阅方复用同一事务。"""
+    events = EventBus()
+    events.subscribe(SourceChanged, partial(on_source_changed, events=events))
+    events.subscribe(PurchaseBasisInvalidated, partial(ledger_service.on_basis_invalidated, events=events))
+    events.subscribe(ReviewApproved, on_review_approved)
+    events.subscribe(ReviewApproved, partial(ledger_service.on_review_approved, events=events))
+    events.subscribe(InvoiceChanging, ledger_service.on_invoice_changing)
+    events.subscribe(InvoiceChanged, partial(ledger_service.on_invoice_changed, events=events))
+    events.subscribe(InvoicesImported, on_invoices_imported)
+    events.subscribe(AllocationChanged, on_allocation_changed)
+    return events
+
+
+def _register_business(app, settings, ns, contract_ns, wecom, engine):
+    events = create_events()
+    pl_comparison = PlScriptService(ns, engine)
+    app.include_router(source_pl_router(pl_comparison))
+    # source 保存来源，review 冻结依据，task 订阅审核通过生成任务。
+    source_storage = SourceStorageService(ns, engine, events)
+    declarations = DeclarationService(engine)
+    app.include_router(review_router(ReviewService(engine, declarations, events)))
+    directory = SourceDirectory(engine)
+    archive = ContractArchive(settings.subpo_archive_root)
+    task_queries = TaskService(engine, directory, SourceContracts(contract_ns), archive)
+    app.include_router(
+        task_group_router(
+            TaskGroupService(engine, directory, wecom), SupplierProfileService(engine, directory)
+        )
+    )
+    app.include_router(
+        task_router(
+            task_queries,
+            DocumentService(engine, directory, SourceContracts(contract_ns), archive, task_queries),
+            NotificationService(engine, task_queries),
+            ClosureService(engine, task_queries),
+        )
+    )
+    # 发票导入 → matching 生成比对建议；比对通过 / 取消 → task 重算收票进度（均在发布方事务中）。
+    app.include_router(invoice_router(ImportService(engine, events), InvoiceService(engine)))
+    matching_queries = MatchingQueryService(engine)
+    app.include_router(
+        matching_router(
+            matching_queries,
+            AllocationService(engine, events, matching_queries),
+            ProposalService(engine),
+        )
+    )
+    app.include_router(
+        sync_router(ConnectionService(settings, ns), PullService(settings, ns, source_storage))
+    )

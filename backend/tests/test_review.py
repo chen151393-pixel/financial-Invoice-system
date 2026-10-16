@@ -163,7 +163,7 @@ def test_failing_subscriber_rolls_back_review(engine, seeded):
 
 
 def test_http_query_and_approve(context, seeded, engine):
-    app = create_app(context.settings, context.ns, context.engine, business_engine=engine)
+    app = create_app(context.settings, context.ns, engine)
     with TestClient(app) as client:
         assert client.post("/api/review/declarations/query", json={}).status_code == 401
         login = client.post(

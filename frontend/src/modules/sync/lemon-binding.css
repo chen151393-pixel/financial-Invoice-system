@@ -1,0 +1,171 @@
+.lemon-binding {
+  margin-bottom: var(--space-layout);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-panel);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-size: 14px;
+}
+.lemon-binding__heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: start;
+  gap: var(--space-control);
+  padding: var(--space-layout);
+  border-bottom: 1px solid var(--color-border);
+}
+.lemon-binding h2,
+.lemon-binding h3 {
+  margin: 0;
+  font-size: 16px;
+}
+.lemon-binding p {
+  margin: var(--space-small) 0 0;
+  line-height: 1.7;
+  color: var(--color-muted);
+}
+.lemon-binding__workspace {
+  display: grid;
+  grid-template-columns: minmax(0, 1.35fr) minmax(280px, 1fr);
+}
+.lemon-binding__operation,
+.lemon-binding__guide {
+  padding: var(--space-layout);
+  min-width: 0;
+}
+.lemon-binding .lemon-binding__status {
+  color: var(--color-text);
+  font-size: 16px;
+  font-weight: 600;
+  margin: 0;
+}
+.lemon-binding .lemon-binding__warning {
+  color: var(--color-feedback);
+}
+.lemon-binding > .lemon-binding__warning,
+.lemon-binding__loading {
+  padding: var(--space-control) var(--space-layout);
+}
+.lemon-binding__form {
+  display: grid;
+  justify-items: start;
+  gap: var(--space-control);
+  margin-top: var(--space-layout);
+  max-width: 480px;
+}
+.lemon-binding__form p {
+  margin: 0;
+  font-size: 13px;
+}
+.lemon-binding__form label {
+  display: grid;
+  gap: var(--space-small);
+  width: min(100%, 360px);
+}
+.lemon-binding input {
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  border: 1px solid var(--color-input-border);
+  border-radius: var(--radius-control);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font: inherit;
+  padding: var(--space-control);
+  caret-color: var(--color-primary);
+}
+.lemon-binding input::placeholder {
+  color: var(--color-muted);
+}
+.lemon-binding__verify {
+  margin-top: var(--space-layout);
+}
+.lemon-binding__verify p {
+  font-size: 13px;
+}
+.lemon-binding__guide {
+  background: var(--color-canvas);
+  border-left: 1px solid var(--color-border);
+}
+.lemon-binding__guide ol {
+  display: grid;
+  gap: var(--space-control);
+  padding-left: var(--space-layout);
+  margin: var(--space-layout) 0;
+}
+.lemon-binding__guide li {
+  padding-left: var(--space-small);
+  line-height: 1.5;
+}
+.lemon-binding__guide li::marker {
+  color: var(--color-primary);
+  font-weight: 600;
+}
+.lemon-binding__guide p {
+  font-size: 13px;
+  margin-top: var(--space-small);
+}
+.lemon-binding a:not(.ui-button) {
+  color: var(--color-primary);
+  text-underline-offset: 3px;
+}
+.lemon-binding__boundary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-layout);
+  padding: var(--space-layout);
+  border-top: 1px solid var(--color-border);
+}
+.lemon-binding__boundary .ui-button {
+  flex-shrink: 0;
+}
+.lemon-binding__boundary p {
+  font-size: 13px;
+}
+.lemon-binding__configuration {
+  margin-top: var(--space-layout);
+  font-size: 13px;
+  line-height: 1.7;
+}
+.lemon-binding summary {
+  cursor: pointer;
+  color: var(--color-primary);
+  width: fit-content;
+  padding-block: var(--space-small);
+}
+.lemon-binding__configuration ol {
+  padding-left: var(--space-layout);
+}
+.lemon-binding .lemon-binding__callback {
+  overflow-wrap: anywhere;
+  padding: var(--space-control);
+  background: var(--color-canvas);
+  color: var(--color-text);
+}
+.lemon-binding input:focus-visible,
+.lemon-binding summary:focus-visible,
+.lemon-binding a:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+@media (max-width: 1000px) {
+  .lemon-binding__workspace {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .lemon-binding__guide {
+    border-left: 0;
+    border-top: 1px solid var(--color-border);
+  }
+}
+@media (max-width: 600px) {
+  .lemon-binding__heading,
+  .lemon-binding__boundary {
+    align-items: start;
+    flex-direction: column;
+  }
+  .lemon-binding__form,
+  .lemon-binding__form label {
+    width: 100%;
+  }
+}

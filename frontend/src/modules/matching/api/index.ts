@@ -53,3 +53,9 @@ export const confirmBatch = (ids: string[]) =>
   );
 export const generateProposals = (invoiceIds: string[]) =>
   http<{ created: number }>("/matching/proposals/generate", "POST", { invoiceIds });
+
+export const reverifyAllocation = (id: string, body: ConfirmBody) =>
+  http<InvoiceMatching>(`${allocation(id)}/reverify`, "POST", body);
+
+export const replaceAllocation = (id: string, body: ManualBody, reason: string) =>
+  http<InvoiceMatching>(`${allocation(id)}/replace`, "POST", { ...body, reason });

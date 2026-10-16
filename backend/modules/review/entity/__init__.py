@@ -4,3 +4,5 @@ from .line import lines
 from .record import records
 
 __all__ = ["lines", "records"]
+
+from .purchase_basis import bases as bases

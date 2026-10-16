@@ -33,7 +33,8 @@
   min-width: 200px;
 }
 .it-page input,
-.it-page select {
+.it-page select,
+.it-page textarea {
   min-height: 36px;
   padding: 7px 10px;
   font: inherit;
@@ -203,4 +204,23 @@
   display: flex;
   flex-wrap: wrap;
   gap: var(--space-small);
+}
+
+.it-closure form {
+  display: grid;
+  gap: var(--space-small);
+  min-width: 220px;
+  white-space: normal;
+}
+.it-closure label {
+  display: grid;
+}
+.it-closure textarea {
+  box-sizing: border-box;
+  width: 100%;
+  resize: vertical;
+}
+.it-closure :is(button, textarea):focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
 }

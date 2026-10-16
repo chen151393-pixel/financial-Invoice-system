@@ -6,9 +6,16 @@ from ..entity import events
 
 
 def append(connection, values, now):
-    connection.execute(insert(events).values(occurred_at=now, created_at=now, updated_at=now, **values))
+    return connection.execute(
+        insert(events).values(occurred_at=now, created_at=now, updated_at=now, **values)
+    ).inserted_primary_key[0]
 
 
 def by_task(connection, task_id):
     query = select(events).where(events.c.task_id == task_id).order_by(events.c.occurred_at, events.c.id)
     return [dict(row) for row in connection.execute(query).mappings()]
+
+
+def by_request(connection, request_id):
+    row = connection.execute(select(events).where(events.c.request_id == request_id)).mappings().first()
+    return dict(row) if row else None

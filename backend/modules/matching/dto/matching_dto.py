@@ -15,16 +15,29 @@ Note = Annotated[str, StringConstraints(max_length=300)]
 def positive(value, label, scale):
     try:
         number = Decimal(value)
+        if not number.is_finite() or number <= 0 or number >= Decimal(10) ** 16:
+            raise ValueError(f"{label}须为范围内的正数")
+        if number != number.quantize(Decimal(1).scaleb(-scale)):
+            raise ValueError(f"{label}最多 {scale} 位小数")
+        return number
     except ArithmeticError:
         raise ValueError(f"{label}不是有效数值") from None
-    if not number.is_finite() or number <= 0 or number != number.quantize(Decimal(1).scaleb(-scale)):
-        raise ValueError(f"{label}须为正数，最多 {scale} 位小数")
-    if number >= Decimal(10) ** 16:
-        raise ValueError(f"{label}超出范围")
-    return number
 
 
-class ConfirmBody(StrictModel):
+class ConversionBody(StrictModel):
+    conversionNumerator: Decimal = Decimal(1)
+    conversionDenominator: Decimal = Decimal(1)
+    conversionEvidence: str = Field(default="", max_length=500)
+    invoiceVersionId: Id | None = None
+    purchaseBasisId: Id | None = None
+
+    @field_validator("conversionNumerator", "conversionDenominator", mode="before")
+    @classmethod
+    def valid_factor(cls, value):
+        return positive(str(value), "换算因子", 12)
+
+
+class ConfirmBody(ConversionBody):
     note: Note = ""
     closesPurchaseLine: bool = False
 
@@ -37,8 +50,8 @@ class CancelBody(StrictModel):
     reason: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=300)]
 
 
-class ManualBody(StrictModel):
-    requestId: UUID
+class ManualBody(ConversionBody):
+    requestId: UUID = Field(strict=False)
     invoiceId: Id
     invoiceItemId: Id
     purchaseLineId: Id
@@ -80,3 +93,7 @@ class CandidateQuery(StrictModel):
     invoiceId: Id
     invoiceItemId: Id
     keyword: str = Field(default="", max_length=100)
+
+
+class ReplaceBody(ManualBody):
+    reason: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=300)]

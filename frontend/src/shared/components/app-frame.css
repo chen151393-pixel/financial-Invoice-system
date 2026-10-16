@@ -25,6 +25,13 @@
   border-bottom: 1px solid var(--color-border);
   font-size: 12px;
 }
+.platform-frame__account {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-control);
+  min-width: 0;
+}
 .platform-frame__badge {
   flex-shrink: 0;
   padding: 6px 10px;

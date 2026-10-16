@@ -48,7 +48,17 @@ class ReviewState(StrictModel):
     note: str = ""
 
 
+class CurrencyCheck(StrictModel):
+    purchaseOrderId: str
+    orderNumber: str
+    currency: str
+    allowed: bool
+    reason: str
+
+
 class Declaration(StrictModel):
+    currencyEvidenceSummary: list[str] = Field(default_factory=list)
+    currencyChecks: list[CurrencyCheck] = Field(default_factory=list)
     id: str
     contentSha256: str
     account: str

@@ -11,7 +11,12 @@ class LineReceipt:
     purchase_line_id: int
     quantity: Decimal
     amount: Decimal
-    closed: bool
+    closed: bool = False
+    purchase_basis_id: int | None = None
+    ledger_sha256: str = ""
+    requires_review: bool = False
+    pending_quantity: Decimal = Decimal(0)
+    pending_amount: Decimal = Decimal(0)
 
 
 @dataclass(frozen=True)

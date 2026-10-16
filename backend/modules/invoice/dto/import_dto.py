@@ -8,4 +8,4 @@ from backend.core.dto import StrictModel
 class ImportBody(StrictModel):
     filename: str = Field(min_length=1, max_length=255)
     content: str = Field(min_length=1, max_length=5592408)
-    previewToken: str | None = Field(default=None, max_length=100)
+    previewToken: str | None = Field(default=None, max_length=180)

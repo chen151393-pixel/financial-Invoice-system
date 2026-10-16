@@ -5,9 +5,6 @@ from sqlalchemy.dialects.mysql import BIGINT, DATETIME, LONGTEXT, VARCHAR
 from sqlalchemy.ext.compiler import compiles
 from sqlalchemy.sql.functions import FunctionElement
 
-metadata = MetaData()
-# 新表结构（docs/architecture/database.md）的表定义登记在独立元数据中，不与旧表元数据混用；
-# 旧迁移链的建表核验只比较旧元数据。
 schema_metadata = MetaData()
 
 
@@ -45,6 +42,14 @@ def _utc_now_mysql(element, compiler, **kw):
 def timestamps():
     """新表公共列：created_at、updated_at（UTC）；updated_at 由 DAO 在每次更新时写入。"""
     return [
-        Column("created_at", TIMESTAMP, nullable=False, server_default=utc_now()),
-        Column("updated_at", TIMESTAMP, nullable=False, server_default=utc_now()),
+        Column(
+            "created_at", TIMESTAMP, comment="本地记录创建时间，UTC", nullable=False, server_default=utc_now()
+        ),
+        Column(
+            "updated_at",
+            TIMESTAMP,
+            comment="本地记录最后更新时间，UTC；由 DAO 更新",
+            nullable=False,
+            server_default=utc_now(),
+        ),
     ]

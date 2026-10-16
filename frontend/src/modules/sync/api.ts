@@ -42,5 +42,6 @@ export const pullRecords = (kind: SourceKind, offset: number, range: DateRange, 
   http<PullResult>(`/ns/sync/${kind}/${save ? "pull-save" : "pull"}`, "POST", {
     offset,
     limit: 20,
+    requireDateRange: true,
     ...range,
   });

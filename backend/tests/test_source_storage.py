@@ -9,6 +9,7 @@ from decimal import Decimal
 from types import SimpleNamespace
 
 import pytest
+from backend.app import create_events
 from backend.core.config import ROOT
 from backend.core.database import make_engine
 from backend.core.errors import ApiError
@@ -195,7 +196,7 @@ def bundle(purchases, declarations, with_evidence=True, parents=None):
 
 
 def save(ns, engine, data):
-    return StorageService(ns, engine).save(lambda: deepcopy(data), read_relations=False)
+    return StorageService(ns, engine, create_events()).save(lambda: deepcopy(data), read_relations=False)
 
 
 def rows(engine, sql, **params):
@@ -378,11 +379,11 @@ def test_sync_page_reads_ns_and_relations_then_saves(ns, engine, monkeypatch):
     monkeypatch.setattr(
         "backend.modules.source.service.storage_service.read_parent_orders", lambda ns, data: {"100": PARENT}
     )
-    # 完整同步要求原始报关行与 v3 关联接口均已配置
+    # 此用例验证已配置追溯接口的完整路径；未配置及结构不可见由 optional_sync 测试覆盖
     for key in ("finance_source_script", "finance_source_deploy", "pl_restlet_script", "pl_restlet_deploy"):
         setattr(ns.settings, key, "configured")
     page = {"rows": [{"id": "870"}], "page": 1, "hasNext": False}
-    result = StorageService(ns, engine).sync_page("customs-declarations", lambda: page)
+    result = StorageService(ns, engine, create_events()).sync_page("customs-declarations", lambda: page)
     assert reads == [("customs-declarations", page["rows"])]
     assert result["storage"]["relations"]["matched"] == 1
     assert result["message"] == result["storage"]["message"] and result["page"] == 1
@@ -391,7 +392,7 @@ def test_sync_page_reads_ns_and_relations_then_saves(ns, engine, monkeypatch):
 
 def test_sync_page_rejects_unsupported_kind(ns, engine):
     with pytest.raises(ApiError, match="标准采购订单"):
-        StorageService(ns, engine).sync_page("purchase-orders", lambda: {"rows": []})
+        StorageService(ns, engine, create_events()).sync_page("purchase-orders", lambda: {"rows": []})
 
 
 def test_http_pull_save_uses_source_storage(context, engine, monkeypatch):
@@ -433,7 +434,7 @@ def test_http_pull_save_uses_source_storage(context, engine, monkeypatch):
     monkeypatch.setattr(
         "backend.modules.sync.pull_service.PullService.pull", lambda self, kind, request: page
     )
-    app = create_app(settings, context.ns, context.engine, business_engine=engine)
+    app = create_app(settings, context.ns, engine)
     headers = {"Authorization": f"Bearer {settings.service_key}"}
     # 新库只有 source_* 等新表，旧六表检查在此会失败
     assert StorageService(context.ns, engine).configuration()["allowed"]

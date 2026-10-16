@@ -79,8 +79,6 @@ def compare(invoice, item, line, remaining_quantity, remaining_amount):
     unit_match = bool(
         item["unit"] and line["unit"] and normalize_name(item["unit"]) == normalize_name(line["unit"])
     )
-    quantity, amount = item["quantity"], item["amount_including_tax"]
-    amount_gap = amount - remaining_amount if amount is not None and remaining_amount is not None else None
     checks = [
         _check(
             "order",
@@ -115,23 +113,38 @@ def compare(invoice, item, line, remaining_quantity, remaining_amount):
             "match" if unit_match else "mismatch",
             note="" if line["unit"] else "子采购单位缺失",
         ),
+    ]
+    checks.extend(_receipt_checks(item, unit_match, remaining_quantity, remaining_amount))
+    return checks, sum(Decimal(check["score"]) for check in checks)
+
+
+def _receipt_checks(item, unit_match, remaining_quantity, remaining_amount):
+    quantity, amount = item["quantity"], item["amount_including_tax"]
+    amount_gap = amount - remaining_amount if amount is not None and remaining_amount is not None else None
+    return [
         _check(
             "quantity",
             quantity,
             remaining_quantity,
-            "match" if quantity is not None and quantity == remaining_quantity else "mismatch",
+            "match"
+            if quantity is not None
+            and remaining_quantity is not None
+            and unit_match
+            and 0 < quantity <= remaining_quantity
+            else "mismatch",
             difference=quantity - remaining_quantity
             if quantity is not None and remaining_quantity is not None
             else None,
-            note="与子采购剩余应开数量比较",
+            note="本次数量在剩余应开范围内可分次收票；不同单位须核实换算",
         ),
         _check(
             "amount",
             amount,
             remaining_amount,
-            "match" if amount_gap is not None and abs(amount_gap) <= AMOUNT_TOLERANCE else "mismatch",
+            "match"
+            if amount_gap is not None and amount > 0 and amount_gap <= AMOUNT_TOLERANCE
+            else "mismatch",
             difference=amount_gap,
-            note="与剩余应开含税金额比较，容差 0.01 元",
+            note="本次含税金额在剩余额度内可分次收票；收齐容差 0.01 元",
         ),
     ]
-    return checks, sum(Decimal(check["score"]) for check in checks)

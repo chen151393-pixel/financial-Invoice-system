@@ -38,7 +38,7 @@
 | created_at | DATETIME(6) | 本地首次保存时间，UTC；更新时保留 |
 | updated_at | DATETIME(6) | 最近保存时间，UTC |
 
-索引 `ix_customs_reconciliation_status(tenant_id, ns_account, status, review_ready)` 支持按身份、账套、技术状态查询。财务列表根据当前有效审核快照统计并分页；先分页轻量主键，再加载当前页来源与依据（以及校验已有审核需要的单据），避免大JSON参与排序。缺少v3时按已存来源引用、Packing和原报关品名定位唯一报关汇总行，详见[business模块](../../backend/modules/business/README.md)。原始JSON不返回前端；此展示关系不回填v3契约或修改 `status/review_ready`，不生成开票分摊金额。
+索引 `ix_customs_reconciliation_status(tenant_id, ns_account, status, review_ready)` 支持按身份、账套、技术状态查询。财务列表根据当前有效审核快照统计并分页；先分页轻量主键，再加载当前页来源与依据（以及校验已有审核需要的单据），避免大JSON参与排序。缺少v3时按已存来源引用、Packing和原报关品名定位唯一报关汇总行，详见business模块（旧实现已退役，参见 Git 历史）。原始JSON不返回前端；此展示关系不回填v3契约或修改 `status/review_ready`，不生成开票分摊金额。
 
 ## 保存、更新和迁移
 

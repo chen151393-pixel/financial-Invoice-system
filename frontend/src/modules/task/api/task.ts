@@ -1,3 +1,4 @@
+import type { ClosureRequest } from "../types/task";
 import { http } from "../../../shared/api/http";
 import type {
   NotificationDraft,
@@ -22,3 +23,10 @@ export const saveTaskNotification = (id: string, draft: NotificationDraft) =>
 
 export const recordTaskNotification = (id: string, record: NotificationRecord) =>
   http<TaskDetail>(`${task(id)}/notification/record`, "POST", record);
+
+export const closeTaskLine = (id: string, lineId: string, body: ClosureRequest) =>
+  http<TaskDetail>(
+    `/tasks/${encodeURIComponent(id)}/lines/${encodeURIComponent(lineId)}/close`,
+    "POST",
+    body,
+  );

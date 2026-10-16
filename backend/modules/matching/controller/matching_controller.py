@@ -15,6 +15,7 @@ from ..dto.matching_dto import (
     ManualBody,
     QueueQuery,
     RejectBody,
+    ReplaceBody,
     SummaryBody,
 )
 from ..vo.matching_vo import BatchResult, Candidates, GenerateResult, InvoiceMatching, Queue, Summaries
@@ -64,5 +65,13 @@ def create_router(queries, allocations, proposals):
     @router.post("/proposals/generate", response_model=GenerateResult)
     def generate(body: GenerateBody, owner: Owner):
         return {"created": proposals.generate_now([int(value) for value in body.invoiceIds], owner)}
+
+    @router.post("/allocations/{allocation_id}/reverify", response_model=InvoiceMatching)
+    def reverify(allocation_id: Id, body: ConfirmBody, owner: Owner):
+        return allocations.reverify(allocation_id, body, owner)
+
+    @router.post("/allocations/{allocation_id}/replace", response_model=InvoiceMatching)
+    def replace(allocation_id: Id, body: ReplaceBody, owner: Owner):
+        return allocations.replace(allocation_id, body, owner)
 
     return router
