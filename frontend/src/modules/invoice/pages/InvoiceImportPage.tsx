@@ -91,7 +91,7 @@ export function InvoiceImportPage() {
           <h2>导入进项发票</h2>
           <p>上传柠檬云导出的 Excel，仅导入业务类型为“采购固定资产”的发票。</p>
         </div>
-        <span className="sync-page__tag">Excel 导入 · API 同步待接入</span>
+        <span className="sync-page__tag">Excel 导入 · 含商品明细</span>
       </div>
       {!configuration && !error && <p role="status">正在检查发票数据库…</p>}
       {configuration && !configuration.allowed && (

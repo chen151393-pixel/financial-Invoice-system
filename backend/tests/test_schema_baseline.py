@@ -31,6 +31,8 @@ TABLES = {
     "invoice_versions",
     "review_lines",
     "task_supplier_groups",
+    "task_external_groups",
+    "task_group_imports",
     "task_tasks",
     "task_lines",
     "task_documents",
@@ -43,6 +45,7 @@ TABLES = {
     "sync_runs",
     "sync_cursors",
     "sync_lemon_bindings",
+    "sync_lemon_runs",
 }
 NOW = "2026-10-10 00:00:00"
 
@@ -273,7 +276,7 @@ def test_downgrade_refuses_to_erase_version_evidence(tmp_path):
             connection.execute(text("CREATE TABLE invoice_lines (id INTEGER PRIMARY KEY)"))
             connection.execute(text("INSERT INTO invoice_lines VALUES (77)"))
         upgrade_schema(_url(engine))
-        with pytest.raises(RuntimeError, match="版本证据不可丢弃"):
+        with pytest.raises(RuntimeError, match="不可.*丢弃|不能降级删除"):
             command.downgrade(_config(SCHEMA_INI, _url(engine)), "base")
         with engine.connect() as connection:
             assert TABLES <= set(inspect(connection).get_table_names())

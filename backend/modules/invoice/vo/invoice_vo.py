@@ -55,6 +55,7 @@ class InvoiceLine(StrictModel):
 
 
 class InvoiceDetail(InvoiceRow):
+    detailStatusLabel: str
     invoiceCode: str | None
     buyer: str | None
     buyerTaxNo: str | None

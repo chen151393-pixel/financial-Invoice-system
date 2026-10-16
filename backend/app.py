@@ -13,6 +13,7 @@ from .core.frontend import create_router as frontend_router
 from .core.middleware import RequestGuard, register_error_handlers
 from .integrations.contract_archive import ContractArchive
 from .integrations.lemon.existing_account import LemonExistingAccount
+from .integrations.lemon.invoice_client import LemonInvoiceClient
 from .integrations.netsuite.client import NetSuite
 from .integrations.netsuite.subpo_contract import connection_settings
 from .integrations.wecom import WeComGroups
@@ -20,9 +21,10 @@ from .manage import verify_database
 from .modules.identity.controller import create_router as identity_router
 from .modules.identity.service import IdentityService
 from .modules.invoice.controller.invoice_controller import create_router as invoice_router
-from .modules.invoice.public import InvoiceChanged, InvoiceChanging, InvoicesImported
+from .modules.invoice.public import InvoiceChanged, InvoiceChanging, InvoicesImported, LemonInvoicesStored
 from .modules.invoice.service.import_service import ImportService
 from .modules.invoice.service.invoice_service import InvoiceService
+from .modules.invoice.service.lemon_invoice_service import on_lemon_invoices_fetched
 from .modules.matching.controller.matching_controller import create_router as matching_router
 from .modules.matching.public import AllocationChanged
 from .modules.matching.service import ledger_service
@@ -39,13 +41,21 @@ from .modules.source.public import SubpoContractSource as SourceContracts
 from .modules.source.service.storage_service import StorageService as SourceStorageService
 from .modules.sync.controller import create_router as sync_router
 from .modules.sync.controller.lemon_binding_controller import create_router as lemon_binding_router
+from .modules.sync.controller.lemon_invoice_controller import create_router as lemon_invoice_router
+from .modules.sync.public import LemonInvoicesFetched
 from .modules.sync.pull_service import PullService
 from .modules.sync.service import ConnectionService
+from .modules.sync.service.lemon_account_service import LemonAccountService
 from .modules.sync.service.lemon_binding_service import LemonBindingService
+from .modules.sync.service.lemon_invoice_service import LemonInvoiceService, on_lemon_invoices_stored
+from .modules.task.controller.external_group_controller import create_router as external_group_router
 from .modules.task.controller.supplier_group_controller import create_router as task_group_router
 from .modules.task.controller.task_controller import create_router as task_router
 from .modules.task.service.closure_service import ClosureService
 from .modules.task.service.document_service import DocumentService
+from .modules.task.service.external_group_service import ExternalGroupService
+from .modules.task.service.group_import_preview import GroupImportPreview
+from .modules.task.service.group_import_service import GroupImportService
 from .modules.task.service.notification_service import NotificationService
 from .modules.task.service.progress_service import on_allocation_changed
 from .modules.task.service.supplier_group_service import SupplierGroupService as TaskGroupService
@@ -54,7 +64,7 @@ from .modules.task.service.task_generation_service import on_review_approved
 from .modules.task.service.task_service import TaskService
 
 
-def create_app(settings=None, ns=None, engine=None, wecom=None, lemon=None):
+def create_app(settings=None, ns=None, engine=None, wecom=None, lemon=None, lemon_invoices=None):
     settings = settings or load_settings()
     owns_engine = engine is None
     if engine is None:
@@ -63,6 +73,8 @@ def create_app(settings=None, ns=None, engine=None, wecom=None, lemon=None):
         engine = make_business_engine(settings.business_database_url)
     owns_lemon = lemon is None
     lemon = lemon or LemonExistingAccount(settings)
+    owns_lemon_invoices = lemon_invoices is None
+    lemon_invoices = lemon_invoices or LemonInvoiceClient(settings, lemon)
     owns_ns, owns_wecom = ns is None, wecom is None
     wecom = wecom or WeComGroups(settings)
     ns = ns or NetSuite(settings)
@@ -74,6 +86,8 @@ def create_app(settings=None, ns=None, engine=None, wecom=None, lemon=None):
             verify_database(engine)
             yield
         finally:
+            if owns_lemon_invoices:
+                lemon_invoices.close()
             if owns_lemon:
                 lemon.close()
             if owns_wecom:
@@ -93,7 +107,7 @@ def create_app(settings=None, ns=None, engine=None, wecom=None, lemon=None):
     app.include_router(identity_router(identity, settings))
     app.state.lemon_binding = LemonBindingService(settings, engine, lemon)
     app.include_router(lemon_binding_router(app.state.lemon_binding))
-    _register_business(app, settings, ns, contract_ns, wecom, engine)
+    _register_business(app, settings, ns, contract_ns, wecom, engine, lemon_invoices)
 
     @app.get("/api/health", tags=["基础设施"])
     def health():
@@ -117,12 +131,16 @@ def create_events():
     events.subscribe(InvoiceChanging, ledger_service.on_invoice_changing)
     events.subscribe(InvoiceChanged, partial(ledger_service.on_invoice_changed, events=events))
     events.subscribe(InvoicesImported, on_invoices_imported)
+    events.subscribe(LemonInvoicesFetched, partial(on_lemon_invoices_fetched, events=events))
+    events.subscribe(LemonInvoicesStored, on_lemon_invoices_stored)
     events.subscribe(AllocationChanged, on_allocation_changed)
     return events
 
 
-def _register_business(app, settings, ns, contract_ns, wecom, engine):
+def _register_business(app, settings, ns, contract_ns, wecom, engine, lemon_invoices):
     events = create_events()
+    lemon_accounts = LemonAccountService(app.state.lemon_binding, lemon_invoices)
+    app.include_router(lemon_invoice_router(lemon_accounts, LemonInvoiceService(lemon_accounts, events)))
     pl_comparison = PlScriptService(ns, engine)
     app.include_router(source_pl_router(pl_comparison))
     # source 保存来源，review 冻结依据，task 订阅审核通过生成任务。
@@ -130,6 +148,13 @@ def _register_business(app, settings, ns, contract_ns, wecom, engine):
     declarations = DeclarationService(engine)
     app.include_router(review_router(ReviewService(engine, declarations, events)))
     directory = SourceDirectory(engine)
+    app.include_router(
+        external_group_router(
+            GroupImportPreview(engine, directory),
+            GroupImportService(engine, directory),
+            ExternalGroupService(engine, directory),
+        )
+    )
     archive = ContractArchive(settings.subpo_archive_root)
     task_queries = TaskService(engine, directory, SourceContracts(contract_ns), archive)
     app.include_router(

@@ -242,9 +242,12 @@ class NetSuite:
         if not re.fullmatch(r"[A-Za-z][A-Za-z0-9_]{0,99}", field):
             raise ApiError(503, "PL 联查筛选字段配置无效")
         if reference:
-            if not re.fullmatch(r"[0-9]{1,40}", value):
+            values = value if isinstance(value, list) else [value]
+            if not 1 <= len(values) <= 20 or any(
+                not isinstance(item, str) or not re.fullmatch(r"[0-9]{1,40}", item) for item in values
+            ):
                 raise ApiError(502, "NS 返回了无效的关联内部 ID")
-            condition = f"{field} ANY_OF [{value}]"
+            condition = f"{field} ANY_OF [{','.join(dict.fromkeys(values))}]"
         else:
             if not re.fullmatch(r"[A-Za-z0-9_-]{1,80}", value):
                 raise ApiError(400, "PL 单号只允许字母、数字、下划线和短横线")
@@ -264,7 +267,9 @@ class NetSuite:
             )["data"]
             if not isinstance(data, dict) or not isinstance(data.get("items"), list):
                 raise ApiError(502, "NS 列表响应不完整")
-            items = data["items"]
+            items, has_more = data["items"], data.get("hasMore")
+            if not isinstance(has_more, bool) or len(items) > 100 or (has_more and not items):
+                raise ApiError(502, "NS 分页响应不完整，未保存部分结果")
             for item in items:
                 record_id = str(item.get("id", "")) if isinstance(item, dict) else ""
                 if not re.fullmatch(r"[0-9]{1,40}", record_id):
@@ -273,10 +278,6 @@ class NetSuite:
                     raise ApiError(502, "NS 分页数据重复，请重新查询")
                 seen.add(record_id)
                 ids.append(record_id)
-            if len(ids) > 300:
-                raise ApiError(422, "该 PL 关联记录过多，单类最多支持 300 条，请缩小业务范围")
-            if not data.get("hasMore", False):
+            if not has_more:
                 return ids
-            if not items:
-                raise ApiError(502, "NS 分页未取得后续数据")
             offset += len(items)

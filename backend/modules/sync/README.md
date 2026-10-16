@@ -1,6 +1,6 @@
 # 数据同步与连接模块
 
-柠檬云页 `/sync/lemon` 现由应用层装配发票模块的Excel导入组件，支持原文件预览和确认入库。导入使用独立 `/api/invoices/import/*` 契约，见[发票模块](../invoice/README.md)；本模块已提供已有账号授权绑定；发票 API 拉取仍未接入。配置、前端操作与接口见[账号绑定说明](../../../docs/lemon-account-binding.md)。
+柠檬云页 `/sync/lemon` 现由应用层装配发票模块的Excel导入组件，支持原文件预览和确认入库。导入使用独立 `/api/invoices/import/*` 契约，见[发票模块](../invoice/README.md)；本模块已提供已有账号授权绑定、账套选择和 API 手动拉票；接口与部署见[接入说明](../../../docs/lemon-invoice-sync-plan.md)。配置、前端操作与接口见[账号绑定说明](../../../docs/lemon-account-binding.md)。
 
 展示服务器连接配置与最近M2M认证结果，支持三类单据只读分页拉取；子采购订单和报关单另支持补齐明细后按页保存到独立 MySQL 的 source 新表（架构 v2 第 4b 步起）。尚未执行定时全量或增量同步，不写回 NS。
 
@@ -12,7 +12,7 @@ controller/ns_controller.py接收 NS 请求；service/connection_service.py生�
 
 `GET /api/ns/status；POST /api/ns/connect`。模块通过应用工厂注入依赖，不建立全局客户端或全局数据库连接。
 
-- `GET /api/ns/sync/sources`：三类单据的 allowed/reason 和柠檬云未接入状态。
+- `GET /api/ns/sync/sources`：三类单据的 allowed/reason；柠檬云提示进入独立同步页操作。
 - `POST /api/ns/sync/purchase-orders/pull`：标准采购订单 `purchaseOrder`。
 - `POST /api/ns/sync/sub-purchase-orders/pull`：子采购单，使用 `NETSUITE_PL_LOOKUP.purchase.type`。
 - `POST /api/ns/sync/customs-declarations/pull`：报关单，使用 `NETSUITE_PL_LOOKUP.customs.type`。
@@ -37,7 +37,7 @@ controller/ns_controller.py接收 NS 请求；service/connection_service.py生�
 
 认证成功不等于拥有记录读写权限，状态不能虚构为同步完成。
 
-仅拉取接口返回 REST 单头详情及内嵌资源，不额外联查独立明细。列表会随 NS 数据变化，不是不可变快照。定时同步、增量游标和柠檬云发票拉取尚未实施。
+仅拉取接口返回 REST 单头详情及内嵌资源，不额外联查独立明细。列表会随 NS 数据变化，不是不可变快照。定时同步、增量游标尚未实施；柠檬云手动拉票使用下方独立接口。
 
 ## 按页拉取并保存
 
@@ -74,3 +74,37 @@ test_sync_pull.py 覆盖三类映射、身份、参数、金额精度、空结�
 `controller/lemon_binding_controller.py` 提供状态、开始授权、固定回调、确认与核实接口；`service/lemon_binding_service.py` 处理身份和一次性授权上下文；`dao/lemon_binding_dao.py` 条件更新 `entity/lemon_binding.py` 定义的绑定表。外部调用通过 `integrations/lemon/existing_account.py`，不放在数据库事务内。配置与手机号校验在 policy/dto 中。迁移 `0016_sync_lemon_bindings` 不包含密码或令牌字段。
 
 入口为 `/api/sync/lemon/binding`，固定回调保留用户已指定的 `/api/lemon/oauth/callback`。只有管理员可绑定，回调需同一浏览器临时 Cookie，真正提交还需原身份及账号密码。网络结果未知或进程中断后禁止直接再次绑定，先查询官方状态；单 API worker 约束与部署步骤见上方说明。测试见 `test_lemon_binding.py`、`test_lemon_binding_database.py`。
+
+
+## 批内读取优化与阶段进度（2026-10-16）
+
+- 关联明细按同一记录类型、父引用字段合并查询，每组最多 20 个父 ID；详情在单批缓存中按类型＋ID 复用。报关入口可合并报关明细、子采购发现、子采购明细三类列表。子采购入口保留逐报关的成员复核，避免缓存单头掩盖读取期间的改挂。
+- `NETSUITE_SYNC_READ_WORKERS` 默认 `2`，允许 `1`～`4`；仅控制每组详情 GET 的并发数，账户配额紧张可设为 `1` 后重启后端。关联脚本仍按原规则读取。合并筛选不支持、限流、截断、重复 ID、范围不符均明确失败，不自动重试、拆散重发或省略数据。
+- 缓存只在本批读取期间有效，下一批／重新同步重新读取 NS 最新值。已取消本地累计 300 条详情及单类关联记录上限；详情任务按固定并发逐步提交，保留完整关联补齐、母采购币种、可选追溯提示、账户锁和整批短事务；没有新增数据库表或改变审核、任务生成规则。
+- `POST /api/sync/ns/progress`：认证后申请本批临时进度，返回 `{progressId}`。将其作为可选字段传给原 `/api/ns/sync/{kind}/pull-save`；省略时保留旧调用行为。同一编号只能发起一次保存，重复使用返回 409。
+- `GET /api/sync/ns/progress/{progressId}`：仅原认证身份可查询，返回 `state`（pending/running/completed/failed）、中文 `label`、阶段 `completed/total`（未知时为 null）、`elapsedSeconds`。仅包含进度，不包含单据、密钥或保存结果；查询只读内存，不触发 NS 请求。
+- 申请进度失败时尚未发起保存，前端以旧协议发起一次保存并提示进度不可用；已发起的保存失败绝不重试。前端每秒串行查询一次进度，显示真实阶段与当前阶段计数。进度失败不重发保存；只有保存响应成功才推进下一批。停止仍等待当前批次结束；进度显示完成但保存响应丢失时，必须核实本地结果，不能视作已确认成功。
+- 进度在当前后端进程内存保存，未开始／结束后 10 分钟过期，总量上限 256，容量不足时优先移除已结束的旧进度；运行中的进度不清除。适用于当前单进程部署，重启或多 worker 不共享进度。它不是持久任务队列，不提供断点续跑。
+
+验证：`test_sync_optimization.py` 用 20 张报关、20 张子采购、各 40 条明细的合成数据检查列表请求从原先 60 次降至 3 次、详情去重、母采购币种、重复保存、越界与失败不部分入库。`test_sync_progress.py` 检查身份隔离、单次使用、运行中进度及结果未知不重试。新增 `test_sync_large_batches.py` 验证超过 300 条报关／子采购明细完整入库、重复同步不新增相同记录、后续详情失败不部分保存；`test_sync_optimization.py` 同时验证 401 条关联 ID 分页和 601 条详情缓存及进度。真实 NS 耗时和账户并发额度需在部署环境确认。
+
+## 柠檬云手动进项拉取（2026-10-16）
+
+`lemon_account_service.py` 维护授权账套查询和选择，`lemon_invoice_service.py` 编排持久请求与事务外读取，`dao/lemon_run_dao.py` 管理本模块的 `sync_lemon_runs`。迁移 `0018_sync_lemon_runs` 新增同步记录与已选账套。`integrations/lemon/invoice_client.py` 负责正式用户 Token、Bearer/asid 及 page/rows 查询参数。
+
+新入口为 `/api/sync/lemon/invoices/configuration`、`/accounts/query`、`/account`、`/invoices/pull-save`、`/runs/{requestId}`（后四项同属 `/api/sync/lemon` 前缀）。请求、响应、限制见[完整协议](../../../docs/lemon-invoice-sync-plan.md)。API 按管理员身份隔离；日期必填且最多 366 天，所有分页完成才整批入库；同请求返回原结果，运行中拒绝切账套及新请求，重启不重置状态。
+
+跨模块保存通过 `public.py` 的 `LemonInvoicesFetched` 事件，invoice 通过 `LemonInvoicesStored` 回执，同事务更新票据与已完成统计。事件只在 `app.py` 订阅；不通过 DAO 写其他模块。测试位于 `backend/tests/sync/test_lemon_{protocol,invoices,mysql}.py`；真实上游未联调。
+
+
+## 部分成功保存协议（2026-10-16）
+
+`/api/ns/sync/{kind}/pull-save` 新增可选 `partialSave: boolean`，当前同步页面固定发送 `true`。省略或 false 保留旧整页原子行为，兼容尚未更新的客户端；待旧客户端退出后再统一切换默认值。只读 `/pull` 不启用部分保存。
+
+新模式将本页按完整报关关联组分别提交：同组内任一基础字段、明细或关系校验失败，该组不更新，其余组继续；单头读取失败也列出内部编号。整个过程中保留原锁顺序和账户互斥，各组外部读取在事务外。成功组写入后计入 `storage` 汇总；`storage.savedAt` 无成功组时为 null。不得把 HTTP 200 或进度 completed 当作全部单据保存成功。
+
+响应新增 `batch`：`status` 为 completed / partial / interrupted；`canContinue` 控制是否可拉下一批；`counts` 按本批入口单据统计 saved / failed / unknown / not_processed；`items` 含 id、number、同名 status 和中文 reason。`count` 仍为本页列表单据数，`rows` 仅含成功读到的单头，失败的单头在 items 中。已补齐并提交的同组入口按实际提交结果标记，不重复计入组保存次数。
+
+已知失败不阻止翻页，但时间段完成显示“存在失败单据”，可逐批查看清单。数据库提交未知或不可继续的错误返回 interrupted，先保留已返回的本批结果，再停止后续分页，不自动重发。保存响应丢失时仍须核实本地记录，单靠进度不能推断哪些组已写入。进度中的“处理结束”仅指请求结束，以逐单保存结果为准。
+
+旧文档中的“整页失败／整页事务”适用于 `partialSave=false`；新模式对应完整关联组，不把失败组的部分明细保存为完整单据。本次不新增表、不调整数值精度、不写 NS，也不提供持久断点续跑。

@@ -57,6 +57,11 @@ def line(item):
 def detail(header, item_rows):
     return InvoiceDetail(
         **row(header, len(item_rows)).model_dump(),
+        detailStatusLabel={
+            "complete": "商品明细已齐备",
+            "pending": "商品明细待补齐，暂不生成逐行匹配建议",
+            "failed": "商品明细待核实，暂不生成逐行匹配建议",
+        }.get(header["detail_status"], "商品明细状态待核实"),
         invoiceCode=header["invoice_code"],
         buyer=header["buyer_name"],
         buyerTaxNo=header["buyer_tax_no"],

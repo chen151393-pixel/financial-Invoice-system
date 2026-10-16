@@ -8,6 +8,7 @@ from backend.core import named_lock, write_lock
 from backend.core.database import check_business_database
 from backend.core.errors import ApiError
 from backend.core.events import EventBus
+from backend.integrations.netsuite.read_batch import quiet_progress
 
 from ..dao import (
     company_dao,
@@ -21,7 +22,10 @@ from ..entity import SOURCE_TABLES
 from ..mapper.storage_mapper import map_bundle, map_parent, validate_storage_config
 from ..policy.currency_policy import resolve as resolve_currency
 from ..policy.ns_config import parse_config
+from ..policy.optional_field_policy import warnings as missing_field_warnings
+from ..policy.unit_price_policy import warnings as unit_price_warnings
 from ..public import SourceChanged
+from ..vo.storage_result import storage_result
 from . import link_service
 from .declaration_service import sync_lock_name
 from .ns_reader import PlReader
@@ -56,7 +60,7 @@ class StorageService:
             raise ApiError(503, "NS账户未配置")
         return account
 
-    def sync_page(self, kind, read_page):
+    def sync_page(self, kind, read_page, *, progress=None):
         """同步页按页读取并保存；分页读取在账户锁内完成。"""
         if kind not in SYNC_KINDS:
             raise ApiError(422, "标准采购订单尚未配置独立存储映射，当前仅支持子采购订单和报关单入库")
@@ -65,13 +69,15 @@ class StorageService:
         def collect():
             nonlocal page
             page = read_page()
-            return PlReader(self.ns).collect_records(kind, page["rows"])
+            return PlReader(self.ns, progress).collect_records(kind, page["rows"])
 
-        saved = self.save(collect, read_relations=True)
+        saved = self.save(collect, read_relations=True, progress=progress)
         return {**page, "storage": saved, "message": saved["message"]}
 
-    def save(self, collect, *, read_relations):
+    def save(self, collect, *, read_relations, progress=None):
         """collect() 在锁内、事务外读取 NS，返回完整的来源数据包。"""
+        report = progress or quiet_progress
+        report("等待当前账户保存锁")
         if self.engine is None:
             raise ApiError(503, "独立MySQL业务库尚未配置")
         config = parse_config(self.ns.settings)
@@ -85,16 +91,9 @@ class StorageService:
                 if not acquired:
                     raise ApiError(409, "当前账户已有采购报关保存操作，请完成后再试")
                 try:
-                    bundle = collect()
-                    if read_relations:
-                        bundle["relation_evidence"] = RelationReader(self.ns).collect(bundle, match=True)
-                        bundle["parent_orders"] = read_parent_orders(self.ns, bundle)
-                    now = datetime.now(timezone.utc).replace(tzinfo=None)
-                    documents = map_bundle(bundle, config, now)
-                    with connection.begin():
-                        if not named_lock.owns(connection, lock):
-                            raise ApiError(409, "同步连接已失去占用，未保存，请重新读取")
-                        counts = self._write(connection, account, bundle, documents, now)
+                    result = self._save_locked(
+                        connection, collect, config, account, lock, read_relations, report
+                    )
                 finally:
                     # 无论读取、映射或保存是否失败，都释放本次命名锁；断连则丢弃连接。
                     try:
@@ -106,7 +105,31 @@ class StorageService:
                         connection.invalidate()
         except SQLAlchemyError:
             raise ApiError(503, "MySQL保存未能确认，请查询本地结果；检查表结构、权限和连接后再重试") from None
-        return self._result(bundle, counts)
+        return result
+
+    def sync_partial_page(self, kind, read_page, *, progress=None):
+        from .partial_sync_service import PartialSyncService
+
+        return PartialSyncService(self).run(kind, read_page, progress)
+
+    def _save_locked(self, connection, collect, config, account, lock, read_relations, report):
+        bundle = collect()
+        if read_relations:
+            report("补齐原始行、Packing 和逐行关联依据")
+            bundle["relation_evidence"] = RelationReader(self.ns, report).collect(bundle, match=True)
+            report("读取母采购单并核验币种")
+            bundle["parent_orders"] = read_parent_orders(self.ns, bundle)
+        now = datetime.now(timezone.utc).replace(tzinfo=None)
+        report("校验完整来源数据")
+        documents = map_bundle(bundle, config, now)
+        bundle["warnings"].extend(missing_field_warnings(bundle, config))
+        bundle["warnings"].extend(unit_price_warnings(documents, config))
+        report("保存到本地数据库，等待整批提交")
+        with connection.begin():
+            if not named_lock.owns(connection, lock):
+                raise ApiError(409, "同步连接已失去占用，未保存，请重新读取")
+            counts = self._write(connection, account, bundle, documents, now)
+        return storage_result(bundle, counts)
 
     def _write(self, connection, account, bundle, documents, now):
         affected_orders = set()
@@ -245,36 +268,6 @@ class StorageService:
             "ns_internal_id": document["ns_internal_id"],
             "customs_ns_id": document["customs_ns_id"],
             "line_ids": line_ids,
-        }
-
-    def _result(self, bundle, counts):
-        relations = list(bundle.get("relation_evidence", {}).values())
-        partial = sum(value["status"] == "partial" for value in relations)
-        return {
-            "purchase": counts["purchase"],
-            "customs": counts["customs"],
-            "relations": {
-                "declarations": len(relations),
-                "collected": len(relations) - partial,
-                "partial": partial,
-                "matched": sum(value["status"] == "matched" for value in relations),
-                "rawLines": sum(len(value["rawLines"]) for value in relations),
-                "packingLines": sum(len(value["packingLines"]) for value in relations),
-                "purchaseLinks": sum(len(value["purchaseLinks"]) for value in relations),
-            },
-            "warnings": list(
-                dict.fromkeys(
-                    bundle["warnings"] + [issue for value in relations for issue in value["issues"]]
-                )
-            ),
-            "savedAt": datetime.now(timezone.utc).isoformat(),
-            "message": (
-                "单据及关联结果已保存到MySQL；部分来源存在待核实项"
-                if partial
-                else "单据、来源依据及逐行关联结果已保存到MySQL"
-            )
-            if bundle["purchases"] or bundle["customs"]
-            else "本页没有可保存的单据，已有本地数据保持不变",
         }
 
 

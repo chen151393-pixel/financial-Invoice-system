@@ -60,7 +60,7 @@ class LemonBindingService:
             "awaiting_confirmation": "已收到授权，请确认绑定",
             "binding": "绑定请求已提交；如服务中断，请先核实状态",
             "unknown": "绑定结果未知，请先核实状态，不能重复提交",
-            "bound": "已有账号已绑定；发票自动同步尚未接入",
+            "bound": "已有账号已绑定；可在下方选择账套手动拉票",
         }
         return {
             "phase": phase,
@@ -87,7 +87,10 @@ class LemonBindingService:
                 "allowed": not reason and row is not None,
                 "reason": reason or "仅查询已有账号与当前应用的绑定关系",
             },
-            "sync": {"allowed": False, "reason": "发票 API 自动拉取尚未接入，请继续使用下方 Excel 导入"},
+            "sync": {
+                "allowed": False,
+                "reason": "已支持手动 API 拉票，请在下方查询账套；定时同步与商品明细待接入",
+            },
         }
 
     def begin(self, owner, mobile):

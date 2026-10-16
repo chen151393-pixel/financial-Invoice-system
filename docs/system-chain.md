@@ -8,7 +8,7 @@
 | `/pl-reconciliation` | `/api/source/pl-comparison` | source 实时只读查询，不自动保存或审批 |
 | `/review` | `/api/review/declarations/query`、`/{id}/approve` | review 保存报关审核和全局开票依据 |
 | `/tasks`、`/tasks/:id` | `/api/tasks/*` | task 保存任务、合同、通知与状态历史 |
-| `/sync/lemon`、`/invoices` | `/api/invoices/import/*`、`/api/invoices` | Excel 发票、原始数据、不可变版本 |
+| `/sync/lemon`、`/invoices` | `/api/sync/lemon/*`、`/api/invoices/import/*`、`/api/invoices` | 绑定、选账套手动拉票、Excel 导入、原始数据、不可变版本 |
 | `/matching`、`/matching/:invoiceId` | `/api/matching/*` | matching 建议、确认、取消、复核、原子替换 |
 
 旧前端 `/finance-reconciliation` 和 `/invoice-followup` 保留跳转；旧 `/api/reconciliation/*` 已删除。没有正式 dashboard/exception 模块或演示成功入口。
@@ -39,3 +39,5 @@ flowchart LR
 唯一迁移链为 `backend/migrations`。`0005`—`0009` 保留既有 v2 数据并回填证据；无法还原的历史标记待复核。旧业务表、旧版本表及 NS 回写锁留在数据库，清理须管理员另行处理。部署与验证见[Python 后端](python-backend.md)。
 
 下一阶段是第 5 步持久调度和 open2 真实明细接入；自动通知、权限角色、NS 回写另行设计。本次不触发真实 NS 写入。
+
+2026-10-16 补充：柠檬云已支持管理员选账套按开票日期手动拉取进项票头，通过 sync→invoice→sync 事件链原子保存票头、不可变版本和同步结果。API 明细仍待补齐，不生成逐行匹配建议；完整 Excel 通道继续运行。定时同步仍未实施，部署与边界见[柠檬云接入说明](lemon-invoice-sync-plan.md)。

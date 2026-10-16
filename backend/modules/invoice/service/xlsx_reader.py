@@ -4,7 +4,7 @@ from datetime import date, datetime
 from decimal import Decimal
 from io import BytesIO
 from xml.etree.ElementTree import ParseError
-from zipfile import BadZipFile, ZipFile
+from zipfile import BadZipFile
 
 from defusedxml.common import DefusedXmlException
 from openpyxl import load_workbook
@@ -12,6 +12,7 @@ from openpyxl.cell.read_only import EMPTY_CELL
 from openpyxl.utils.exceptions import InvalidFileException
 
 from backend.core.errors import ApiError
+from backend.core.xlsx_archive import check_xlsx_archive
 
 
 def sheet_rows(sheet, headers, keys=None):
@@ -60,12 +61,7 @@ def sheet_rows(sheet, headers, keys=None):
 
 def read_xlsx(raw, head_headers, line_headers):
     try:
-        with ZipFile(BytesIO(raw)) as archive:
-            entries = archive.infolist()
-            if len(entries) > 1000 or sum(entry.file_size for entry in entries) > 32 * 1024 * 1024:
-                raise ApiError(422, "XLSX解压后过大，请拆分文件")
-            if any("vbaproject" in entry.filename.lower() for entry in entries):
-                raise ApiError(422, "不支持包含宏的工作簿，请导出普通XLSX文件")
+        check_xlsx_archive(raw)
         book = load_workbook(BytesIO(raw), read_only=True, data_only=False, keep_links=False)
         try:
             combined = head_headers + line_headers[4:]

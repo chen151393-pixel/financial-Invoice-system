@@ -4,6 +4,7 @@ import { AppFrame } from "./WorkspaceFrame";
 import { navigation } from "./navigation";
 import { paths } from "./paths";
 import { useViewNavigate } from "./useViewNavigate";
+import { LemonInvoicePanel } from "../modules/sync/LemonInvoicePanel";
 import { LemonBindingPanel } from "../modules/sync/LemonBindingPanel";
 import { InvoiceImportPage } from "../modules/invoice/pages/InvoiceImportPage";
 
@@ -22,7 +23,7 @@ export default function SyncWorkspacePage() {
           ? "监控 NetSuite 与柠檬云的数据新鲜度、批次和失败任务"
           : source === "ns"
             ? "选择采购订单、子采购订单或报关单，按需拉取 NS 单据。"
-            : "绑定已有柠檬云账号，或导入进项发票文件。"
+            : "绑定账号并选择账套，手动拉取进项发票或导入文件。"
       }
       actions={
         source === "overview" ? (
@@ -37,19 +38,20 @@ export default function SyncWorkspacePage() {
         ) : undefined
       }
       mode={source === "overview" ? "pending" : "live"}
-      dataLabel={source === "lemon" ? "文件导入 · 本地保存" : undefined}
+      dataLabel={source === "lemon" ? "API 拉取 / 文件导入 · 本地保存" : undefined}
       notice={
         source === "ns"
           ? "不修改 NS 源单据；子采购订单、报关单支持按页拉取并保存到 MySQL，暂不支持定时同步。"
           : source === "lemon"
-            ? "支持已有账号授权绑定与 Excel 导入；发票自动拉取和附件同步尚未接入。导入后自动生成比对建议，需人工审核，不写回 NS。"
-            : "NS 支持按页读取，子采购订单及报关单支持保存到 MySQL；柠檬云支持账号绑定与文件导入，定时同步待接入。"
+            ? "支持手动拉取进项票头与 Excel 导入。API 商品明细待补齐；完整明细才生成比对建议，需人工审核，不写回 NS。"
+            : "NS 支持按页读取，子采购订单及报关单支持保存到 MySQL；柠檬云支持手动拉票与文件导入，定时同步待接入。"
       }
     >
       <SyncPage source={source}>
         {source === "lemon" && (
           <>
             <LemonBindingPanel />
+            <LemonInvoicePanel />
             <div id="lemon-invoice-import" tabIndex={-1}>
               <InvoiceImportPage />
             </div>

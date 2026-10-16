@@ -33,6 +33,7 @@ export const router = createBrowserRouter([
           { path: paths.review, element: page("财务核对", <ReviewWorkspacePage />) },
           { path: legacyPaths.finance, element: <Navigate to={paths.review} replace /> },
           { path: paths.tasks, element: page("开票跟进", <TaskWorkspacePage />) },
+          { path: paths.externalGroups, element: page("外部群导入与关联", <TaskWorkspacePage />) },
           { path: paths.supplierGroups, element: page("供应商档案", <TaskWorkspacePage />) },
           { path: `${paths.tasks}/:taskId`, element: page("开票任务详情", <TaskWorkspacePage />) },
           // 旧链路的任务编号在新表中不存在，旧任务详情地址统一回到任务列表。

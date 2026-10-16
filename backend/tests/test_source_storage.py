@@ -359,7 +359,7 @@ def test_sync_page_reads_ns_and_relations_then_saves(ns, engine, monkeypatch):
     reads = []
 
     class FakeReader:
-        def __init__(self, client):
+        def __init__(self, client, progress=None):
             assert client is ns
 
         def collect_records(self, kind, page_rows):
@@ -367,7 +367,7 @@ def test_sync_page_reads_ns_and_relations_then_saves(ns, engine, monkeypatch):
             return deepcopy(data)
 
     class FakeRelations:
-        def __init__(self, client):
+        def __init__(self, client, progress=None):
             pass
 
         def collect(self, collected, *, match):
@@ -412,14 +412,14 @@ def test_http_pull_save_uses_source_storage(context, engine, monkeypatch):
     data = bundle([purchase()], [customs()], with_evidence=False)
 
     class FakeReader:
-        def __init__(self, client):
+        def __init__(self, client, progress=None):
             pass
 
         def collect_records(self, kind, page_rows):
             return deepcopy(data)
 
     class FakeRelations:
-        def __init__(self, client):
+        def __init__(self, client, progress=None):
             pass
 
         def collect(self, collected, *, match):

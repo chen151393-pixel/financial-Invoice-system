@@ -25,6 +25,7 @@ class Settings:
     write_enabled: bool = False
     pl_lookup: dict = field(default_factory=dict)
     sync_date_format: str = "YYYY-MM-DD"
+    sync_read_workers: int = 2
     pl_restlet_script: str = ""
     pl_restlet_deploy: str = ""
     finance_source_script: str = ""
@@ -90,6 +91,10 @@ def load_settings(source=None):
     sync_date_format = get("NETSUITE_SYNC_DATE_FORMAT", "YYYY-MM-DD")
     if sync_date_format not in {"YYYY-MM-DD", "M/D/YYYY", "D/M/YYYY"}:
         raise ValueError("NETSUITE_SYNC_DATE_FORMAT 须为 YYYY-MM-DD、M/D/YYYY 或 D/M/YYYY")
+
+    workers = get("NETSUITE_SYNC_READ_WORKERS", "2")
+    if workers not in {"1", "2", "3", "4"}:
+        raise ValueError("NETSUITE_SYNC_READ_WORKERS 须为 1 至 4 的整数")
 
     account = get("NETSUITE_ACCOUNT_ID").strip().lower().replace("_", "-")
     if account and not re.fullmatch(r"[a-z0-9]+(?:-[a-z0-9]+)*", account):
@@ -176,6 +181,7 @@ def load_settings(source=None):
         write_enabled=enabled == "true",
         pl_lookup=pl_lookup,
         sync_date_format=sync_date_format,
+        sync_read_workers=int(workers),
         pl_restlet_script=pl_script,
         pl_restlet_deploy=pl_deploy,
         finance_source_script=finance_script,

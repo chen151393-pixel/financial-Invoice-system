@@ -46,6 +46,7 @@ export type InvoiceLine = {
   gross: string | null;
 };
 export type InvoiceDetail = InvoiceRow & {
+  detailStatusLabel: string;
   invoiceCode: string | null;
   buyer: string | null;
   buyerTaxNo: string | null;

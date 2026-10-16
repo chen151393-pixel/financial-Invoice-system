@@ -14,7 +14,7 @@
 
 ## 拥有的表
 
-`task_tasks`、`task_lines`、`task_documents`、`task_notifications`、`task_events`、`task_supplier_groups`。迁移 `0003` 增加 `task_tasks.review_revision`（审核版本）、`task_notifications.sender_name`（发送员工）与 `note`（登记说明）。
+`task_tasks`、`task_lines`、`task_documents`、`task_notifications`、`task_events`、`task_supplier_groups`、`task_external_groups`、`task_group_imports`。迁移 `0003` 增加 `task_tasks.review_revision`（审核版本）、`task_notifications.sender_name`（发送员工）与 `note`（登记说明）。
 
 ## 目录
 
@@ -95,3 +95,28 @@ documents_pending → notify_pending → awaiting_invoice → partially_received
 - 保存仍使用 `/save`，提交 `supplierId/chatId/revision/enabled`；群名和群主由企微重新查询，不接受前端伪造。仅停用原群可离线完成，已有乐观版本保护保留。此页不发送通知。
 - `/query`、`/suppliers/query`、`/wecom/query` 暂留一版本兼容原维护客户端；新页面仅使用档案查询和名称匹配，下一版本确认外部调用方迁移后再删除旧接口。
 - 新验证：`backend/tests/test_supplier_profiles.py` 覆盖候选排名/歧义、分页、权限、真实保存、绑定状态筛选、环境隔离与旧版本拒绝；渠道使用假实现，不代表真实企微已联调。
+
+
+## 外部群 Excel 导入与手动关联
+
+新增 `/api/tasks/external-groups` 接口：
+
+| POST 路径 | 请求 | 响应 / 行为 |
+| --- | --- | --- |
+| `/import/preview` | filename、content（原 XLSX base64）、account（可选，推荐匹配的 NS 环境） | importId 与有效/错误/有候选/无候选数量；只保存预览，不写群目录或绑定 |
+| `/import/query` | importId、page、pageSize | 七列原值、行号、错误、匹配依据、最多 5 个候选、候选总数和无冲突预选建议；只有预览创建者可读 |
+| `/import/confirm` | importId、selections[{rowNo,supplierId,revision,replaceExisting}] | 确认有效群及所选关联，返回真实 imported/bound/skipped；相同请求幂等 |
+| `/query` | keyword、status（all/unbound/bound）、page、pageSize | 已导入目录与现有关联，后端搜索分页；停用的绑定仍属于“已关联” |
+| `/associate` | chatId、catalogRevision、supplierId、revision、replaceExisting | 后续人工维护一个供应商默认群；只使用已确认目录中的群与群主字段 |
+
+表头严格按七列顺序：群名、群人数、群主、群主所在部门、创建时间、外部群id、群主id。支持 ID 表头大小写和首尾空白；ID 内容区分大小写。单工作表、4MB、1000 数据行；创建时间可为空或任意格式，能识别的日期按时区转 UTC（无时区按北京时间），无法识别、公式或错误值保存为空，接口 createdAt 返回空字符串，页面显示“未提供”。群人数同样可空或任意格式：整数、数字文本及“8人”等可识别内容保存为人数；无法识别、负数、小数、公式、错误值或超出数据库整数存储范围的内容保存为 NULL，接口 memberCount 返回 null，不显示为 0。其余列的公式、错误值、非法字段、缺失 ID、重复 chat_id 都产生错误行；整表结构错误拒绝预览。错误行在确认时明确跳过，有效群全部导入，未选择供应商的群保留待维护。
+
+候选仅复用后端保守名称匹配，不猜品牌或地域简称。仅一个候选且没有其他群争用该供应商、不会替换其他默认群时返回预选建议；所有写入仍需用户确认。跨 NS 环境同名必须核对身份。保存后启用默认群，可从原供应商档案停用；一个供应商一个默认群，一个群可以对应多个供应商。
+
+`GroupImportPreview` 负责不可变预览；`GroupImportService` 负责同事务确认；`ExternalGroupService` 负责目录和后续关联。两种写入与原企微实时维护共用 `group_binding_writer`，只导入本模块 DAO，经 source 门面读取供应商。通用 XLSX 归档检查提取到 `core/xlsx_archive.py`，发票导入复用相同检查。
+
+迁移与表结构见 [数据库设计](../../../docs/architecture/database.md)。新增 `test_external_groups.py` 覆盖格式、预选歧义、原子回滚、重放、身份、分页、过期与版本冲突；`test_external_groups_mysql.py` 仅在专用 MySQL 连接存在时验证并发。导入不调用企微网络或发送消息，不代表文件内群主仍是实时群主。
+
+创建时间可选由新增迁移 `0019_task_optional_group_time` 调整，不修改旧迁移及已有日期。部署执行 `npm.cmd run db:upgrade` 并重启；旧预览保留原校验结果，需要重新上传文件。
+
+群人数可选由新增迁移 `0020_task_optional_group_count` 调整，保留已有计数。升级并重启后重新上传文件，旧预览不自动重算。

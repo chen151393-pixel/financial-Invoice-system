@@ -1,6 +1,7 @@
 """同步过程中复用NS整单追溯结果，不另写一套配对或分摊算法。"""
 
 from backend.core.errors import ApiError
+from backend.integrations.netsuite.read_batch import quiet_progress
 
 from ..dto.pl_comparison import PlScriptQuery
 from ..mapper.ns_fields import reference
@@ -8,14 +9,16 @@ from ..policy.relation_policy import incomplete_reason, source_digest
 from .pl_comparison_service import PlScriptService
 
 
-def collect_comparisons(ns, bundle, evidence):
+def collect_comparisons(ns, bundle, evidence, *, progress=None):
+    report = progress or quiet_progress
     if not all(getattr(ns.settings, key, "") for key in ("pl_restlet_script", "pl_restlet_deploy")):
         for value in evidence.values():
             value["status"] = "partial"
             value["issues"].append("精确追溯未完成：v3关联查询接口未配置，不影响基础单据保存。")
         return
     service = PlScriptService(ns)
-    for identity, head, detail in bundle["customs"]:
+    report("核对报关与子采购逐行关联", 0, len(bundle["customs"]))
+    for index, (identity, head, detail) in enumerate(bundle["customs"], 1):
         if not head.get("name"):
             raise ApiError(502, "报关单缺少NS记录编号，无法读取完整关联")
         result = service.query(PlScriptQuery(type="customsRecord", pl=head["name"], showIncomplete=True))
@@ -54,3 +57,5 @@ def collect_comparisons(ns, bundle, evidence):
         value["status"] = "partial" if reason else "matched"
         if reason:
             value["issues"] = list(dict.fromkeys([*value["issues"], reason]))
+
+        report("核对报关与子采购逐行关联", index, len(bundle["customs"]))

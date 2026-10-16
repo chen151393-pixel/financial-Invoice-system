@@ -145,7 +145,7 @@ completed / partially_received → 按剩余有效收票回退到对应节点
 | task | `task_supplier_groups`、`task_tasks`、`task_lines`、`task_documents`、`task_notifications`、`task_events` |
 | invoice | `invoice_raw_records`、`invoice_headers`、`invoice_items`、`invoice_versions` |
 | matching | `matching_allocations` |
-| sync | `sync_runs`、`sync_cursors`、`sync_lemon_bindings` |
+| sync | `sync_runs`、`sync_cursors`、`sync_lemon_bindings`、`sync_lemon_runs` |
 
 每张表只属于一个模块，只有该模块的 DAO 可以读写；跨模块只保存对方 ID，不建外键。
 
@@ -208,7 +208,7 @@ completed / partially_received → 按剩余有效收票回退到对应节点
 - 前端 HTTP 14 项、组件 19 项、NS 来源脚本 3 项通过；构建、lint、类型与架构检查通过。后端受版本管理的源码及本次新增文件通过 Ruff 检查与格式检查。
 - 浏览器使用隔离数据走通币种补证、审核换版、分配复核、替换失败回滚与成功、差异结束；1280 与 390 宽度页面没有横向溢出。
 - `npm.cmd run check` 在格式阶段被 35 个既有、未修改文件阻断；没有放宽质量规则。以上各项已分别执行，不将统一命令描述为全绿。
-- 本机业务库 `127.0.0.1:3306/financial_invoice_business` 已升级至 `0009_matching_ledger_versions`，并在整库备份、管理员确认后手工清理 21 张旧表、2,487 条记录；保留的 31 张表记录数未变化，详见[数据库设计第 9.1 节](database.md#91-4e-退役表核对清单)。本次未触发真实 NS 写入，未在其他环境执行旧表清理或验证部署；其他目标库仍须备份、在线 `db:upgrade` 并核对待复核数据。open2、定时同步不属于已完成项。
+- 本机业务库 `127.0.0.1:3306/financial_invoice_business` 已升级至 `0009_matching_ledger_versions`，并在整库备份、管理员确认后手工清理 21 张旧表、2,487 条记录；保留的 31 张表记录数未变化，详见[数据库设计第 9.1 节](database.md#91-4e-退役表核对清单)。本次未触发真实 NS 写入，未在其他环境执行旧表清理或验证部署；其他目标库仍须备份、在线 `db:upgrade` 并核对待复核数据。上述验收时 open2、定时同步不属于已完成项；2026-10-16 已新增 open2 手动票头拉取，正式联调、商品明细与定时同步仍未完成，见[接入说明](../lemon-invoice-sync-plan.md)。
 
 ## 8. 超开处理
 

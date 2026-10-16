@@ -30,7 +30,7 @@ export function SupplierGroupsPage() {
   return (
     <div className="it-page sg-page">
       <p className="it-help">
-        供应商来自已同步子采购订单。手动维护默认外部群，群主由企微自动读取；开票任务按供应商身份使用对应绑定。
+        供应商来自已同步子采购订单。可导入外部群表后手动关联，或查询企微群并保存；开票任务按供应商身份使用默认绑定。
       </p>
       {feedback && (
         <p ref={feedbackElement} tabIndex={-1} role="status" className="sg-feedback">

@@ -7,8 +7,11 @@ from sqlalchemy import insert, select, update
 from ..entity.lemon_binding import lemon_bindings as table
 
 
-def get(connection, scope):
-    row = connection.execute(select(table).where(table.c.scope_key == scope)).mappings().first()
+def get(connection, scope, *, lock=False):
+    query = select(table).where(table.c.scope_key == scope)
+    if lock:
+        query = query.with_for_update()
+    row = connection.execute(query).mappings().first()
     return dict(row) if row else None
 
 
@@ -46,4 +49,12 @@ def transition(connection, scope, before, after, mobile=None):
             .values(**values)
         ).rowcount
         == 1
+    )
+
+
+def select_account(connection, scope, asid, name):
+    connection.execute(
+        update(table)
+        .where(table.c.scope_key == scope)
+        .values(selected_asid=asid, selected_name=name, updated_at=datetime.now(timezone.utc))
     )

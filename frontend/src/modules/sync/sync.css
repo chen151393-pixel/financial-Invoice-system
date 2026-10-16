@@ -540,3 +540,19 @@ a.sync-overview__card:focus-visible {
   padding-top: 16px;
   border-top: 1px solid var(--color-border);
 }
+
+.sync-page__save-results table {
+  min-width: 640px;
+}
+.sync-page__save-results th,
+.sync-page__save-results td:nth-child(-n + 3) {
+  white-space: nowrap;
+}
+.sync-page__save-results td:last-child {
+  min-width: 240px;
+  overflow-wrap: anywhere;
+}
+.sync-page__save-results .sync-page__table:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}

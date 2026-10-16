@@ -80,3 +80,8 @@ def update_group(connection, group_id, version, values, now):
         .values(version=version + 1, updated_at=now, **values)
     )
     return result.rowcount == 1
+
+
+def by_chats(connection, chat_ids):
+    query = select(supplier_groups).where(supplier_groups.c.chat_id.in_(chat_ids))
+    return [dict(row) for row in connection.execute(query).mappings()]

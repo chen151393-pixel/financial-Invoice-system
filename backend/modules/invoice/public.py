@@ -30,3 +30,12 @@ class InvoiceChanged:
     previous_version_id: int
     version_id: int
     status: str
+
+
+@dataclass(frozen=True)
+class LemonInvoicesStored:
+    """API 批次保存结果；sync 订阅并与发票版本在同一事务提交。"""
+
+    scope: str
+    request_id: str
+    result: dict

@@ -13,7 +13,12 @@ from backend.tests.test_schema_baseline import TABLES as ALL_TABLES
 from backend.tests.test_schema_baseline import schema_engine as schema_engine
 from sqlalchemy import inspect, text
 
-TABLES = ALL_TABLES - {"sync_lemon_bindings"}
+TABLES = ALL_TABLES - {
+    "sync_lemon_bindings",
+    "sync_lemon_runs",
+    "task_external_groups",
+    "task_group_imports",
+}
 COMMENT_HEAD = "0015_sync_comments"
 
 INITIAL_REVISION = "0009_matching_ledger_versions"
@@ -23,7 +28,7 @@ MODULES = ("source", "review", "task", "invoice", "matching", "sync")
 def test_entity_comments_cover_all_columns():
     for module in MODULES:
         importlib.import_module(f"backend.modules.{module}.entity")
-    assert len(schema_metadata.tables) == 25
+    assert set(schema_metadata.tables) == ALL_TABLES - {"sync_runs", "sync_cursors"}
     for table in schema_metadata.tables.values():
         assert table.comment and re.search(r"[\u4e00-\u9fff]", table.comment), table.name
         for column in table.c:

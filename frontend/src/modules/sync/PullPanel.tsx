@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Button } from "../../shared/components/Button";
 import type { DateRange, Source } from "./api";
+import { PullProgress } from "./PullProgress";
 import { PullResults } from "./PullResults";
 import { useRangePull } from "./useRangePull";
 
@@ -87,7 +88,7 @@ export function PullPanel({
           </p>
           <p>
             {source.storageReason}
-            。保存时补齐关联单据、明细和可读取的关联依据；关联单据可能超出筛选日期，重复同步更新原记录。
+            。按完整报关关联组分别保存，成功组立即提交，失败组单独列出；关联单据可能超出筛选日期，重复同步更新原记录。
           </p>
         </fieldset>
       </form>
@@ -107,10 +108,16 @@ export function PullPanel({
           </Button>
         </div>
       )}
+      {task.busy && <PullProgress progress={task.progress} unavailable={task.progressUnavailable} />}
       {task.status === "completed" && (
         <p className="sync-page__result-summary" role="status">
           所选时间段拉取完成，共完成 {task.pages.length} 批。
-          {result?.storage ? "各批均已提交保存，待核实提示请逐批查看。" : "仅展示数据，未保存到本地数据库。"}
+          {result?.storage ? "各批单据均已保存，待核实提示请逐批查看。" : "仅展示数据，未保存到本地数据库。"}
+        </p>
+      )}
+      {task.status === "partial" && (
+        <p className="sync-page__scope-change" role="status">
+          所选时间段已处理完，共 {task.pages.length} 批，存在失败单据。成功数据已保存，请逐批查看失败原因。
         </p>
       )}
       {task.status === "stopped" && (

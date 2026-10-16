@@ -1,40 +1,48 @@
 """实时联查与落库共用完整读取链路；报关单保存时保留其他PL的明细。"""
 
 from backend.core.errors import ApiError
+from backend.integrations.netsuite.read_batch import RecordReader
 
 from ..mapper.ns_fields import reference, text
 from ..policy.ns_config import parse_config
 
 
 class PlReader:
-    def __init__(self, ns):
+    def __init__(self, ns, progress=None):
         self.ns = ns
         self.config = parse_config(ns.settings)
-        self.cache = {}
+        self.reader = RecordReader(ns, progress)
+        self.cache = self.reader.cache
+        self.progress = self.reader.progress
 
     def read(self, spec, record_id):
-        key = (spec.type, record_id)
-        if key not in self.cache:
-            if len(self.cache) >= 300:
-                raise ApiError(422, "本次联查超过 300 条详情读取上限，未保存不完整结果")
-            self.ns.validate(spec.type, record_id)
-            record = self.ns.request("GET", spec.type, record_id, exact_numbers=True)["data"]
-            if not isinstance(record, dict) or ("id" in record and str(record["id"]) != record_id):
-                raise ApiError(502, "NS详情响应不完整或记录身份不一致")
-            self.cache[key] = record
-        return self.cache[key]
+        return self.reader.read(spec.type, record_id)
+
+    def grouped(self, spec, field, parent_ids, label, *, batch_size=20):
+        """合并同类父记录筛选，但逐条核实返回记录的所属身份。"""
+        parents = list(dict.fromkeys(parent_ids))
+        result = {identity: [] for identity in parents}
+        seen = set()
+        for offset in range(0, len(parents), batch_size):
+            batch = parents[offset : offset + batch_size]
+            self.progress(label)
+            ids = self.ns.filtered_ids(
+                spec.type, field, batch[0] if len(batch) == 1 else batch, reference=True
+            )
+            if len(set(ids)) != len(ids) or seen.intersection(ids):
+                raise ApiError(502, "NS明细身份重复，未保存")
+            seen.update(ids)
+            self.reader.prefetch(spec.type, ids, label)
+            for identity in ids:
+                record = self.read(spec, identity)
+                parent = reference(record.get(field))
+                if parent not in batch:
+                    raise ApiError(502, "NS明细所属报关单不一致或采购订单不一致")
+                result[parent].append((identity, record))
+        return result
 
     def lines(self, spec, parent_id):
-        ids = self.ns.filtered_ids(spec.type, spec.parent, parent_id, reference=True)
-        if len(set(ids)) != len(ids):
-            raise ApiError(502, "NS明细身份重复，未保存")
-        records = []
-        for record_id in ids:
-            record = self.read(spec, record_id)
-            if reference(record.get(spec.parent)) != parent_id:
-                raise ApiError(502, "NS明细所属报关单不一致或采购订单不一致")
-            records.append((record_id, record))
-        return records
+        return self.grouped(spec, spec.parent, [parent_id], "读取单据明细")[parent_id]
 
     def collect(self, pl_number, *, resolve_all_pl=False, discover_customs=False):
         config = self.config
@@ -113,20 +121,29 @@ class PlReader:
             self.ns.validate(spec.type, record_id)
             if str(head.get("id")) != record_id:
                 raise ApiError(502, "同步单据身份不一致，未保存")
-            if (spec.type, record_id) not in self.cache and len(self.cache) >= 300:
-                raise ApiError(422, "本次同步超过 300 条详情读取上限，未保存不完整结果")
             self.cache[spec.type, record_id] = head
+        purchase_lines = self.grouped(
+            config.purchase_line,
+            config.purchase_line.parent,
+            [row["id"] for row in rows] if kind == "sub-purchase-orders" else [],
+            "读取子采购明细",
+        )
+        for row in rows:
+            record_id, head = row["id"], row["record"]
             if kind == "sub-purchase-orders":
-                lines = self.lines(config.purchase_line, record_id)
-                bundle["purchases"].append((record_id, head, lines))
+                bundle["purchases"].append((record_id, head, purchase_lines[record_id]))
                 linked = reference(head.get(config.purchase.customs))
                 if linked:
                     customs_ids.add(linked)
             else:
                 customs_ids.add(record_id)
+        self.reader.prefetch(config.customs.type, sorted(customs_ids), "读取关联报关单")
+        customs_lines = self.grouped(
+            config.customs_line, config.customs_line.parent, sorted(customs_ids), "读取报关明细"
+        )
         for record_id in sorted(customs_ids):
             bundle["customs"].append(
-                (record_id, self.read(config.customs, record_id), self.lines(config.customs_line, record_id))
+                (record_id, self.read(config.customs, record_id), customs_lines[record_id])
             )
         self.complete_customs_purchases(bundle)
         self.resolve_pl_names(bundle)
@@ -137,12 +154,18 @@ class PlReader:
         config = self.config
         purchases = {identity: (identity, head, lines) for identity, head, lines in bundle["purchases"]}
         membership = {}
-        for identity, _, _ in bundle["customs"]:
-            ids = self.ns.filtered_ids(
-                config.purchase.type, config.purchase.customs, identity, reference=True
-            )
-            if len(set(ids)) != len(ids):
-                raise ApiError(502, "关联子采购单身份重复，未保存")
+        grouped = self.grouped(
+            config.purchase,
+            config.purchase.customs,
+            [identity for identity, _, _ in bundle["customs"]],
+            "查找完整关联子采购",
+            # 子采购入口已有单头缓存，逐报关核实其查询归属，避免漏检批内改挂。
+            batch_size=1 if purchases else 20,
+        )
+        new_ids = [key for records in grouped.values() for key, _ in records if key not in purchases]
+        lines = self.grouped(config.purchase_line, config.purchase_line.parent, new_ids, "读取关联子采购明细")
+        for identity, records in grouped.items():
+            ids = [key for key, _ in records]
             previous = {
                 key
                 for key, (_, head, _) in purchases.items()
@@ -150,16 +173,9 @@ class PlReader:
             }
             if not previous.issubset(ids):
                 raise ApiError(502, "读取期间子采购报关引用发生变化，未保存本页")
-            for purchase_id in ids:
-                head = self.read(config.purchase, purchase_id)
-                if reference(head.get(config.purchase.customs)) != identity:
-                    raise ApiError(502, "关联子采购单的报关引用与查询范围不一致")
+            for purchase_id, head in records:
                 if purchase_id not in purchases:
-                    purchases[purchase_id] = (
-                        purchase_id,
-                        head,
-                        self.lines(config.purchase_line, purchase_id),
-                    )
+                    purchases[purchase_id] = (purchase_id, head, lines[purchase_id])
             membership[identity] = ids
         bundle["purchases"] = list(purchases.values())
         bundle["customs_purchase_membership"] = membership
@@ -172,6 +188,7 @@ class PlReader:
             for _, _, lines in bundle["customs"]
             for _, line in lines
         )
+        self.reader.prefetch(config.pl.type, sorted(pl_ids - {""}), "核对 PL 单号")
         for pl_id in sorted(pl_ids - {""}):
             record = self.read(config.pl, pl_id)
             number = text(record.get(config.pl.number))

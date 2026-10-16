@@ -17,7 +17,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from backend.core import named_lock, write_lock
 from backend.core.errors import ApiError
 
-from ..dao import header_dao, item_dao
+from ..dao import header_dao, item_dao, lemon_invoice_dao
 from ..mapper import import_mapper
 from ..policy.version_policy import digest as business_digest
 from ..public import InvoicesImported
@@ -139,6 +139,8 @@ class ImportService:
 
     @staticmethod
     def _classify(connection, item, existing):
+        if lemon_invoice_dao.api_conflict(connection, item["key"]):
+            return "conflict"
         if existing is None:
             return "new"
         if existing["source"] != import_mapper.EXCEL_SOURCE:

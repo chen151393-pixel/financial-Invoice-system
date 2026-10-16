@@ -8,26 +8,34 @@ from ..dto import PullRequest, SourceKind
 
 
 def create_router(service, pull_service):
-    router = APIRouter(prefix="/api/ns", tags=["连接状态"])
+    router = APIRouter(tags=["连接状态"])
 
-    @router.get("/status")
+    @router.get("/api/ns/status")
     def status(owner: Owner):
         return service.status()
 
-    @router.post("/connect")
+    @router.post("/api/ns/connect")
     def connect(owner: Owner):
         return service.connect()
 
-    @router.get("/sync/sources")
+    @router.get("/api/ns/sync/sources")
     def sources(owner: Owner):
         return pull_service.sources()
 
-    @router.post("/sync/{kind}/pull")
+    @router.post("/api/ns/sync/{kind}/pull")
     def pull(kind: SourceKind, body: PullRequest, owner: Owner):
         return pull_service.pull(kind, body)
 
-    @router.post("/sync/{kind}/pull-save")
+    @router.post("/api/ns/sync/{kind}/pull-save")
     def pull_save(kind: SourceKind, body: PullRequest, owner: Owner):
-        return pull_service.pull_and_save(kind, body)
+        return pull_service.pull_and_save(kind, body, owner)
+
+    @router.post("/api/sync/ns/progress")
+    def create_progress(owner: Owner):
+        return pull_service.progress.create(owner)
+
+    @router.get("/api/sync/ns/progress/{identity}")
+    def get_progress(identity: str, owner: Owner):
+        return pull_service.progress.get(identity, owner)
 
     return router

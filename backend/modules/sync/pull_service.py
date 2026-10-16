@@ -5,6 +5,9 @@ from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
 
 from backend.core.errors import ApiError
+from backend.integrations.netsuite.read_batch import RecordReader, quiet_progress
+
+from .service.progress_service import ProgressService
 
 SOURCES = {
     "purchase-orders": ("采购订单", None),
@@ -32,6 +35,7 @@ def exact_value(value):
 class PullService:
     def __init__(self, settings, ns, storage=None):
         self.settings, self.ns, self.storage = settings, ns, storage
+        self.progress = ProgressService()
 
     def query_date(self, value):
         # 日期格式取自服务器配置，不能按失败结果盲目换格式重试。
@@ -83,14 +87,28 @@ class PullService:
                     else storage["reason"],
                 }
             )
-        return {"sources": result, "lemon": {"allowed": False, "reason": "柠檬云接口尚未接入"}}
+        return {
+            "sources": result,
+            "lemon": {"allowed": False, "reason": "请进入柠檬云同步页选择账套手动拉票"},
+        }
 
-    def pull_and_save(self, kind, request):
+    def pull_and_save(self, kind, request, owner=None):
         if self.storage is None:
             raise ApiError(503, "尚未配置业务存储")
-        return self.storage.sync_page(kind, lambda: self.pull(kind, request))
+        save = self.storage.sync_partial_page if request.partialSave else self.storage.sync_page
+        options = {"partial": True} if request.partialSave else {}
+        if request.progressId:
+            with self.progress.track(request.progressId, owner) as report:
+                return save(
+                    kind,
+                    lambda: self.pull(kind, request, report, **options),
+                    progress=report,
+                )
+        return save(kind, lambda: self.pull(kind, request, **options))
 
-    def pull(self, kind, request):
+    def pull(self, kind, request, progress=None, *, partial=False):
+        report = progress or quiet_progress
+        report("读取当前批次单据列表")
         record_type = self.record_type(kind)
         if self.settings.missing():
             raise ApiError(503, "NS 连接配置不完整，请联系管理员")
@@ -116,22 +134,7 @@ class PullService:
         items, has_more = data["items"], data.get("hasMore")
         if not isinstance(has_more, bool) or len(items) > request.limit or (has_more and not items):
             raise ApiError(502, "NS 分页响应无效，未返回不完整结果")
-        rows, seen = [], set()
-        for item in items:
-            record_id = str(item.get("id", "")) if isinstance(item, dict) else ""
-            if not re.fullmatch(r"[0-9]{1,40}", record_id) or record_id in seen:
-                raise ApiError(502, "NS 列表包含无效或重复的内部 ID")
-            seen.add(record_id)
-            detail = self.ns.request("GET", record_type, record_id, exact_numbers=True)["data"]
-            if not isinstance(detail, dict) or str(detail.get("id")) != record_id:
-                raise ApiError(502, "NS 单据详情不完整，整页拉取失败")
-            rows.append(
-                {
-                    "id": record_id,
-                    "number": display(detail.get("tranId") or detail.get("name") or record_id),
-                    "record": exact_value(detail),
-                }
-            )
+        ids, rows, failures = self._read_headers(record_type, items, report, partial)
         next_offset = request.offset + request.limit
         if has_more and next_offset // request.limit >= 1000:
             raise ApiError(422, "已达到分页查询上限，请联系管理员缩小数据范围")
@@ -140,7 +143,16 @@ class PullService:
             "label": SOURCES[kind][0],
             "recordType": record_type,
             "rows": rows,
-            "count": len(rows),
+            "count": len(ids),
+            **(
+                {
+                    "readFailures": [
+                        {"id": key, "number": key, "reason": value} for key, value in failures.items()
+                    ]
+                }
+                if partial
+                else {}
+            ),
             "offset": request.offset,
             "hasMore": has_more,
             "nextOffset": next_offset if has_more else None,
@@ -152,3 +164,39 @@ class PullService:
                 "label": "创建日期",
             },
         }
+
+    def _read_headers(self, record_type, items, report, partial):
+        rows, seen, ids = [], set(), []
+        for item in items:
+            record_id = str(item.get("id", "")) if isinstance(item, dict) else ""
+            if not re.fullmatch(r"[0-9]{1,40}", record_id) or record_id in seen:
+                raise ApiError(502, "NS 列表包含无效或重复的内部 ID")
+            seen.add(record_id)
+            ids.append(record_id)
+        reader = RecordReader(self.ns, report)
+        failures = {}
+        reader.prefetch(
+            record_type,
+            ids,
+            "读取当前批次单据详情",
+            on_error=(lambda identity, error: failures.update({identity: error.message}))
+            if partial
+            else None,
+        )
+        for record_id in ids:
+            if record_id in failures:
+                continue
+            detail = reader.read(record_type, record_id)
+            if not isinstance(detail, dict) or str(detail.get("id")) != record_id:
+                if partial:
+                    failures[record_id] = "NS 单据详情身份不完整，未保存"
+                    continue
+                raise ApiError(502, "NS 单据详情不完整，整页拉取失败")
+            rows.append(
+                {
+                    "id": record_id,
+                    "number": display(detail.get("tranId") or detail.get("name") or record_id),
+                    "record": exact_value(detail),
+                }
+            )
+        return ids, rows, failures

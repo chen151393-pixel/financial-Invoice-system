@@ -13,6 +13,8 @@ lemon_bindings = Table(
     Column("mobile", identifier(32), nullable=False, comment="绑定的已有账号手机号"),
     Column("status", identifier(20), nullable=False, comment="未绑定、绑定中、结果未知或已绑定"),
     Column("verified_at", TIMESTAMP, nullable=True, comment="最近确认绑定成功时间，UTC"),
+    Column("selected_asid", identifier(32), nullable=True, comment="已选择并核实可访问的账套编号"),
+    Column("selected_name", identifier(255), nullable=True, comment="已选择账套名称"),
     *timestamps(),
     UniqueConstraint("scope_key", name="uq_sync_lemon_binding_scope"),
     CheckConstraint("status IN ('unbound','binding','unknown','bound')", name="ck_sync_lemon_binding_status"),

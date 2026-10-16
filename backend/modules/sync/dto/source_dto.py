@@ -13,6 +13,8 @@ SourceKind = Literal["purchase-orders", "sub-purchase-orders", "customs-declarat
 class PullRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
+    partialSave: bool = Field(default=False, strict=True)
+    progressId: str | None = Field(default=None, pattern=r"^[a-f0-9]{32}$")
     offset: int = Field(default=0, ge=0, le=99980, strict=True)
     limit: int = Field(default=20, ge=1, le=20, strict=True)
     startDate: str = Field(default="", max_length=10)

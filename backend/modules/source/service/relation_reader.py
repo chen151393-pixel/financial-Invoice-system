@@ -4,6 +4,7 @@ import re
 from datetime import datetime, timezone
 
 from backend.core.errors import ApiError
+from backend.integrations.netsuite.read_batch import quiet_progress
 
 from ..mapper.ns_fields import normalize, reference
 from .relation_matcher import collect_comparisons
@@ -119,8 +120,9 @@ def validate_original_batch(declarations, batch, customs, seen_rows):
 
 
 class RelationReader:
-    def __init__(self, ns):
+    def __init__(self, ns, progress=None):
         self.ns = ns
+        self.progress = progress or quiet_progress
 
     def collect(self, bundle, *, match=False):
         customs = {source_id(identity): head for identity, head, _ in bundle["customs"]}
@@ -152,7 +154,9 @@ class RelationReader:
             for value in evidence.values():
                 value["issues"].append("当前单据映射尚未配置原始行及Packing关联依据读取。")
             return evidence
+        self.progress("读取原始报关行")
         raw, issue = read_originals(self.ns, customs)
+        self.progress("读取 Packing 关联明细")
         packing = self.ns.relation_rows("packing_by_customs", list(customs))
         by_id = {}
         for row in packing:
@@ -173,6 +177,7 @@ class RelationReader:
         if len(by_id) > 5000:
             raise ApiError(422, "Packing明细超过5000行，请缩小范围")
         sales = sorted({source_id(row.get(PACK_SALES)) for row in by_id.values()} - {""})
+        self.progress("读取销售与母采购行关系")
         links = self.ns.relation_rows("purchase_links", sales) if sales else []
         if any(source_id(row.get("previousdoc")) not in sales for row in links):
             raise ApiError(502, "销售采购行关系超出读取范围")
@@ -203,6 +208,7 @@ class RelationReader:
         parent_ids.update(
             row["parentPurchaseId"] for rows in raw.values() for row in rows if row["parentPurchaseId"]
         )
+        self.progress("核实母采购来源行")
         parent_rows = self.ns.relation_rows("parent_lines", sorted(parent_ids)) if parent_ids else []
         if any(source_id(row.get("transaction")) not in parent_ids for row in parent_rows):
             raise ApiError(502, "母采购行来源超出读取范围")
@@ -249,5 +255,5 @@ class RelationReader:
             value["status"] = "partial" if value["issues"] else "collected"
         # 原始来源缺失时跳过依赖它的 v3 追溯，独立读取的 Packing 等依据仍如实保存。
         if match and not issue:
-            collect_comparisons(self.ns, bundle, evidence)
+            collect_comparisons(self.ns, bundle, evidence, progress=self.progress)
         return normalize(evidence)

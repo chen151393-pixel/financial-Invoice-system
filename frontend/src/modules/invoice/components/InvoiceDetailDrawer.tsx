@@ -86,7 +86,7 @@ export function InvoiceDetailDrawer({
                 ["币种", detail.currency],
                 ["发票代码", detail.invoiceCode],
                 ["票面状态", detail.status],
-                ["购买方", detail.buyer ?? "导入文件未提供"],
+                ["购买方", detail.buyer ?? "来源未提供"],
                 ["购买方税号", detail.buyerTaxNo],
                 ["备注", detail.remark],
                 ["来源", detail.source],
@@ -98,6 +98,7 @@ export function InvoiceDetailDrawer({
               ))}
             </dl>
             <h3 className="invoice-list__section-title">商品明细</h3>
+            <p role="status">{detail.detailStatusLabel}</p>
             <div className="invoice-list__table" role="region" aria-label="发票商品明细，可横向滚动">
               <table>
                 <caption>票面商品明细 · {detail.lineCount} 行</caption>

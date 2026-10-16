@@ -1,0 +1,42 @@
+.eg-page .eg-preview,
+.eg-page .eg-catalog {
+  display: grid;
+  gap: var(--space-control);
+  min-width: 0;
+}
+.eg-page .eg-catalog {
+  margin-top: var(--space-layout);
+}
+.eg-page .eg-table {
+  min-width: 980px;
+  width: 100%;
+}
+.eg-page .eg-table td {
+  vertical-align: top;
+  max-width: 300px;
+  overflow-wrap: anywhere;
+}
+.eg-page .eg-table small {
+  display: block;
+  margin-top: var(--space-small);
+  color: var(--color-muted);
+}
+.eg-page .eg-error {
+  color: var(--color-feedback);
+}
+.eg-page .eg-check {
+  display: flex;
+  gap: var(--space-small);
+  align-items: start;
+  margin: var(--space-control) 0;
+}
+.eg-page .eg-check input {
+  width: auto;
+  margin-top: 4px;
+}
+.eg-page .eg-association {
+  min-width: 0;
+}
+.eg-page h3 {
+  margin: 0;
+}

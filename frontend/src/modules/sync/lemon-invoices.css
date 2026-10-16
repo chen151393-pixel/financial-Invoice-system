@@ -1,0 +1,94 @@
+.lemon-invoices {
+  margin-block: var(--space-layout);
+  padding: var(--space-layout);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-panel);
+  background: var(--color-surface);
+}
+.lemon-invoices__heading,
+.lemon-invoices__account,
+.lemon-invoices__selection,
+.lemon-invoices__form {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: var(--space-control);
+}
+.lemon-invoices__heading {
+  justify-content: space-between;
+  align-items: start;
+}
+.lemon-invoices h2 {
+  margin: 0;
+  font-size: 20px;
+}
+.lemon-invoices p {
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+.lemon-invoices__account {
+  align-items: center;
+  margin-block: var(--space-layout);
+}
+.lemon-invoices__selection {
+  margin-bottom: var(--space-layout);
+}
+.lemon-invoices label {
+  display: grid;
+  gap: var(--space-small);
+  min-width: 0;
+}
+.lemon-invoices input,
+.lemon-invoices select {
+  min-height: 40px;
+  max-width: 100%;
+  min-width: 0;
+  padding: var(--space-small) var(--space-control);
+  border: 1px solid var(--color-input-border);
+  border-radius: var(--radius-control);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font: inherit;
+}
+.lemon-invoices select {
+  width: min(440px, 100%);
+}
+.lemon-invoices__note,
+.lemon-invoices__request {
+  color: var(--color-muted);
+}
+.lemon-invoices__error {
+  color: var(--color-feedback);
+}
+.lemon-invoices__result {
+  margin-top: var(--space-layout);
+  padding-top: var(--space-control);
+  border-top: 1px solid var(--color-border);
+}
+.lemon-invoices dl {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-layout);
+}
+.lemon-invoices dt {
+  color: var(--color-muted);
+}
+.lemon-invoices dd {
+  margin: var(--space-small) 0 0;
+  font-variant-numeric: tabular-nums;
+}
+@media (max-width: 760px) {
+  .lemon-invoices {
+    padding: var(--space-control);
+  }
+  .lemon-invoices__form,
+  .lemon-invoices__selection {
+    align-items: stretch;
+    flex-direction: column;
+  }
+  .lemon-invoices input,
+  .lemon-invoices select {
+    width: 100%;
+    box-sizing: border-box;
+  }
+}

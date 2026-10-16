@@ -5,6 +5,7 @@ export const paths = {
   review: "/review",
   tasks: "/tasks",
   supplierGroups: "/suppliers",
+  externalGroups: "/suppliers/external-groups",
   invoices: "/invoices",
   matching: "/matching",
   sync: "/sync",

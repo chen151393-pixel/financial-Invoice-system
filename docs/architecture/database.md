@@ -955,3 +955,23 @@ MySQL 上另验证迁移升级、生成列唯一约束、两票争同一子采�
 ### 既有单位字典展示兼容（2026-10-16）
 
 `unit_dictionary(unit_id, unit_name, enabled)` 由管理员维护，归 source 模块只读访问，其他模块通过 source 门面读取。该历史非前缀表只用于将数字编号显示为启用的单位名称，不属于 `schema_metadata` 新迁移链；缺表时显示来源原值，不自动建表或填充猜测字典。既有数据、冻结依据和比对规则不因展示名称改变。后续显式迁移且替换全部调用方后再退出兼容。
+
+
+### 外部群目录与导入预览（2026-10-16）
+
+迁移 `0017_task_external_groups` 新增两张 task 表，不修改旧表和历史通知。
+
+| 表 | 主要字段与约束 | 用途 |
+| --- | --- | --- |
+| `task_external_groups` | id 主键；chat_id VARCHAR(190) 区分大小写唯一；group_name、owner_name、owner_userid；member_count（0020 起可空，不可识别人数不阻止导入）、department、group_created_at（UTC，可空；0019 起允许创建时间缺失或无法识别）；filename、version、updated_by、created_at/updated_at | 保存确认导入的七列 Excel 群目录，尚未关联供应商的群也保留。信息来源为文件，不表示企微实时核验通过。 |
+| `task_group_imports` | UUID id 主键；owner、filename、status（pending/confirmed）；snapshot LONGTEXT、confirmation LONGTEXT；created_at/updated_at | 持久保存服务器解析的预览、目录版本与候选，预览确认有效期 24 小时；确认请求和实际结果用于幂等重放。 |
+
+确认事务先锁导入记录，再按 chat_id 排序锁目录，最后按供应商 ID 排序锁 `task_supplier_groups`。目录按预览版本比较；绑定沿用供应商唯一键和版本校验。已有其他默认群须显式确认替换。任何一项冲突整批回滚，相同确认请求返回原结果，不重复更新版本。目录更新不会自动传播到未选中的已有绑定或历史通知。部署前执行 `npm.cmd run db:business:upgrade`，无需迁移旧供应商数据。降级拒绝自动删除目录及人工确认证据。
+
+## 柠檬云手动同步存储（2026-10-16，迁移 0018）
+
+归属 `sync` 模块。`0018_sync_lemon_runs` 在绑定表新增 `selected_asid VARCHAR(32)`、`selected_name VARCHAR(255)`，新增 `sync_lemon_runs`：主键 id，scope_key（已有管理员/应用身份范围）、request_id（UUID）、asid、account_name、start_date、end_date、status（running/completed/failed）、result JSON、error、created_at、updated_at。唯一键为 `(scope_key, request_id)`，另建 `(scope_key,status)` 索引；无跨模块外键，不存令牌或密码。
+
+开始请求时锁绑定行，检查同请求和未结束请求后持久写 running；外部 HTTP 在事务外执行。发票写入复用现有账本锁及 invoice 版本事件，完成回执与所有发票数据在同一事务提交。数据库结果不确定或重启保留 running，禁止自动复位。记录为持久审计依据，迁移 downgrade 拒绝删除。
+
+API 发票使用 `source=lemon_open2`，`lemon_account=open2:` 加 `SHA256(host|asid)`，`external_id=InvoiceId`；复用 invoice 现有票头、原始数据、不可变版本表，不另建平行发票表。无商品明细则完整性为 pending。Excel 固定命名空间尚未与真实 API 账套对齐，两个入口遇同代码/号码均拒绝跨渠道重复。接口及异常处置详见[接入说明](../lemon-invoice-sync-plan.md)。

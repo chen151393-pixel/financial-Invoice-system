@@ -13,6 +13,7 @@ from ..mapper.supplier_group_mapper import binding
 from ..policy.supplier_group_policy import match_group
 from ..vo.capability import Capability
 from ..vo.supplier_group_vo import GroupList, SupplierList, WecomGroupList
+from .group_binding_writer import write_binding
 
 
 def _pages(total, page_size):
@@ -169,17 +170,12 @@ class SupplierGroupService:
             }
         else:
             fields = self._live_group(body.chatId)
-        values = {**fields, "enabled": body.enabled, "updated_by": actor}
         now = datetime.now(timezone.utc).replace(tzinfo=None)
         try:
             with self.engine.begin() as connection:
-                if current is None:
-                    supplier_group_dao.insert_group(connection, {"supplier_id": supplier_id, **values}, now)
-                elif not supplier_group_dao.update_group(
-                    connection, current["id"], body.revision, values, now
-                ):
-                    raise ApiError(409, "配置已被修改，请重新查询后编辑")
-                saved = supplier_group_dao.by_supplier(connection, supplier_id)
+                saved = write_binding(
+                    connection, supplier_id, body.revision, fields, actor, now, enabled=body.enabled
+                )
         except IntegrityError:
             raise ApiError(409, "该供应商已有配置，请重新查询后编辑") from None
         except SQLAlchemyError:

@@ -20,6 +20,8 @@ from ..entity import (
     purchase_order_lines,
     purchase_orders,
 )
+from ..policy.optional_field_policy import allows_missing
+from ..policy.unit_price_policy import normalize as normalize_unit_price
 from .ns_fields import normalize, reference, text
 
 # 非列目标：供应商、申报公司引用
@@ -149,20 +151,24 @@ def reference_value(value, target):
 
 
 def project(record, kind, spec):
-    """返回 (列值, 引用值)；默认拒绝缺字段，仅对已核实的报关空字段允许 NULL。"""
+    """返回 (列值, 引用值)；默认拒绝缺字段；仅显式允许的空字段或非关键展示字段存 NULL。"""
     columns, references = {}, {}
     table = TABLES[kind]
     for key, source in spec.storage_fields.items():
         target = FIELDS[kind][key]
         if source not in record:
-            if key in spec.omitted_as_null and table.c[target].nullable:
+            if (key in spec.omitted_as_null or allows_missing(kind, spec, key)) and table.c[target].nullable:
                 columns[target] = None
                 continue
             raise ApiError(422, f"NS响应缺少已配置字段{source}，请核实映射后重试")
         if target in REFERENCE_LENGTH:
             references[target] = reference_value(record[source], target)
         else:
-            columns[target] = column_value(record[source], table.c[target])
+            value = record[source]
+            column = table.c[target]
+            if target == "unit_price" and kind in ("purchase_line", "customs_line"):
+                value = normalize_unit_price(value, column.type.precision, column.type.scale)
+            columns[target] = column_value(value, column)
     return columns, references
 
 

@@ -75,10 +75,15 @@ class RequestGuard:
                 if headers.get(b"content-type", b"").split(b";")[0].strip().lower() != b"application/json":
                     raise ApiError(415, "请求必须使用 application/json")
                 buffer = bytearray()
-                # 仅两个原文件导入接口允许较大JSON，4MB文件经base64后仍限制在6MB内。
+                # 仅原文件导入接口允许较大JSON，4MB文件经base64后仍限制在6MB内。
                 limit = (
                     6 * 1024 * 1024
-                    if scope["path"] in {"/api/invoices/import/preview", "/api/invoices/import/confirm"}
+                    if scope["path"]
+                    in {
+                        "/api/invoices/import/preview",
+                        "/api/invoices/import/confirm",
+                        "/api/tasks/external-groups/import/preview",
+                    }
                     else 128 * 1024
                 )
                 while True:

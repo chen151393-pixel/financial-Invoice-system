@@ -7,20 +7,24 @@ from ..public import InvoiceChanged, InvoiceChanging
 
 
 def save_version(connection, item, existing, events, now):
-    document = item["document"]
+    head = (
+        dict(item["header"]) if "header" in item else import_mapper.header_values(item["document"], None, now)
+    )
+    rows = item["rows"] if "rows" in item else import_mapper.item_values(item["document"])
+    source, account = head["source"], head["lemon_account"]
+    external_id = head.get("external_id") or item["key"]
     raw_id = raw_record_dao.save(
         connection,
         {
-            "source": import_mapper.EXCEL_SOURCE,
-            "lemon_account": import_mapper.EXCEL_ACCOUNT,
-            "external_id": item["key"],
+            "source": source,
+            "lemon_account": account,
+            "external_id": external_id,
             "payload": item["payload"],
             "payload_sha256": item["digest"],
         },
         now,
     )
-    head = import_mapper.header_values(document, raw_id, now)
-    rows = import_mapper.item_values(document)
+    head.update(raw_record_id=raw_id, imported_at=now)
     old_version = None
     if existing:
         invoice_id = existing["id"]
@@ -48,8 +52,8 @@ def save_version(connection, item, existing, events, now):
             "invoice_id": invoice_id,
             "content_sha256": rules.digest(head, saved),
             "raw_record_id": raw_id,
-            "source": import_mapper.EXCEL_SOURCE,
-            "external_id": item["key"],
+            "source": source,
+            "external_id": external_id,
             "currency_source": "source_rule",
             "source_rule_version": "lemon_cny_v1",
             "header_snapshot": rules.safe(head),

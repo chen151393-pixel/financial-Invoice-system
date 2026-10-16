@@ -1,4 +1,5 @@
 import type { PullResult } from "./api";
+import { PartialSaveResults } from "./PartialSaveResults";
 
 export function PullResults({ result }: { result: PullResult }) {
   return (
@@ -13,13 +14,18 @@ export function PullResults({ result }: { result: PullResult }) {
         {result.message} · 本批 {result.count} 张 ·{" "}
         {new Date(result.pulledAt).toLocaleString("zh-CN", { timeZone: "Asia/Shanghai" })}（北京时间）
       </p>
+      {result.batch && <PartialSaveResults batch={result.batch} />}
       {result.storage && (
         <div role="status" className="sync-page__result-summary">
-          <p>
-            保存时间：
-            {new Date(result.storage.savedAt).toLocaleString("zh-CN", { timeZone: "Asia/Shanghai" })}
-            （北京时间）
-          </p>
+          {result.storage.savedAt ? (
+            <p>
+              最近成功保存时间：
+              {new Date(result.storage.savedAt).toLocaleString("zh-CN", { timeZone: "Asia/Shanghai" })}
+              （北京时间）
+            </p>
+          ) : (
+            <p>本批暂无确认成功的保存记录。</p>
+          )}
           <p>
             采购单：新增 {result.storage.purchase.created} 张，更新 {result.storage.purchase.updated}{" "}
             张；明细新增 {result.storage.purchase.linesCreated} 行，更新{" "}
