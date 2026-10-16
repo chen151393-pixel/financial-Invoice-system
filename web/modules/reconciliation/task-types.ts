@@ -107,6 +107,14 @@ export interface NotificationEvent {
   attachments: string[];
 }
 export interface TaskNotification extends NotificationDraft {
+  supplierGroup: {
+    groupName: string;
+    chatId: string;
+    employee: string;
+    userid: string;
+    revision: number;
+  } | null;
+  groupConfigReason: string;
   defaultMessage: string;
   statusLabel: string;
   edit: { allowed: boolean; reason: string };

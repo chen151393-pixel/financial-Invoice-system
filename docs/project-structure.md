@@ -4,7 +4,7 @@
 
 ## 1. 架构结论
 
-当前是一个模块化 FastAPI 应用和一个正式 React 前端，后端内部按业务划分职责。数据库分为应用库与业务库，各有独立引擎和 Alembic 迁移。没有独立的 Python 任务 worker，也没有持久同步队列；根目录 `worker/` 服务于历史 Vinext 原型。
+当前是一个模块化 FastAPI 应用和一个正式 React 前端，后端内部按业务划分职责。正式运行统一读取业务 MySQL 配置并共用一个连接池；两条历史 Alembic 迁移链和版本表保留。没有独立的 Python 任务 worker，也没有持久同步队列；根目录 `worker/` 服务于历史 Vinext 原型。
 
 ```mermaid
 flowchart TB
@@ -18,15 +18,15 @@ flowchart TB
     REVIEW --> PUBLIC["business.public：报关与合同来源"]
     PUBLIC --> SOURCE
     SOURCE --> BDB[(业务库)]
-    REVIEW --> ADB[(应用库)]
-    WRITE --> ADB
+    REVIEW --> BDB
+    WRITE --> BDB
     SOURCE --> NS["integrations/netsuite"]
     SYNC --> NS
     WRITE --> NS
     REVIEW --> ARCHIVE["integrations/contract_archive：共享盘"]
 ```
 
-图是依赖概览，省略各模块内部 Controller、DAO、Mapper，以及公共 identity/audit。`matching` 当前通过发票公开接口与注入的采购来源能力取数，没有接入审核获批范围。应用库审核与业务库匹配不共享事务，不能把两条链路当作已完成闭环。
+图是依赖概览，省略各模块内部 Controller、DAO、Mapper，以及公共 identity/audit。`matching` 当前通过发票公开接口与注入的采购来源能力取数，没有接入审核获批范围。共用数据库和连接池不自动合并各 Service 的事务；审核与匹配的获批范围联动尚未接通。
 
 ## 2. 实际目录
 
@@ -90,20 +90,16 @@ flowchart TB
 
 ## 4. 数据库与迁移归属
 
-| 项目 | 应用库 | 业务库 |
-| --- | --- | --- |
-| 配置 | `DATABASE_URL` | `BUSINESS_DATABASE_URL` / `BUSINESS_MYSQL_*` |
-| 连接入口 | `backend/core/database.py` | `backend/core/business_database.py` |
-| 主要内容 | 审核快照、审核历史、开票任务、合同和通知、回写预览与锁 | 母采购、子采购、报关、发票来源，关联依据及匹配占用 |
-| Alembic 配置 | `backend/alembic.ini` | `backend/business_alembic.ini` |
-| 迁移目录 | `backend/migrations/` | `backend/business_migrations/` |
-| 版本表 | `alembic_version` | `business_alembic_version` |
-| 升级命令 | `npm.cmd run db:upgrade` | `npm.cmd run db:business:upgrade` |
-| 当前代码 head | `0006_task_notifications` | `0007_invoice_purchase_links` |
+正式运行只读 `BUSINESS_DATABASE_URL` / `BUSINESS_MYSQL_*`，连接入口为 `backend/core/business_database.py`；所有模块共用该引擎。`core/database.py` 保留连接工厂，SQLite 仅供隔离测试、预览和历史复制。
 
-代码 head 不代表环境已升级。本次没有连接数据库核对部署版本。业务迁移依赖已有基础表及所需扩展，不能用作空库初始化；[MySQL 目录](mysql/README.md)中的 SQL 与设计稿须按用途区分。
+| 迁移链 | 内容 | 配置 / 目录 | 版本表 |
+| --- | --- | --- | --- |
+| 历史应用表 | 审核、任务、合同、通知、群配置、回写及审计 | `backend/alembic.ini` / `backend/migrations` | `alembic_version` |
+| 来源与匹配 | 母子采购、报关、发票、关联依据及匹配占用 | `backend/business_alembic.ini` / `backend/business_migrations` | `business_alembic_version` |
 
-审核、审计和开票任务可在一个应用库事务中提交；匹配和占用在业务库事务中提交。跨库获批范围的一致性仍是后续设计问题，详见[系统链路](system-chain.md)。正常启动不会自动清除 `executing/unknown` 或释放其目标锁。
+两条链均在同一业务库执行；统一命令为 `npm.cmd run db:upgrade`，`db:business:upgrade` 是兼容入口。业务迁移仍依赖已有基础表，不能当作空库初始化。代码 head 不代表部署状态，环境必须分别核对版本表。
+
+审核、审计和开票任务保持同事务，匹配和占用保持同事务；同一个连接池不代表所有来源读取与更新已自动合并到一个事务。正常启动不清除 executing/unknown 或释放其目标锁。旧应用记录迁移步骤见[历史数据迁移](python-backend.md#历史应用库合入业务库)。
 
 ## 5. 容易误删或混淆的目录
 

@@ -2,7 +2,10 @@ services:
   app:
     build: .
     network_mode: host
-    env_file: .env.local
+    # 与本地后端保持文件覆盖顺序；兼容仅有 .env 或仅有 .env.local 的部署。
+    env_file:
+      - path: .env
+        required: false
     volumes:
       - ./data:/app/data
       - ./secrets:/run/secrets:ro

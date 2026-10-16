@@ -49,7 +49,8 @@ documents = Table(
     Column("ns_id", identifier(40), nullable=False),
     Column("filename", String(255), nullable=False),
     Column("sha256", identifier(64), nullable=False),
-    Column("content", LargeBinary().with_variant(LONGBLOB(), "mysql"), nullable=False),
+    # 新合同只留元数据；该列保留旧版原件，不删除历史副本。
+    Column("content", LargeBinary().with_variant(LONGBLOB(), "mysql")),
     Column("downloaded_at", BigInteger, nullable=False),
     Column("archive_path", String(2048)),
     Column("archived_at", BigInteger),

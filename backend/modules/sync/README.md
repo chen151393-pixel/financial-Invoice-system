@@ -8,6 +8,12 @@
 
 controller.py接收请求；service.py生成连接状态并调用NS认证；dto.py校验分页；pull_service.py负责读取单据及校验上游响应，通过应用工厂注入的业务存储公开用例完成保存。没有持久同步队列。
 
+## 柠檬云授权回调（接收阶段）
+
+已注册 `GET /api/lemon/oauth/callback`，公开访问可检查入口就绪；`GET /api/lemon/oauth/configuration` 查询配置，管理员 `POST /api/lemon/oauth/authorize` 发起授权。`lemon_controller.py` 负责 HTTP/DTO/cookie，`lemon_service.py` 校验发起身份、浏览器上下文、有效期与一次性消费，授权 URL 复用外部适配器。
+
+**接收回调不等于绑定账号**：本阶段不保存授权码、不调用 LinkUser 或 Token 接口，所有接收结果明确 `accountBound=false`；发票 API 连接状态仍为未接入。配置、生产地址、部署和后续边界见[回调接入说明](../../../docs/lemon-callback.md)。
+
 ## 公开入口
 
 `GET /api/ns/status；POST /api/ns/connect`。模块通过应用工厂注入依赖，不建立全局客户端或全局数据库连接。

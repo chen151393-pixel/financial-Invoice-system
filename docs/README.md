@@ -34,6 +34,7 @@
 | 文档 | 用途与状态 |
 | --- | --- |
 | [NS 适配器](../backend/integrations/netsuite/README.md) | M2M 与 HTTP 适配层 |
+| [柠檬云授权回调](lemon-callback.md) | 已实现回调接收与配置查询；正式绑定及发票 API 未接入 |
 | [PL 共用脚本接入](pl-script-integration.md) | 当前网站与 NS RESTlet 共用查询服务的部署说明 |
 | [财务来源读取](finance-source-reader.md) | 报关原始行、Packing、采购关系及同步完整性 |
 | [PL 联查](pl-lookup.md)、[字段映射](netsuite-pl-lookup.json) | PL 查询契约、兼容路径与配置依据 |

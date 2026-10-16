@@ -1,4 +1,4 @@
-"""独立业务库的配置、连接及只读检查，不创建表或执行迁移。"""
+"""统一业务库的配置、连接及只读检查，不创建表或执行迁移。"""
 
 from sqlalchemy import event, inspect
 from sqlalchemy.engine import URL, make_url
@@ -52,28 +52,11 @@ def business_database_url(env):
         ) from None
 
 
-def ensure_separate_database(application_url, business_url):
-    if not business_url:
-        return
-    application, business = make_url(application_url), make_url(business_url)
-    if application.get_backend_name() != "mysql":
-        return
-
-    def location(url):
-        host = (url.host or "").lower()
-        if host in ("localhost", "::1"):
-            host = "127.0.0.1"
-        return host, url.port or 3306, (url.database or "").lower()
-
-    if location(application) == location(business):
-        raise ValueError("业务库必须使用独立库名，不能与现有预览、回写和审计库相同")
-
-
 def make_business_engine(database_url):
     if not database_url:
         return None
     if make_url(database_url).drivername != "mysql+pymysql":
-        raise ValueError("独立业务库仅支持MySQL / PyMySQL")
+        raise ValueError("业务库仅支持MySQL / PyMySQL")
     engine = make_engine(database_url)
 
     @event.listens_for(engine, "connect")
@@ -91,7 +74,7 @@ def check_business_database(engine):
         "connected": False,
         "ready": False,
         "state": "not_configured",
-        "message": "尚未配置独立MySQL业务库",
+        "message": "尚未配置MySQL业务库",
         "missingTables": [],
     }
     if engine is None:

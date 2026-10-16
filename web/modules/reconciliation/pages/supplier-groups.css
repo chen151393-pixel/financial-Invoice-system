@@ -1,0 +1,110 @@
+.sg-page .sg-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: var(--space-control);
+}
+.sg-page .sg-between {
+  justify-content: space-between;
+  align-items: center;
+}
+.sg-page .sg-editor {
+  padding: var(--space-layout);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-panel);
+  background: var(--color-surface);
+  min-width: 0;
+}
+.sg-page .sg-editor {
+  display: grid;
+  gap: var(--space-control);
+}
+.sg-page h2 {
+  margin: 0;
+  font-size: 16px;
+}
+.sg-page details > summary {
+  cursor: pointer;
+  padding: var(--space-small) 0;
+  font-weight: 600;
+}
+.sg-page .sg-row > label,
+.sg-page .sg-fields > label {
+  display: grid;
+  align-items: stretch;
+  gap: var(--space-small);
+  min-width: 0;
+}
+.sg-page .sg-row input,
+.sg-page .sg-row select,
+.sg-page .sg-fields input,
+.sg-page .sg-fields select {
+  width: 100%;
+  min-width: 0;
+}
+.sg-page .sg-row > label {
+  flex: 1;
+  min-width: 180px;
+}
+.sg-page .sg-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-control);
+  margin-bottom: var(--space-layout);
+}
+.sg-page .sg-lookup {
+  padding-top: var(--space-control);
+}
+.sg-page .sg-options {
+  list-style: none;
+  margin: var(--space-control) 0;
+  padding: 0;
+  max-height: 300px;
+  overflow: auto;
+}
+.sg-page .sg-options li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-control);
+  padding: var(--space-control) 0;
+  border-bottom: 1px solid var(--color-border);
+}
+.sg-page .sg-options span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.sg-page .sg-options small {
+  display: block;
+  margin-top: 4px;
+  color: var(--color-muted);
+}
+.sg-page .sg-options button {
+  flex-shrink: 0;
+}
+.sg-page .sg-selection {
+  margin: 0;
+  padding: var(--space-control);
+  background: var(--color-canvas);
+  overflow-wrap: anywhere;
+}
+.sg-page .sg-feedback {
+  margin: 0;
+  padding: var(--space-control);
+  color: var(--color-feedback);
+  background: var(--color-surface);
+  line-height: 1.7;
+}
+.sg-page .sg-table {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-panel);
+  background: var(--color-surface);
+}
+@media (max-width: 760px) {
+  .sg-page .sg-fields {
+    grid-template-columns: 1fr;
+  }
+  .sg-page .sg-editor {
+    padding: var(--space-control);
+  }
+}

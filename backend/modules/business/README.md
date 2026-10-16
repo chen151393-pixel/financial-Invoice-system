@@ -38,7 +38,7 @@
 
 查询配置允许访问的NS记录，支持列表与指定ID。已实现采购与报关按PL完整落库；本机已配置真实沙箱映射并通过单个PL只读联查，真实保存尚未验收。
 
-已接入独立 MySQL 业务库连接检查：`GET /api/business/database-status` 需要现有登录身份，返回未配置、连接失败、缺少表或连接成功。`service.py` 调用 `core/business_database.py` 的基础设施检查，`database_vo.py` 定义安全响应。连接参数使用 `BUSINESS_MYSQL_*`，不替换原应用库；配置及命令见 [MySQL说明](../../../docs/mysql/README.md)。检查不执行建表或单据同步。
+已接入统一 MySQL 业务库连接检查：`GET /api/business/database-status` 需要现有登录身份，返回未配置、连接失败、缺少表或连接成功。`service.py` 调用 `core/business_database.py` 的基础设施检查，`database_vo.py` 定义安全响应。连接参数使用 `BUSINESS_MYSQL_*` 或 `BUSINESS_DATABASE_URL`，正式运行与审核、开票跟进共用同一个连接池；配置及命令见 [MySQL说明](../../../docs/mysql/README.md)。检查不执行建表或单据同步。
 
 已增加 PL 单联查：`pl_service.py` 编排按需读取，`pl_config.py` 校验服务器字段映射，`pl_mapper.py` 转换源字段，`pl_vo.py` 定义输出。配置和边界见 [PL 联查说明](../../../docs/pl-lookup.md)。
 
@@ -75,3 +75,7 @@ PL脚本结果校验通过后，Service按来源补充 `missingCells`，用于�
 ## 匹配快照公开读取
 
 `public.PurchaseMatchingSource.read(owner)`只读返回当前身份有效子采购及其有效明细，用于matching模块的逐行试匹配。DAO执行带tenant限制的查询，不保存匹配关系，不调用NS。
+
+## 供应商选择公开接口
+
+`SupplierDirectory.read(owner, keyword, account, supplier_id, page, page_size)` 从同身份的有效采购订单按 NS 环境与供应商稳定 ID 分组，提供服务器搜索、分页及精确身份查询；过滤缺失供应商 ID 的来源。供 reconciliation 的供应商群配置调用，SQL 位于 `supplier_dao.py`，不创建独立供应商主数据副本。

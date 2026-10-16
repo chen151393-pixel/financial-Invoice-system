@@ -1,13 +1,12 @@
 """open2 记账开放平台「获取账号授权 → 已有账号」OAuth2 授权码流程。
 
-只负责鉴权：构造授权跳转地址、用 code 换 token、用 refresh_token 续期，以及 token 的
-内存缓存与持久化。不读取发票业务数据。凭证（app_key/app_secret）来自 config，不写死。
+已实现官方授权页面链接构造；下方保留未接入的 Token 缓存与换取模板，不读取发票业务数据。
+模板凭证（app_key/app_secret）来自 config，不写死；退出条件是正式绑定与鉴权适配器接通。
 
-Open2 鉴权模型（详见文档「获取账号授权 → 已有账号」）：
-- 浏览器重定向到 authorize_url，用户登录并授权后，柠檬云回调 redirect_uri?code=xxx&state=xxx
-- 服务端用 code 调 token_url 换 access_token / refresh_token
-- 后续业务请求在 Header 带 Authorization: Bearer <access_token>
-token_url 真实路径、请求体字段（client_id/client_secret 或 Basic 鉴权）以文档为准，下方用占位。
+已核实：已有账号授权页面接受 appId、mobile、redirect_uri，回调只保证携带 code。
+收到 code 后须获取全局 Token，再调用 LinkUserToApp 绑定，不是标准 OAuth code 换 Token。
+当前公开回调只复用 account_authorization_url，尚不调用下方 Token 骨架；
+exchange_code、refresh 和 FileTokenStore 均为未接入模板，不能用于生产绑定。
 """
 
 import json
@@ -18,6 +17,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from threading import Lock
 from typing import Optional
+from urllib.parse import urlencode
 
 import httpx
 
@@ -97,8 +97,27 @@ class FileTokenStore(TokenStore):
             self.path.unlink()
 
 
+def account_authorization_url(
+    app_id: str, mobile: str, redirect_uri: str, *, host: str = "https://open2.ningmengyun.com"
+) -> str:
+    """官方已有账号授权页面只约定 appId、mobile、redirect_uri，后者必须 URL 编码。"""
+    return (
+        host.rstrip("/")
+        + "/OAuthPage/OAPage/Index?"
+        + urlencode(
+            {
+                "appId": app_id,
+                "mobile": mobile,
+                "redirect_uri": redirect_uri,
+            }
+        )
+    )
+
+
 class LemonOpen2Auth:
-    def __init__(self, settings: LemonOpen2Settings, store: TokenStore, client: Optional[httpx.Client] = None):
+    def __init__(
+        self, settings: LemonOpen2Settings, store: TokenStore, client: Optional[httpx.Client] = None
+    ):
         self.settings = settings
         self.store = store
         self.client = client or httpx.Client(timeout=20, follow_redirects=False, trust_env=False)
@@ -108,21 +127,11 @@ class LemonOpen2Auth:
     def close(self):
         self.client.close()
 
-    def authorize_url(self, state: str) -> str:
-        """构造引导用户（已有账号）授权的跳转地址。"""
-        if not self.settings.authorize_url:
-            raise ApiError(503, "柠檬云 open2 授权地址未配置（LEMON_OPEN2_AUTHORIZE_URL）")
-        sep = "&" if "?" in self.settings.authorize_url else "?"
-        url = (
-            f"{self.settings.authorize_url}{sep}"
-            f"client_id={self.settings.app_key}"
-            f"&response_type=code"
-            f"&redirect_uri={self.settings.redirect_uri}"
-            f"&state={state}"
+    def authorize_url(self, mobile: str) -> str:
+        """复用官方已有账号授权页面；不假定平台回传 state。"""
+        return account_authorization_url(
+            self.settings.app_key, mobile, self.settings.redirect_uri, host=self.settings.api_base
         )
-        if self.settings.scope:
-            url += f"&scope={self.settings.scope}"
-        return url
 
     def exchange_code(self, code: str, state: str) -> Token:
         """授权回调拿到 code 后换取 token。state 校验由调用方在路由层完成。"""

@@ -45,13 +45,13 @@ flowchart LR
 | --- | --- | --- | --- |
 | `/sync/ns` | `/api/ns/sync/{kind}/pull`、`/pull-save` | `sync.PullService` → `business.StorageService` | NS 来源单、完整明细、当前关联结果 |
 | `/pl-reconciliation`，当前默认首页 | `POST /api/ns/pl-script-comparison` | `business.PlScriptService` | 实时 NS 对照结果，不持久化该次页面查询 |
-| `/finance-reconciliation` | `POST /api/reconciliation/declarations`、`/approve` | `ReconciliationService.browse/approve` | 业务库来源 → 应用库审核快照、审核头、审计、任务 |
+| `/finance-reconciliation` | `POST /api/reconciliation/declarations`、`/approve` | `ReconciliationService.browse/approve` | 统一业务库来源 → 审核快照、审核头、审计、任务 |
 | `/invoice-followup` 与任务详情 | `/api/reconciliation/invoice-tasks/query`、`/{id}`、`/{id}/documents/{orderId}/prepare` | `InvoiceTaskService` → `SubpoContractSource`、`ContractArchive` | 任务、合同缓存、共享盘路径及归档时间 |
 | 任务详情中的通知区 | `/{id}/notification/draft`、`/{id}/notification/record`，前缀同上 | `InvoiceTaskService.save_notification` → `notification_service` | 通知版本、人工登记、任务状态；没有自动发送渠道回执 |
 | `/sync/lemon` | `/api/invoices/import/configuration`、`/preview`、`/confirm` | `InvoiceService`、`parser.py` | 原文件解析和校验 → 业务库发票头、商品行 |
 | `/invoices` | `GET /api/invoices`、`/{id}`；`POST /api/matching/summaries` | `InvoiceService` + `MatchingService.summaries` | 发票来源状态和匹配摘要分别提供 |
 | `/matching?invoiceId=本地主键` | `/api/matching/invoices/{id}`、`/links/review`、`/links`、`/confirm` | `MatchingService` | 当前发票、子采购候选、整票关系或数量分配 |
-| 后端保留的通用回写能力 | `/api/ns/preview`、`/preview-text`、`/execute`、`/jobs` | `WritebackService` | 应用库 NS 预览、持久目标锁、审计 |
+| 后端保留的通用回写能力 | `/api/ns/preview`、`/preview-text`、`/execute`、`/jobs` | `WritebackService` | 统一业务库 NS 预览、持久目标锁、审计 |
 
 `/sync/lemon` 虽位于同步工作区，Excel 解析和入库归属 `invoice`，由 [SyncWorkspacePage.tsx](../web/app/SyncWorkspacePage.tsx)装配，不在 `sync` 中再写一套导入规则。
 
@@ -82,9 +82,9 @@ flowchart TB
 | `sync` | 连接状态、分页拉取、发起保存 | NS 客户端、注入的 `business.storage` 用例；尚无持久同步队列 |
 | `business` | NS 来源读取、字段映射、当前来源和行关系保存 | NS 适配器、业务库；公开采购、报关、合同读取能力 |
 | `invoice` | 发票导入、去重、冲突检查、来源查询 | 业务库；向 matching 提供带权限的发票读取 |
-| `reconciliation` | 财务审核、版本快照、任务、合同准备与通知登记 | `business.public`、`audit.public`、应用库、合同归档适配器 |
+| `reconciliation` | 财务审核、版本快照、任务、合同准备与通知登记 | `business.public`、`audit.public`、统一业务库、合同归档适配器 |
 | `matching` | 候选、比对、人工确认、两种关联方式的占用保护 | `invoice.public`、注入的 `PurchaseMatchingSource`、业务库；当前未依赖审核来源 |
-| `writeback` | NS 写入预览、执行权、未知结果保护 | NS 客户端、应用库、`audit.public`；当前独立于 matching |
+| `writeback` | NS 写入预览、执行权、未知结果保护 | NS 客户端、统一业务库、`audit.public`；当前独立于 matching |
 | `audit` | 调用方事务内追加审计 | 共用调用方 Connection；不自行推进业务状态 |
 | `exception`、`dashboard` | 目标中的异常闭环和统一汇总 | 当前无对应正式后端模块，不能把演示统计当作真实能力 |
 
@@ -103,21 +103,21 @@ flowchart TB
 
 | 数据位置 | 当前主要表 | 业务含义 |
 | --- | --- | --- |
-| 业务库：`BUSINESS_DATABASE_URL` / `BUSINESS_MYSQL_*` | `parent_purchase_orders`、`parent_purchase_order_lines` | 母采购来源 |
+| 统一业务库：`BUSINESS_DATABASE_URL` / `BUSINESS_MYSQL_*` | `parent_purchase_orders`、`parent_purchase_order_lines` | 母采购来源 |
 | 同上 | `purchase_orders`、`purchase_order_lines` | 子采购来源；不是已审核可开票额度 |
 | 同上 | `customs_declarations`、`customs_declaration_lines` | 报关来源及汇总行 |
 | 同上 | `invoices`、`invoice_lines` | 实际导入发票及商品行 |
 | 同上 | `customs_reconciliation_results` | 每张报关单一份当前证据和关联结果；可被后续完整同步替换 |
 | 同上 | `invoice_purchase_allocations` | 按数量保存的分配及占用 |
 | 同上 | `invoice_purchase_link_batches`、`invoice_purchase_link_pairs` | 整票确认批次及行关系，占用所选子采购行 |
-| 应用库：`DATABASE_URL` | `finance_review_snapshots`、`finance_reviews`、`finance_review_audit` | 不可变审核依据、当前审核头、追加式审核历史 |
-| 同上 | `finance_invoice_tasks`、`finance_task_documents`、`finance_task_notifications` | 开票跟进、合同缓存与归档记录、通知版本和人工登记 |
+| 统一业务库：`BUSINESS_DATABASE_URL` / `BUSINESS_MYSQL_*` | `finance_review_snapshots`、`finance_reviews`、`finance_review_audit` | 不可变审核依据、当前审核头、追加式审核历史 |
+| 同上 | `finance_invoice_tasks`、`finance_task_documents`、`finance_task_notifications` | 开票跟进、合同元数据与归档路径（旧副本保留）、通知版本和人工登记 |
 | 同上 | `ns_previews`、`ns_target_locks`、`ns_audit` | 独立通用回写流程及其保护 |
-| 共享盘 | 按下载日期组织的子采购合同 PDF | 可取用的业务原件；数据库缓存成功不等于共享盘已归档 |
+| 共享盘 | 按首次下载日期组织的子采购合同 PDF | 新合同唯一持久文件；数据库元数据存在不等于已归档成功 |
 
 “八张来源表”只计算母采购、子采购、报关、发票各两张，**不代表整个业务库只有八张表**。
 
-当前代码有两套 Alembic：`backend/migrations` 管应用库，`backend/business_migrations` 管业务库。梳理时文件中的最新版本分别为 `0006_task_notifications` 和 `0007_invoice_purchase_links`；这不是对任何运行数据库版本的确认。业务迁移依赖已有基础表，不能当作空库全量初始化脚本。本次未运行升级命令。
+当前保留两条历史 Alembic 迁移链，在同一业务库记录 `alembic_version` 和 `business_alembic_version`。统一升级入口为 `npm.cmd run db:upgrade`。业务迁移仍依赖已有基础表，不能作为空库初始化；旧 SQLite 应用记录须通过[离线复制工具](python-backend.md#历史应用库合入业务库)迁入。配置变化不会自动复制数据。
 
 ### 4.2 关系键与证据
 
@@ -174,7 +174,7 @@ sequenceDiagram
     participant UI as 财务核对页
     participant R as ReconciliationService
     participant B as business 公开来源
-    participant DB as 应用库
+    participant DB as 统一业务库
     UI->>R: declarations：查询已入库单据
     R->>B: read：当前内容与稳定摘要
     R->>DB: 保存有期限的审核快照
@@ -195,7 +195,7 @@ sequenceDiagram
 
 ### 5.3 合同归档与通知登记
 
-`prepare_document` 检查任务来源和版本 → 从指定 NS 环境获取合同 → 重新核验后缓存原件 → 锁外写共享盘 → 再次核验来源和审核版本 → 记录归档成功。共享盘失败时保持资料待准备，不能只因取得 PDF 就推进任务。
+`prepare_document` 检查任务来源和版本 → 从指定 NS 环境获取合同 → 重新核验后只保存元数据 → 锁外写共享盘 → 再次核验来源和审核版本 → 记录归档成功。新 PDF 不存入数据库或服务器本地归档目录；失败重试重新获取并核对首次内容与日期。旧版副本保持原样。共享盘失败时保持资料待准备，不能只因取得 PDF 就推进任务。
 
 工作区的 `notification/draft` 保存群名称、发送员工及通知文本；`notification/record` 在合同全部归档后允许人工确认实际发送时间和说明，保存追加版本并进入 `awaiting_invoice`。`notification.send.allowed` 仍为 false，当前没有企微自动发送实现，也没有渠道送达证明。本次未验证该新增路径的运行状态或测试结果。
 
@@ -257,14 +257,14 @@ sequenceDiagram
 
 整票关系与数量分配继续共享占用约束。人工差异关联的数量、金额归属未经额外核实前，作为“已关联有差异”保留，不能把采购全额当成已收票金额；后续若统一内部占用模型，需要迁移现有关系，禁止新台账从零起算。
 
-### 8.2 先确定跨库一致性，再接页面按钮
+### 8.2 共用业务库后仍须明确事务与获批范围
 
-当前能保证的是“应用库审核、审计、任务同事务”以及“业务库匹配和占用同事务”，不能宣称跨两个引擎同事务。
+当前运行已共用业务 MySQL 引擎。审核、审计、任务保持同事务，匹配和占用保持同事务；共用连接池不代表全部 Service 调用已共用一个 Connection，也不代表审核获批范围已接通。
 
 建议后续将**可执行获批范围及其占用**放在同一个业务库事务边界内，仍由各业务模块维护自己的表。应用库审核快照作为不可变依据，通过明确的版本衔接建立可用范围。上线前必须完成以下设计和验证：
 
 1. 审核确认、来源同步、重审和匹配确认采用一致的锁顺序及版本检查；新版本失效旧范围时不能留下可继续使用的窗口。
-2. 如果采用跨库投影，持久记录待投影工作，幂等应用；投影未完成或无法证明版本当前时禁止消费。一次先读应用库、再写业务库的普通调用不足以保证一致性。
+2. 若未来重新拆库并采用跨库投影，持久记录待投影工作，幂等应用；投影未完成或无法证明版本当前时禁止消费。一次先读应用库、再写业务库的普通调用不足以保证一致性。
 3. 若改为同库权威批准范围，则明确旧审核数据的引用和迁移方法，保留历史，不重建数据库、不修改历史迁移文件。
 4. 无论采用哪种实现，必须用隔离 MySQL 多连接验证“重审与确认竞争”“同步与确认竞争”“中途失败与重启恢复”。
 
@@ -298,3 +298,7 @@ sequenceDiagram
 - 阅读根目录规范、README、架构方案和相关模块说明；沿正式前后端入口核对调用链、服务依赖、存储表、迁移及状态。
 - 本文给出现状、差距和建议；根 README 与早期架构方案增加导读，后端目录说明更新实际模块。没有删除业务代码或迁移，也没有改动用户已有实现。
 - 仅执行文档本地链接和差异检查，不运行业务测试。本次未验证 MySQL 迁移版本、真实 NS 部署、合同共享盘、通知页面或端到端业务效果；历史文档中的验收记录不算本次验证结果。
+
+## 供应商群配置补充（2026-10-09）
+
+开票跟进新增 `/invoice-followup/supplier-groups`。用户选择已同步的供应商，输入群名查询企微并选择目标群，系统获取群和群主 ID 建立默认群映射；运行时只使用 MySQL 业务库的 `finance_supplier_groups`，配置接口和任务带出复用同一服务。应用库历史迁移保留兼容，遗留映射表不再读写；迁移 `0009_simplify_supplier_groups` 删除旧配置历史表与群目录表，不再提供 Excel 群清单导入。当前任务可带出启用的同身份、同账套、同供应商配置，已有通知快照保持原内容。查询与保存前群身份核验已接入；此能力仅维护映射，真实发送和渠道结果查询仍待接入，详见[模块接口说明](../backend/modules/reconciliation/README.md#供应商默认企微群配置已实现)。

@@ -31,7 +31,7 @@ class ContractArchive:
 
     def save(self, order_number, supplier, downloaded_at, content):
         if self.root is None:
-            raise ApiError(503, "合同共享盘路径尚未配置，原件暂存在系统中")
+            raise ApiError(503, "合同共享盘路径尚未配置，合同未归档")
         filename = contract_filename(order_number, supplier)
         day = datetime.fromtimestamp(downloaded_at, CHINA_TIME)
         folder_name = f"{day.year}年{day.month}月{day.day}日"
@@ -73,9 +73,7 @@ class ContractArchive:
             verify(target)
             return str(target), filename
         except OSError:
-            raise ApiError(
-                503, "共享盘保存失败，请检查网络及后端运行账号的目录写入权限；原件已暂存，可重试保存"
-            ) from None
+            raise ApiError(503, "共享盘保存失败，请检查网络及目录写入权限；流程未推进，可重试保存") from None
         finally:
             if temporary is not None:
                 try:

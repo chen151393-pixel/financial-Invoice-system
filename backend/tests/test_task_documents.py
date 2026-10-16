@@ -60,7 +60,7 @@ def task_service(context, source, contract):
     return service, task, order
 
 
-def test_download_persists_and_advances_idempotently(context, local_source):
+def test_download_keeps_only_metadata_and_advances_idempotently(context, local_source):
     contract = ContractSource()
     service, task, order = task_service(context, local_source, contract)
     assert service.detail(task.id, OWNER).prepare.allowed
@@ -70,6 +70,8 @@ def test_download_persists_and_advances_idempotently(context, local_source):
     assert detail.documents[0].environment == "production"
     assert detail.documents[0].sha256 and not detail.notify.allowed
     assert Path(detail.documents[0].archivePath).read_bytes() == PDF
+    with context.engine.connect() as connection:
+        assert connection.execute(select(documents.c.content)).scalar_one() is None
     service.prepare_document(task.id, order, OWNER)
     assert contract.calls == 1
     with pytest.raises(ApiError) as error:

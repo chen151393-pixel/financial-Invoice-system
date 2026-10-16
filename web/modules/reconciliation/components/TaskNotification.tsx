@@ -129,7 +129,23 @@ export function TaskNotification({
       <div className="itn-columns">
         <section aria-label="接收信息">
           <h3>接收信息</h3>
-          <p className="it-help">仅用于当前任务；群名称由人工核对，系统尚未验证企微群身份。</p>
+          <p className="it-help">{notification.groupConfigReason}</p>
+          {notification.supplierGroup && (
+            <dl className="itn-facts">
+              <dt>默认通知群</dt>
+              <dd>{notification.supplierGroup.groupName}</dd>
+              <dt>外部群 ID</dt>
+              <dd>{notification.supplierGroup.chatId}</dd>
+              <dt>群主</dt>
+              <dd>
+                {notification.supplierGroup.employee} · {notification.supplierGroup.userid}
+              </dd>
+            </dl>
+          )}
+          <a href="/invoice-followup/supplier-groups">维护供应商群配置</a>
+          <p className="it-help">
+            以下为本任务接收信息。已保存的通知保留原内容，默认群配置不会覆盖历史记录。
+          </p>
           <dl className="itn-facts">
             <dt>供应商</dt>
             <dd>{detail.task.supplier}</dd>
