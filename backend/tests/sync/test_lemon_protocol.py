@@ -34,11 +34,17 @@ def test_official_user_token_account_and_query_headers():
             assert request.headers["Authorization"] == "Bearer user-secret"
             assert request.headers["asid"] == "7"
             assert request.method == "POST" and not request.content
-            assert request.url.params["startDate"] == "2026-10-01"
-            assert request.url.params["endDate"] == "2026-10-16"
-            assert request.url.params["invoiceCategory"] == "10080"
-            assert request.url.params["invoiceStatus"] == "0"
-            assert request.url.params["rows"] == "100"
+            assert dict(request.url.params) == {
+                "invoiceCategory": "10080",
+                "startDate": "2026-10-01",
+                "endDate": "2026-10-16",
+                "number": "",
+                "invoiceType": "0",
+                "invoiceStatus": "0",
+                "name": "",
+                "page": str(len(calls) - 2),
+                "rows": "100",
+            }
             if request.url.params["page"] == "1":
                 return httpx.Response(
                     200,
@@ -97,3 +103,21 @@ def test_page_limit_rejects_instead_of_truncating():
 
     with pytest.raises(ApiError, match="2000"):
         client(handler).invoices("token", "7", "2026-10-01", "2026-10-16")
+
+
+def test_required_empty_query_keys_reach_upstream_authorization(caplog):
+    def handler(request):
+        # 复现官方无凭证探测：缺查询键时路由 404，完整请求才进入授权检查。
+        params = dict(request.url.params)
+        if not {"number", "name", "invoiceType"} <= params.keys():
+            return httpx.Response(404, json={"Message": "No matching resource"})
+        return httpx.Response(401, json={"Message": "Unauthorized"})
+
+    upstream = client(handler)
+    try:
+        with pytest.raises(ApiError, match="HTTP 401"):
+            upstream.invoices("test-token", "7", "2026-10-01", "2026-10-16")
+    finally:
+        upstream.close()
+    assert "operation=invoices" in caplog.text
+    assert "upstream_status=401" in caplog.text

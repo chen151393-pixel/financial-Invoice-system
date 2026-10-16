@@ -27,7 +27,7 @@
 | 查询进项票 | `/api/Invoice/Invoice/GetInvoice` | 用户 Bearer，独立请求头 `asid`；查询参数见下方 |
 
 ```http
-POST $ACCAPI_HOST/api/Invoice/Invoice/GetInvoice?invoiceCategory=10080&startDate=2026-10-01&endDate=2026-10-16&invoiceStatus=0&page=1&rows=100
+POST $ACCAPI_HOST/api/Invoice/Invoice/GetInvoice?invoiceCategory=10080&startDate=2026-10-01&endDate=2026-10-16&number=&invoiceType=0&invoiceStatus=0&name=&page=1&rows=100
 Authorization: Bearer <正式用户Token>
 asid: <已授权账套编号>
 ```
@@ -86,3 +86,12 @@ asid: <已授权账套编号>
 服务器日志新增 `lemon_read_failed`，只记录 `operation`（user_token/accounts/invoices）、异常类别、`upstream_status`、页码、整数 `State/SubState` 与耗时；不记录手机号、账套、URL 查询串、Token、上游 Msg 或正文。`upstream_status=403` 表示上游 HTTP 拒绝，不能仅凭它断言是账号权限还是网关策略；具体仍须按阶段核查应用权限或网关。`invalid_json` 表示响应无法按 JSON 解析；`timeout` 表示客户端等待超时。上述诊断不会自动重试。
 
 Docker 部署更新本次后端代码并重建 app 后，可用 `docker compose logs --since=10m app` 查找 `lemon_read_failed`。旧版只保留了 `request_failed ... status=502`，无法从旧日志恢复已经丢弃的上游状态；诊断补丁本身不代表已修复真实上游故障。
+
+
+## 发票查询 404 修复（2026-10-16）
+
+远端日志显示 `operation=invoices upstream_status=404 page=1`，前置用户授权和账套查询已通过。客户端原先省略了文档 URL 中的 `number`、`invoiceType`、`name`；已改为每页显式发送 `number=`、`invoiceType=0`、`name=`，不调整域名、绑定或数据库。
+
+在官方生产地址进行了不携带 Token/账套的只读协议对照：原参数返回 404；补齐三个键（invoiceType 为 0）返回 401；只补 invoiceType 或只补两个文本键仍为 404。该结果验证缺参数时上游无法选择查询接口，完整参数进入授权检查；401 是无凭证探测的预期结果，不代表真实用户授权失败，也不证明已成功取得真实发票。0 作为本次未指定票种的请求值，实际返回范围仍须在授权联调中核对；不能凭此声称所有票种已验证。
+
+协议测试逐页核对完整查询串，包括两个空字符串键，避免 HTTP 客户端或后续整理再次省略。该修复无需数据库迁移；真实账套需部署后重新执行一次小范围拉取验证。

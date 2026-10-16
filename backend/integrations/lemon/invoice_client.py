@@ -140,6 +140,10 @@ class LemonInvoiceClient:
                     "invoiceCategory": 10080,
                     "startDate": start,
                     "endDate": end,
+                    # 这些查询键参与上游路由选择；即使不筛选也不能省略，否则返回 404。
+                    "number": "",
+                    "invoiceType": 0,
+                    "name": "",
                     "invoiceStatus": 0,
                     "page": page,
                     "rows": 100,
