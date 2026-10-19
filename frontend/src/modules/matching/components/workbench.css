@@ -1,0 +1,232 @@
+.wb {
+  display: grid;
+  gap: 20px;
+  font-size: 13px;
+}
+.wb h2 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 650;
+}
+.wb h3 {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+}
+.wb small,
+.wb-caption {
+  color: var(--color-muted);
+  font-size: 11px;
+}
+.wb a {
+  color: var(--color-primary);
+  text-decoration: none;
+}
+.wb a:hover {
+  text-decoration: underline;
+}
+.wb input,
+.wb select {
+  min-height: 36px;
+  border: 1px solid var(--color-input-border);
+  border-radius: var(--radius-control);
+  padding: 7px 10px;
+  background: var(--color-surface);
+  color: var(--color-text);
+  font: inherit;
+  max-width: 100%;
+}
+.wb :focus-visible {
+  outline: 3px solid var(--color-primary);
+  outline-offset: 3px;
+}
+.wb-toolbar {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.wb-toolbar > span {
+  color: var(--color-muted);
+  font-size: 11px;
+}
+.wb-panel {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-panel);
+  min-width: 0;
+  overflow: hidden;
+}
+.wb-panel__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 20px 20px 12px;
+}
+.wb-panel__head h2 small {
+  margin-left: 8px;
+  font-weight: 400;
+}
+.wb-count {
+  padding: 3px 7px;
+  border-radius: 4px;
+  font-size: 11px;
+  background: var(--color-canvas);
+  color: var(--color-muted);
+  white-space: nowrap;
+}
+.wb-columns {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 300px;
+  gap: 20px;
+  align-items: start;
+}
+.wb-aside {
+  display: grid;
+  gap: 20px;
+}
+.wb-attention {
+  display: flex;
+  gap: 12px;
+  margin: 0 20px;
+  padding: 18px 0;
+  border-top: 1px solid var(--color-border);
+}
+.wb-attention__icon {
+  color: var(--color-feedback);
+  background: var(--color-canvas);
+  border-radius: 5px;
+  width: 27px;
+  height: 27px;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+}
+.wb-attention p {
+  color: var(--color-muted);
+  font-size: 11px;
+  line-height: 1.8;
+  margin: 6px 0;
+}
+.wb .wb-attention .ui-button {
+  border: 0;
+  background: transparent;
+  color: var(--color-primary);
+  padding: 5px 0;
+  min-height: 30px;
+  font-size: 11px;
+  margin-right: 12px;
+}
+.wb-progress {
+  padding: 0 20px 16px;
+}
+.wb-progress__value {
+  display: flex;
+  align-items: baseline;
+  gap: 2px;
+}
+.wb-progress__value strong {
+  font-size: 28px;
+  font-weight: 600;
+}
+.wb-progress__value > span {
+  color: var(--color-muted);
+  margin-left: 8px;
+  font-size: 11px;
+}
+.wb-track {
+  height: 5px;
+  background: var(--color-canvas);
+  border-radius: 3px;
+  overflow: hidden;
+}
+.wb-track > span {
+  display: block;
+  height: 100%;
+  background: var(--color-primary);
+  border-radius: inherit;
+}
+.wb-caption {
+  line-height: 1.8;
+}
+.wb-amount-line {
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+  font-size: 11px;
+  color: var(--color-muted);
+}
+.wb-amount-line strong {
+  color: var(--color-primary);
+  font-weight: 400;
+}
+.wb-panel__foot {
+  display: flex;
+  justify-content: space-around;
+  border-top: 1px solid var(--color-border);
+  padding: 16px;
+  font-size: 11px;
+}
+.wb-empty,
+.wb-loading {
+  text-align: center;
+  padding: 42px 20px;
+  color: var(--color-muted);
+}
+.wb-empty strong {
+  color: var(--color-text);
+}
+.wb-feedback {
+  margin: 0;
+  color: var(--color-primary);
+}
+.wb-definitions {
+  color: var(--color-muted);
+  font-size: 12px;
+  line-height: 1.9;
+}
+.wb-definitions summary {
+  cursor: pointer;
+}
+.wb-sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+}
+@media (max-width: 1450px) {
+  .wb-columns {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .wb-aside {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (max-width: 760px) {
+  .wb-metrics,
+  .wb-aside {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .wb-panel__head h2 small {
+    display: block;
+    margin: 5px 0 0;
+  }
+  .wb-toolbar {
+    justify-content: flex-start;
+  }
+  .wb-panel__head,
+  .wb-search {
+    padding-left: 14px;
+    padding-right: 14px;
+  }
+  .wb-search__input {
+    min-width: 100%;
+    max-width: none;
+  }
+  .wb-table-scroll {
+    margin: 0 14px;
+  }
+}

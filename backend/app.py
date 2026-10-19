@@ -28,11 +28,13 @@ from .modules.invoice.service.import_service import ImportService
 from .modules.invoice.service.invoice_service import InvoiceService
 from .modules.invoice.service.lemon_invoice_service import on_lemon_invoices_fetched
 from .modules.matching.controller.matching_controller import create_router as matching_router
+from .modules.matching.controller.workbench_controller import create_router as workbench_router
 from .modules.matching.public import AllocationChanged
 from .modules.matching.service import ledger_service
 from .modules.matching.service.allocation_service import AllocationService
 from .modules.matching.service.matching_query_service import MatchingQueryService
 from .modules.matching.service.proposal_service import ProposalService, on_invoices_imported
+from .modules.matching.service.workbench_service import WorkbenchService
 from .modules.review.controller.review_controller import create_router as review_router
 from .modules.review.public import PurchaseBasisInvalidated, ReviewApproved
 from .modules.review.service.purchase_basis_service import on_source_changed
@@ -194,6 +196,7 @@ def _register_business(app, settings, ns, contract_ns, wecom, engine, lemon_invo
     # 发票导入 → matching 生成比对建议；比对通过 / 取消 → task 重算收票进度（均在发布方事务中）。
     app.include_router(invoice_router(ImportService(engine, events), InvoiceService(engine)))
     matching_queries = MatchingQueryService(engine)
+    app.include_router(workbench_router(WorkbenchService(engine)))
     app.include_router(
         matching_router(
             matching_queries,

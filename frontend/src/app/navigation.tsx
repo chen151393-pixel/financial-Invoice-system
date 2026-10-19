@@ -19,6 +19,16 @@ function MenuIcon({ path }: { path: string }) {
 // 所有页面共用的导航，不携带模拟业务计数。
 export const navigation: readonly SidebarGroup<View>[] = [
   {
+    label: "工作空间",
+    items: [
+      {
+        id: "workbench",
+        label: "发票工作台",
+        icon: <MenuIcon path="M3 3h7v7H3z M14 3h7v7h-7z M3 14h7v7H3z M14 14h7v7h-7z" />,
+      },
+    ],
+  },
+  {
     label: "发票管理",
     items: [
       {

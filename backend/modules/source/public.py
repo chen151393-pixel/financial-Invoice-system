@@ -9,8 +9,10 @@ from .service.declaration_service import DeclarationService, digest, snapshot
 from .service.directory_service import SourceDirectory
 from .service.pl_comparison_service import PlScriptService
 from .service.purchase_context import purchase_lines
+from .service.workbench_reader import workbench_declarations
 
 __all__ = [
+    "workbench_declarations",
     "unit_names",
     "unit_label",
     # 采购报关联查（实时 NS）与子采购合同

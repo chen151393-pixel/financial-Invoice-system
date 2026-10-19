@@ -1,6 +1,7 @@
 // 全部页面路径集中在此；页面和模块之间跳转只用这里的常量。
 export const paths = {
   login: "/login",
+  workbench: "/workbench",
   pl: "/pl-reconciliation",
   review: "/review",
   tasks: "/tasks",
@@ -27,6 +28,7 @@ export const matchingInvoicePath = (invoiceId: string) =>
 
 // 侧栏菜单项与页面路径的对应。
 export type View =
+  | "workbench"
   | "invoices"
   | "match"
   | "sync"
@@ -36,6 +38,7 @@ export type View =
   | "supplier-profiles";
 
 const viewPaths: Record<View, string> = {
+  workbench: paths.workbench,
   invoices: paths.invoices,
   match: paths.matching,
   sync: paths.sync,

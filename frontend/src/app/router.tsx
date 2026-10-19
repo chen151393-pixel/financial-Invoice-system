@@ -7,6 +7,7 @@ import { legacyPaths, paths } from "./paths";
 
 // 各页面按需加载；新增页面只在这里登记路由。
 const PlWorkspacePage = lazy(() => import("./PlWorkspacePage"));
+const WorkbenchWorkspacePage = lazy(() => import("./WorkbenchWorkspacePage"));
 const ReviewWorkspacePage = lazy(() => import("./ReviewWorkspacePage"));
 const SyncWorkspacePage = lazy(() => import("./SyncWorkspacePage"));
 const InvoiceWorkspacePage = lazy(() => import("./InvoiceWorkspacePage"));
@@ -29,6 +30,7 @@ export const router = createBrowserRouter([
       {
         element: <RequireSession />,
         children: [
+          { path: paths.workbench, element: page("发票工作台", <WorkbenchWorkspacePage />) },
           { path: paths.pl, element: page("采购报关联查", <PlWorkspacePage />) },
           { path: paths.review, element: page("财务核对", <ReviewWorkspacePage />) },
           { path: legacyPaths.finance, element: <Navigate to={paths.review} replace /> },
@@ -47,8 +49,8 @@ export const router = createBrowserRouter([
           { path: paths.sync, element: page("数据同步", <SyncWorkspacePage />) },
           { path: paths.syncNs, element: page("数据同步", <SyncWorkspacePage />) },
           { path: paths.syncLemon, element: page("数据同步", <SyncWorkspacePage />) },
-          // 首页及未知地址（含已删除的 /demo）进入采购报关联查，并改写地址，与原行为一致。
-          { path: "*", element: <Navigate to={paths.pl} replace /> },
+          // 首页及未知地址进入工作台；已有业务地址保持独立访问。
+          { path: "*", element: <Navigate to={paths.workbench} replace /> },
         ],
       },
     ],

@@ -7,14 +7,18 @@ export function FinanceSearchForm({
   accounts,
   onSearch,
   onRefresh,
+  initialKeyword = "",
+  initialAccount = "",
 }: {
   busy: boolean;
   accounts: string[];
   onSearch: (keyword: string, account: string) => void;
   onRefresh: () => void;
+  initialKeyword?: string;
+  initialAccount?: string;
 }) {
-  const [keyword, setKeyword] = useState("");
-  const [account, setAccount] = useState("");
+  const [keyword, setKeyword] = useState(initialKeyword);
+  const [account, setAccount] = useState(initialAccount);
   return (
     <form
       className="fr-search"

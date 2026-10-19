@@ -1,0 +1,72 @@
+.wb-metrics {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 20px;
+}
+.wb .wb-metric {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 16px;
+  min-height: 156px;
+  text-align: left;
+  white-space: normal;
+  padding: 20px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-panel);
+  background: var(--color-surface);
+  color: var(--color-text);
+}
+.wb .wb-metric:hover,
+.wb .wb-metric[aria-pressed="true"] {
+  border-color: var(--color-primary);
+  background: var(--color-surface);
+}
+.wb-metric__label,
+.wb-metric__foot {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+}
+.wb-metric__label {
+  color: var(--color-muted);
+}
+.wb-metric__icon {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 7px;
+  background: var(--color-canvas);
+  color: var(--color-primary);
+  font-size: 20px;
+}
+.wb-metric--matching .wb-metric__icon {
+  color: var(--color-feedback);
+}
+.wb-metric__value {
+  display: flex;
+  align-items: baseline;
+  gap: 9px;
+}
+.wb-metric__value strong {
+  font-size: 34px;
+  line-height: 1.1;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.wb-metric__value > span,
+.wb-metric__foot {
+  font-size: 11px;
+  color: var(--color-muted);
+}
+.wb-metric__foot > :last-child {
+  color: var(--color-primary);
+}
+
+.wb-metric__foot {
+  margin-top: auto;
+  flex-wrap: wrap;
+  row-gap: 6px;
+}

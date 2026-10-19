@@ -1,0 +1,117 @@
+.wb-tabs {
+  display: flex;
+  gap: 14px;
+  padding: 0 20px;
+  border-bottom: 1px solid var(--color-border);
+  overflow-x: auto;
+}
+.wb .wb-tabs .ui-button {
+  border: 0;
+  border-radius: 0;
+  padding: 14px 0;
+  border-bottom: 2px solid transparent;
+  background: transparent;
+  font-size: 12px;
+  color: var(--color-muted);
+  flex-shrink: 0;
+}
+.wb .wb-tabs .ui-button[aria-pressed="true"] {
+  border-bottom-color: var(--color-primary);
+  color: var(--color-primary);
+}
+.wb-tabs span {
+  background: var(--color-canvas);
+  border-radius: 3px;
+  padding: 1px 5px;
+  font-size: 10px;
+}
+.wb-search {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  padding: 15px 20px;
+  flex-wrap: wrap;
+}
+.wb-search__input {
+  flex: 1;
+  min-width: 180px;
+  max-width: 340px;
+}
+.wb-search input {
+  width: 100%;
+}
+.wb .wb-export {
+  margin-left: auto;
+}
+.wb-applied {
+  margin: 0 20px 12px;
+}
+.wb-table-scroll {
+  overflow-x: auto;
+  margin: 0 20px;
+}
+.wb-table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 840px;
+  table-layout: fixed;
+  font-size: 12px;
+}
+.wb-table th {
+  background: var(--color-canvas);
+  text-align: left;
+  color: var(--color-muted);
+  font-weight: 400;
+  padding: 12px;
+}
+.wb-table td {
+  padding: 16px 12px;
+  border-bottom: 1px solid var(--color-border);
+  vertical-align: top;
+  line-height: 1.7;
+  overflow-wrap: anywhere;
+}
+.wb-table th:last-child,
+.wb-table td:last-child {
+  text-align: right;
+  white-space: nowrap;
+}
+.wb-table small {
+  display: block;
+  margin-top: 6px;
+  line-height: 1.65;
+}
+.wb-table .wb-number {
+  text-align: right;
+  min-width: 145px;
+  font-variant-numeric: tabular-nums;
+}
+.wb-status {
+  padding: 3px 6px;
+  background: var(--color-canvas);
+  color: var(--color-primary);
+  border-radius: 4px;
+  font-size: 11px;
+}
+.wb-status--attention {
+  color: var(--color-feedback);
+}
+.wb .ui-pagination {
+  padding: 14px 20px;
+}
+
+.wb-col-document {
+  width: 25%;
+}
+.wb-col-supplier {
+  width: 22%;
+}
+.wb-col-amount {
+  width: 18%;
+}
+.wb-col-status {
+  width: 26%;
+}
+.wb-col-action {
+  width: 9%;
+}

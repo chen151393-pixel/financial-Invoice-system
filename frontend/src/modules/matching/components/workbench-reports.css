@@ -1,0 +1,196 @@
+.wb-reports {
+  display: grid;
+  grid-template-columns: minmax(0, 1.45fr) minmax(0, 1fr);
+  gap: 20px;
+  align-items: stretch;
+}
+.wb-reports > .wb-panel {
+  display: flex;
+  flex-direction: column;
+  min-height: 290px;
+}
+.wb-reports .wb-empty {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+.wb-reports .wb-panel__head > a {
+  font-size: 11px;
+}
+.wb-report-note {
+  color: var(--color-muted);
+  font-size: 11px;
+  margin: 0 20px 16px;
+  line-height: 1.8;
+}
+.wb-trend {
+  padding: 0 20px 22px;
+}
+.wb-trend h3 {
+  color: var(--color-muted);
+  font-size: 11px;
+  font-weight: 400;
+  margin-bottom: 14px;
+}
+.wb-chart {
+  display: flex;
+  gap: 12px;
+  overflow-x: auto;
+  padding-bottom: 6px;
+}
+.wb-chart__column {
+  flex: 1;
+  min-width: 60px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+.wb-chart__amount {
+  font-size: 10px;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+  margin-bottom: 6px;
+}
+.wb-chart__well {
+  position: relative;
+  height: 125px;
+  width: 100%;
+  display: flex;
+  justify-content: center;
+  align-items: flex-end;
+  border-bottom: 1px solid var(--color-border);
+  background: repeating-linear-gradient(
+    to top,
+    transparent 0,
+    transparent 40px,
+    var(--color-border) 40px,
+    var(--color-border) 41px
+  );
+}
+.wb-chart__well::after {
+  content: "";
+  position: absolute;
+  width: 100%;
+  top: 100%;
+  border-top: 1px solid var(--color-input-border);
+}
+.wb-chart__half {
+  position: absolute;
+  top: 0;
+  height: 100%;
+  width: 100%;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+}
+.wb-chart__half--negative {
+  top: 50%;
+  align-items: flex-start;
+}
+.wb-chart--signed .wb-chart__well::after {
+  top: 50%;
+}
+.wb-chart--signed .wb-chart__half {
+  height: 50%;
+}
+.wb-chart__half > span {
+  width: 22px;
+  max-width: 50%;
+  background: var(--color-primary);
+  border-radius: 3px 3px 0 0;
+}
+.wb-chart__half--negative > span {
+  background: var(--color-feedback);
+  border-radius: 0 0 3px 3px;
+}
+.wb-chart__date {
+  margin-top: 9px;
+  color: var(--color-muted);
+  font-size: 11px;
+}
+.wb-rank-list {
+  display: grid;
+  gap: 22px;
+  padding: 4px 20px 24px;
+}
+.wb-rank > div:first-child {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 12px;
+}
+.wb-rank strong {
+  font-size: 12px;
+  font-weight: 400;
+  overflow-wrap: anywhere;
+}
+.wb-rank > div > span {
+  color: var(--color-primary);
+  font-size: 11px;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.wb-rank .wb-track {
+  height: 4px;
+  margin-top: 12px;
+}
+@media (max-width: 1150px) {
+  .wb-reports {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.wb-trend-range {
+  padding: 0 20px 16px;
+}
+.wb-trend-range form {
+  display: flex;
+  align-items: end;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.wb-trend-range label {
+  display: grid;
+  gap: 5px;
+  color: var(--color-muted);
+  font-size: 11px;
+}
+.wb-trend-range form > span {
+  padding-bottom: 8px;
+}
+.wb-trend-range .wb-caption {
+  margin: 10px 0 0;
+}
+
+.wb-chart--dense {
+  gap: 2px;
+  padding-top: 22px;
+}
+.wb-chart--dense .wb-chart__column {
+  min-width: 0;
+  flex-basis: 0;
+  position: relative;
+}
+.wb-chart--dense .wb-chart__date {
+  font-size: 10px;
+  white-space: nowrap;
+  visibility: hidden;
+}
+.wb-chart--dense .wb-chart__column:nth-child(5n + 1) .wb-chart__date,
+.wb-chart--dense .wb-chart__column:last-child .wb-chart__date {
+  visibility: visible;
+}
+.wb-chart--dense .wb-chart__amount {
+  position: absolute;
+  bottom: calc(100% - 4px);
+  opacity: 0;
+  z-index: 1;
+  padding: 2px 4px;
+  background: var(--color-surface);
+  pointer-events: none;
+}
+.wb-chart--dense .wb-chart__column:hover .wb-chart__amount,
+.wb-chart--dense .wb-chart__column:focus .wb-chart__amount {
+  opacity: 1;
+}

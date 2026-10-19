@@ -88,3 +88,7 @@
 发票比对采购侧与单位比对项通过 source 只读门面解析为单位名称，仅影响展示，不修改原始编号、数量金额或审核／比对结论。字典缺失、停用及未知编号保留原值，规则与兼容表归属见 [source 单位说明](../source/README.md)；验证见 `backend/tests/test_unit_display.py`。
 
 2026-10-19：专业版 API 商品明细补全后沿用 InvoicesImported 订阅生成建议，不新增匹配算法或自动确认入口。明细不完整时禁止确认；发票先拉取、采购后审核时仍通过“重新生成建议”进入队列。完整拉票到收齐、重排去重、换版待复核、作废红冲、撤销和事务回滚见 `backend/tests/sync/test_lemon_detail_matching.py`，MySQL 复用验证见 `test_lemon_detail_mysql.py`。
+
+## 发票工作台只读汇总
+
+工作台查询与导出由本模块编排，通过各模块 public.py 门面在同一只读快照内读取，不改变审核、分配或任务状态。新增接口、统计口径和验证见[发票工作台](../../../docs/invoice-workbench.md)。

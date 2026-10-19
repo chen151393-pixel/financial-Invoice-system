@@ -5,6 +5,7 @@ from decimal import Decimal
 
 from .service.basis_reader import basis_versions as basis_versions
 from .service.basis_reader import current_bases as current_bases
+from .service.workbench_reader import workbench_reviews as workbench_reviews
 
 
 @dataclass(frozen=True)

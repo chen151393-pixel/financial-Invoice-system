@@ -56,7 +56,7 @@ test("原业务地址由路由状态保存，登录地址固定为 /login", () =
   assert.equal(identityRoutes[0].path, "/login");
   assert.equal(navigation.getLoginDestination({ from: destination }), destination);
   for (const state of [null, undefined, {}, { from: 1 }, "/tasks/1"]) {
-    assert.equal(navigation.getLoginDestination(state), "/pl-reconciliation");
+    assert.equal(navigation.getLoginDestination(state), "/workbench");
   }
 });
 
@@ -76,7 +76,7 @@ test("登录回跳拒绝外部地址、登录循环和无效地址", () => {
     "/tasks/1\n",
   ];
   for (const value of unsafe) {
-    assert.equal(navigation.getLoginDestination({ from: value }), "/pl-reconciliation", value);
+    assert.equal(navigation.getLoginDestination({ from: value }), "/workbench", value);
   }
 });
 

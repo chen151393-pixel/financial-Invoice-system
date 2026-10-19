@@ -7,15 +7,15 @@ export function getLoginDestination(state: unknown): string {
       ? state.from
       : null;
   if (!value || !value.startsWith("/") || value.startsWith("//") || /[\\\s]/.test(value)) {
-    return paths.pl;
+    return paths.workbench;
   }
   try {
     const url = new URL(value, "https://workspace.invalid");
     const pathname = decodeURIComponent(url.pathname).replace(/\/+$/, "").toLowerCase();
-    if (url.origin !== "https://workspace.invalid" || pathname === paths.login) return paths.pl;
+    if (url.origin !== "https://workspace.invalid" || pathname === paths.login) return paths.workbench;
     return value;
   } catch (error) {
-    if (error instanceof TypeError || error instanceof URIError) return paths.pl;
+    if (error instanceof TypeError || error instanceof URIError) return paths.workbench;
     throw error;
   }
 }

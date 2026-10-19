@@ -1,5 +1,6 @@
 import type { CurrencyEvidence } from "../types";
 import { useEffect, useRef, useState } from "react";
+import { useSearchParams } from "react-router";
 import { Pagination } from "../../../shared/components/Pagination";
 import { openLocalSession } from "../../identity/api";
 import { approveDeclaration, queryDeclarations } from "../api";
@@ -9,10 +10,11 @@ import { ReviewDialog } from "../components/ReviewDialog";
 import type { ComparisonGroup, ComparisonState, DeclarationListQuery } from "../types";
 
 export function ReviewPage() {
+  const [searchParams] = useSearchParams();
   const [state, setState] = useState<ComparisonState>({ kind: "loading" });
   const [query, setQuery] = useState<DeclarationListQuery>({
-    keyword: "",
-    account: "",
+    keyword: searchParams.get("keyword") || "",
+    account: searchParams.get("account") || "",
     status: "all",
     page: 1,
     pageSize: 20,
@@ -74,6 +76,8 @@ export function ReviewPage() {
   return (
     <>
       <FinanceSearchForm
+        initialKeyword={query.keyword}
+        initialAccount={query.account}
         busy={state.kind === "loading" || submitting}
         accounts={accounts}
         onSearch={(keyword, account) => {
