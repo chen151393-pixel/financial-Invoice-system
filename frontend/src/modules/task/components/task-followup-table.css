@@ -38,20 +38,39 @@
   color: var(--color-primary);
 }
 .task-followup__status {
-  display: inline-block;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   padding: 4px var(--space-small);
   border-radius: var(--radius-control);
-  color: var(--color-feedback);
-  background: color-mix(in srgb, var(--color-feedback) 8%, var(--color-surface));
+  color: var(--color-inactive-text);
+  background: var(--color-inactive-surface);
+  font-weight: 600;
   line-height: 1.5;
 }
-.task-followup__status[data-status="partially_received"] {
+.task-followup__status::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: currentColor;
+}
+.task-followup__status:is([data-status="documents_pending"], [data-status="notify_pending"]) {
+  color: var(--color-feedback);
+  background: var(--color-warning-surface);
+}
+.task-followup__status[data-status="awaiting_invoice"] {
   color: var(--color-primary);
   background: color-mix(in srgb, var(--color-primary) 8%, var(--color-surface));
 }
-.task-followup__status:is([data-status="completed"], [data-status="superseded"]) {
-  color: var(--color-muted);
-  background: var(--color-canvas);
+.task-followup__status[data-status="partially_received"] {
+  color: var(--color-progress-text);
+  background: var(--color-progress-surface);
+}
+.task-followup__status[data-status="completed"] {
+  color: var(--color-success-text);
+  background: var(--color-success-surface);
 }
 .task-followup__progress {
   display: flex;

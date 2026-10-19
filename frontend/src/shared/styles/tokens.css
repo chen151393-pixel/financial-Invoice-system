@@ -13,6 +13,10 @@
   --color-danger-text: #a12622;
   --color-danger-surface: #fff2f0;
   --color-warning-surface: #fff4e5;
+  --color-progress-text: #6941c6;
+  --color-progress-surface: #f4f0ff;
+  --color-success-text: #067647;
+  --color-success-surface: #ecfdf3;
   --color-inactive-text: #5b6474;
   --color-inactive-surface: #f0f2f5;
   --color-demo-bg: #fff1bd;

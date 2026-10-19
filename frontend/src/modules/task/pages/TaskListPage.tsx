@@ -145,7 +145,7 @@ export function TaskListPage() {
             <TaskCountList counts={state.data.counts} />
           </div>
           {state.data.groups.length ? (
-            <TaskFollowupTable groups={state.data.groups} />
+            <TaskFollowupTable groups={state.data.groups} groupBy={state.data.groupBy} />
           ) : (
             <div className="it-empty">
               <h2>

@@ -1,7 +1,7 @@
 import { Link } from "react-router";
 import { taskPath } from "../../../app/paths";
 import { money } from "../../../shared/format/money";
-import type { TaskGroup } from "../types/task";
+import type { TaskGroup, TaskListQuery } from "../types/task";
 import { formatTime } from "./format";
 import "./task-followup-table.css";
 
@@ -17,7 +17,13 @@ const contactTime = (value: string) =>
     .format(new Date(value))
     .replace(/\//g, "-");
 
-export function TaskFollowupTable({ groups }: { groups: TaskGroup[] }) {
+export function TaskFollowupTable({
+  groups,
+  groupBy,
+}: {
+  groups: TaskGroup[];
+  groupBy: TaskListQuery["groupBy"];
+}) {
   return (
     <div
       className="task-followup"
@@ -38,7 +44,7 @@ export function TaskFollowupTable({ groups }: { groups: TaskGroup[] }) {
         </colgroup>
         <thead>
           <tr>
-            <th scope="col">供应商 / 经办人</th>
+            <th scope="col">{groupBy === "declaration" ? "报关单 / 经办人" : "供应商 / 经办人"}</th>
             <th scope="col">当前环节</th>
             <th scope="col" className="task-followup__amount">
               待收金额
@@ -54,7 +60,9 @@ export function TaskFollowupTable({ groups }: { groups: TaskGroup[] }) {
             group.tasks.map((task) => (
               <tr key={task.id}>
                 <td>
-                  <strong className="task-followup__supplier">{task.supplier}</strong>
+                  <strong className="task-followup__supplier">
+                    {groupBy === "declaration" ? task.recordNumber || "报关单号缺失" : task.supplier}
+                  </strong>
                   <span className="task-followup__secondary">
                     {task.followupEmployee ? `通知经办：${task.followupEmployee}` : "经办人未提供"}
                     {" · "}
@@ -66,7 +74,7 @@ export function TaskFollowupTable({ groups }: { groups: TaskGroup[] }) {
                     {task.statusLabel}
                   </span>
                   <span className="task-followup__secondary" title={task.orderNumbers.join("、")}>
-                    {task.recordNumber || "报关单号缺失"}
+                    {groupBy === "declaration" ? task.supplier : task.recordNumber || "报关单号缺失"}
                   </span>
                 </td>
                 <td className="task-followup__amount">

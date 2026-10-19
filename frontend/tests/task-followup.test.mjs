@@ -46,13 +46,19 @@ function render(tasks) {
       Router,
       null,
       createElement(Table, {
-        groups: tasks.map((item) => ({ id: item.id, tasks: [item] })),
+        groupBy: "supplier",
+        groups: tasks.map((item) => ({
+          id: item.id,
+          label: item.supplier,
+          counts: { tasks: 1 },
+          tasks: [item],
+        })),
       }),
     ),
   );
 }
 
-test("全部分组平铺在同一七列表格，保留每个任务的详情入口及后端精度", () => {
+test("同一七列表格平铺任务，保留每个任务的详情入口及后端精度", () => {
   const html = render([task, { ...task, id: "2", supplier: "另一供应商" }]);
   assert.equal((html.match(/<table/g) || []).length, 1);
   assert.equal((html.match(/scope="col"/g) || []).length, 7);
@@ -124,4 +130,27 @@ test("金额格式化兼容缺失值，并保留零金额、零进度和高精�
   const html = render([{ ...task, outstandingAmount: "0", receiptPercent: "0", receiptBarPercent: "0" }]);
   assert.ok(html.includes("0.00") && html.includes("width:0%"));
   assert.ok(!html.includes("金额待确认") && !html.includes("进度待确认"));
+});
+
+test("切换分组只更换首列主体，保持七列平铺且不插入分组标题行", () => {
+  const renderGroups = (groupBy, groups) =>
+    renderToStaticMarkup(createElement(Router, null, createElement(Table, { groupBy, groups })));
+  const other = { ...task, id: "2", supplier: "另一供应商" };
+  const groups = [{ id: "CD001", label: "CD001", counts: { tasks: 2 }, tasks: [task, other] }];
+  const declaration = renderGroups("declaration", groups);
+  const suppliers = renderGroups("supplier", groups);
+  for (const html of [declaration, suppliers]) {
+    assert.equal((html.match(/<tr>/g) || []).length, 3);
+    assert.equal((html.match(/scope="col"/g) || []).length, 7);
+    assert.doesNotMatch(html, /scope="rowgroup"|task-followup__group|colSpan/);
+    assert.match(html, /href="\/tasks\/1"/);
+    assert.match(html, /href="\/tasks\/2"/);
+    assert.match(html, /104,000.000001/);
+  }
+  assert.match(declaration, /报关单 \/ 经办人/);
+  assert.equal((declaration.match(/class="task-followup__supplier">CD001/g) || []).length, 2);
+  assert.match(declaration, /class="task-followup__secondary"[^>]*>另一供应商/);
+  assert.match(suppliers, /供应商 \/ 经办人/);
+  assert.match(suppliers, /class="task-followup__supplier">隔离测试供应商/);
+  assert.match(suppliers, /class="task-followup__supplier">另一供应商/);
 });
