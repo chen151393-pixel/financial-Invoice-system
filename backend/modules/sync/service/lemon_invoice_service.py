@@ -9,6 +9,7 @@ from backend.core.errors import ApiError
 from backend.core.write_lock import transaction
 
 from ..dao import lemon_run_dao as runs
+from ..policy.lemon_invoice_policy import run_business_types
 from ..public import LemonInvoicesFetched
 from ..vo.lemon_invoice_vo import run_view
 
@@ -31,6 +32,8 @@ class LemonInvoiceService:
             scope, binding = self.accounts.context(connection, owner, lock=True)
             previous = runs.get(connection, scope, body.requestId)
             if previous:
+                if set(run_business_types(previous)) != set(body.businessTypes):
+                    raise ApiError(409, "同一请求编号不能用于不同业务类型，请查询原结果")
                 if (previous["asid"], str(previous["start_date"]), str(previous["end_date"])) != (
                     body.asid,
                     body.startDate,
@@ -52,6 +55,8 @@ class LemonInvoiceService:
                     "start_date": date.fromisoformat(body.startDate),
                     "end_date": date.fromisoformat(body.endDate),
                     "status": "running",
+                    # JSON 中保留本次请求筛选快照；失败和进程重启也不能丢失幂等依据。
+                    "result": {"businessTypes": body.businessTypes},
                 },
             )
         return scope, binding, None
@@ -93,6 +98,7 @@ class LemonInvoiceService:
                         date.fromisoformat(body.startDate),
                         date.fromisoformat(body.endDate),
                         tuple(records),
+                        tuple(body.businessTypes),
                     ),
                 )
                 if runs.get(connection, scope, body.requestId)["status"] != "completed":

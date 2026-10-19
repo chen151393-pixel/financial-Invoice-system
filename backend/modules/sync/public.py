@@ -12,3 +12,4 @@ class LemonInvoicesFetched:
     start: date
     end: date
     records: tuple[dict, ...]
+    business_types: tuple[str, ...]

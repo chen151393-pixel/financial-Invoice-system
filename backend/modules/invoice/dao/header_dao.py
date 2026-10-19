@@ -14,6 +14,7 @@ def by_keys(connection, account, keys):
             headers.c.id,
             headers.c.invoice_key,
             headers.c.source,
+            headers.c.business_type,
             headers.c.current_version_id,
             raw_records.c.payload_sha256,
         )

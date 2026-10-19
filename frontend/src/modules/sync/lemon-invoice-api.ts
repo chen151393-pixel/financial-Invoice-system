@@ -7,6 +7,7 @@ export type LemonRun = {
   accountName: string;
   startDate: string;
   endDate: string;
+  businessTypes: string[];
   status: "running" | "completed" | "failed";
   createdAt: string;
   error: string | null;
@@ -27,17 +28,22 @@ export type LemonConfiguration = {
   sync: Action;
   selected: LemonAccount | null;
   latest: LemonRun | null;
+  businessTypeOptions: string[];
+  defaultBusinessTypes: string[];
 };
 export const lemonConfiguration = () => http<LemonConfiguration>("/sync/lemon/invoices/configuration");
 export const queryLemonAccounts = () =>
   http<{ items: LemonAccount[] }>("/sync/lemon/accounts/query", "POST", {});
 export const selectLemonAccount = (asid: string) =>
   http<LemonConfiguration>("/sync/lemon/account", "POST", { asid });
-export const pullLemonInvoices = (body: {
+export type LemonPullRequest = {
   asid: string;
   startDate: string;
   endDate: string;
   requestId: string;
-}) => http<LemonRun>("/sync/lemon/invoices/pull-save", "POST", body);
+  businessTypes: string[];
+};
+export const pullLemonInvoices = (body: LemonPullRequest) =>
+  http<LemonRun>("/sync/lemon/invoices/pull-save", "POST", body);
 export const getLemonRun = (requestId: string) =>
   http<LemonRun>(`/sync/lemon/runs/${encodeURIComponent(requestId)}`);

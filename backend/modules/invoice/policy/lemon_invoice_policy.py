@@ -6,8 +6,6 @@ from decimal import Decimal, InvalidOperation
 
 from backend.core.errors import ApiError
 
-BUSINESS_TYPE = "采购固定资产"
-
 
 def money(raw, field):
     value = raw.get(field)

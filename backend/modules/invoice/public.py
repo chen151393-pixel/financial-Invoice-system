@@ -6,6 +6,11 @@
 
 from dataclasses import dataclass
 
+from .policy.lemon_scope_policy import (
+    describe_lemon_result,
+    lemon_business_type_options,
+    lemon_import_defaults,
+)
 from .service.invoice_reader import lock_invoice, read_invoices
 
 
@@ -16,7 +21,14 @@ class InvoicesImported:
     invoice_ids: tuple[int, ...]
 
 
-__all__ = ["InvoicesImported", "lock_invoice", "read_invoices"]
+__all__ = [
+    "InvoicesImported",
+    "lock_invoice",
+    "read_invoices",
+    "describe_lemon_result",
+    "lemon_business_type_options",
+    "lemon_import_defaults",
+]
 
 
 @dataclass(frozen=True)

@@ -1,6 +1,7 @@
 """账号绑定内的账套授权与选择，外部查询不占数据库事务。"""
 
 from backend.core.errors import ApiError
+from backend.modules.invoice.public import lemon_business_type_options, lemon_import_defaults
 
 from ..dao import lemon_binding_dao as bindings
 from ..dao import lemon_run_dao as runs
@@ -52,6 +53,8 @@ class LemonAccountService:
             "sync": {"allowed": not reason and not active and bool(selected), "reason": sync_reason},
             "selected": selected,
             "latest": run_view(latest),
+            "businessTypeOptions": lemon_business_type_options(latest["result"] if latest else None),
+            "defaultBusinessTypes": lemon_import_defaults(),
         }
 
     def query(self, owner):

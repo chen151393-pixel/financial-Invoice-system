@@ -6,7 +6,9 @@ import {
   selectLemonAccount,
   pullLemonInvoices,
 } from "./lemon-invoice-api";
-import type { LemonAccount, LemonConfiguration } from "./lemon-invoice-api";
+import type { LemonAccount, LemonConfiguration, LemonPullRequest } from "./lemon-invoice-api";
+
+const EMPTY_TYPES: string[] = [];
 
 export function useLemonInvoices() {
   const [data, setData] = useState<LemonConfiguration | null>(null);
@@ -14,13 +16,13 @@ export function useLemonInvoices() {
   const [asid, setAsid] = useState("");
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
+  const [selectedTypes, setBusinessTypes] = useState<string[] | null>(null);
+  const businessTypes = selectedTypes ?? data?.defaultBusinessTypes ?? EMPTY_TYPES;
   const [busy, setBusy] = useState("");
   const [error, setError] = useState("");
   const sequence = useRef(0);
   const running = useRef(false);
-  const pending = useRef<{ asid: string; startDate: string; endDate: string; requestId: string } | null>(
-    null,
-  );
+  const pending = useRef<LemonPullRequest | null>(null);
 
   const run = useCallback(
     async (action: "refresh" | "query" | "select" | "pull") => {
@@ -46,6 +48,7 @@ export function useLemonInvoices() {
             asid: data?.selected?.asid ?? "",
             startDate,
             endDate,
+            businessTypes: [...businessTypes],
             requestId: crypto.randomUUID(),
           };
           pending.current = body;
@@ -83,7 +86,7 @@ export function useLemonInvoices() {
         if (active()) setBusy("");
       }
     },
-    [asid, data, startDate, endDate],
+    [asid, data, startDate, endDate, businessTypes],
   );
 
   useEffect(() => {
@@ -100,5 +103,19 @@ export function useLemonInvoices() {
       sequence.current += 1;
     };
   }, []);
-  return { data, accounts, asid, setAsid, startDate, setStartDate, endDate, setEndDate, busy, error, run };
+  return {
+    data,
+    accounts,
+    asid,
+    setAsid,
+    startDate,
+    setStartDate,
+    endDate,
+    setEndDate,
+    businessTypes,
+    setBusinessTypes,
+    busy,
+    error,
+    run,
+  };
 }

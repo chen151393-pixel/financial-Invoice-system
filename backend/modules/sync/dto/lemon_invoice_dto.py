@@ -2,10 +2,11 @@
 
 from datetime import date
 
-from pydantic import Field, model_validator
+from pydantic import Field, field_validator, model_validator
 from pydantic_core import PydanticCustomError
 
 from backend.core.dto import StrictModel
+from backend.modules.invoice.public import lemon_import_defaults
 
 
 class SelectLemonAccount(StrictModel):
@@ -16,6 +17,17 @@ class PullLemonInvoices(SelectLemonAccount):
     requestId: str = Field(pattern=r"^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$")
     startDate: str = Field(pattern=r"^\d{4}-\d{2}-\d{2}$")
     endDate: str = Field(pattern=r"^\d{4}-\d{2}-\d{2}$")
+    businessTypes: list[str] = Field(default_factory=lemon_import_defaults, min_length=1, max_length=50)
+
+    @field_validator("businessTypes")
+    @classmethod
+    def business_types(cls, values):
+        if any(not value.strip() or len(value) > 255 for value in values):
+            raise PydanticCustomError("lemon_types", "业务类型不能为空，且每项最多 255 个字符")
+        normalized = [value.strip() for value in values]
+        if len(set(normalized)) != len(normalized):
+            raise PydanticCustomError("lemon_types", "业务类型不能重复选择")
+        return sorted(normalized)
 
     @model_validator(mode="after")
     def dates(self):

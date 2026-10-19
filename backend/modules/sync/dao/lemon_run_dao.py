@@ -38,8 +38,11 @@ def create(connection, values):
 
 
 def finish(connection, scope, request_id, status, *, result=None, error=None):
+    values = {"status": status, "error": error, "updated_at": datetime.now(timezone.utc)}
+    if result is not None:
+        values["result"] = result
     return connection.execute(
         update(table)
         .where(table.c.scope_key == scope, table.c.request_id == request_id, table.c.status == "running")
-        .values(status=status, result=result, error=error, updated_at=datetime.now(timezone.utc))
+        .values(**values)
     ).rowcount

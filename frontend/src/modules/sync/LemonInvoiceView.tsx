@@ -2,6 +2,7 @@ import { Link } from "react-router";
 import { Button } from "../../shared/components/Button";
 import { paths } from "../../app/paths";
 import type { useLemonInvoices } from "./useLemonInvoices";
+import { LemonBusinessTypes } from "./LemonBusinessTypes";
 
 type Props = ReturnType<typeof useLemonInvoices>;
 export function LemonInvoiceView({
@@ -13,6 +14,8 @@ export function LemonInvoiceView({
   setStartDate,
   endDate,
   setEndDate,
+  businessTypes,
+  setBusinessTypes,
   busy,
   error,
   run,
@@ -28,7 +31,7 @@ export function LemonInvoiceView({
       <header className="lemon-invoices__heading">
         <div>
           <h2 id="lemon-invoices-title">从柠檬云拉取进项发票</h2>
-          <p>选择已授权账套，按开票日期读取并保存采购固定资产发票。</p>
+          <p>选择已授权账套，按开票日期读取进项发票，并保存勾选的业务类型。</p>
         </div>
         <Button disabled={Boolean(busy)} onClick={() => void run("refresh")}>
           刷新同步状态
@@ -93,6 +96,12 @@ export function LemonInvoiceView({
               void run("pull");
             }}
           >
+            <LemonBusinessTypes
+              options={data.businessTypeOptions}
+              selected={businessTypes}
+              onChange={setBusinessTypes}
+              disabled={Boolean(busy)}
+            />
             <label htmlFor="lemon-start">
               起始开票日期
               <input
@@ -127,6 +136,7 @@ export function LemonInvoiceView({
               <p>
                 {latest.accountName}（{latest.asid}） · {latest.startDate} 至 {latest.endDate}
               </p>
+              <p>本次业务类型：{latest.businessTypes.join("、")}</p>
               {latest.status === "running" && (
                 <p>执行中或结果待核实。请刷新同步状态；若服务曾重启，请管理员核实此请求，不能直接重发。</p>
               )}
@@ -139,7 +149,7 @@ export function LemonInvoiceView({
                   <dl>
                     {[
                       ["读取", latest.result.fetched],
-                      ["其他业务类型跳过", latest.result.excluded],
+                      ["未选类型跳过", latest.result.excluded],
                       ["新增", latest.result.created],
                       ["更新版本", latest.result.updated],
                       ["重复跳过", latest.result.unchanged],

@@ -6,7 +6,8 @@ from backend.core.errors import ApiError
 
 from ..dao import header_dao, item_dao, lemon_invoice_dao, raw_record_dao
 from ..mapper.lemon_invoice_mapper import prepare
-from ..policy.lemon_invoice_policy import BUSINESS_TYPE, validate
+from ..policy.lemon_invoice_policy import validate
+from ..policy.lemon_scope_policy import describe_lemon_result
 from ..policy.version_policy import digest
 from ..public import InvoicesImported, LemonInvoicesStored
 from .version_service import save_version
@@ -38,22 +39,16 @@ def classify(connection, item, existing):
 
 def on_lemon_invoices_fetched(connection, event, *, events):
     prepared = prepared_batch(event)
+    available_types = sorted({item["header"]["business_type"] for item in prepared})
     sources = lemon_invoice_dao.source_keys(
         connection, event.account, [item["header"]["external_id"] for item in prepared]
     )
-    prepared = [
-        item
-        for item in prepared
-        if item["header"]["business_type"] == BUSINESS_TYPE or item["header"]["external_id"] in sources
-    ]
-    for item in prepared:
-        if item["header"]["business_type"] != BUSINESS_TYPE:
-            item["header"]["status"] = "unknown"
+    existing = header_dao.by_keys(connection, event.account, [item["key"] for item in prepared])
+    prepared = selected_batch(prepared, existing, sources, event.business_types)
     keys = [item["key"] for item in prepared]
     if lemon_invoice_dao.excel_conflicts(connection, keys):
         raise ApiError(409, "存在已由 Excel 导入的同票；其账套尚未对齐，整批未保存，避免重复收票")
-    existing = header_dao.by_keys(connection, event.account, keys)
-    counts, changed = save_batch(connection, prepared, existing, sources, event.account, events)
+    counts, changed = save_batch(connection, prepared, existing, event.account, events)
     if changed:
         events.publish(connection, InvoicesImported(tuple(changed)))
     events.publish(
@@ -61,24 +56,41 @@ def on_lemon_invoices_fetched(connection, event, *, events):
         LemonInvoicesStored(
             event.scope,
             event.request_id,
-            {
-                **counts,
-                "fetched": len(event.records),
-                "excluded": len(event.records) - len(prepared),
-                "pendingDetails": len(prepared),
-                "saved": True,
-                "message": "拉取结果已提交；商品明细待补齐，暂不生成逐行匹配建议。",
-            },
+            describe_lemon_result(
+                {
+                    **counts,
+                    "fetched": len(event.records),
+                    "excluded": len(event.records) - len(prepared),
+                    "pendingDetails": len(prepared),
+                    "businessTypes": list(event.business_types),
+                    "availableBusinessTypes": available_types,
+                }
+            ),
         ),
     )
 
 
-def save_batch(connection, prepared, existing, sources, account, events):
+def selected_batch(prepared, existing, sources, business_types):
+    selected = []
+    for item in prepared:
+        external_id = item["header"]["external_id"]
+        if sources.get(external_id, item["key"]) != item["key"]:
+            raise ApiError(409, "同一来源记录的票号发生变化，整批未保存，请核实")
+        if item["header"]["business_type"] in business_types:
+            selected.append(item)
+        elif external_id in sources:
+            old = existing.get(item["key"])
+            if old and old["business_type"] != item["header"]["business_type"]:
+                # 上游改类型仍须让旧依据失效；仅取消勾选不会修改已保存票据。
+                item["header"]["status"] = "unknown"
+                selected.append(item)
+    return selected
+
+
+def save_batch(connection, prepared, existing, account, events):
     counts = {"created": 0, "updated": 0, "unchanged": 0}
     changed, now = [], datetime.now(timezone.utc).replace(tzinfo=None)
     for item in prepared:
-        if sources.get(item["header"]["external_id"], item["key"]) != item["key"]:
-            raise ApiError(409, "同一来源记录的票号发生变化，整批未保存，请核实")
         action = classify(connection, item, existing.get(item["key"]))
         counts[action] += 1
         if action != "unchanged":
