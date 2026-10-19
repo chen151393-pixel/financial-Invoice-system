@@ -315,7 +315,7 @@ flowchart TD
 
 1. 执行 `npm.cmd run db:upgrade`，迁移到 `0022_task_notifications`；构建前端并重启后端。迁移只新增 task 台账、守卫及更新两列备注，不删除旧记录。存在发送证据时禁止降级删表。
 2. 配置 `WECOM_CORP_ID/WECOM_SECRET`，或 `WECOM_CONNECTION_FILE`。使用客户联系“可调用应用”中的应用凭证，配置服务器可信出口 IP、客户联系权限和群主可见范围；服务进程须能读取合同共享盘。
-3. 初始保留 `WECOM_SEND_ENABLED=false` 和空 `WECOM_TARGETING_VERIFIED_CORP_ID`。准备明确授权的测试任务、无业务收件人的测试群，以及其他群用于检查接收范围。群主使用 4.1.10 及以上客户端，先通过受控渠道验证单群定向，再登记验收企业 ID 并启用发送开关；代码不自动修改这些配置。
+3. 初始保留 `WECOM_SEND_ENABLED=false`；启用后可在任务页预览并提交，不要求额外的企业 ID 验收标记。部署联调使用明确授权的测试任务和测试群，群主使用 4.1.10 及以上客户端。代码不自动修改发送开关。
 4. 配置 `WECOM_GROUP_DAILY_LIMIT=1`（允许 1—31），完成“任务预览 → 提交 → 群主确认 → 目标群回执 → 等待开票”联调，验证正文和 PDF 内容、无其他群收到。关闭发送开关只停止新建，不关闭历史查询与核实。
 5. MySQL 并发测试用专用 `BUSINESS_MIGRATION_TEST_SERVER_URL`：测试随机建库，不指向业务库。运行 `test_deliveries_mysql.py`；SQLite 结果不能替代 MySQL 并发验收。
 

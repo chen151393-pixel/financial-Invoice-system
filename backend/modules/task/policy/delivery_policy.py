@@ -51,8 +51,6 @@ def submit_reason(task, latest, binding, settings, blocked, basis=""):
         return BLOCK_REASON
     if not settings or not settings.wecom_send_enabled:
         return "企微发送开关未开启，请由管理员完成渠道验证并启用"
-    if not settings.wecom_verified_corp_id:
-        return "尚未登记指定群定向发送验收的企业 ID"
     if task["status"] != "notify_pending":
         return "仅资料齐全且待通知的任务可提交企微群发"
     if not latest or latest["status"] != "draft":

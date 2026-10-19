@@ -53,8 +53,6 @@ class DeliverySubmitService:
             data = load(connection, task_id)
             self._validate(connection, data, body)
         corp = self.channel.corp_id()
-        if corp != self.settings.wecom_verified_corp_id:
-            raise ApiError(409, "当前企微企业与已完成定向验收的企业不一致")
         group = self.channel.group(corp, data["binding"]["chat_id"])
         if group["userid"] != data["binding"]["owner_userid"]:
             raise ApiError(409, "实际群主与供应商绑定不一致，请重新维护供应商群")

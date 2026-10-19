@@ -43,7 +43,6 @@ class Settings:
     wecom_secret: str = field(default="", repr=False)
     wecom_connection_file: Path | None = field(default=None, repr=False)
     wecom_send_enabled: bool = False
-    wecom_verified_corp_id: str = ""
     wecom_group_daily_limit: int = 1
     host: str = "127.0.0.1"
     port: int = 3000
@@ -207,7 +206,6 @@ def load_settings(source=None):
         business_database_url=business_url,
         wecom_corp_id=get("WECOM_CORP_ID"),
         wecom_send_enabled=wecom_send == "true",
-        wecom_verified_corp_id=get("WECOM_TARGETING_VERIFIED_CORP_ID").strip(),
         wecom_group_daily_limit=int(wecom_limit),
         wecom_secret=get("WECOM_SECRET"),
         wecom_connection_file=(ROOT / get("WECOM_CONNECTION_FILE")).resolve()

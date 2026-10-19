@@ -89,7 +89,6 @@ def delivery(engine, app_services, approved):
     channel = Channel()
     settings = Settings(
         wecom_send_enabled=True,
-        wecom_verified_corp_id=channel.corp,
         subpo_archive_root=app_services["tasks"].archive.root,
     )
     app_services["tasks"].settings = settings

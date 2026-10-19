@@ -27,6 +27,7 @@ def refresh(delivery, item):
 
 
 def test_preview_submit_and_receipt_are_separate(delivery, engine):
+    assert delivery.services["tasks"].detail(delivery.task_id).notification.send.allowed
     body = request(delivery)
     assert not delivery.channel.uploads and not delivery.channel.creates
     item = delivery.submit.submit(delivery.task_id, body, USER)
