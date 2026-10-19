@@ -42,6 +42,9 @@ class Settings:
     wecom_corp_id: str = field(default="", repr=False)
     wecom_secret: str = field(default="", repr=False)
     wecom_connection_file: Path | None = field(default=None, repr=False)
+    wecom_send_enabled: bool = False
+    wecom_verified_corp_id: str = ""
+    wecom_group_daily_limit: int = 1
     host: str = "127.0.0.1"
     port: int = 3000
     tls_cert: str = ""
@@ -168,6 +171,12 @@ def load_settings(source=None):
         raise ValueError("原始报关行接口的脚本和部署编号须同时填写")
     if bool(contract_script) != bool(contract_deploy):
         raise ValueError("子采购合同接口的脚本和部署编号须同时填写")
+    wecom_send = get("WECOM_SEND_ENABLED", "false").lower()
+    wecom_limit = get("WECOM_GROUP_DAILY_LIMIT", "1")
+    if wecom_send not in {"true", "false"}:
+        raise ValueError("WECOM_SEND_ENABLED 须为 true 或 false")
+    if not wecom_limit.isdigit() or not 1 <= int(wecom_limit) <= 31:
+        raise ValueError("WECOM_GROUP_DAILY_LIMIT 须为 1 至 31 的整数")
     return Settings(
         account=account,
         client_id=get("NETSUITE_CLIENT_ID"),
@@ -197,6 +206,9 @@ def load_settings(source=None):
         service_key=get("SERVICE_API_KEY"),
         business_database_url=business_url,
         wecom_corp_id=get("WECOM_CORP_ID"),
+        wecom_send_enabled=wecom_send == "true",
+        wecom_verified_corp_id=get("WECOM_TARGETING_VERIFIED_CORP_ID").strip(),
+        wecom_group_daily_limit=int(wecom_limit),
         wecom_secret=get("WECOM_SECRET"),
         wecom_connection_file=(ROOT / get("WECOM_CONNECTION_FILE")).resolve()
         if get("WECOM_CONNECTION_FILE")

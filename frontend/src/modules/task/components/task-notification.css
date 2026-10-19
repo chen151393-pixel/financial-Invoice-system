@@ -3,6 +3,9 @@
   font-size: 13px;
   line-height: 1.7;
 }
+.task-wecom {
+  overflow-wrap: anywhere;
+}
 .itn-heading {
   display: flex;
   align-items: center;

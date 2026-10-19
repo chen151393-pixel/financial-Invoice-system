@@ -1,6 +1,6 @@
 # 当前表设计与字段字典
 
-核对日期：2026-10-16。范围：当前工作区代码（含未提交改动）、实体定义与 `0001`—`0016` 迁移。**27 张业务表、430 个字段，另有 1 张迁移版本表**。本次未连接业务数据库，不能据此认定目标库已执行迁移或已有实际数据。
+基础字典核对日期：2026-10-16，基础章节覆盖实体与 `0001`—`0016` 迁移（27 张业务表、430 个字段）。后续新增表不计入上述历史统计；2026-10-19 补充 `0022` 企微执行台账和群守卫字段，见文末。本文不能证明目标库已升级或已有实际数据。
 
 本文解释现有字段；对应实体已补齐中文 `comment`，数据库备注由新增 `0010`—`0015` 迁移写入。设计决策以[数据库设计](../architecture/database.md)为准；本文列出的是当前实现字段，不把旧六表、八表历史 SQL 当作当前结构。
 
@@ -685,7 +685,7 @@ flowchart LR
 | `status`             | `VARCHAR(24)`     | 否   | draft                | 本条记录的业务状态，含义见本表状态说明                |
 | `sent_by`            | `VARCHAR(200)`    | 是   | —                    | 登记发送的认证操作者；与实际发送员工 sender_name 分开 |
 | `sent_at`            | `DATETIME(6)`     | 是   | —                    | 登记的实际发送时间，统一保存 UTC                      |
-| `channel_message_id` | `VARCHAR(190)`    | 是   | —                    | 渠道消息回执 ID；企业微信自动发送尚未接入             |
+| `channel_message_id` | `VARCHAR(190)`    | 是   | —                    | 渠道消息回执 ID；0022 起用于企微目标群成功回执             |
 | `created_by`         | `VARCHAR(200)`    | 否   | —                    | 创建通知版本的认证操作者                              |
 | `created_at`         | `DATETIME(6)`     | 否   | CURRENT_TIMESTAMP(6) | 本地记录创建时间，UTC                                 |
 | `updated_at`         | `DATETIME(6)`     | 否   | CURRENT_TIMESTAMP(6) | 本地记录最后更新时间，UTC；由 DAO 更新                |
@@ -1054,7 +1054,7 @@ flowchart LR
 | 设计中 JSON 子字段     | 本字典按当前服务实际写入说明，例如来源引用为 `purchase_raw_record_id` / `currency_raw_record_id`；不把 JSON 子字段算成数据库列 |
 | 母采购明细             | 表与外键已定义，但当前保存链路未发现写入；母采购单头与币种证据已接入                                                           |
 | 同步记录、增量水位     | `sync_runs/cursors` 有迁移结构，尚未接入持久同步；现有手动拉取保存走 source                                                    |
-| 柠檬云 API 与企微发送  | 数据结构保留扩展字段，open2 自动拉票、企微自动发送尚未接入                                                                     |
+| 柠檬云 API 与企微发送  | 数据结构保留扩展字段，基础字典时 open2 自动拉票、企微自动发送尚未接入；企微当前实现见文末 0022 增量说明                                                                     |
 | 数据库内实际结构       | 未连业务库核对；本字典不能替代目标库版本、列定义及数据检查                                                                     |
 
 ## 7. 核对依据与维护
@@ -1082,3 +1082,58 @@ flowchart LR
 | verified_at | DATETIME(6) | 是 | — | 最近明确成功或查询核实时间，UTC |
 | created_at | DATETIME(6) | 否 | CURRENT_TIMESTAMP(6) | 记录创建时间，UTC |
 | updated_at | DATETIME(6) | 否 | CURRENT_TIMESTAMP(6) | DAO 更新的最近修改时间，UTC |
+
+## 企微通知增量字段（0022，2026-10-19）
+
+现有 `task_notifications.channel` 的 wecom 表示渠道已确认发送，`channel_message_id` 保存目标群成功回执对应消息 ID。尚在准备、提交、待确认或结果未知时仅写入以下执行台账。
+
+### `task_notification_deliveries`
+
+企微通知执行及恢复证据。
+
+| 字段 | 类型 | 可空 | 含义 |
+| --- | --- | --- | --- |
+| `id` | BIGINT | 否 | 发送执行主键 |
+| `task_id` | BIGINT | 否 | 所属任务 |
+| `notification_id` | BIGINT | 否 | 通知版本 |
+| `request_id` | VARCHAR(64) | 否 | 客户端幂等编号 |
+| `request_sha256` | VARCHAR(64) | 否 | 提交请求摘要 |
+| `corp_id` | VARCHAR(190) | 否 | 冻结企微企业身份 |
+| `chat_id` | VARCHAR(190) | 否 | 冻结目标群 |
+| `sender_userid` | VARCHAR(190) | 否 | 冻结实际群主 |
+| `group_binding_id` | BIGINT | 否 | 供应商绑定 |
+| `group_binding_version` | BIGINT | 否 | 冻结绑定版本 |
+| `snapshot_json` | JSON | 否 | 正文、依据与合同清单快照，不含文件字节 |
+| `snapshot_sha256` | VARCHAR(64) | 否 | 冻结快照摘要 |
+| `status` | VARCHAR(32) | 否 | 发送状态：preparing/submitting/pending_confirmation/sent/failed/unknown |
+| `created_by` | VARCHAR(190) | 否 | 认证提交身份 |
+| `submitted_at` | DATETIME | 是 | 进入创建阶段时间 UTC |
+| `channel_message_id` | VARCHAR(190) | 是 | 渠道 msgid |
+| `channel_status` | VARCHAR(32) | 是 | 目标群渠道状态 |
+| `sent_at` | DATETIME | 是 | 目标群实际发送时间 UTC |
+| `last_checked_at` | DATETIME | 是 | 最近查询时间 UTC |
+| `next_check_at` | DATETIME | 是 | 允许下次查询时间 UTC |
+| `error_code` | VARCHAR(64) | 是 | 脱敏错误码 |
+| `error_message` | VARCHAR(500) | 是 | 脱敏说明 |
+| `evidence_json` | JSON | 否 | 素材编号与核实证据 |
+| `lease_token` | VARCHAR(64) | 否 | 执行领取令牌 |
+| `lease_expires_at` | DATETIME | 否 | 领取有效期，不代表可以重发 |
+| `resolved_by` | VARCHAR(190) | 是 | 核实操作者 |
+| `resolved_at` | DATETIME | 是 | 核实时间 UTC |
+| `resolution_reason` | VARCHAR(500) | 是 | 核实原因 |
+| `created_at` | DATETIME | 否 | 本地记录创建时间，UTC |
+| `updated_at` | DATETIME | 否 | 本地记录最后更新时间，UTC；由 DAO 更新 |
+
+### `task_notification_group_guards`
+
+同群跨任务发送互斥守卫。
+
+| 字段 | 类型 | 可空 | 含义 |
+| --- | --- | --- | --- |
+| `corp_id` | VARCHAR(190) | 否 | 企微企业身份 |
+| `chat_id` | VARCHAR(190) | 否 | 客户群身份 |
+| `active_delivery_id` | BIGINT | 是 | 未决发送执行 |
+| `created_at` | DATETIME | 否 | 本地记录创建时间，UTC |
+| `updated_at` | DATETIME | 否 | 本地记录最后更新时间，UTC；由 DAO 更新 |
+
+notification_id、request_id 各自唯一；企业和非空 channel_message_id 联合唯一。群守卫以企业和群作为复合主键。两表均不允许通过降级清除发送证据。结构与状态规则以[数据库设计第 13 节](../architecture/database.md#13-企微通知执行与群守卫2026-10-19)为准。

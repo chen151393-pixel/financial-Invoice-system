@@ -18,6 +18,7 @@ from .integrations.lemon.invoice_client import LemonInvoiceClient
 from .integrations.netsuite.client import NetSuite
 from .integrations.netsuite.subpo_contract import connection_settings
 from .integrations.wecom import WeComGroups
+from .integrations.wecom_messaging import WeComMessaging
 from .manage import verify_database
 from .modules.identity.controller import create_router as identity_router
 from .modules.identity.service import IdentityService
@@ -49,11 +50,15 @@ from .modules.sync.service import ConnectionService
 from .modules.sync.service.lemon_account_service import LemonAccountService
 from .modules.sync.service.lemon_binding_service import LemonBindingService
 from .modules.sync.service.lemon_invoice_service import LemonInvoiceService, on_lemon_invoices_stored
+from .modules.task.controller.delivery_controller import create_router as delivery_router
 from .modules.task.controller.external_group_controller import create_router as external_group_router
 from .modules.task.controller.supplier_group_controller import create_router as task_group_router
 from .modules.task.controller.task_controller import create_router as task_router
 from .modules.task.service.closure_service import ClosureService
 from .modules.task.service.contract_worker import ContractWorker
+from .modules.task.service.delivery_receipt_service import DeliveryReceiptService
+from .modules.task.service.delivery_reconcile_service import DeliveryReconcileService
+from .modules.task.service.delivery_submit_service import DeliverySubmitService
 from .modules.task.service.document_service import DocumentService
 from .modules.task.service.external_group_service import ExternalGroupService
 from .modules.task.service.group_import_preview import GroupImportPreview
@@ -161,7 +166,16 @@ def _register_business(app, settings, ns, contract_ns, wecom, engine, lemon_invo
         )
     )
     archive = ContractArchive(settings.subpo_archive_root)
-    task_queries = TaskService(engine, directory, SourceContracts(contract_ns), archive)
+    task_queries = TaskService(engine, directory, SourceContracts(contract_ns), archive, settings)
+    messaging = WeComMessaging(wecom)
+    receipts = DeliveryReceiptService(engine, messaging)
+    app.include_router(
+        delivery_router(
+            DeliverySubmitService(engine, settings, messaging, task_queries),
+            receipts,
+            DeliveryReconcileService(engine, messaging, receipts),
+        )
+    )
     documents = DocumentService(engine, directory, SourceContracts(contract_ns), archive, task_queries)
     app.state.contract_worker = ContractWorker(engine, documents)
     app.include_router(

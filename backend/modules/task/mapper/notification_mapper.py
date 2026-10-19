@@ -19,6 +19,7 @@ def group(row):
 def history(rows, attachments):
     return [
         NotificationEvent(
+            channel=row["channel"],
             revision=row["version"],
             actor=row["created_by"],
             at=iso(row["created_at"]),
@@ -50,7 +51,9 @@ def view(task, summary, rows, attachments, binding, group_reason):
         employee=(latest["sender_name"] or "") if latest else (binding["owner_name"] if binding else ""),
         message=latest["content"] if latest else default,
         defaultMessage=default,
-        statusLabel="人工登记已发送" if sent else "待人工发送",
+        statusLabel=("企微已确认目标群发送" if latest["channel"] == "wecom" else "人工登记已发送")
+        if sent
+        else "待通知供应商",
         edit=Capability(allowed=not edit, reason=edit or "仅保存本任务的群信息和通知内容。"),
         record=Capability(allowed=not record, reason=record or "在企微实际发送后登记。"),
         send=Capability(reason=SEND_REASON),

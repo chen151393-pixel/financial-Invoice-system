@@ -242,3 +242,9 @@ docker compose logs --tail=100 app
 ```
 
 不要把执行中或结果未知的 NS 写入当作普通失败自动重试。Compose 的 `stop` 与 `up` 不会自动清除任务状态或目标锁。对外开放前请先按 [后端部署与身份说明](python-backend.md) 补齐 HTTPS 与远程认证方案。
+
+## 企微开票通知
+
+升级代码后执行数据库迁移至 `0022_task_notifications` 并重新构建/启动服务。初始保持 `WECOM_SEND_ENABLED=false`，配置可信出口、客户联系可调用应用凭证、群主权限和容器可读合同挂载。群主客户端须为 4.1.10 及以上。完成单群定向验收后，将企业 ID 写入 `WECOM_TARGETING_VERIFIED_CORP_ID`，再启用发送开关；默认本系统每群每天最多 1 次有效或未决提交。
+
+具体接口、恢复和验收步骤见[企微通知方案第 13 节](wecom-supplier-notification-plan.md#13-第一阶段实现与部署2026-10-19)。关闭发送开关仍可查询历史回执；不要删台账、清占用或自动重试 unknown。页面关闭后暂不后台查询回执。

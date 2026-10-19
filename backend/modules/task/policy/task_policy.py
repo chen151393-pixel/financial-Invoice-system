@@ -16,7 +16,7 @@ STATUS_LABELS = {
 STATUS_REASONS = {
     "documents_pending": "财务审核已通过，将子采购合同保存到共享盘后通知供应商。",
     "notify_pending": "子采购合同已保存到共享盘，等待通知供应商开票。",
-    "awaiting_invoice": "已人工登记发送通知，等待供应商开票；尚无企微渠道回执。",
+    "awaiting_invoice": "通知已登记或经企微渠道确认，等待供应商开票；具体渠道见通知记录。",
     "partially_received": "已收到部分发票，等待其余发票。",
     "completed": "全部任务行已结束。",
     "superseded": "请查看该报关单最新审核生成的任务。",
@@ -85,7 +85,7 @@ def event_label(from_status, to_status):
         return "收票依据变化，退回部分收票"
     return {
         "notify_pending": "子采购合同已全部保存到共享盘",
-        "awaiting_invoice": "人工登记已发送通知",
+        "awaiting_invoice": "通知已发送，等待开票",
         "partially_received": "收到部分发票",
         "completed": "任务完成",
         "superseded": "被新审核版本替代",

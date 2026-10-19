@@ -19,6 +19,8 @@ TABLES = ALL_TABLES - {
     "task_external_groups",
     "task_group_imports",
     "task_contract_jobs",
+    "task_notification_deliveries",
+    "task_notification_group_guards",
 }
 COMMENT_HEAD = "0015_sync_comments"
 
@@ -138,7 +140,15 @@ def assert_mysql_comments(engine, comments):
             continue
         assert comments[name]["__table__"] == table.comment
         for column in table.c:
-            assert comments[name][column.name] == column.comment, (name, column.name)
+            # 本测试停在 0015；0022 的企微接入另行更新两列备注，不能倒改历史迁移。
+            historical = {
+                ("task_notifications", "channel"): "通知渠道：manual 人工登记；wecom 企业微信自动发送预留",
+                ("task_notifications", "channel_message_id"): "渠道消息回执 ID；企业微信自动发送尚未接入",
+            }
+            assert comments[name][column.name] == historical.get((name, column.name), column.comment), (
+                name,
+                column.name,
+            )
 
 
 def test_comment_upgrade_and_downgrade_preserve_structure_and_data(schema_engine):

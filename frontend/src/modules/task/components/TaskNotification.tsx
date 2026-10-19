@@ -3,6 +3,8 @@ import { Link } from "react-router";
 import { paths } from "../../../app/paths";
 import { Button } from "../../../shared/components/Button";
 import type { NotificationDraft, NotificationRecord, TaskDetail } from "../types/task";
+import type { DeliveryController } from "../types/delivery";
+import { WecomNotification } from "./WecomNotification";
 import { NotificationDialog } from "./NotificationDialog";
 import { NotificationHistory } from "./NotificationHistory";
 import { NotificationRecordForm, type RecordInput } from "./NotificationRecordForm";
@@ -14,10 +16,12 @@ export function TaskNotification({
   detail,
   onSave,
   onRecord,
+  delivery,
 }: {
   detail: TaskDetail;
   onSave: (draft: NotificationDraft) => Promise<void>;
   onRecord: (record: NotificationRecord) => Promise<void>;
+  delivery: DeliveryController;
 }) {
   const notification = detail.notification;
   const [draft, setDraft] = useState({
@@ -25,7 +29,8 @@ export function TaskNotification({
     employee: notification.employee,
     message: notification.message,
   });
-  const [busy, setBusy] = useState(false);
+  const [saving, setBusy] = useState(false);
+  const busy = saving || delivery.busy;
   const [feedback, setFeedback] = useState<Feedback>(null);
   const [dialog, setDialog] = useState<"preview" | "record" | null>(null);
   const dirty =
@@ -83,7 +88,7 @@ export function TaskNotification({
       <header className="itn-heading">
         <div>
           <h3>{notification.statusLabel}</h3>
-          <p className="it-help">通知渠道：企微外部群 · 人工发送与登记</p>
+          <p className="it-help">通知渠道：企微群发或人工发送登记</p>
         </div>
         <Button onClick={() => setDialog("preview")}>预览通知</Button>
       </header>
@@ -112,8 +117,8 @@ export function TaskNotification({
             <dt>采购公司</dt>
             <dd>{detail.task.company}</dd>
           </dl>
-          {field("groupName", "企微外部群名称", 200, "填写供应商所在的企微外部群")}
-          {field("employee", "负责发送的员工", 100, "填写实际发送通知的员工")}
+          {field("groupName", "人工发送群名称", 200, "仅用于人工发送登记")}
+          {field("employee", "人工发送员工", 100, "仅用于人工发送登记")}
           <p className="it-help">已保存的通知保留原内容，默认群配置变化不会覆盖历史记录。</p>
           <p className="it-help">{notification.edit.reason}</p>
         </section>
@@ -155,7 +160,7 @@ export function TaskNotification({
               </div>
             ))}
           </div>
-          <p className="it-help">请从共享盘添加文件；通知正文不包含内部共享盘路径。</p>
+          <p className="it-help">企微群发由系统上传合同；人工发送时请从共享盘添加。正文不包含内部路径。</p>
         </section>
       </div>
       <div className="itn-actions">
@@ -168,11 +173,9 @@ export function TaskNotification({
         <Button disabled={!notification.record.allowed || dirty || busy} onClick={() => setDialog("record")}>
           登记已人工发送
         </Button>
-        <Button disabled title={notification.send.reason}>
-          企微自动发送（未接入）
-        </Button>
       </div>
       <p className="it-help">{dirty ? "请先保存修改后的通知，再登记发送。" : notification.record.reason}</p>
+      <WecomNotification controller={delivery} notification={notification} dirty={dirty} disabled={saving} />
       <NotificationHistory history={notification.history} />
       {dialog && (
         <NotificationDialog
@@ -186,7 +189,7 @@ export function TaskNotification({
           {dialog === "preview" ? (
             <>
               <pre>{draft.message}</pre>
-              <p className="it-help">仅预览正文，未向供应商发送。</p>
+              <p className="it-help">此窗口仅预览正文，不触发发送。</p>
               <Button onClick={() => void copy()}>复制正文</Button>
             </>
           ) : (

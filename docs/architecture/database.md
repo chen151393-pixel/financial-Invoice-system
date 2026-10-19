@@ -991,3 +991,16 @@ API 发票默认版使用 `source=lemon_open2`、`lemon_account=open2:` 加 `SHA
 | created_at / updated_at | DATETIME(6) | UTC 时间 |
 
 唯一约束 `(task_id, purchase_order_id)`；检查约束限制状态；索引 `(status, id)` 支持有界消费。后台只处理已提交 pending，失败供人工重试；归档成功与作业完成在同一短事务更新。只读下载中断后允许继续，已有 PDF 通过原合同摘要保护避免覆盖。MySQL 消费者和单合同命名锁均不持有下载期间的数据库事务。详见 [task 模块](../../backend/modules/task/README.md#审核后自动归档2026-10-16)。
+
+## 13. 企微通知执行与群守卫（2026-10-19）
+
+新增迁移 `0022_task_notifications`，归属 task。现有通知和合同保留，不自动操作旧表及数据。详细流程见[企微通知接入方案](../wecom-supplier-notification-plan.md)。
+
+| 表 | 关键约束与用途 |
+| --- | --- |
+| `task_notification_deliveries` | 一条通知版本一次提交；notification_id、request_id 分别唯一；(corp_id, channel_message_id) 唯一；status 检查约束。保存目标、正文/依据/合同不可变快照、请求摘要、领取期限、回执和核实证据 |
+| `task_notification_group_guards` | (corp_id, chat_id) 复合主键；active_delivery_id 外键指向执行台账。未决占用持久保留，成功或明确失败才释放 |
+
+执行表 task_id/notification_id/group_binding_id 仅建立模块内外键；快照中的来源、审核 ID 不建跨模块外键。两表使用 UTC DATETIME(6) 及公共 created_at/updated_at，身份字符串用大小写敏感类型。PDF 字节和令牌不入库。完整字段见[字段字典](../mysql/current-data-dictionary.md)。
+
+任务、绑定和群守卫由账本写锁及行锁复核；外部上传/创建/查询均在事务外。领取过期不允许盲目重发：创建前可关闭失败，创建中转 unknown。结构回退只关闭发送开关，不允许降级删除证据。此处描述代码结构，不代表目标业务库已升级。

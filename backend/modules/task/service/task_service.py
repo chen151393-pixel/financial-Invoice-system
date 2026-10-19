@@ -11,11 +11,13 @@ from ..dao import (
     document_dao,
     event_dao,
     notification_dao,
+    notification_delivery_dao,
     supplier_group_dao,
     task_dao,
     task_line_dao,
 )
 from ..mapper import notification_mapper, task_mapper
+from ..policy.delivery_policy import ACTIVE, BLOCK_REASON, LABELS, submit_reason
 from ..policy.task_policy import SUPERSEDED_REASON, missing_identity_reasons
 from ..vo.capability import Capability
 from ..vo.task_vo import TaskDetail, TaskDocument, TaskGroup, TaskList
@@ -25,9 +27,10 @@ READ_ERROR = "开票任务读取失败，请检查业务数据库及迁移状态
 
 
 class TaskService:
-    def __init__(self, engine, directory, contracts=None, archive=None):
+    def __init__(self, engine, directory, contracts=None, archive=None, settings=None):
         self.engine, self.directory = engine, directory
         self.contracts, self.archive = contracts, archive
+        self.settings = settings
 
     def browse(self, query):
         found = (
@@ -103,6 +106,10 @@ class TaskService:
                     "documents": document_dao.by_task(connection, task_id),
                     "contract_jobs": contract_job_dao.by_task(connection, task_id),
                     "notifications": notification_dao.history(connection, task_id),
+                    "deliveries": notification_delivery_dao.history(connection, task_id),
+                    "delivery_blocked": bool(
+                        notification_delivery_dao.overlapping(connection, task_id, ACTIVE)
+                    ),
                     "events": event_dao.by_task(connection, task_id),
                     "binding": supplier_group_dao.by_supplier(connection, task["supplier_id"])
                     if task["supplier_id"]
@@ -135,6 +142,27 @@ class TaskService:
         )
         superseded = task["status"] == "superseded"
         block = data["basis_reason"]
+        latest = data["notifications"][0] if data["notifications"] else None
+        if (
+            data["deliveries"]
+            and latest
+            and latest["status"] != "sent"
+            and data["deliveries"][0]["notification_id"] == latest["id"]
+        ):
+            notification.statusLabel = LABELS[data["deliveries"][0]["status"]]
+        send_reason = submit_reason(task, latest, binding, self.settings, data["delivery_blocked"], block)
+        if (
+            not send_reason
+            and latest
+            and any(row["notification_id"] == latest["id"] for row in data["deliveries"])
+        ):
+            send_reason = "该版本已有执行记录，明确失败后请先保存新版本"
+        notification.send = Capability(
+            allowed=not send_reason, reason=send_reason or "预览正文和合同，提交后等待群主确认"
+        )
+        if data["delivery_blocked"]:
+            notification.edit = Capability(reason=BLOCK_REASON)
+            notification.record = Capability(reason=BLOCK_REASON)
         if block and not superseded:
             for document in documents:
                 document.prepare = Capability(allowed=False, reason=block)

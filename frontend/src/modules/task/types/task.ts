@@ -133,6 +133,7 @@ export interface NotificationRecord {
   confirmed: boolean;
 }
 export interface NotificationEvent {
+  channel: string;
   revision: number;
   actor: string;
   at: string;

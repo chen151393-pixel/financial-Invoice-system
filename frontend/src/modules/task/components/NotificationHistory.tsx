@@ -11,7 +11,8 @@ export function NotificationHistory({ history }: { history: NotificationEvent[] 
         history.map((event) => (
           <details key={event.revision}>
             <summary>
-              {event.sentAt ? "人工登记已发送" : "保存通知"} · {formatTime(event.at)} · 版本 {event.revision}
+              {event.sentAt ? (event.channel === "wecom" ? "企微渠道已发送" : "人工登记已发送") : "保存通知"}{" "}
+              · {formatTime(event.at)} · 版本 {event.revision}
             </summary>
             <p>保存人：{event.actor}</p>
             <p>
@@ -19,11 +20,18 @@ export function NotificationHistory({ history }: { history: NotificationEvent[] 
             </p>
             {event.sentAt && (
               <>
-                <p>实际发送时间（人工填写）：{formatTime(event.sentAt)}</p>
+                <p>
+                  发送时间（{event.channel === "wecom" ? "渠道回执" : "人工填写"}）：
+                  {formatTime(event.sentAt)}
+                </p>
                 <p>登记人：{event.recordedBy}</p>
                 <p>登记说明：{event.note}</p>
                 <p>合同：{event.attachments.join("、")}</p>
-                <p>此记录为人工登记，不代表企微回执、供应商已读或已开票。</p>
+                <p>
+                  {event.channel === "wecom"
+                    ? "企微已确认目标群发送，不代表供应商已读或已开票。"
+                    : "此记录为人工登记，不代表企微回执、供应商已读或已开票。"}
+                </p>
               </>
             )}
             <pre>{event.message}</pre>

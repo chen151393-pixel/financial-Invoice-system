@@ -92,21 +92,31 @@ class WeComGroups:
 
     def token(self):
         with self._token_lock:
-            if self._token and self._token[1] > time.monotonic():
-                return self._token[0]
             corpid, secret = self._credentials()
+            if self._token and self._token[1] > time.monotonic() and self._token[2:] == (corpid, secret):
+                return self._token[0]
             data = self._check(
                 self._request("GET", "gettoken", params={"corpid": corpid, "corpsecret": secret})
             )
             token, expires = data.get("access_token"), data.get("expires_in")
             if not isinstance(token, str) or not token or type(expires) is not int or expires <= 0:
                 raise ApiError(502, "企微返回的访问凭证格式异常")
-            self._token = token, time.monotonic() + max(1, expires - 120)
+            self._token = token, time.monotonic() + max(1, expires - 120), corpid, secret
             return token
 
-    def _read(self, path, body):
+    def corp_id(self):
+        return self._credentials()[0]
+
+    def token_for(self, corp_id):
+        token = self.token()
+        with self._token_lock:
+            if not self._token or self._token[0] != token or self._token[2] != corp_id:
+                raise ApiError(409, "企微企业凭证已变化，请核实原企业配置")
+        return token
+
+    def _read(self, path, body, expected_corp=None):
         for attempt in range(2):
-            token = self.token()
+            token = self.token_for(expected_corp) if expected_corp else self.token()
             data = self._request("POST", path, params={"access_token": token}, body=body)
             if attempt == 0 and data["errcode"] in (40014, 42001):
                 with self._token_lock:
@@ -115,8 +125,10 @@ class WeComGroups:
                 continue
             return self._check(data)
 
-    def group(self, chat_id):
-        data = self._read("externalcontact/groupchat/get", {"chat_id": chat_id, "need_name": 1})
+    def group(self, chat_id, expected_corp=None):
+        data = self._read(
+            "externalcontact/groupchat/get", {"chat_id": chat_id, "need_name": 1}, expected_corp
+        )
         group = data.get("group_chat")
         if not isinstance(group, dict) or group.get("chat_id") != chat_id:
             raise ApiError(502, "企微返回的客户群身份不一致，请重新查询")

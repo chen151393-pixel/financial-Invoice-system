@@ -1,7 +1,7 @@
 """供应商开票通知：默认正文与可操作判断（人工发送、人工登记，不调用企微）。"""
 
 EDITABLE_STATUSES = ("documents_pending", "notify_pending")
-SEND_REASON = "企微自动发送接口尚未接入，请复制通知并由员工在外部群发送合同。"
+SEND_REASON = "请先保存通知并核对供应商群，提交后仍需群主在企微确认发送。"
 
 
 def default_message(supplier, company, order_numbers, record_no):
@@ -19,7 +19,7 @@ def edit_block(task_status, latest_status):
     if task_status == "superseded":
         return "此任务已被新审核版本替代，仅供追溯。"
     if latest_status == "sent" or task_status not in EDITABLE_STATUSES:
-        return "已人工登记发送，通知内容只读。"
+        return "通知已发送或任务已进入收票阶段，通知内容只读。"
     return ""
 
 

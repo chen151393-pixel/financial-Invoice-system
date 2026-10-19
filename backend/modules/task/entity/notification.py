@@ -21,7 +21,7 @@ notifications = Table(
     Column(
         "channel",
         String(24),
-        comment="通知渠道：manual 人工登记；wecom 企业微信自动发送预留",
+        comment="通知渠道：manual 人工登记；wecom 企业微信渠道确认",
         nullable=False,
         server_default="manual",
     ),
@@ -37,7 +37,7 @@ notifications = Table(
     ),
     Column("sent_by", String(200), comment="登记发送的认证操作者；与实际发送员工 sender_name 分开"),
     Column("sent_at", TIMESTAMP, comment="登记的实际发送时间，统一保存 UTC"),
-    Column("channel_message_id", String(190), comment="渠道消息回执 ID；企业微信自动发送尚未接入"),
+    Column("channel_message_id", String(190), comment="企微目标群发送成功后保存的渠道消息 ID"),
     Column("created_by", String(200), comment="创建通知版本的认证操作者", nullable=False),
     *timestamps(),
     Column("sender_name", String(100), comment="负责实际发送的员工姓名"),

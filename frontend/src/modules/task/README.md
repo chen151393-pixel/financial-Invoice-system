@@ -52,3 +52,11 @@
 预览有效期 24 小时，刷新会丢弃未提交的人工选择并恢复初始推荐；确认失败保留当前选择，不自动重试写入。已确认预览不能换一组选择重新提交。Excel 信息标明来源，未使用企微实时核验。新页面只收集选择并展示后端候选和规则，不在前端匹配供应商或筛选业务行。
 
 `GroupImportUpload`、`GroupImportPreview`、`ExternalGroupCatalog` 分别负责上传、预览确认与后续维护，共用 `SupplierAssociation`。原文件读取与发票导入共用 `shared/api/import-file.ts`。组件拆分行展示以遵守文件上限。测试见 `frontend/tests/external-groups.test.mjs`。
+
+## 企微通知提交与回执（2026-10-19）
+
+任务详情通知区接入 `WecomNotification` 和 `useDelivery`，请求集中在 `api/delivery.ts`。沿用原生 dialog 和 Button，不增加新路由。先保存通知，再查看后端冻结预览，确认后提交正文和合同；界面只展示版本、目标群、群主、合同清单与实际状态。
+
+已提交显示“待群主确认”，页面可见且后端允许轮询时每 30 秒刷新；隐藏、离开通知区或进入终态即停止。失败不自动重放提交；浏览器重开只读取台账。unknown 仅提供证据查询和唯一候选关联，不提供任意消息编号或无证据重置。人工输入群名/员工只用于人工通道，企微目标取供应商绑定及实时群主。
+
+`test:web` 已包含 `wecom-notification.test.mjs`，检查请求不带任意目标/路径、失败不重试、未知状态和禁用操作。部署见[企微通知方案](../../../../docs/wecom-supplier-notification-plan.md)。本次浏览器验证仅使用合成数据及假企微。

@@ -6,6 +6,7 @@ from .capability import Capability
 
 
 class NotificationEvent(StrictModel):
+    channel: str = "manual"
     revision: int
     actor: str
     at: str

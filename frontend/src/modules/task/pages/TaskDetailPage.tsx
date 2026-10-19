@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router";
 import { paths } from "../../../app/paths";
 import { Button } from "../../../shared/components/Button";
@@ -14,6 +14,7 @@ import { TaskDocuments } from "../components/TaskDocuments";
 import { TaskHistory } from "../components/TaskHistory";
 import { TaskLines } from "../components/TaskLines";
 import { TaskNotification } from "../components/TaskNotification";
+import { useDelivery } from "../hooks/useDelivery";
 import { sectionLabels, TaskOverview, type Section } from "../components/TaskOverview";
 import type { ClosureRequest, NotificationDraft, NotificationRecord, TaskDetail } from "../types/task";
 import "./task.css";
@@ -41,6 +42,11 @@ export function TaskDetailPage({ id }: { id: string }) {
   const [section, setSection] = useState<Section>(readSection);
   const [busy, setBusy] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<Feedback>(null);
+  const deliveryChanged = useCallback(async () => {
+    const data = await getTask(id);
+    setState({ kind: "ready", data });
+  }, [id]);
+  const delivery = useDelivery(id, deliveryChanged, section === "notification");
   useEffect(() => {
     let active = true;
     async function load() {
@@ -193,6 +199,7 @@ export function TaskDetailPage({ id }: { id: string }) {
             detail={detail}
             onSave={saveNotification}
             onRecord={recordNotification}
+            delivery={delivery}
           />
         </div>
         {section === "invoices" && (

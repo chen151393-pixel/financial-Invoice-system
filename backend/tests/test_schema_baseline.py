@@ -38,6 +38,8 @@ TABLES = {
     "task_documents",
     "task_contract_jobs",
     "task_notifications",
+    "task_notification_deliveries",
+    "task_notification_group_guards",
     "task_events",
     "invoice_raw_records",
     "invoice_headers",

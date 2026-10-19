@@ -7,7 +7,8 @@ from sqlalchemy.exc import SQLAlchemyError
 from backend.core.errors import ApiError
 from backend.core.write_lock import transaction
 
-from ..dao import notification_dao, supplier_group_dao, task_dao
+from ..dao import notification_dao, notification_delivery_dao, supplier_group_dao, task_dao
+from ..policy.delivery_policy import ACTIVE, BLOCK_REASON
 from ..policy.notification_policy import edit_block, record_block
 from .basis_guard import require_current
 from .task_status_service import change_status
@@ -30,6 +31,8 @@ class NotificationService:
                 task = task_dao.get(connection, task_id, lock=True)
                 if task is None:
                     raise ApiError(404, "开票任务不存在")
+                if notification_delivery_dao.overlapping(connection, task_id, ACTIVE):
+                    raise ApiError(409, BLOCK_REASON)
                 action(connection, task, notification_dao.latest(connection, task_id), _now())
         except SQLAlchemyError:
             raise ApiError(409, "通知未能保存，请刷新核实最新版本后操作") from None
@@ -79,6 +82,7 @@ class NotificationService:
                 # 相同登记请求的网络重试返回原结果，不产生第二条记录；其他修改一律拒绝。
                 same = (
                     body.revision == latest["version"]
+                    and latest["channel"] == "manual"
                     and body.confirmed
                     and sent_at == latest["sent_at"]
                     and body.note.strip() == latest["note"]

@@ -51,8 +51,8 @@ export default function TaskWorkspacePage() {
       }
       notice={
         groupsPage
-          ? "支持 Excel 群目录导入与人工关联，也可通过企微查询群信息；自动通知发送尚未接入。"
-          : "财务审核通过后按供应商、采购公司和币种自动生成任务。合同从指定 NS 环境获取并保存到共享盘；支持编辑通知并登记企微外部群人工发送；收票进度由发票比对确认自动汇总，自动发送尚未接入。"
+          ? "支持 Excel 群目录导入与人工关联，也可通过企微查询群信息；群绑定用于开票任务中的通知预览。维护群信息不会发送消息。"
+          : "财务审核通过后按供应商、采购公司和币种生成任务，合同归档到共享盘。通知支持提交企微群发并等待群主确认，也可登记人工发送；收票进度由发票比对确认自动汇总。"
       }
     >
       {externalPage ? (
@@ -60,7 +60,7 @@ export default function TaskWorkspacePage() {
       ) : groupsPage ? (
         <SupplierGroupsPage />
       ) : taskId ? (
-        <TaskDetailPage id={taskId} />
+        <TaskDetailPage key={taskId} id={taskId} />
       ) : (
         <TaskListPage />
       )}

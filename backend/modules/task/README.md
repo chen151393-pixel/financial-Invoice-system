@@ -8,7 +8,7 @@
 
 - 订阅 `ReviewApproved`：在审核事务中生成任务与任务行（应开值从审核行复制），重新审核时替代旧任务。
 - 合同：审核事务中登记持久归档作业，事务提交后后台从 NS 下载子采购合同并保存到共享盘，数据库只记录路径与 SHA-256。
-- 通知：保存通知版本、登记人工发送（企微自动发送未接入）。
+- 通知：保存通知版本、登记人工发送，以及企微群发预览、提交、回执和未知结果核实。
 - 供应商默认企微群配置。
 - 收票进度（第 4d 步接入）：订阅 matching 的 `AllocationChanged`，按已通过分配的合计更新任务行已收与任务状态（`service/progress_service.py`）。
 
@@ -132,3 +132,13 @@ MySQL 命名锁保证多实例单消费者，并对同一任务的同一子采�
 升级前任务没有作业，不在启动时批量下载历史合同；原手动保存接口保持可用。配置文件仅使用根 `.env`，不加载 `.env.local`，进程环境变量仍优先；合同 RESTlet 配置与真实共享目录必须可用。
 
 验证：`test_contract_jobs.py` 覆盖审核回滚、重复提交、提交后下载、失败展示、手动重试、重启恢复与任务换版；`test_contract_jobs_mysql.py` 验证多消费者与人工保存互斥，须配置专用 MySQL 测试连接。测试采用合成合同及临时目录，不代表真实 NS／NAS 联调。
+
+## 企微通知接入（2026-10-19）
+
+新增 `delivery_controller.py`、通知执行/群守卫 Entity 和 DAO、`delivery_submit_service.py`、`delivery_receipt_service.py`、`delivery_reconcile_service.py`。方案、接口、默认关闭的发送配置及恢复规则见[通知方案第 13 节](../../../docs/wecom-supplier-notification-plan.md#13-第一阶段实现与部署2026-10-19)。
+
+迁移 `0022_task_notifications` 新增 `task_notification_deliveries` 和 `task_notification_group_guards`。准备、创建、待群主确认、成功、失败、未知结果分别持久记录；创建不重试，未决记录保留群占用且阻止人工登记绕过。历史与任务状态区分 manual / wecom；企微创建成功不会推进收票节点，只有目标群成功回执才补证据并按原任务状态推进。
+
+新增预览/提交/本地历史/回执刷新/候选核实接口；DTO 只接受版本、摘要和记录 ID。记录及候选只读查询不创建群发。所有操作复用认证身份、来源依据保护和账本写锁，外部调用不占事务。
+
+验证入口：`test_deliveries.py`、`test_delivery_recovery.py`、`test_wecom_messaging.py`、`test_deliveries_mysql.py`；真实渠道联调及专用 MySQL 并发未在本次执行。

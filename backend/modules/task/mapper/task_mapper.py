@@ -119,6 +119,7 @@ def events(rows):
                 "difference_closed": "人工按差异结束",
                 "evidence_linked": "关联报关审核证据",
                 "migration_review_required": "历史依据待复核",
+                "wecom_delivery": "企微通知进度",
             }.get(row["event_type"])
             or event_label(row["from_status"], row["to_status"]),
             reason=row["reason"] or "",
