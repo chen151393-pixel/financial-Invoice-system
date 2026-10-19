@@ -79,14 +79,14 @@ def test_children_of_same_customs_are_one_failure_unit(batch, engine):
 
 def test_detail_read_failure_isolated_to_complete_group(batch, engine):
     ns, page, _, _ = batch
-    original = ns.request
+    original = ns.projected_records
 
-    def request(method, kind, identity, **kwargs):
-        if identity == "2011":
+    def request(kind, ids, fields):
+        if "2011" in ids:
             raise ApiError(502, "明细读取失败")
-        return original(method, kind, identity, **kwargs)
+        return original(kind, ids, fields)
 
-    ns.request = request
+    ns.projected_records = request
     result = StorageService(ns, engine).sync_partial_page(
         "customs-declarations", lambda: page_result(page[:3])
     )

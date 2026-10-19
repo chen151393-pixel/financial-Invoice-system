@@ -48,6 +48,18 @@ def read_relation_rows(ns, kind, ids):
     ):
         raise ApiError(422, "关联来源查询范围无效")
     query = QUERIES[kind].format(ids=",".join(ids))
+    identity_fields = (
+        ("previousdoc", "previousline", "nextdoc", "nextline", "linktype")
+        if kind == "purchase_links"
+        else ("transaction", "id")
+        if kind == "parent_lines"
+        else ("id",)
+    )
+    return read_suiteql_rows(ns, query, identity_fields=identity_fields)
+
+
+def read_suiteql_rows(ns, query, *, identity_fields=("id",)):
+    """供已校验的关联查询和字段投影共用；调用方不能传入浏览器 SQL。"""
     url = f"https://{ns.settings.account}.suitetalk.api.netsuite.com/services/rest/query/v1/suiteql"
     rows, seen, size = [], set(), 0
     # 不使用远端 next 链接，限制整次返回行数与字节数；任意页失败不返回部分成功。
@@ -84,16 +96,8 @@ def read_relation_rows(ns, kind, ids):
             if not isinstance(item, dict):
                 raise ApiError(502, "NS 关联依据行格式无效")
             row = {key: value for key, value in item.items() if key != "links"}
-            if kind == "purchase_links":
-                key = tuple(
-                    str(row.get(field, ""))
-                    for field in ("previousdoc", "previousline", "nextdoc", "nextline", "linktype")
-                )
-            elif kind == "parent_lines":
-                key = (str(row.get("transaction", "")), str(row.get("id", "")))
-            else:
-                key = str(row.get("id", ""))
-            if not key or (isinstance(key, tuple) and not all(key)) or key in seen:
+            key = tuple(str(row[field]) if row.get(field) is not None else "" for field in identity_fields)
+            if not all(key) or key in seen:
                 raise ApiError(502, "NS 关联依据行身份缺失或重复")
             seen.add(key)
             rows.append(row)

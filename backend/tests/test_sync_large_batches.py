@@ -55,17 +55,17 @@ def test_more_than_three_hundred_lines_saved_without_duplicates(batch, engine, s
 def test_failure_beyond_old_limit_never_saves_partial_documents(batch, engine):
     ns, page, _, calls, kind = expand_lines(batch, "purchase_line")
     ns.settings.sync_read_workers = 1
-    original = ns.request
+    original = ns.projected_records
 
-    def request(method, record_type, identity, **kwargs):
-        if record_type == kind and identity == "100300":
+    def request(record_type, ids, fields):
+        if record_type == kind and "100300" in ids:
             raise ApiError(502, "最后一条明细读取失败")
-        return original(method, record_type, identity, **kwargs)
+        return original(record_type, ids, fields)
 
-    ns.request = request
+    ns.projected_records = request
     with pytest.raises(ApiError, match="最后一条明细"):
         StorageService(ns, engine).sync_page("customs-declarations", lambda: {"rows": page})
-    assert sum(call[0] == "detail" for call in calls) > 300
+    assert any(call[0] == "batch" and len(call[2]) == 300 for call in calls)
     assert rows(engine, "SELECT id FROM source_customs_declarations") == []
     assert rows(engine, "SELECT id FROM source_purchase_orders") == []
 

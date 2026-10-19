@@ -14,6 +14,7 @@ from backend.core.config import Settings
 from backend.core.errors import ApiError
 
 from .auth import assertion
+from .record_projection import read_projected_records
 from .relation_sources import read_relation_rows
 
 logger = logging.getLogger("ns_api.netsuite")
@@ -60,6 +61,9 @@ class NetSuite:
 
     def relation_rows(self, kind, ids):
         return read_relation_rows(self, kind, ids)
+
+    def projected_records(self, record_type, ids, fields):
+        return read_projected_records(self, record_type, ids, fields)
 
     def _read_restlet(self, script, deploy, payload):
         settings = self.settings

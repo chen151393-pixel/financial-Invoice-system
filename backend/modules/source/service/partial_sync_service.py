@@ -35,10 +35,21 @@ class PartialSyncService:
             with write_lock.locked(storage.engine, lock) as connection:
                 page = read_page()
                 result = PartialResult(page)
+                pl_cache = {}
                 groups = self._groups(kind, page["rows"], config)
                 for index, group in enumerate(groups, 1):
                     if not self._save_group(
-                        connection, kind, group, config, account, lock, report, result, index, len(groups)
+                        connection,
+                        kind,
+                        group,
+                        config,
+                        account,
+                        lock,
+                        report,
+                        result,
+                        index,
+                        len(groups),
+                        pl_cache,
                     ):
                         break
                 return result.response()
@@ -56,7 +67,9 @@ class PartialSyncService:
             groups.setdefault(key, []).append(row)
         return list(groups.values())
 
-    def _save_group(self, connection, kind, group, config, account, lock, report, result, index, total):
+    def _save_group(
+        self, connection, kind, group, config, account, lock, report, result, index, total, pl_cache
+    ):
         label = f"第 {index}/{total} 组（已保存 {result.saved_groups} 组）："
 
         def phase(message, completed=None, count=None):
@@ -66,7 +79,7 @@ class PartialSyncService:
 
         def collect():
             nonlocal collected
-            collected = PlReader(self.storage.ns, phase).collect_records(kind, group)
+            collected = PlReader(self.storage.ns, phase, pl_cache=pl_cache).collect_records(kind, group)
             return collected
 
         try:

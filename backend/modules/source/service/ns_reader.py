@@ -4,16 +4,18 @@ from backend.core.errors import ApiError
 from backend.integrations.netsuite.read_batch import RecordReader
 
 from ..mapper.ns_fields import reference, text
+from ..policy.line_read_policy import line_projection
 from ..policy.ns_config import parse_config
 
 
 class PlReader:
-    def __init__(self, ns, progress=None):
+    def __init__(self, ns, progress=None, *, pl_cache=None):
         self.ns = ns
         self.config = parse_config(ns.settings)
         self.reader = RecordReader(ns, progress)
         self.cache = self.reader.cache
         self.progress = self.reader.progress
+        self.pl_cache = pl_cache if pl_cache is not None else {}
 
     def read(self, spec, record_id):
         return self.reader.read(spec.type, record_id)
@@ -32,7 +34,7 @@ class PlReader:
             if len(set(ids)) != len(ids) or seen.intersection(ids):
                 raise ApiError(502, "NS明细身份重复，未保存")
             seen.update(ids)
-            self.reader.prefetch(spec.type, ids, label)
+            self.prefetch(spec, ids, label)
             for identity in ids:
                 record = self.read(spec, identity)
                 parent = reference(record.get(field))
@@ -40,6 +42,25 @@ class PlReader:
                     raise ApiError(502, "NS明细所属报关单不一致或采购订单不一致")
                 result[parent].append((identity, record))
         return result
+
+    def prefetch(self, spec, ids, label):
+        projection = line_projection(spec)
+        if projection is None:
+            self.reader.prefetch(spec.type, ids, label)
+            return
+        pending = [identity for identity in ids if (spec.type, identity) not in self.cache]
+        completed = len(ids) - len(pending)
+        self.progress(label, completed, len(ids))
+        for start in range(0, len(pending), 300):
+            batch = pending[start : start + 300]
+            records = self.ns.projected_records(spec.type, batch, projection)
+            if set(records) != set(batch) or any(
+                str(record.get("id")) != key for key, record in records.items()
+            ):
+                raise ApiError(502, "NS 批量明细身份或范围不一致，未保存")
+            self.cache.update({(spec.type, key): record for key, record in records.items()})
+            completed += len(batch)
+            self.progress(label, completed, len(ids))
 
     def lines(self, spec, parent_id):
         return self.grouped(spec, spec.parent, [parent_id], "读取单据明细")[parent_id]
@@ -188,10 +209,14 @@ class PlReader:
             for _, _, lines in bundle["customs"]
             for _, line in lines
         )
+        for pl_id in pl_ids - {""}:
+            if pl_id in self.pl_cache:
+                self.cache[config.pl.type, pl_id] = self.pl_cache[pl_id]
         self.reader.prefetch(config.pl.type, sorted(pl_ids - {""}), "核对 PL 单号")
         for pl_id in sorted(pl_ids - {""}):
             record = self.read(config.pl, pl_id)
             number = text(record.get(config.pl.number))
             if not number:
                 raise ApiError(502, "关联PL单号未能完整解析，未保存")
+            self.pl_cache[pl_id] = record
             bundle["pl_names"][pl_id] = number

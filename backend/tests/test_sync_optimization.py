@@ -49,6 +49,18 @@ def batch(ns):
         ]
 
     ns.request, ns.filtered_ids = request, filtered
+
+    def projected(kind, ids, fields):
+        calls.append(("batch", kind, tuple(ids)))
+        return {
+            key: {
+                "id": key,
+                **{field: deepcopy(value) for field, value in records[kind, key].items() if field in fields},
+            }
+            for key in ids
+        }
+
+    ns.projected_records = projected
     ns.relation_rows = lambda kind, ids: [PARENT] if kind == "parent_headers" else []
     return ns, page, records, calls
 
@@ -63,7 +75,7 @@ def test_twenty_customs_batch_reduces_lists_and_keeps_all_data(batch, engine):
     )
     counts = Counter(kind for kind, *_ in calls)
     # 原来每张报关分别查询三类列表：20 * 3；现在同类父引用合并为 3 次。
-    assert counts == {"list": 3, "detail": 101}
+    assert counts == {"list": 3, "detail": 21, "batch": 2}
     assert max(Counter(calls).values()) == 1
     assert result["storage"]["customs"]["created"] == 20
     assert result["storage"]["purchase"]["created"] == 20
@@ -76,7 +88,8 @@ def test_twenty_customs_batch_reduces_lists_and_keeps_all_data(batch, engine):
     repeated = StorageService(ns, engine).sync_page("customs-declarations", lambda: {"rows": page})
     assert repeated["storage"]["customs"]["created"] == 0
     assert len(rows(engine, "SELECT id FROM source_purchase_orders")) == 20
-    assert Counter(kind for kind, *_ in calls)["detail"] == 101  # 下一批重新读取最新 NS 值。
+    assert Counter(kind for kind, *_ in calls)["detail"] == 21  # 下一批重新读取最新 NS 值。
+    assert Counter(kind for kind, *_ in calls)["batch"] == 2
 
 
 def test_child_entry_keeps_membership_check_and_reuses_page_headers(batch):
@@ -111,14 +124,14 @@ def test_invalid_batch_never_saves_partial_data(batch, engine, mode):
                 original(*args, **kw) + (["8701"] if args[0] == spec["type"] else [])
             )
         else:
-            original_request = ns.request
+            original_request = ns.projected_records
 
-            def fail(method, kind, identity, **kw):
-                if identity == "8701":
+            def fail(kind, ids, fields):
+                if "8701" in ids:
                     raise ApiError(502, "模拟 NS 超时")
-                return original_request(method, kind, identity, **kw)
+                return original_request(kind, ids, fields)
 
-            ns.request = fail
+            ns.projected_records = fail
     with pytest.raises(ApiError):
         StorageService(ns, engine).sync_page("customs-declarations", lambda: {"rows": page})
     assert rows(engine, "SELECT id FROM source_customs_declarations") == []

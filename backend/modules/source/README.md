@@ -31,6 +31,18 @@
 | policy | `ns_config.py`、`relation_policy.py`、`local_relation_policy.py` | 字段映射配置、v3 完整性规则、本地行定位规则（由 business 移入） |
 | | `content_digest.py`、`currency_policy.py` | 内容摘要、子采购单币种规则（名称规范化在 `core/names.py`） |
 
+## 同步明细批量读取（2026-10-19）
+
+- 已支持的报关、子采购明细映射先按原父引用查询完整 ID 列表，再每批最多 300 个 ID 使用 SuiteQL 读取配置的展示/保存字段与逐行定位必需字段，不再逐条下载完整明细记录。超过 300 条继续分批，不截断；单头仍走原 REST 读取。
+- 字段清单归 `policy/line_read_policy.py`；`integrations/netsuite/record_projection.py` 只负责已授权记录的字段投影和传输。保留原生行 ID、父单、PL、公司、货源地、商品、母采购行、销售行、履行引用与有效状态，继续执行现有 Packing、母采购行及 v3 追溯规则，不降为仅整单关联，也不按品名猜配。
+- 引用恢复为原有 `id/refName` 形状；数值按 Decimal 解析，源空字段保留缺字段语义，由原映射规则决定拒绝或允许缺失。未知记录或字段映射使用原详情通道；商品引用用作展示字段时也保留原通道，避免 SuiteQL 与 REST 显示名差异。已进入批量通道后发生权限、超时、分页、漏行或身份异常时明确失败，不自动逐条重发。
+- 部分成功模式仅在同一页的报关组之间复用已核实的 PL 名称，下一页或重同步重新读取；单据、明细、成员范围、币种和逐行依据不使用跨组缓存。原始快照中的明细只包含本次实际读取字段，业务内容摘要仍基于原有字段和关联计算。
+- 验证见 `backend/tests/source/` 与 `test_sync_optimization.py`、`test_sync_large_batches.py`、`test_sync_partial_save.py`。覆盖逐行关联/审核摘要等价、精度、完整性、组失败隔离和新页重新读取。无需部署新的 NS 脚本，沿用当前 SuiteQL 只读权限；其他账套的字段可见性仍须验证。
+
+协议参考：[Oracle SuiteQL REST 查询](https://docs.oracle.com/en/cloud/saas/netsuite/ns-online-help/section_157909186990.html)。
+
+2026-10-19 真实只读样本：对 CD000839、CD000840 的 3 条报关明细、9 条子采购明细，新旧基础读取的业务映射结果相同；HTTP 请求从 22 次降至 12 次，单次对照耗时为 11.08 秒与 6.45 秒。此测量仅覆盖单头已取得后的基础数据补齐，不含原始行/v3追溯、币种读取及数据库保存，不代表完整同步固定提速比例；没有写入 NS 或业务库。
+
 ## 保存规则
 
 - 按 NS 账套 + NS 内部 ID 识别单据；来源修改时间早于已保存版本、或记录类型变化时拒绝覆盖，整页回滚。

@@ -63,6 +63,9 @@ def source(ns):
         pytest.fail("原始来源缺失时不能继续调用依赖它的 v3 追溯")
 
     ns.validate, ns.request, ns.filtered_ids = validate, request, filtered
+    ns.projected_records = lambda kind, ids, fields: {
+        key: {"id": key, **ns.request("GET", kind, key)["data"]} for key in ids
+    }
     ns.relation_rows, ns.pl_script_query = relation_rows, no_comparison
     ns.finance_source_query = lambda ids: unavailable()
     ns.settings.finance_source_script, ns.settings.finance_source_deploy = "482", "1"
