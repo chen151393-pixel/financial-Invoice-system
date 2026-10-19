@@ -55,6 +55,9 @@ class FakeInvoices:
     def accounts(self, token):
         return deepcopy(self.allowed)
 
+    def account_service_ids(self, token, asid=None):
+        return []
+
     def invoices(self, token, asid, start, end):
         self.pulls += 1
         if self.failure:

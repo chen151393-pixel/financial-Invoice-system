@@ -92,6 +92,8 @@ test_sync_pull.py 覆盖三类映射、身份、参数、金额精度、空结�
 
 `lemon_account_service.py` 维护授权账套查询和选择，`lemon_invoice_service.py` 编排持久请求与事务外读取，`dao/lemon_run_dao.py` 管理本模块的 `sync_lemon_runs`。迁移 `0018_sync_lemon_runs` 新增同步记录与已选账套。`integrations/lemon/invoice_client.py` 负责正式用户 Token、Bearer/asid 及 page/rows 查询参数。
 
+2026-10-19：`authorized_accounts()` 统一为查询、选择和拉票前复核自动发现专业版服务。HTTP 适配先读取默认账套和 `GetAllPermissions` 的 `ServiceId`，再逐个以 `GetAccountSets?serviceId=...` 查询；发现专业版服务时只返回专业版结果，无专业版服务才保留默认结果。失败不回退或返回部分列表，服务/账套去重且冲突报错。前端无需输入服务 ID，不改数据库和接口契约。协议边界与待联调范围见[接入说明](../../../docs/lemon-invoice-sync-plan.md#专业版服务自动发现2026-10-19)，隔离测试位于 `tests/sync/test_lemon_account_services.py`。
+
 新入口为 `/api/sync/lemon/invoices/configuration`、`/accounts/query`、`/account`、`/invoices/pull-save`、`/runs/{requestId}`（后四项同属 `/api/sync/lemon` 前缀）。请求、响应、限制见[完整协议](../../../docs/lemon-invoice-sync-plan.md)。API 按管理员身份隔离；日期必填且最多 366 天，所有分页完成才整批入库；同请求返回原结果，运行中拒绝切账套及新请求，重启不重置状态。
 
 跨模块保存通过 `public.py` 的 `LemonInvoicesFetched` 事件，invoice 通过 `LemonInvoicesStored` 回执，同事务更新票据与已完成统计。事件只在 `app.py` 订阅；不通过 DAO 写其他模块。测试位于 `backend/tests/sync/test_lemon_{protocol,invoices,mysql}.py`；真实上游未联调。

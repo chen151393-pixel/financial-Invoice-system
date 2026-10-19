@@ -70,7 +70,7 @@ class LemonInvoiceService:
     def _execute(self, owner, body, scope, binding):
         try:
             token = self.client.user_token(binding["mobile"])
-            accounts = self.client.accounts(token)
+            accounts = self.accounts.authorized_accounts(token)
             if not any(row["asid"] == body.asid for row in accounts):
                 raise ApiError(403, "当前账号已无该账套访问权限，本次未保存")
             records = self.client.invoices(token, body.asid, body.startDate, body.endDate)

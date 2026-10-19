@@ -8,7 +8,7 @@ from backend.core.errors import ApiError
 from backend.tests.sync.test_lemon_protocol import client
 
 
-@pytest.mark.parametrize("operation", ["user_token", "accounts", "invoices"])
+@pytest.mark.parametrize("operation", ["user_token", "accounts", "account_permissions", "invoices"])
 @pytest.mark.parametrize("failure", ["status", "timeout", "connect", "json", "business", "data"])
 def test_stage_and_safe_failure_details(caplog, operation, failure):
     calls = []
@@ -32,6 +32,8 @@ def test_stage_and_safe_failure_details(caplog, operation, failure):
                 upstream.user_token("13800000001")
             elif operation == "accounts":
                 upstream.accounts("private-token")
+            elif operation == "account_permissions":
+                upstream.account_service_ids("private-token", "private-account")
             else:
                 upstream.invoices("private-token", "private-account", "2026-10-01", "2026-10-16")
     finally:

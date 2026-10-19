@@ -57,12 +57,32 @@ class LemonAccountService:
     def query(self, owner):
         with self.engine.connect() as connection:
             _, row = self.context(connection, owner)
-        return {"items": self.client.accounts(self.client.user_token(row["mobile"]))}
+        return {"items": self.authorized_accounts(self.client.user_token(row["mobile"]))}
+
+    def authorized_accounts(self, token):
+        defaults = self.client.accounts(token)
+        # 使用上游真实返回的账套提供权限查询上下文，不把它自动选为业务账套。
+        services = self.client.account_service_ids(token, defaults[0]["asid"] if defaults else None)
+        if not services:
+            return defaults
+        if len(services) > 50:
+            raise ApiError(502, "柠檬云专业版服务数量超出单次查询范围，请联系管理员")
+        # 已发现专业版服务时，只展示这些服务下的账套，不回退成免费版查询成功。
+        accounts = {}
+        for service_id in services:
+            for row in self.client.accounts(token, service_id):
+                previous = accounts.get(row["asid"])
+                if previous and previous != row:
+                    raise ApiError(502, "柠檬云不同服务返回的同一账套信息不一致，请核实")
+                accounts[row["asid"]] = row
+            if len(accounts) > 1000:
+                raise ApiError(502, "柠檬云账套数量超出单次查询范围，请联系管理员")
+        return list(accounts.values())
 
     def select(self, owner, asid):
         with self.engine.connect() as connection:
             scope, initial = self.context(connection, owner)
-        accounts = self.client.accounts(self.client.user_token(initial["mobile"]))
+        accounts = self.authorized_accounts(self.client.user_token(initial["mobile"]))
         chosen = next((row for row in accounts if row["asid"] == asid), None)
         if chosen is None:
             raise ApiError(403, "当前绑定账号无权访问该账套，请刷新账套列表")

@@ -10,7 +10,12 @@ import httpx
 from backend.core.errors import ApiError
 
 logger = logging.getLogger("ns_api.lemon")
-OPERATIONS = {"user_token": "获取用户授权", "accounts": "查询授权账套", "invoices": "查询进项发票"}
+OPERATIONS = {
+    "user_token": "获取用户授权",
+    "accounts": "查询授权账套",
+    "account_permissions": "查询账套服务权限",
+    "invoices": "查询进项发票",
+}
 
 
 class LemonInvoiceClient:
@@ -106,8 +111,40 @@ class LemonInvoiceClient:
             raise ApiError(502, "柠檬云未返回用户授权，请核实已有绑定")
         return token
 
-    def accounts(self, token):
-        data = self._post("/api/Settings/AccountSet/GetAccountSets", token, operation="accounts")
+    def account_service_ids(self, token, asid=None):
+        data = self._post(
+            "/api/Settings/Permission/GetAllPermissions",
+            token,
+            operation="account_permissions",
+            asid=asid,
+        )
+        rows = data.get("rows")
+        if not isinstance(rows, list) or len(rows) > 1000:
+            raise ApiError(502, "柠檬云账套服务权限列表异常，请核实专业版访问权限")
+        services = set()
+        for row in rows:
+            if not isinstance(row, dict):
+                raise ApiError(502, "柠檬云账套服务权限格式异常")
+            # 官方字段表使用 AsId，返回示例使用 as_id；不把权限表编号传给浏览器。
+            account_id = row.get("AsId", row.get("as_id"))
+            service_id = row.get("ServiceId")
+            if type(account_id) is not int or account_id <= 0:
+                raise ApiError(502, "柠檬云账套服务权限缺少有效账套编号")
+            if service_id is None:
+                continue
+            if type(service_id) is not int or not 0 <= service_id <= 2147483647:
+                raise ApiError(502, "柠檬云返回的账套服务编号无效")
+            if service_id:
+                services.add(str(service_id))
+        return sorted(services)
+
+    def accounts(self, token, service_id=None):
+        data = self._post(
+            "/api/Settings/AccountSet/GetAccountSets",
+            token,
+            operation="accounts",
+            params={"serviceId": service_id} if service_id is not None else None,
+        )
         rows = data.get("rows")
         if not isinstance(rows, list) or len(rows) > 1000:
             raise ApiError(502, "柠檬云账套列表异常")
