@@ -1,202 +1,163 @@
-"""通过真实 HTTP 适配与隔离 API 验证专业版自动发现，不访问柠檬云生产环境。"""
+"""专业版真实协议形状的隔离测试；不将模拟结果作为真实联调记录。"""
 
 from types import SimpleNamespace
 
 import httpx
 import pytest
 from backend.core.errors import ApiError
+from backend.integrations.lemon.professional_accounts import LemonProfessionalAccounts
 from backend.modules.sync.service.lemon_account_service import LemonAccountService
 from backend.tests.sync.test_lemon_invoices import BASE, body
 from backend.tests.sync.test_lemon_invoices import setup as setup
-from backend.tests.sync.test_lemon_protocol import client
+
+PRO_ROW = {"asid": 21, "asname": "专业账套", "appAsId": "private-account-context"}
 
 
-def discovery(handler):
-    upstream = client(handler)
-    service = LemonAccountService(SimpleNamespace(engine=None), upstream)
-    return service, upstream
+def adapter(handler):
+    return LemonProfessionalAccounts(
+        SimpleNamespace(lemon_host="https://open2.ningmengyun.com"),
+        lambda: httpx.Client(transport=httpx.MockTransport(handler)),
+    )
 
 
-def ok(data):
-    return httpx.Response(200, json={"State": 1000, "Data": data})
+def reply(request, *, available=True, service_id=99, rows=None):
+    path = request.url.path
+    if path.endswith("AuthorizationCookie.ashx"):
+        assert request.url.host == "api.ningmengyun.com"
+        assert dict(request.url.params) == {"token": "private-user-token"}
+        assert "cookie" not in request.headers
+        return httpx.Response(
+            200, headers={"Set-Cookie": "auth=private-cookie; Domain=.ningmengyun.com; Path=/; Secure"}
+        )
+    assert "authorization" not in request.headers
+    assert request.headers["cookie"] == "auth=private-cookie"
+    if path.endswith("haveProServiceInfo"):
+        return httpx.Response(200, json={"statusCode": True, "data": available})
+    if path.endswith("/redirect/info"):
+        assert dict(request.url.params) == {"appId": "1060", "virtualAppId": "1062", "productType": "acc"}
+        return httpx.Response(
+            200,
+            json={
+                "statusCode": True,
+                "data": {
+                    "serviceId": service_id,
+                    "appasid": "private-account-context",
+                    "url": "https://untrusted.example",
+                },
+            },
+        )
+    assert request.url.host == "jproapi.ningmengyun.com"
+    assert path == "/api/AccountSetOnlyAuth/TopInfoV2"
+    assert dict(request.url.params) == {"serviceId": str(service_id), "appasid": "private-account-context"}
+    return httpx.Response(
+        200, json={"state": 1000, "data": {"accountList": [PRO_ROW] if rows is None else rows}}
+    )
 
 
-def test_automatic_services_are_deduplicated_and_free_accounts_are_not_substituted():
+def test_verified_protocol_uses_service_context_and_fresh_cookie_jar():
     calls = []
 
     def handler(request):
-        assert request.headers["Authorization"] == "Bearer user-token"
-        assert request.method == "POST" and not request.content
-        calls.append((request.url.path, dict(request.url.params)))
-        if request.url.path.endswith("GetAllPermissions"):
-            assert request.headers["asid"] == "7"
-            return ok(
-                {
-                    "rows": [
-                        {"AsId": 7, "ServiceId": 0},
-                        {"AsId": 21, "ServiceId": 99},
-                        {"as_id": 22, "ServiceId": 99},
-                        {"as_id": 23, "ServiceId": 100},
-                    ]
-                }
-            )
-        service_id = request.url.params.get("serviceId")
-        if service_id == "99":
-            return ok({"rows": [{"AsId": 21, "AsName": "专业账套甲"}, {"AsId": 22, "AsName": "专业账套乙"}]})
-        if service_id == "100":
-            return ok({"rows": [{"AsId": 22, "AsName": "专业账套乙"}, {"AsId": 23, "AsName": "专业账套丙"}]})
-        assert not request.url.params
-        return ok({"rows": [{"AsId": 7, "AsName": "免费账套"}]})
+        assert request.method == "GET"
+        calls.append(request)
+        return reply(request)
 
-    service, upstream = discovery(handler)
-    try:
-        result = service.authorized_accounts("user-token")
-    finally:
-        upstream.close()
-    assert {row["asid"] for row in result} == {"21", "22", "23"}
-    assert len(result) == 3 and len(calls) == 4
-    assert {params["serviceId"] for _, params in calls if params} == {"99", "100"}
+    upstream = adapter(handler)
+    for _ in range(2):
+        assert upstream.query("private-user-token") == [
+            {"asid": "21", "name": "专业账套", "edition": "professional"}
+        ]
+    assert len(calls) == 8
+    assert all(request.url.host != "untrusted.example" for request in calls)
 
 
-@pytest.mark.parametrize("defaults", [[], [{"AsId": 7, "AsName": "免费账套"}]])
-def test_professional_service_is_discovered_even_with_no_default_accounts(defaults):
-    def handler(request):
-        if request.url.path.endswith("GetAllPermissions"):
-            assert request.headers.get("asid") == ("7" if defaults else None)
-            return ok({"rows": [{"AsId": 21, "ServiceId": 99}]})
-        if request.url.params.get("serviceId") == "99":
-            return ok({"rows": [{"AsId": 21, "AsName": "专业账套"}]})
-        return ok({"rows": defaults})
-
-    service, upstream = discovery(handler)
-    try:
-        assert service.authorized_accounts("token") == [{"asid": "21", "name": "专业账套"}]
-    finally:
-        upstream.close()
+@pytest.mark.parametrize("available", [False, True])
+def test_empty_professional_results_are_not_free_results(available):
+    upstream = adapter(lambda request: reply(request, available=available, rows=[]))
+    assert upstream.query("private-user-token") == ([] if available else None)
 
 
-@pytest.mark.parametrize("service_id", [None, 0])
-def test_free_only_account_keeps_existing_query(service_id):
-    def handler(request):
-        if request.url.path.endswith("GetAllPermissions"):
-            return ok({"rows": [{"AsId": 7, "ServiceId": service_id}]})
-        assert not request.url.params
-        return ok({"rows": [{"AsId": 7, "AsName": "免费账套"}]})
-
-    service, upstream = discovery(handler)
-    try:
-        assert service.authorized_accounts("token") == [{"asid": "7", "name": "免费账套"}]
-    finally:
-        upstream.close()
-
-
-@pytest.mark.parametrize("stage", ["permissions", "service"])
-def test_discovery_failure_does_not_fall_back_to_default_accounts(stage):
-    def handler(request):
-        if request.url.path.endswith("GetAllPermissions"):
-            if stage == "permissions":
-                return httpx.Response(403)
-            return ok({"rows": [{"AsId": 21, "ServiceId": 99}]})
-        if request.url.params:
-            return httpx.Response(403)
-        return ok({"rows": [{"AsId": 7, "AsName": "免费账套"}]})
-
-    service, upstream = discovery(handler)
-    try:
-        with pytest.raises(ApiError, match="HTTP 403"):
-            service.authorized_accounts("token")
-    finally:
-        upstream.close()
-
-
-@pytest.mark.parametrize("second", ["empty", "failure", "conflict"])
-def test_professional_empty_partial_failure_and_conflicting_account_names(second):
-    def handler(request):
-        if request.url.path.endswith("GetAllPermissions"):
-            return ok({"rows": [{"AsId": 21, "ServiceId": 10}, {"AsId": 22, "ServiceId": 20}]})
-        service_id = request.url.params.get("serviceId")
-        if service_id == "20" and second == "failure":
-            return httpx.Response(502)
-        if service_id:
-            if second == "empty":
-                return ok({"rows": []})
-            name = "不同名称" if service_id == "20" else "专业账套"
-            return ok({"rows": [{"AsId": 21, "AsName": name}]})
-        return ok({"rows": [{"AsId": 7, "AsName": "免费账套"}]})
-
-    service, upstream = discovery(handler)
-    try:
-        if second == "empty":
-            assert service.authorized_accounts("token") == []
-        else:
-            with pytest.raises(ApiError, match="HTTP 502" if second == "failure" else "不一致"):
-                service.authorized_accounts("token")
-    finally:
-        upstream.close()
+@pytest.mark.parametrize("value", [None, 0, -1, True, "99", 2147483648])
+def test_invalid_service_context_is_rejected(value):
+    upstream = adapter(lambda request: reply(request, service_id=value))
+    with pytest.raises(ApiError, match="服务 ID"):
+        upstream.query("private-user-token")
 
 
 @pytest.mark.parametrize(
     "rows",
     [
-        None,
         [{}],
         [None],
-        [{"AsId": True, "ServiceId": 1}],
-        [{"AsId": 7, "ServiceId": True}],
-        [{"AsId": 7, "ServiceId": -1}],
-        [{"AsId": 7, "ServiceId": "99"}],
-        [{"AsId": 7, "ServiceId": 2147483648}],
+        [{**PRO_ROW, "asid": True}],
+        [{**PRO_ROW, "asname": ""}],
+        [PRO_ROW, PRO_ROW],
+        [PRO_ROW] * 1001,
     ],
 )
-def test_invalid_permissions_are_not_treated_as_free_only(rows):
-    upstream = client(lambda request: ok({"rows": rows}))
-    try:
-        with pytest.raises(ApiError):
-            upstream.account_service_ids("token", "7")
-    finally:
-        upstream.close()
+def test_invalid_or_duplicate_accounts_never_succeed(rows):
+    with pytest.raises(ApiError):
+        adapter(lambda request: reply(request, rows=rows)).query("private-user-token")
 
 
-def test_query_select_and_pull_all_use_current_professional_service(setup):
-    calls, permissions = [], [{"AsId": 21, "ServiceId": 99}]
+@pytest.mark.parametrize(
+    "path", ["AuthorizationCookie.ashx", "haveProServiceInfo", "/redirect/info", "TopInfoV2"]
+)
+@pytest.mark.parametrize("status", [302, 401, 403, 500])
+def test_failures_do_not_follow_redirect_or_fall_back(path, status, caplog):
+    calls = []
 
     def handler(request):
         calls.append(request)
-        if request.url.path.endswith("GetSpecificUserToken"):
-            return ok({"access_token": "user-token"})
-        if request.url.path.endswith("GetAllPermissions"):
-            return ok({"rows": permissions})
-        if request.url.path.endswith("GetAccountSets"):
-            rows = [{"AsId": 7, "AsName": "免费账套"}]
-            if request.url.params.get("serviceId") == "99":
-                rows = [{"AsId": 21, "AsName": "专业账套"}]
-            return ok({"rows": rows})
-        assert request.url.path.endswith("GetInvoice")
-        assert request.headers["asid"] == "21"
-        return ok({"List": []})
+        if request.url.path.endswith(path):
+            return httpx.Response(
+                status, headers={"Location": "https://untrusted.example/private"}, text="private-response"
+            )
+        return reply(request)
 
-    upstream = setup.upstream
-    adapter = client(handler)
-    # 应用的 Service 复用此注入对象；只替换 HTTP 适配方法，保留真实路由和数据库。
-    upstream.user_token = adapter.user_token
-    upstream.accounts = adapter.accounts
-    upstream.account_service_ids = adapter.account_service_ids
-    upstream.invoices = adapter.invoices
-    try:
-        response = setup.client.post(BASE + "/accounts/query", json={})
-        assert response.status_code == 200
-        assert response.json() == {"items": [{"asid": "21", "name": "专业账套"}]}
-        assert setup.client.post(BASE + "/account", json={"asid": "7"}).status_code == 403
-        selected = setup.client.post(BASE + "/account", json={"asid": "21"})
-        assert selected.status_code == 200 and selected.json()["selected"]["asid"] == "21"
-        assert setup.client.get(BASE + "/invoices/configuration").json()["selected"]["asid"] == "21"
-        response = setup.client.post(BASE + "/invoices/pull-save", json=body(asid="21"))
-        assert response.status_code == 200 and response.json()["status"] == "completed"
-        assert len([request for request in calls if request.url.params.get("serviceId") == "99"]) == 4
-        permissions.clear()
-        calls.clear()
-        revoked = setup.client.post(BASE + "/invoices/pull-save", json=body(asid="21"))
-        assert revoked.status_code == 403
-        assert not any(request.url.path.endswith("GetInvoice") for request in calls)
-    finally:
-        adapter.close()
+    with pytest.raises(ApiError, match=f"HTTP {status}") as error:
+        adapter(handler).query("private-user-token")
+    assert calls[-1].url.path.endswith(path)
+    assert "private" not in caplog.text + str(error.value)
+
+
+@pytest.mark.parametrize("data", [None, "false", {}, 0])
+def test_missing_or_malformed_availability_is_not_no_service(data):
+    def handler(request):
+        if request.url.path.endswith("haveProServiceInfo"):
+            return httpx.Response(200, json={"statusCode": True, "data": data})
+        return reply(request)
+
+    with pytest.raises(ApiError):
+        adapter(handler).query("private-user-token")
+
+
+def test_default_accounts_only_used_after_explicit_no_service():
+    calls = []
+    client = SimpleNamespace(
+        professional_accounts=lambda token: None,
+        accounts=lambda token: calls.append(token) or [{"asid": "7", "name": "默认账套"}],
+    )
+    service = LemonAccountService(SimpleNamespace(engine=None), client)
+    assert service.authorized_accounts("token") == [{"asid": "7", "name": "默认账套"}]
+    client.professional_accounts = lambda token: []
+    assert service.authorized_accounts("token") == []
+    assert calls == ["token"]
+
+
+def test_query_select_revoke_and_invoice_boundary(setup):
+    rows = [PRO_ROW]
+    upstream = adapter(lambda request: reply(request, rows=rows))
+    setup.upstream.professional_accounts = upstream.query
+    response = setup.client.post(BASE + "/accounts/query", json={})
+    assert response.status_code == 200
+    assert response.json() == {"items": [{"asid": "21", "name": "专业账套"}]}
+    assert setup.client.post(BASE + "/account", json={"asid": "7"}).status_code == 403
+    selected = setup.client.post(BASE + "/account", json={"asid": "21"})
+    assert selected.status_code == 200 and selected.json()["selected"]["asid"] == "21"
+    response = setup.client.post(BASE + "/invoices/pull-save", json=body(asid="21"))
+    assert response.status_code == 422 and "专业版进项发票读取尚未接入" in response.json()["error"]
+    assert setup.upstream.pulls == 0
+    rows.clear()
+    assert setup.client.post(BASE + "/invoices/pull-save", json=body(asid="21")).status_code == 403
+    assert setup.upstream.pulls == 0

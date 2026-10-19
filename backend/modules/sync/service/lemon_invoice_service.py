@@ -71,8 +71,11 @@ class LemonInvoiceService:
         try:
             token = self.client.user_token(binding["mobile"])
             accounts = self.accounts.authorized_accounts(token)
-            if not any(row["asid"] == body.asid for row in accounts):
+            chosen = next((row for row in accounts if row["asid"] == body.asid), None)
+            if chosen is None:
                 raise ApiError(403, "当前账号已无该账套访问权限，本次未保存")
+            if chosen.get("edition") == "professional":
+                raise ApiError(422, "专业版账套查询已接通，专业版进项发票读取尚未接入；本次未保存")
             records = self.client.invoices(token, body.asid, body.startDate, body.endDate)
             namespace = hashlib.sha256(
                 f"{self.accounts.binding.settings.lemon_host}|{body.asid}".encode()

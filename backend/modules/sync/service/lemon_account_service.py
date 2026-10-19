@@ -57,27 +57,13 @@ class LemonAccountService:
     def query(self, owner):
         with self.engine.connect() as connection:
             _, row = self.context(connection, owner)
-        return {"items": self.authorized_accounts(self.client.user_token(row["mobile"]))}
+        accounts = self.authorized_accounts(self.client.user_token(row["mobile"]))
+        return {"items": [{"asid": account["asid"], "name": account["name"]} for account in accounts]}
 
     def authorized_accounts(self, token):
-        defaults = self.client.accounts(token)
-        # 使用上游真实返回的账套提供权限查询上下文，不把它自动选为业务账套。
-        services = self.client.account_service_ids(token, defaults[0]["asid"] if defaults else None)
-        if not services:
-            return defaults
-        if len(services) > 50:
-            raise ApiError(502, "柠檬云专业版服务数量超出单次查询范围，请联系管理员")
-        # 已发现专业版服务时，只展示这些服务下的账套，不回退成免费版查询成功。
-        accounts = {}
-        for service_id in services:
-            for row in self.client.accounts(token, service_id):
-                previous = accounts.get(row["asid"])
-                if previous and previous != row:
-                    raise ApiError(502, "柠檬云不同服务返回的同一账套信息不一致，请核实")
-                accounts[row["asid"]] = row
-            if len(accounts) > 1000:
-                raise ApiError(502, "柠檬云账套数量超出单次查询范围，请联系管理员")
-        return list(accounts.values())
+        professional = self.client.professional_accounts(token)
+        # 空专业版列表仍是专业版结果；None 仅表示上游明确确认没有专业版服务。
+        return self.client.accounts(token) if professional is None else professional
 
     def select(self, owner, asid):
         with self.engine.connect() as connection:
