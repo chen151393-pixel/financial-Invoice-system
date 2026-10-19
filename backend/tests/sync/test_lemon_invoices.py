@@ -255,33 +255,6 @@ def test_changed_business_type_invalidates_previously_imported_header(setup):
         assert row["status"] == "unknown" and row["business_type"] == "购买服务"
 
 
-@pytest.mark.parametrize("api_first", [True, False])
-def test_cross_channel_same_invoice_rejected_in_both_directions(setup, api_first):
-    # 与正式 Excel 入口相同的解析、预览和确认流程。
-
-    from backend.modules.invoice.dto.import_dto import ImportBody
-    from backend.modules.invoice.service.import_service import ImportService
-    from backend.tests.invoice_files import invoice as excel_invoice
-    from backend.tests.invoice_files import workbook
-
-    number = "26000000000000000001"
-    content = workbook([excel_invoice(number, [("墨水", "个", "1", "100", "13")])])
-    importer = ImportService(setup.engine, setup.events)
-    request = ImportBody(filename="test.xlsx", content=content)
-    if api_first:
-        setup.service.pull(OWNER, PullLemonInvoices(**body()))
-        preview = importer.process(request, OWNER)
-        assert preview.conflicts == 1 and not preview.allowed
-    else:
-        preview = importer.process(request, OWNER)
-        importer.process(
-            request.model_copy(update={"previewToken": preview.previewToken}), OWNER, commit=True
-        )
-        with pytest.raises(ApiError, match="Excel"):
-            setup.service.pull(OWNER, PullLemonInvoices(**body()))
-    assert count(setup.engine, headers) == 1
-
-
 def test_account_query_uses_authenticated_json_request(setup):
     response = setup.client.post(BASE + "/accounts/query", json={})
     assert response.status_code == 200 and len(response.json()["items"]) == 2

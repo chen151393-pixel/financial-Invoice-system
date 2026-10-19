@@ -9,7 +9,7 @@ from .import_mapper import checked, invoice_key, json_safe, payload_digest
 def prepare(raw, values, account):
     seller = raw.get("Name") or None
     header = {
-        "source": "lemon_open2",
+        "source": "lemon_professional" if account.startswith("professional:") else "lemon_open2",
         "lemon_account": account,
         "external_id": str(raw["InvoiceId"]),
         "invoice_code": raw.get("Code") or None,

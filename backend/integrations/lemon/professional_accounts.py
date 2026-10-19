@@ -2,6 +2,8 @@
 
 import json
 import logging
+from contextlib import contextmanager
+from decimal import Decimal
 
 import httpx
 
@@ -21,11 +23,20 @@ class LemonProfessionalAccounts:
         )
 
     def query(self, token):
+        with self.open(token) as (_, _, rows):
+            return (
+                None
+                if rows is None
+                else [{key: row[key] for key in ("asid", "name", "edition")} for row in rows]
+            )
+
+    @contextmanager
+    def open(self, token):
         if self.settings.lemon_host != "https://open2.ningmengyun.com":
             raise ApiError(422, "专业版账套查询仅支持已验证的柠檬云正式环境")
         # 不能复用进程级 Cookie 容器，避免并发用户或绑定切换串用认证上下文。
         with self.session_factory() as session:
-            self._get(
+            self.request(
                 session,
                 ACCOUNT_HOST + "/api/AuthorizationCookie.ashx",
                 "session",
@@ -37,7 +48,8 @@ class LemonProfessionalAccounts:
             availability = self._service_data(session, "/wb/plan/haveProServiceInfo")
             if availability is False:
                 # 只有上游明确确认没有专业版服务时，才允许调用方查询默认账套。
-                return None
+                yield session, None, None
+                return
             if availability is not True:
                 raise ApiError(502, "柠檬云专业版服务状态格式异常")
             context = self._service_data(
@@ -45,10 +57,10 @@ class LemonProfessionalAccounts:
                 "/wb/redirect/info",
                 params={"appId": 1060, "virtualAppId": 1062, "productType": "acc"},
             )
-            return self._accounts(session, context)
+            yield session, context, self._accounts(session, context)
 
     def _service_data(self, session, path, params=None):
-        payload = self._get(session, SERVICE_HOST + path, "service", params=params)
+        payload = self.request(session, SERVICE_HOST + path, "service", params=params)
         if payload.get("statusCode") is not True or "data" not in payload:
             raise ApiError(502, "柠檬云未确认专业版服务查询成功，请核实授权")
         return payload["data"]
@@ -60,7 +72,7 @@ class LemonProfessionalAccounts:
         appasid = context.get("appasid")
         if not isinstance(appasid, str) or not appasid or len(appasid) > 2048:
             raise ApiError(502, "柠檬云未返回有效的专业版账套上下文")
-        payload = self._get(
+        payload = self.request(
             session,
             PRO_HOST + "/api/AccountSetOnlyAuth/TopInfoV2",
             "accounts",
@@ -81,14 +93,28 @@ class LemonProfessionalAccounts:
             if asid in seen or len(name) > 255:
                 raise ApiError(502, "柠檬云专业版账套重复或名称过长")
             seen.add(asid)
-            result.append({"asid": str(asid), "name": name, "edition": "professional"})
+            result.append(
+                {
+                    "asid": str(asid),
+                    "name": name,
+                    "edition": "professional",
+                    "appasid": row.get("appAsId"),
+                }
+            )
         logger.info("lemon_accounts_read source=professional count=%s", len(result))
         return result
 
     @staticmethod
-    def _get(session, url, stage, *, params=None, expect_json=True):
+    def request(session, url, stage, *, params=None, expect_json=True, body=None, headers=None):
         try:
-            with session.stream("GET", url, params=params, follow_redirects=False) as response:
+            with session.stream(
+                "GET" if body is None else "POST",
+                url,
+                params=params,
+                json=body,
+                headers=headers,
+                follow_redirects=False,
+            ) as response:
                 status = response.status_code
                 if status != 200:
                     logger.warning("lemon_professional_failed stage=%s upstream_status=%s", stage, status)
@@ -103,7 +129,7 @@ class LemonProfessionalAccounts:
                     chunks.append(chunk)
                 if not expect_json:
                     return None
-                payload = json.loads(b"".join(chunks))
+                payload = json.loads(b"".join(chunks), parse_float=Decimal)
         except (httpx.HTTPError, ValueError) as error:
             # URL 含临时令牌或加密账套；不记录异常正文、重定向地址或上游消息。
             logger.warning("lemon_professional_failed stage=%s type=%s", stage, type(error).__name__)

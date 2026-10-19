@@ -5,7 +5,11 @@ from datetime import UTC
 from ..vo.invoice_vo import InvoiceDetail, InvoiceLine, InvoiceRow
 
 STATUS_LABELS = {"normal": "正常", "red_offset": "已红冲", "void": "作废", "unknown": "未知"}
-SOURCE_LABELS = {"lemon_excel": "Excel导入", "lemon_open2": "柠檬云接口"}
+SOURCE_LABELS = {
+    "lemon_excel": "Excel导入",
+    "lemon_open2": "柠檬云接口",
+    "lemon_professional": "柠檬云专业版接口",
+}
 
 
 def text(value):

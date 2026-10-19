@@ -92,7 +92,9 @@ test_sync_pull.py 覆盖三类映射、身份、参数、金额精度、空结�
 
 `lemon_account_service.py` 维护授权账套查询和选择，`lemon_invoice_service.py` 编排持久请求与事务外读取，`dao/lemon_run_dao.py` 管理本模块的 `sync_lemon_runs`。迁移 `0018_sync_lemon_runs` 新增同步记录与已选账套。`integrations/lemon/invoice_client.py` 负责正式用户 Token、Bearer/asid 及 page/rows 查询参数。
 
-2026-10-19 真实联调修正：旧 `GetAllPermissions` 仅查到默认账套；即使携带真实服务 ID，旧 `GetAccountSets` 仍返回默认账套，不能用于专业版发现。`authorized_accounts()` 改为通过 `integrations/lemon/professional_accounts.py` 建立临时官方会话、取得财务服务入口的服务 ID，并调用专业版 `TopInfoV2`。已在真实账号验证返回 6 个专业版账套，编号与截图一致；无用户 Token/Cookie 落盘，不硬编码服务 ID。仅上游明确确认没有专业版服务才查询默认账套，专业版空列表或失败不回退。查询、选择和拉票前复核共用此流程；专业版发票读取尚未接入，明确返回 422，不能把专业版编号发往旧免费版发票接口。前端无需输入服务 ID，不改数据库和接口契约。协议来源、当前单服务范围和验证边界见[接入说明](../../../docs/lemon-invoice-sync-plan.md#专业版服务自动发现2026-10-19)，隔离测试位于 `tests/sync/test_lemon_account_services.py`。
+2026-10-19 真实联调修正：旧 `GetAllPermissions` 仅查到默认账套；即使携带真实服务 ID，旧 `GetAccountSets` 仍返回默认账套，不能用于专业版发现。`authorized_accounts()` 通过 `integrations/lemon/professional_accounts.py` 建立临时官方会话、取得财务服务入口的服务 ID，并调用专业版 `TopInfoV2`。已在真实账号验证返回 6 个专业版账套，编号与截图一致；无用户 Token/Cookie 落盘，不硬编码服务 ID。仅上游明确确认没有专业版服务才查询默认账套，专业版空列表或失败不回退。前端无需输入服务 ID，不改数据库和接口契约。
+
+专业版发票已接入 `integrations/lemon/professional_invoices.py` 的 `PurchasePagingList` 分页读取。拉票使用所选账套的加密上下文，排除严格识别的合计行，并核对总数、重复编号和页数；成功完整读取后发布原有事件事务保存，默认版继续使用原接口。真实账号读取 78 张，隔离 SQLite 保存固定资产票 15 张，重复跨页读取仍为 78 张且无重复保存。协议来源、当前单服务范围和验证边界见[接入说明](../../../docs/lemon-invoice-sync-plan.md#专业版服务自动发现2026-10-19)。隔离测试：`tests/sync/test_lemon_account_services.py`、`test_lemon_professional_protocol.py`、`test_lemon_professional_save.py`。
 
 新入口为 `/api/sync/lemon/invoices/configuration`、`/accounts/query`、`/account`、`/invoices/pull-save`、`/runs/{requestId}`（后四项同属 `/api/sync/lemon` 前缀）。请求、响应、限制见[完整协议](../../../docs/lemon-invoice-sync-plan.md)。API 按管理员身份隔离；日期必填且最多 366 天，所有分页完成才整批入库；同请求返回原结果，运行中拒绝切账套及新请求，重启不重置状态。
 

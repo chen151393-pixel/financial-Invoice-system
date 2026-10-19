@@ -974,7 +974,7 @@ MySQL 上另验证迁移升级、生成列唯一约束、两票争同一子采�
 
 开始请求时锁绑定行，检查同请求和未结束请求后持久写 running；外部 HTTP 在事务外执行。发票写入复用现有账本锁及 invoice 版本事件，完成回执与所有发票数据在同一事务提交。数据库结果不确定或重启保留 running，禁止自动复位。记录为持久审计依据，迁移 downgrade 拒绝删除。
 
-API 发票使用 `source=lemon_open2`，`lemon_account=open2:` 加 `SHA256(host|asid)`，`external_id=InvoiceId`；复用 invoice 现有票头、原始数据、不可变版本表，不另建平行发票表。无商品明细则完整性为 pending。Excel 固定命名空间尚未与真实 API 账套对齐，两个入口遇同代码/号码均拒绝跨渠道重复。接口及异常处置详见[接入说明](../lemon-invoice-sync-plan.md)。
+API 发票默认版使用 `source=lemon_open2`、`lemon_account=open2:` 加 `SHA256(host|asid)`；专业版使用 `source=lemon_professional`、`lemon_account=professional:` 加相同环境/账套哈希。两版 `external_id=InvoiceId`，命名空间相互隔离；复用 invoice 现有票头、原始数据、不可变版本表，不另建平行发票表。来源字段为 VARCHAR，新增来源值不改变表结构。无商品明细则完整性为 pending。Excel 固定命名空间尚未与真实 API 账套对齐，两个入口遇同代码/号码均拒绝跨渠道重复。接口及异常处置详见[接入说明](../lemon-invoice-sync-plan.md)。
 
 ## 合同自动归档队列（0021，2026-10-16）
 

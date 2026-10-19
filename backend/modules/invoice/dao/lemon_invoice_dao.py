@@ -9,7 +9,7 @@ def source_keys(connection, account, external_ids):
     rows = connection.execute(
         select(headers.c.external_id, headers.c.invoice_key).where(
             headers.c.lemon_account == account,
-            headers.c.source == "lemon_open2",
+            headers.c.source.in_(("lemon_open2", "lemon_professional")),
             headers.c.external_id.in_(external_ids),
         )
     ).mappings()
@@ -26,5 +26,7 @@ def excel_conflicts(connection, keys):
 
 def api_conflict(connection, key):
     return connection.scalar(
-        select(headers.c.id).where(headers.c.source == "lemon_open2", headers.c.invoice_key == key).limit(1)
+        select(headers.c.id)
+        .where(headers.c.source.in_(("lemon_open2", "lemon_professional")), headers.c.invoice_key == key)
+        .limit(1)
     )

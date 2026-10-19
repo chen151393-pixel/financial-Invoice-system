@@ -56,10 +56,12 @@
 
 `service/version_service.py` 保存原始来源、不可变快照和当前投影；`policy/version_policy.py` 规范化业务摘要，排除显示行号；`dao/version_dao.py` 管理追加版本。`0008` 迁移增加版本表和当前逻辑行标记。列表详情仅展示当前行，比对视图保留历史行及其占用。
 
-预览后其他请求改变同票版本时，旧确认返回 409 并要求重新预览；同一文件提交成功后的重试可以返回重复跳过。open2 票头已通过 sync 事件接入；商品明细 API 尚未接入。
+预览后其他请求改变同票版本时，旧确认返回 409 并要求重新预览；同一文件提交成功后的重试可以返回重复跳过。默认版和专业版票头已通过 sync 事件接入；商品明细 API 尚未接入。
 
 ## API 票头入库（2026-10-16）
 
 `policy/lemon_invoice_policy.py` 校验进项范围、开票日期、字符串票号、状态与 Decimal 金额；`mapper/lemon_invoice_mapper.py` 转换官方票头；`dao/lemon_invoice_dao.py` 查询来源身份与跨渠道冲突；`service/lemon_invoice_service.py` 订阅事件并复用 `version_service.py` 保存。依赖仅为本模块与公开事件，不调用外部 HTTP。
 
 同一环境/账套/InvoiceId 去重；票头变化追加不可变版本并复用现有匹配失效事件。API 票只保存票头，`detail_status=pending`；不伪造商品行、不自动生成逐行候选。现有查询接口保留，详情新增中文 `detailStatusLabel`。Excel 与 API 同票在账套未对齐时双向拒绝，防止重复台账与额度。
+
+2026-10-19：专业版小驼峰字段由适配层规范化后复用同一校验和入库服务。专业版来源为 `lemon_professional`、账套命名空间前缀 `professional:`，默认版仍为 `lemon_open2` / `open2:`。两版都参与来源 ID 稳定性检查和 Excel 跨渠道冲突校验。真实只读数据在隔离 SQLite 验证：78 张读取、15 张新增、63 张范围外跳过；重复拉取 15 张未变化，未产生重复版本。商品行仍为 0；不表示生产数据库已写入。

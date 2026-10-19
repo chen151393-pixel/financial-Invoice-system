@@ -29,7 +29,7 @@ def classify(connection, item, existing):
     if not existing:
         return "created"
     old = header_dao.by_ids(connection, [existing["id"]])[0]
-    if old["source"] != "lemon_open2" or old["external_id"] != item["header"]["external_id"]:
+    if old["source"] != item["header"]["source"] or old["external_id"] != item["header"]["external_id"]:
         raise ApiError(409, "同票来源身份冲突，整批未保存，请核实原记录")
     if digest(old, item_dao.by_invoices(connection, [old["id"]])) == digest(item["header"], []):
         return "unchanged"
@@ -87,7 +87,7 @@ def save_batch(connection, prepared, existing, sources, account, events):
             raw_record_dao.save(
                 connection,
                 {
-                    "source": "lemon_open2",
+                    "source": item["header"]["source"],
                     "lemon_account": account,
                     "external_id": item["header"]["external_id"],
                     "payload": item["payload"],

@@ -10,6 +10,7 @@ import httpx
 from backend.core.errors import ApiError
 
 from .professional_accounts import LemonProfessionalAccounts
+from .professional_invoices import LemonProfessionalInvoices
 
 logger = logging.getLogger("ns_api.lemon")
 OPERATIONS = {
@@ -115,6 +116,9 @@ class LemonInvoiceClient:
 
     def professional_accounts(self, token):
         return self.professional.query(token)
+
+    def professional_invoices(self, token, asid, start, end):
+        return LemonProfessionalInvoices(self.professional).query(token, asid, start, end)
 
     def accounts(self, token):
         data = self._post(

@@ -145,7 +145,7 @@ def test_default_accounts_only_used_after_explicit_no_service():
     assert calls == ["token"]
 
 
-def test_query_select_revoke_and_invoice_boundary(setup):
+def test_query_select_and_revoke(setup):
     rows = [PRO_ROW]
     upstream = adapter(lambda request: reply(request, rows=rows))
     setup.upstream.professional_accounts = upstream.query
@@ -155,9 +155,6 @@ def test_query_select_revoke_and_invoice_boundary(setup):
     assert setup.client.post(BASE + "/account", json={"asid": "7"}).status_code == 403
     selected = setup.client.post(BASE + "/account", json={"asid": "21"})
     assert selected.status_code == 200 and selected.json()["selected"]["asid"] == "21"
-    response = setup.client.post(BASE + "/invoices/pull-save", json=body(asid="21"))
-    assert response.status_code == 422 and "专业版进项发票读取尚未接入" in response.json()["error"]
-    assert setup.upstream.pulls == 0
     rows.clear()
     assert setup.client.post(BASE + "/invoices/pull-save", json=body(asid="21")).status_code == 403
     assert setup.upstream.pulls == 0
