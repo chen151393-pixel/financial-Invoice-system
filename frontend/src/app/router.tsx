@@ -10,6 +10,7 @@ const PlWorkspacePage = lazy(() => import("./PlWorkspacePage"));
 const WorkbenchWorkspacePage = lazy(() => import("./WorkbenchWorkspacePage"));
 const ReviewWorkspacePage = lazy(() => import("./ReviewWorkspacePage"));
 const SyncWorkspacePage = lazy(() => import("./SyncWorkspacePage"));
+const SyncBatchWorkspacePage = lazy(() => import("./SyncBatchWorkspacePage"));
 const InvoiceWorkspacePage = lazy(() => import("./InvoiceWorkspacePage"));
 const MatchingWorkspacePage = lazy(() => import("./MatchingWorkspacePage"));
 const TaskWorkspacePage = lazy(() => import("./TaskWorkspacePage"));
@@ -49,6 +50,10 @@ export const router = createBrowserRouter([
           { path: paths.sync, element: page("数据同步", <SyncWorkspacePage />) },
           { path: paths.syncNs, element: page("数据同步", <SyncWorkspacePage />) },
           { path: paths.syncLemon, element: page("数据同步", <SyncWorkspacePage />) },
+          {
+            path: `${paths.syncBatches}/:requestId`,
+            element: page("同步任务详情", <SyncBatchWorkspacePage />),
+          },
           // 首页及未知地址进入工作台；已有业务地址保持独立访问。
           { path: "*", element: <Navigate to={paths.workbench} replace /> },
         ],

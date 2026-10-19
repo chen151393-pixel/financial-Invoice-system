@@ -1,5 +1,7 @@
 # 文档索引
 
+2026-10-19 更新：柠檬云全账套后台任务及每日计划已实现，NS 定时仍待接入；当前部署与边界见[后台同步说明](lemon-background-sync.md)。下述带日期的验收结论保留历史口径。
+
 目标架构与开发规则以[架构设计 v2](architecture/README.md)为准（分步实施中）；现状先读[项目目录与架构地图](project-structure.md)了解文件放在哪里，再读[系统链路](system-chain.md)了解页面、服务、数据和业务缺口。本文只维护导航，模块规则不在此复制。
 
 2026-10-15：当前工作区已实现[数据库设计](architecture/database.md)第 10 节的 A—D 补强，迁移链至 `0015`（`0010`—`0015` 为各模块中文备注迁移）；open2 与定时同步待接入，目标库部署状态须另行核对。现有表和逐字段中文解释见[当前表设计与字段字典](mysql/current-data-dictionary.md)。匹配依据是审核冻结的子采购行，旧“按报关行开票”章节仅作历史。
@@ -58,6 +60,7 @@ SQL 文件位于 `mysql/`，不是统一自动迁移入口。4e 后仅使用 `ba
 | [架构方案](history/architecture-plan.md) | 分层原则及早期目标；目标目录、worker、接口草案不等于已实现 |
 | [发票与已审核子采购行匹配方案](lemon-invoice-matching-plan.md) | 第 0 节为当前修订规则，其余明确标记为历史；版本与换算补强待实施 |
 | [柠檬云进项发票接入与运维](lemon-invoice-sync-plan.md) | 已实现正式用户 Token、账套选择、手动拉票、版本保存；部署步骤与明细/正式联调边界 |
+| [柠檬云后台拉票与每日计划](lemon-background-sync.md) | 全部授权账套队列、持久任务、日期分片、每日回扫、失败重试和迁移部署 |
 | [企业微信供应商开票通知接入方案](wecom-supplier-notification-plan.md) | 第一阶段已接入：合同与通知提交、群主确认、目标群回执、幂等与异常恢复；真实定向验收待完成 |
 | [完整业务数据库设计](mysql/purchase-customs-invoice-schema-design.md) | 既有字段核实与目标设计，区别已存在表和计划表 |
 | [单据存储执行方案](history/document-storage-execution-plan.md) | 阶段性存储方案；按当前模块实现核对 |

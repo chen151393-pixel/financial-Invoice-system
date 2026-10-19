@@ -180,7 +180,9 @@ class LemonInvoiceClient:
             if not rows:
                 return records
             if page > 20:
-                raise ApiError(422, "本次超过 2000 张发票，请缩小日期范围；本次未保存")
+                raise ApiError(
+                    422, "本次超过 2000 张发票，请缩小日期范围；本次未保存", code="lemon_range_limit"
+                )
             for row in rows:
                 identifier = row.get("InvoiceId") if isinstance(row, dict) else None
                 if type(identifier) is not int or identifier <= 0 or identifier in seen:

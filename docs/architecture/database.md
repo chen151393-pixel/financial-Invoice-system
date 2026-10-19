@@ -1004,3 +1004,21 @@ API 发票默认版使用 `source=lemon_open2`、`lemon_account=open2:` 加 `SHA
 执行表 task_id/notification_id/group_binding_id 仅建立模块内外键；快照中的来源、审核 ID 不建跨模块外键。两表使用 UTC DATETIME(6) 及公共 created_at/updated_at，身份字符串用大小写敏感类型。PDF 字节和令牌不入库。完整字段见[字段字典](../mysql/current-data-dictionary.md)。
 
 任务、绑定和群守卫由账本写锁及行锁复核；外部上传/创建/查询均在事务外。领取过期不允许盲目重发：创建前可关闭失败，创建中转 unknown。结构回退只关闭发送开关，不允许降级删除证据。此处描述代码结构，不代表目标业务库已升级。
+
+
+## 柠檬云后台批次与每日计划（2026-10-19，迁移 0023）
+
+当前追加 `0023_sync_background`，仅修改 sync 所属表，不删除旧数据：
+
+| 表 | 新增字段与约束 |
+| --- | --- |
+| `sync_lemon_plans` | id、scope_key 唯一键、owner、enabled、revision、configuration JSON、next_run_at、created_at/updated_at；每个应用/管理员范围一份计划 |
+| `sync_runs` | scope_key、request_id、plan_id（模块内外键）、phase、configuration JSON；(scope_key,request_id) 唯一键、(scope_key,phase) 索引；旧行新增字段可空 |
+| `sync_lemon_jobs` | id、run_id（模块内外键）、request_id 唯一键、asid、account_name、start_date/end_date、status、error、created_at/updated_at；(run_id,status) 索引 |
+| `sync_lemon_runs` | background 布尔字段默认 false，区别后台分片与需要锁定页面选账套的即时操作 |
+
+`sync_runs.status` 保留原约束，细分状态在 phase：queued/discovering/running/completed/partial/failed/unknown；分片另有 split，拆分父片不参与最终数量统计。配置只含范围及绑定摘要，不保存 Token/密码。操作权限来自登录身份，后台使用计划保存时的身份范围。
+
+计划和执行时间以 UTC 存储，接口返回 Z 时间并由页面转换为 Asia/Shanghai；开票日期 start_date/end_date 与 window_start/window_end 表示包含起止日的业务窗口，不是修改时间水位。当前不推进 sync_cursors。
+
+任务领取、计划触发和手动提交使用绑定行锁；消费者命名锁在外部读取期间保持数据库连接，但不保持事务。发票原子请求提交仍复用事件事务；结果未知不自动清理、重置或重试。详见[后台同步说明](../lemon-background-sync.md)。

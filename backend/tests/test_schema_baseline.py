@@ -49,6 +49,8 @@ TABLES = {
     "sync_cursors",
     "sync_lemon_bindings",
     "sync_lemon_runs",
+    "sync_lemon_plans",
+    "sync_lemon_jobs",
 }
 NOW = "2026-10-10 00:00:00"
 

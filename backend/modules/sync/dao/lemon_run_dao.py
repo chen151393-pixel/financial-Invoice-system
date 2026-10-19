@@ -27,10 +27,13 @@ def latest(connection, scope):
     return dict(row) if row else None
 
 
-def running(connection, scope):
-    return connection.scalar(
-        select(table.c.id).where(table.c.scope_key == scope, table.c.status == "running").limit(1)
-    )
+def running(connection, scope, *, asid=None, manual_only=False):
+    conditions = [table.c.scope_key == scope, table.c.status == "running"]
+    if asid is not None:
+        conditions.append(table.c.asid == asid)
+    if manual_only:
+        conditions.append(table.c.background.is_(False))
+    return connection.scalar(select(table.c.id).where(*conditions).limit(1))
 
 
 def create(connection, values):

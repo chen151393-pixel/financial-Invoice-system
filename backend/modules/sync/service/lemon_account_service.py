@@ -29,7 +29,7 @@ class LemonAccountService:
         with self.engine.connect() as connection:
             row = bindings.get(connection, scope)
             latest = runs.latest(connection, scope)
-            active = runs.running(connection, scope)
+            active = runs.running(connection, scope, manual_only=True)
         reason = configuration_reason(self.binding.settings)
         if not row or row["status"] != "bound":
             reason = reason or "请先完成已有账号绑定并核实状态"
@@ -77,7 +77,7 @@ class LemonAccountService:
             raise ApiError(403, "当前绑定账号无权访问该账套，请刷新账套列表")
         with self.engine.begin() as connection:
             _, current = self.context(connection, owner, lock=True)
-            if initial["mobile"] != current["mobile"] or runs.running(connection, scope):
+            if initial["mobile"] != current["mobile"] or runs.running(connection, scope, manual_only=True):
                 raise ApiError(409, "绑定已变化或存在待核实同步，不能切换账套")
             bindings.select_account(connection, scope, asid, chosen["name"])
         return self.configuration(owner)

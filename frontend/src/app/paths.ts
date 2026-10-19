@@ -12,6 +12,7 @@ export const paths = {
   sync: "/sync",
   syncNs: "/sync/ns",
   syncLemon: "/sync/lemon",
+  syncBatches: "/sync/batches",
 } as const;
 
 // 旧地址，路由中重定向到新地址；保留一个版本后删除。
@@ -23,6 +24,7 @@ export const legacyPaths = {
 } as const;
 
 export const taskPath = (id: string) => `${paths.tasks}/${encodeURIComponent(id)}`;
+export const syncBatchPath = (id: string) => `${paths.syncBatches}/${encodeURIComponent(id)}`;
 export const matchingInvoicePath = (invoiceId: string) =>
   `${paths.matching}/${encodeURIComponent(invoiceId)}`;
 

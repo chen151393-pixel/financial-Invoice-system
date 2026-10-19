@@ -1,5 +1,7 @@
 # 系统架构设计 v2
 
+2026-10-19 更新：柠檬云全账套后台任务及每日计划已实现，NS 定时仍待接入；当前部署与边界见[后台同步说明](../lemon-background-sync.md)。下述带日期的验收结论保留历史口径。
+
 状态：**已确认（2026-10-09），按第 7 节分步实施中**。依据 `develop` 分支 `3537372`（已统一运行时数据库、新增供应商企微群配置）编写。各步骤完成后在第 7 节标注。
 
 **2026-10-15 修订**：以 `test` 的 `e7422b7` 为实现基线。第 4d 补强 A—D 和 4e 代码切换已实现：币种证据、全局开票依据、任务后继、数量换算、发票版本及冲正闭环。结构与验收契约见[数据库设计第 10 节](database.md)；open2、定时同步和业务库部署仍待后续实施。
@@ -31,7 +33,7 @@
 | 供应商比对 | 子采购单上没有纳税人识别号，先按规范化名称比对 |
 | 第 4 步实施方式 | **新旧并行，最后统一切换**（2026-10-10）：source、review、task 建在新目录、用新表和新接口前缀，页面逐个切换；invoice、matching 最后原地重建；旧模块在 4e 统一删除。过渡期新旧两套代码短暂并存，不写新旧表之间的适配代码 |
 
-## 1. 目标业务主线（定时与 open2 待接入）
+## 1. 目标业务主线（NS 定时待接入）
 
 ```text
 [定时] NS 报关单 + 子采购（自动关联） ──→ source
@@ -145,7 +147,7 @@ completed / partially_received → 按剩余有效收票回退到对应节点
 | task | `task_supplier_groups`、`task_tasks`、`task_lines`、`task_documents`、`task_notifications`、`task_events` |
 | invoice | `invoice_raw_records`、`invoice_headers`、`invoice_items`、`invoice_versions` |
 | matching | `matching_allocations` |
-| sync | `sync_runs`、`sync_cursors`、`sync_lemon_bindings`、`sync_lemon_runs` |
+| sync | `sync_runs`、`sync_cursors`、`sync_lemon_bindings`、`sync_lemon_runs`、`sync_lemon_plans`、`sync_lemon_jobs` |
 
 每张表只属于一个模块，只有该模块的 DAO 可以读写；跨模块只保存对方 ID，不建外键。
 
@@ -199,7 +201,7 @@ completed / partially_received → 按剩余有效收票回退到对应节点
 | 4d invoice + matching ✅ | 原地重建发票与比对（置信度建议、人工通过、`AllocationChanged`）；发票、比对页切换（`/matching`、`/matching/:invoiceId`）；source 同步读取母采购单头，子采购单币种取自母采购单（迁移 `0004`）；锁与名称规范化移入 `core/` | 一张报关单从审核走到任务完成，无需手工改状态（SQLite 测试与浏览器已验证）；MySQL 并发由补强步骤统一验收 |
 | 4d 补强 A—D ✅ | 按数据库第 10 节依次补币种证据、全局开票依据、任务后继、发票版本、双数量换算及冲正 | 固定 CNY 与母单继承、重复报关、完成后增量、撤销重开、版本复核与额度守恒；MySQL 迁移、并发和回滚验收通过 |
 | 4e 切换收尾 ✅ | 删除 business、reconciliation、audit、旧迁移链、`create_app` 过渡参数、`source.public` 过渡期导出及第 6 节标注"移到第 4 步"的删除项 | 只剩一套实现，全部测试通过 |
-| 5 定时同步 | sync 模块切换新表；NS 报关和子采购定时拉取；柠檬云 open2 定时拉票并生成比对建议 | 无人操作时新报关单、新发票自动进入工作台 |
+| 5 定时同步（部分完成） | 柠檬云全部授权账套后台任务、持久历史及每日计划已实现，见[后台同步](../lemon-background-sync.md)；NS 定时仍待接入 | 隔离环境已验证，生产迁移及计划启用另行执行；完整明细沿用待审核建议 |
 | 以后 | 多账号与角色、无人值守回执同步、NS 回写（从分支恢复） | 另行设计；企微人工确认提交与页面回执已接入，见通知方案 |
 
 ### 本次本地验收（2026-10-15）

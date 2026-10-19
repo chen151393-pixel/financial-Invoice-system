@@ -1,132 +1,112 @@
 import { Link } from "react-router";
-import { paths } from "../../app/paths";
+import { syncBatchPath } from "../../app/paths";
+import { Button } from "../../shared/components/Button";
+import { Pagination } from "../../shared/components/Pagination";
+import { useSyncBatches } from "./hooks/useSyncBatches";
+import { phaseOptions, syncTime } from "./types/background";
+import "./components/sync-background.css";
 
-/** 保留同步中心原有布局，平台卡片作为独立同步页入口。 */
 export function SyncOverview() {
+  const { data, error, loading, phase, change, refresh } = useSyncBatches();
   return (
-    <>
-      <div className="sync-overview__cards" id="sync-platforms">
-        <Link className="sync-overview__card" to={paths.syncNs} aria-label="NetSuite，进入 NS 数据同步">
-          <div className="sync-overview__card-head">
-            <span className="sync-overview__logo">N</span>
-            <div>
-              <h2>NetSuite</h2>
-              <small>OAuth 2.0 M2M · SuiteTalk REST</small>
-            </div>
-            <span className="sync-overview__badge">按需拉取</span>
-          </div>
-          <dl>
-            <div>
-              <dt>最后成功</dt>
-              <dd>暂无同步记录</dd>
-            </div>
-            <div>
-              <dt>同步游标</dt>
-              <dd>尚未启用</dd>
-            </div>
-            <div>
-              <dt>今日记录</dt>
-              <dd>暂无统计</dd>
-            </div>
-            <div>
-              <dt>失败任务</dt>
-              <dd>暂无统计</dd>
-            </div>
-          </dl>
-          <span className="sync-overview__enter">进入 NS 数据同步 →</span>
-        </Link>
-        <Link
-          className="sync-overview__card"
-          to={paths.syncLemon}
-          aria-label="柠檬云发票，进入柠檬云数据同步"
-        >
-          <div className="sync-overview__card-head">
-            <span className="sync-overview__logo sync-overview__logo--lemon">柠</span>
-            <div>
-              <h2>柠檬云发票</h2>
-              <small>手动 API 拉票 · Excel 发票导入</small>
-            </div>
-            <span className="sync-overview__badge">手动拉票</span>
-          </div>
-          <dl>
-            <div>
-              <dt>最后成功</dt>
-              <dd>暂无同步记录</dd>
-            </div>
-            <div>
-              <dt>同步游标</dt>
-              <dd>尚未启用</dd>
-            </div>
-            <div>
-              <dt>今日发票</dt>
-              <dd>暂无统计</dd>
-            </div>
-            <div>
-              <dt>失败任务</dt>
-              <dd>暂无统计</dd>
-            </div>
-          </dl>
-          <span className="sync-overview__enter">进入柠檬云数据同步 →</span>
-        </Link>
-        <article className="sync-overview__card">
-          <div className="sync-overview__card-head">
-            <span className="sync-overview__logo sync-overview__logo--pipeline">⇄</span>
-            <div>
-              <h2>对账数据管道</h2>
-              <small>标准化 → 匹配 → 异常 → 回写</small>
-            </div>
-            <span className="sync-overview__badge">待接入</span>
-          </div>
-          <div className="sync-overview__steps">
-            <b>拉取</b>
-            <span>→</span>
-            <b>清洗</b>
-            <span>→</span>
-            <b>匹配</b>
-            <span>→</span>
-            <b>审批</b>
-            <span>→</span>
-            <b>回写</b>
-          </div>
-          <p>自动调度与批次重算尚未接入。</p>
-          <button className="sync-overview__enter" disabled>
-            重算最近批次
-          </button>
-        </article>
+    <section className="sync-background" aria-label="同步执行记录">
+      <div className="sync-background__heading" id="sync-platforms">
+        <div>
+          <h2>同步执行记录</h2>
+          <p>柠檬云后台批次 · 每 5 秒刷新 · 北京时间</p>
+        </div>
+        {data && (
+          <p>
+            定时计划：{data.plan.enabled ? "已启用" : "已暂停"} · 下次执行：{syncTime(data.plan.nextRunAt)}
+          </p>
+        )}
       </div>
-      <section className="sync-overview__tasks">
-        <div className="sync-page__heading">
-          <div>
-            <h2>同步任务记录</h2>
-            <p>所有时间为 Asia/Shanghai · 任务历史尚未接入</p>
+      <p className="sync-background__notice">
+        柠檬云按账套独立执行，关闭页面后继续运行。NS 暂为手动同步，不计入此任务列表。
+      </p>
+      <div className="sync-background__inline sync-background__filters">
+        <label>
+          任务状态
+          <select value={phase} onChange={(event) => change(1, event.target.value)}>
+            {phaseOptions.map(([value, label]) => (
+              <option key={value} value={value}>
+                {label}
+              </option>
+            ))}
+          </select>
+        </label>
+        <Button onClick={refresh}>刷新记录</Button>
+        {data && (
+          <span>
+            已完成 {data.counts.completed ?? 0} 批 · 部分成功 {data.counts.partial ?? 0} 批 · 失败{" "}
+            {data.counts.failed ?? 0} 批 · 待核实 {data.counts.unknown ?? 0} 批
+          </span>
+        )}
+      </div>
+      {error && (
+        <p role="alert" className="sync-background__error">
+          {error}；已有记录可能不是最新状态。
+        </p>
+      )}
+      {loading && !data && <p role="status">正在读取执行记录…</p>}
+      {data && (
+        <>
+          <div className="sync-background__table" role="region" aria-label="后台同步批次表">
+            <table>
+              <thead>
+                <tr>
+                  <th>提交时间 / 触发方式</th>
+                  <th>开票日期范围</th>
+                  <th>状态</th>
+                  <th>读取</th>
+                  <th>新增 / 更新</th>
+                  <th>操作</th>
+                </tr>
+              </thead>
+              <tbody>
+                {data.items.length === 0 ? (
+                  <tr>
+                    <td colSpan={6}>当前条件下没有执行记录。可进入柠檬云提交后台拉取或启用定时计划。</td>
+                  </tr>
+                ) : (
+                  data.items.map((row) => (
+                    <tr key={row.requestId}>
+                      <td>
+                        {syncTime(row.createdAt)}
+                        <small>{row.trigger === "schedule" ? "定时计划" : "手动提交"}</small>
+                      </td>
+                      <td>
+                        {row.startDate} 至 {row.endDate}
+                        <small>{row.businessTypes.join("、")}</small>
+                      </td>
+                      <td>
+                        <span className="sync-background__status">{row.label}</span>
+                      </td>
+                      <td>{row.fetched}</td>
+                      <td>
+                        {row.created} / {row.updated}
+                      </td>
+                      <td>
+                        <Link to={syncBatchPath(row.requestId)}>查看账套明细</Link>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
           </div>
-          <button className="ui-button ui-button--secondary" disabled>
-            导出日志
-          </button>
-        </div>
-        <div className="sync-page__table">
-          <table>
-            <thead>
-              <tr>
-                <th>数据源</th>
-                <th>任务</th>
-                <th>批次号</th>
-                <th>记录数</th>
-                <th>完成时间</th>
-                <th>状态</th>
-                <th>操作</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr>
-                <td colSpan={7} className="sync-overview__empty">
-                  暂无可展示的同步任务记录，请点击上方平台卡片进入对应同步页面。
-                </td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      </section>
-    </>
+          <Pagination
+            label="同步任务分页"
+            total={data.total}
+            page={data.page}
+            pageCount={data.pages}
+            pageSize={data.pageSize}
+            pageSizes={[20]}
+            onPageChange={(page) => change(page)}
+            onPageSizeChange={() => {}}
+          />
+        </>
+      )}
+    </section>
   );
 }

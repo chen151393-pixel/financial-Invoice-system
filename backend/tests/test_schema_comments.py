@@ -16,6 +16,8 @@ from sqlalchemy import inspect, text
 TABLES = ALL_TABLES - {
     "sync_lemon_bindings",
     "sync_lemon_runs",
+    "sync_lemon_plans",
+    "sync_lemon_jobs",
     "task_external_groups",
     "task_group_imports",
     "task_contract_jobs",
@@ -31,7 +33,7 @@ MODULES = ("source", "review", "task", "invoice", "matching", "sync")
 def test_entity_comments_cover_all_columns():
     for module in MODULES:
         importlib.import_module(f"backend.modules.{module}.entity")
-    assert set(schema_metadata.tables) == ALL_TABLES - {"sync_runs", "sync_cursors"}
+    assert set(schema_metadata.tables) == ALL_TABLES - {"sync_cursors"}
     for table in schema_metadata.tables.values():
         assert table.comment and re.search(r"[\u4e00-\u9fff]", table.comment), table.name
         for column in table.c:
@@ -140,6 +142,15 @@ def assert_mysql_comments(engine, comments):
             continue
         assert comments[name]["__table__"] == table.comment
         for column in table.c:
+            if name == "sync_runs" and column.name in {
+                "scope_key",
+                "request_id",
+                "plan_id",
+                "phase",
+                "configuration",
+            }:
+                # 本项固定停在 0015；0023 新字段由实体完整性与最新结构测试覆盖。
+                continue
             # 本测试停在 0015；0022 的企微接入另行更新两列备注，不能倒改历史迁移。
             historical = {
                 ("task_notifications", "channel"): "通知渠道：manual 人工登记；wecom 企业微信自动发送预留",

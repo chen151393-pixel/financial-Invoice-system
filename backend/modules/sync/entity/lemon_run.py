@@ -1,6 +1,6 @@
 """柠檬云手动拉取的持久请求与提交结果。"""
 
-from sqlalchemy import JSON, Column, Date, Index, String, Table, UniqueConstraint
+from sqlalchemy import JSON, Boolean, Column, Date, Index, String, Table, UniqueConstraint, false
 
 from backend.core.schema import ID, identifier, schema_metadata, table_options, timestamps
 
@@ -22,6 +22,7 @@ lemon_runs = Table(
     ),
     Column("result", JSON, nullable=True, comment="已提交的实际保存统计"),
     Column("error", String(500), nullable=True, comment="脱敏失败原因"),
+    Column("background", Boolean, nullable=False, server_default=false(), comment="是否由后台队列执行"),
     *timestamps(),
     UniqueConstraint("scope_key", "request_id", name="uq_sync_lemon_request"),
     Index("ix_sync_lemon_scope_status", "scope_key", "status"),

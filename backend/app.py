@@ -44,14 +44,19 @@ from .modules.source.public import DeclarationService, PlScriptService, SourceCh
 from .modules.source.public import SubpoContractSource as SourceContracts
 from .modules.source.service.storage_service import StorageService as SourceStorageService
 from .modules.sync.controller import create_router as sync_router
+from .modules.sync.controller.lemon_batch_controller import create_router as lemon_batch_router
 from .modules.sync.controller.lemon_binding_controller import create_router as lemon_binding_router
 from .modules.sync.controller.lemon_invoice_controller import create_router as lemon_invoice_router
 from .modules.sync.public import LemonInvoicesFetched
 from .modules.sync.pull_service import PullService
 from .modules.sync.service import ConnectionService
 from .modules.sync.service.lemon_account_service import LemonAccountService
+from .modules.sync.service.lemon_batch_service import LemonBatchService
 from .modules.sync.service.lemon_binding_service import LemonBindingService
 from .modules.sync.service.lemon_invoice_service import LemonInvoiceService, on_lemon_invoices_stored
+from .modules.sync.service.lemon_job_service import LemonJobService
+from .modules.sync.service.lemon_plan_service import LemonPlanService
+from .modules.sync.service.lemon_worker import LemonWorker
 from .modules.task.controller.delivery_controller import create_router as delivery_router
 from .modules.task.controller.external_group_controller import create_router as external_group_router
 from .modules.task.controller.supplier_group_controller import create_router as task_group_router
@@ -94,8 +99,11 @@ def create_app(settings=None, ns=None, engine=None, wecom=None, lemon=None, lemo
         try:
             verify_database(engine)
             app.state.contract_worker.start()
+            app.state.lemon_worker.start()
             yield
         finally:
+            if hasattr(app.state, "lemon_worker"):
+                await asyncio.to_thread(app.state.lemon_worker.stop)
             if hasattr(app.state, "contract_worker"):
                 await asyncio.to_thread(app.state.contract_worker.stop)
             if owns_lemon_invoices:
@@ -152,7 +160,12 @@ def create_events():
 def _register_business(app, settings, ns, contract_ns, wecom, engine, lemon_invoices):
     events = create_events()
     lemon_accounts = LemonAccountService(app.state.lemon_binding, lemon_invoices)
-    app.include_router(lemon_invoice_router(lemon_accounts, LemonInvoiceService(lemon_accounts, events)))
+    lemon_service = LemonInvoiceService(lemon_accounts, events)
+    app.include_router(lemon_invoice_router(lemon_accounts, lemon_service))
+    batches = LemonBatchService(lemon_accounts)
+    plans = LemonPlanService(batches)
+    app.include_router(lemon_batch_router(batches, plans))
+    app.state.lemon_worker = LemonWorker(plans, LemonJobService(batches, lemon_service))
     pl_comparison = PlScriptService(ns, engine)
     app.include_router(source_pl_router(pl_comparison))
     # source 保存来源，review 冻结依据，task 订阅审核通过生成任务。

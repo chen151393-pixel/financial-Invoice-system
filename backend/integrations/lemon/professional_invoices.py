@@ -18,7 +18,7 @@ def invoice_rows(data):
     if type(total) is not int or total < 0 or not isinstance(rows, list):
         raise ApiError(502, "柠檬云专业版发票分页格式异常，本次未保存")
     if total > MAX_INVOICES:
-        raise ApiError(422, "本次超过 2000 张发票，请缩小日期范围；本次未保存")
+        raise ApiError(422, "本次超过 2000 张发票，请缩小日期范围；本次未保存", code="lemon_range_limit")
     if len(rows) > PAGE_SIZE + 1 or any(not isinstance(row, dict) for row in rows):
         raise ApiError(502, "柠檬云专业版发票分页行数或格式异常，本次未保存")
     # 真实接口在每页末尾返回合计；终止页也可能只有合计。不能泛化跳过缺编号行。

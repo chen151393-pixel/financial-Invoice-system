@@ -45,7 +45,7 @@ class LemonInvoiceService:
                 ):
                     raise ApiError(409, "同一请求编号不能用于不同账套或日期范围")
                 return scope, binding, previous
-            if runs.running(connection, scope):
+            if runs.running(connection, scope, asid=body.asid):
                 raise ApiError(409, "已有执行中或结果待核实的同步，请先查询原结果")
             if binding["selected_asid"] != body.asid:
                 raise ApiError(409, "所选账套已变化，请刷新后重新选择")
@@ -64,6 +64,27 @@ class LemonInvoiceService:
                 },
             )
         return scope, binding, None
+
+    def prepare_background(self, connection, owner, body, account_name):
+        """与队列领取同事务；不读写页面当前账套，但仍复核绑定与账户互斥。"""
+        scope, binding = self.accounts.context(connection, owner, lock=True)
+        if runs.running(connection, scope, asid=body.asid):
+            raise ApiError(409, "该账套已有执行中或结果待核实的拉取，本日期分片未执行")
+        runs.create(
+            connection,
+            {
+                "scope_key": scope,
+                "request_id": body.requestId,
+                "asid": body.asid,
+                "account_name": account_name,
+                "start_date": date.fromisoformat(body.startDate),
+                "end_date": date.fromisoformat(body.endDate),
+                "status": "running",
+                "background": True,
+                "result": {"businessTypes": body.businessTypes, "invoiceIds": []},
+            },
+        )
+        return scope, binding
 
     def pull(self, owner, body, *, targets=None):
         try:
@@ -97,13 +118,15 @@ class LemonInvoiceService:
         )
         return professional, records
 
-    def _execute(self, owner, body, scope, binding, targets):
+    def _execute(self, owner, body, scope, binding, targets=None, *, background=False):
         try:
             professional, records = self._fetch(body, binding, targets)
             namespace = account_namespace(self.accounts.binding.settings.lemon_host, body.asid, professional)
             with transaction(self.engine) as connection:
                 _, current = self.accounts.context(connection, owner, lock=True)
-                if current["mobile"] != binding["mobile"] or current["selected_asid"] != body.asid:
+                if current["mobile"] != binding["mobile"] or (
+                    not background and current["selected_asid"] != body.asid
+                ):
                     raise ApiError(409, "拉取期间绑定或账套已变化，本次未保存")
                 if targets is not None:
                     current_targets = read_lemon_refresh_targets(connection, [row["id"] for row in targets])
