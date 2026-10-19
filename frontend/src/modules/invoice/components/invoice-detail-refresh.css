@@ -1,0 +1,19 @@
+.invoice-detail-refresh {
+  padding: var(--space-control);
+  border-bottom: 1px solid var(--color-border);
+  font-size: inherit;
+  overflow-wrap: anywhere;
+}
+.invoice-detail-refresh__actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-control);
+}
+.invoice-detail-refresh p {
+  margin: var(--space-small) 0;
+}
+.invoice-detail-refresh details {
+  max-height: 16rem;
+  overflow: auto;
+}

@@ -1,0 +1,35 @@
+/* 票面状态与比对状态独立展示；文字标签始终保留，颜色仅辅助扫描。 */
+.invoice-list .invoice-status-badge--red_letter {
+  color: var(--color-danger-text);
+  background: var(--color-danger-surface);
+}
+.invoice-list .invoice-status-badge--red_offset {
+  color: var(--color-feedback);
+  background: var(--color-warning-surface);
+}
+.invoice-list .invoice-status-badge--void {
+  color: var(--color-inactive-text);
+  background: var(--color-inactive-surface);
+}
+.invoice-list .invoice-status-badge--red_offset,
+.invoice-list .invoice-status-badge--red_letter,
+.invoice-list .invoice-status-badge--void {
+  border: 1px solid currentColor;
+  font-weight: 600;
+}
+.invoice-list .invoice-status-notice {
+  padding: var(--space-control);
+  margin-bottom: var(--space-layout);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-control);
+}
+.invoice-list .invoice-status-notice p {
+  color: inherit;
+  margin: var(--space-small) 0 0;
+  line-height: 1.6;
+}
+.invoice-list .invoice-list__status-filter {
+  display: flex;
+  align-items: center;
+  gap: var(--space-small);
+}

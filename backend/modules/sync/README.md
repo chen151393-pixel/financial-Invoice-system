@@ -1,5 +1,15 @@
 # 数据同步与连接模块
 
+## 进项发票列表定向补拉（2026-10-19）
+
+- `POST /api/sync/lemon/invoices/detail-actions`：请求 `{invoiceIds: ["1"]}`，返回逐票 `{invoiceId, allowed, reason}` 和最近同步记录。只读校验绑定、当前账套、来源渠道及执行中请求。
+- `POST /api/sync/lemon/invoices/refresh-details`：请求 `{invoiceIds: ["1", "2"], requestId: "UUID"}`。单次 1–100 张且 ID 不重复；仅支持专业版 API 原票。服务端读取日期、业务类型和原来源 ID，用户无需再填写日期。所选票日期跨度最多 366 天，范围内来源列表仍遵循 2000 张上限。
+- 响应沿用 `LemonRun`；`GET /api/sync/lemon/runs/{request_id}` 查询原结果。请求编号和选中 ID 持久保存在原同步记录，同编号换范围返回 409。网络结果未知时只查原请求，不自动重发。
+
+`service/lemon_detail_refresh_service.py` 通过 invoice 门面读取来源与版本，复用 `LemonInvoiceService` 的事务外拉取、持久请求、事件保存及匹配流程。只读取所选票的商品明细，不保存同日期范围的其他发票；任一票不存在、原账套不符、上游未返回所选票、拉取期间版本改变或明细校验失败，整批不保存。返回 `detailIssues/detailIssueCount` 解释未补齐原因。
+
+测试：`tests/sync/test_lemon_detail_refresh.py` 验证单张/批量、身份、范围、幂等和失败；`test_lemon_refresh_mysql.py` 在随机隔离 MySQL 库验证同请求和不同请求竞争。没有执行真实 NS 写入。
+
 柠檬云页 `/sync/lemon` 现由应用层装配发票模块的Excel导入组件，支持原文件预览和确认入库。导入使用独立 `/api/invoices/import/*` 契约，见[发票模块](../invoice/README.md)；本模块已提供已有账号授权绑定、账套选择和 API 手动拉票；接口与部署见[接入说明](../../../docs/lemon-invoice-sync-plan.md)。配置、前端操作与接口见[账号绑定说明](../../../docs/lemon-account-binding.md)。
 
 展示服务器连接配置与最近M2M认证结果，支持三类单据只读分页拉取；子采购订单和报关单另支持补齐明细后按页保存到独立 MySQL 的 source 新表（架构 v2 第 4b 步起）。尚未执行定时全量或增量同步，不写回 NS。

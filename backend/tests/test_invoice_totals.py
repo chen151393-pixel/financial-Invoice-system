@@ -99,7 +99,8 @@ def test_filters_multiple_currencies_and_negative_invoice(engine, world):
     assert amount(groups["CNY"], "pendingAmount") == Decimal("100.50")
     assert amount(groups["USD"], "pendingAmount") == Decimal("20")
     assert totals(world, q="第二")[0].currency == "USD"
-    assert totals(world, status="red_offset")[0].count == 1
+    assert totals(world, status="red_letter")[0].count == 1
+    assert totals(world, status="red_offset") == []
     assert totals(world, date_from="2026-10-11") == []
     assert totals(world, date_from="2026-10-10", date_to="2026-10-10")[0].count == 2
     assert totals(world, q="%") == []
@@ -126,6 +127,49 @@ def test_all_pages_and_header_only_invoices(engine, world):
     assert amount(result, "pendingAmount") == Decimal("100.50") * 503
     assert amount(result, "gross") == Decimal(page.amounts[0].gross)
     assert amount(result, "tax") == Decimal(page.amounts[0].tax)
+
+
+def test_red_letter_display_and_filter_include_existing_normal_negative_invoices(engine, world):
+    states = ["正常", "正常", "已红冲", "已红冲", "作废", "未知状态"]
+    import_invoices(
+        world,
+        [
+            invoice(
+                f"2600000000000000960{index}",
+                [
+                    (
+                        "商品",
+                        "个",
+                        "-1" if negative else "1",
+                        "-10.00" if negative else "10.00",
+                        "-1.30" if negative else "1.30",
+                    )
+                ],
+                status=status,
+            )
+            for index, (status, negative) in enumerate(
+                zip(states, [False, True, False, True, True, True], strict=True)
+            )
+        ],
+    )
+    service = InvoiceService(engine)
+    expected = {
+        "normal": (1, "正常"),
+        "red_letter": (2, "红字发票"),
+        "red_offset": (1, "已被红冲"),
+        "void": (1, "作废"),
+        "unknown": (1, "未知"),
+    }
+    for status, (count, label) in expected.items():
+        result = service.browse(InvoiceQuery(status=status, page_size=1))
+        aggregate = totals(world, status=status)[0]
+        assert result.total == count == aggregate.count
+        assert result.rows[0].displayStatus == status and result.rows[0].status == label
+        assert Decimal(result.amounts[0].gross) == amount(aggregate, "gross")
+    red = service.browse(InvoiceQuery(status="red_letter", page=2, page_size=1)).rows[0]
+    assert red.sourceStatus == "normal" and red.displayStatus == "red_letter"
+    assert service.detail(int(red.id)).status == "红字发票"
+    assert amount(totals(world, status="red_letter")[0], "gross") == Decimal("-22.60")
 
 
 def test_http_auth_validation_and_read_only_contract(engine, env):

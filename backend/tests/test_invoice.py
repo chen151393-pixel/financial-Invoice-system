@@ -119,7 +119,7 @@ def test_list_filters_amounts_and_detail(engine, imports):
     listed = service.browse(InvoiceQuery())
     assert listed.total == 3 and listed.amounts[0].currency == "CNY"
     assert listed.amounts[0].gross == "120.40"
-    assert service.browse(InvoiceQuery(status="red_offset")).total == 1
+    assert service.browse(InvoiceQuery(status="red_letter")).total == 1
     assert service.browse(InvoiceQuery(q="0000000003")).total == 1
     assert service.browse(InvoiceQuery(page_size=2, page=2)).rows[0].number == "26000000000000000001"
     first = next(row for row in listed.rows if row.number.endswith("0001"))
@@ -129,6 +129,33 @@ def test_list_filters_amounts_and_detail(engine, imports):
     with pytest.raises(ApiError) as error:
         service.detail(999999)
     assert error.value.status == 404
+
+
+@pytest.mark.parametrize(
+    ("source_status", "query_status", "label"),
+    [("已红冲", "red_offset", "已被红冲"), ("已被红冲", "red_offset", "已被红冲"), ("作废", "void", "作废")],
+)
+def test_status_filter_keeps_pagination_totals_and_detail_consistent(
+    engine, imports, source_status, query_status, label
+):
+    content = workbook(
+        [
+            invoice("26000000000000009101", [("普通商品", "个", "1", "10.00", "1.30")]),
+            invoice("26000000000000009102", [("异常商品", "个", "1", "20.00", "2.60")], status=source_status),
+            invoice("26000000000000009103", [("异常商品", "个", "1", "30.00", "3.90")], status=source_status),
+        ]
+    )
+    run(imports, content, "status.xlsx")
+    service = InvoiceService(engine)
+    result = service.browse(InvoiceQuery(status=query_status, page_size=1, page=2))
+    assert result.total == 2 and len(result.rows) == 1
+    assert result.amounts[0].gross == "56.50"
+    row = result.rows[0]
+    assert row.sourceStatus == query_status and row.status == label and row.statusNotice
+    assert service.detail(int(row.id)).statusNotice == row.statusNotice
+    normal = service.browse(InvoiceQuery(status="normal")).rows[0]
+    assert normal.status == "正常" and normal.statusNotice is None
+    assert service.browse(InvoiceQuery(status=query_status, q="不存在")).total == 0
 
 
 def test_http_import_and_list(context, engine):
@@ -153,6 +180,10 @@ def test_http_import_and_list(context, engine):
         assert saved.status_code == 200 and saved.json()["created"] == 3
         listed = client.get("/api/invoices?page_size=2", headers=headers).json()
         assert listed["total"] == 3 and len(listed["rows"]) == 2
+        red = client.get("/api/invoices?status=red_letter", headers=headers).json()
+        assert red["total"] == 1 and red["rows"][0]["displayStatus"] == "red_letter"
+        totals = client.get("/api/matching/invoice-totals?status=red_letter", headers=headers).json()
+        assert totals["amounts"][0]["count"] == 1
         assert client.get("/api/invoices/0", headers=headers).status_code == 400
 
 

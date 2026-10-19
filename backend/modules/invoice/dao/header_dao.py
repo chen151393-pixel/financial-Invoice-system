@@ -42,8 +42,16 @@ def _conditions(query):
                 headers.c.seller_tax_no.contains(keyword, autoescape=True),
             )
         )
-    if query.status:
+    if query.status == "red_letter":
+        conditions.extend(
+            [headers.c.status.in_(("normal", "red_offset")), headers.c.amount_including_tax < 0]
+        )
+    elif query.status:
         conditions.append(headers.c.status == query.status)
+        if query.status in ("normal", "red_offset"):
+            conditions.append(
+                or_(headers.c.amount_including_tax >= 0, headers.c.amount_including_tax.is_(None))
+            )
     if query.date_from:
         conditions.append(headers.c.invoice_date >= query.date_from)
     if query.date_to:

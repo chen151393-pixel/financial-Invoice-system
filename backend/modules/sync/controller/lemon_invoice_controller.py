@@ -4,12 +4,24 @@ from fastapi import APIRouter
 
 from backend.core.dependencies import Owner
 
+from ..dto.lemon_detail_dto import LemonDetailSelection, RefreshLemonDetails
 from ..dto.lemon_invoice_dto import PullLemonInvoices, SelectLemonAccount
+from ..service.lemon_detail_refresh_service import LemonDetailRefreshService
+from ..vo.lemon_detail_vo import LemonDetailActions
 from ..vo.lemon_invoice_vo import LemonAccounts, LemonConfiguration, LemonRun
 
 
 def create_router(accounts, service):
     router = APIRouter(prefix="/api/sync/lemon", tags=["柠檬云进项发票同步"])
+    details = LemonDetailRefreshService(service)
+
+    @router.post("/invoices/detail-actions", response_model=LemonDetailActions)
+    def detail_actions(body: LemonDetailSelection, owner: Owner):
+        return details.actions(owner, body)
+
+    @router.post("/invoices/refresh-details", response_model=LemonRun)
+    def refresh_details(body: RefreshLemonDetails, owner: Owner):
+        return details.refresh(owner, body)
 
     @router.get("/invoices/configuration", response_model=LemonConfiguration)
     def configuration(owner: Owner):

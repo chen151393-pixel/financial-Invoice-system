@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Button } from "../../../shared/components/Button";
 import type { InvoiceFilters as Filters } from "../types/invoice";
+import "./invoice-status.css";
 
 export const emptyFilters: Filters = { q: "", status: "", date_from: "", date_to: "" };
 
@@ -36,6 +37,20 @@ export function InvoiceFilters({
           placeholder="搜索发票 / 供应商 / 税号"
           onChange={(event) => onChange({ ...draft, q: event.target.value })}
         />
+        <label className="invoice-list__status-filter">
+          票面状态
+          <select
+            value={draft.status}
+            onChange={(event) => onChange({ ...draft, status: event.target.value })}
+          >
+            <option value="">全部状态</option>
+            <option value="normal">正常</option>
+            <option value="red_letter">红字发票</option>
+            <option value="red_offset">已被红冲</option>
+            <option value="void">作废</option>
+            <option value="unknown">未知</option>
+          </select>
+        </label>
         <Button type="submit" disabled={loading}>
           查询
         </Button>
@@ -54,19 +69,6 @@ export function InvoiceFilters({
       </div>
       {expanded && (
         <div className="invoice-list__more-filters" id="invoice-more-filters">
-          <label>
-            票面状态
-            <select
-              value={draft.status}
-              onChange={(event) => onChange({ ...draft, status: event.target.value })}
-            >
-              <option value="">全部状态</option>
-              <option value="normal">正常</option>
-              <option value="red_offset">已红冲</option>
-              <option value="void">作废</option>
-              <option value="unknown">未知</option>
-            </select>
-          </label>
           <label>
             开票日期从
             <input

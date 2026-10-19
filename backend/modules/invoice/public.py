@@ -13,6 +13,7 @@ from .policy.lemon_scope_policy import (
     lemon_import_defaults,
 )
 from .service.invoice_reader import lock_invoice, read_invoice_amount_scope, read_invoices
+from .service.lemon_refresh_reader import read_lemon_refresh_targets
 
 
 @dataclass(frozen=True)
@@ -23,6 +24,7 @@ class InvoicesImported:
 
 
 __all__ = [
+    "read_lemon_refresh_targets",
     "InvoicesImported",
     "lock_invoice",
     "read_invoices",

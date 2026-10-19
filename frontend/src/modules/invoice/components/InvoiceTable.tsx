@@ -1,7 +1,9 @@
 import { Button } from "../../../shared/components/Button";
 import type { MatchingSummary } from "../../matching/api";
 import type { InvoiceRow } from "../types/invoice";
+import type { useDetailRefresh } from "../hooks/useDetailRefresh";
 import { money, shown } from "./format";
+import "./invoice-status.css";
 
 const tierLabels = { high: "高", medium: "中", low: "低", manual: "人工" } as const;
 const tone = (summary?: MatchingSummary) =>
@@ -13,12 +15,14 @@ export function InvoiceTable({
   matchingError,
   onMatch,
   onDetail,
+  refresh,
 }: {
   rows: InvoiceRow[];
   matching: Record<string, MatchingSummary>;
   matchingError: string;
   onMatch: (id: string) => void;
   onDetail: (id: string) => void;
+  refresh?: ReturnType<typeof useDetailRefresh>;
 }) {
   const pending = matchingError ? "读取失败" : "读取中…";
   return (
@@ -30,6 +34,22 @@ export function InvoiceTable({
       <table>
         <thead>
           <tr>
+            {refresh && (
+              <th scope="col">
+                <input
+                  type="checkbox"
+                  aria-label="选择本页可补拉发票"
+                  disabled={refresh.blocked || !rows.some((row) => refresh.actions[row.id]?.allowed)}
+                  checked={
+                    rows.some((row) => refresh.actions[row.id]?.allowed) &&
+                    rows
+                      .filter((row) => refresh.actions[row.id]?.allowed)
+                      .every((row) => refresh.selected.includes(row.id))
+                  }
+                  onChange={(event) => refresh.selectAll(event.target.checked)}
+                />
+              </th>
+            )}
             {[
               "发票号码 / 来源",
               "供应商 / 税号",
@@ -52,6 +72,18 @@ export function InvoiceTable({
             const summary = matching[row.id];
             return (
               <tr key={row.id}>
+                {refresh && (
+                  <td>
+                    <input
+                      type="checkbox"
+                      aria-label={`选择发票${row.number}`}
+                      title={refresh.actions[row.id]?.reason ?? "正在读取补拉权限"}
+                      disabled={refresh.blocked || !refresh.actions[row.id]?.allowed}
+                      checked={refresh.selected.includes(row.id)}
+                      onChange={(event) => refresh.select(row.id, event.target.checked)}
+                    />
+                  </td>
+                )}
                 <td>
                   <b>{row.number}</b>
                   <small>
@@ -82,7 +114,11 @@ export function InvoiceTable({
                 <td>{summary?.tier ? tierLabels[summary.tier] : "—"}</td>
                 <td>{new Date(row.importedAt).toLocaleString("zh-CN", { timeZone: "Asia/Shanghai" })}</td>
                 <td>
-                  <span className="invoice-list__badge">{row.status}</span>
+                  <span
+                    className={`invoice-list__badge invoice-status-badge--${row.displayStatus ?? row.sourceStatus}`}
+                  >
+                    {row.status}
+                  </span>
                 </td>
                 <td>
                   <Button
@@ -95,6 +131,21 @@ export function InvoiceTable({
                   <Button className="invoice-list__view" onClick={() => onDetail(row.id)}>
                     票面详情
                   </Button>
+                  {refresh && (
+                    <div>
+                      <Button
+                        className="invoice-list__view"
+                        disabled={refresh.blocked || !refresh.actions[row.id]?.allowed}
+                        title={refresh.actions[row.id]?.reason ?? "正在读取补拉权限"}
+                        onClick={() => void refresh.execute([row.id])}
+                      >
+                        重新拉取商品明细
+                      </Button>
+                      {!refresh.actions[row.id]?.allowed && (
+                        <small>{refresh.actions[row.id]?.reason ?? "正在读取补拉权限…"}</small>
+                      )}
+                    </div>
+                  )}
                 </td>
               </tr>
             );

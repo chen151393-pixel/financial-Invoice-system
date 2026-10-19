@@ -4,6 +4,7 @@ import type { MatchingSummary } from "../../matching/api";
 import type { InvoiceDetail } from "../types/invoice";
 import { money, shown } from "./format";
 import "./invoice-detail.css";
+import "./invoice-status.css";
 
 const LINE_HEADERS = [
   "行号",
@@ -73,6 +74,16 @@ export function InvoiceDetailDrawer({
         )}
         {detail && (
           <>
+            {detail.statusNotice && (
+              <div className="invoice-status-notice" role="status">
+                <span
+                  className={`invoice-list__badge invoice-status-badge--${detail.displayStatus ?? detail.sourceStatus}`}
+                >
+                  {detail.status}
+                </span>
+                <p>{detail.statusNotice}</p>
+              </div>
+            )}
             <dl className="invoice-list__metadata">
               {[
                 ["发票号码", detail.number],
@@ -93,7 +104,17 @@ export function InvoiceDetailDrawer({
               ].map(([label, value]) => (
                 <div key={label}>
                   <dt>{label}</dt>
-                  <dd>{shown(value)}</dd>
+                  <dd>
+                    {label === "票面状态" ? (
+                      <span
+                        className={`invoice-list__badge invoice-status-badge--${detail.displayStatus ?? detail.sourceStatus}`}
+                      >
+                        {shown(value)}
+                      </span>
+                    ) : (
+                      shown(value)
+                    )}
+                  </dd>
                 </div>
               ))}
             </dl>

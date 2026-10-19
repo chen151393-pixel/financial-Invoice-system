@@ -1,5 +1,11 @@
 # invoice 模块：进项发票
 
+## 列表状态展示（2026-10-19）
+
+列表及详情保留 `sourceStatus` 状态码，返回展示分类 `displayStatus` 和可空中文 `statusNotice`。`policy/invoice_status_policy.py` 将入库状态为 normal/red_offset 且含税金额为负的票展示为 `red_letter`（红字发票）；其余 red_offset 票展示为“已被红冲”。作废、未知状态优先保留。该分类兼容已入库的“正常”负数 Excel 票，不改写历史版本、不要求重新导入；不凭负金额推断原票已被红冲，也不猜测关联关系。Excel 来源状态兼容“已红冲”“已被红冲”两种明确文本。
+
+查询 `status` 支持 `normal/red_letter/red_offset/void/unknown`，列表、分页与统计复用同一 DAO 条件。normal/red_offset 筛选排除已归类 red_letter 的负数票，作废/未知票仍按来源状态筛选。正常票提示为空，其余分类返回说明。不更改匹配规则，无数据库迁移。测试覆盖来源“正常”的负数票、来源红冲的正负票、作废和未知负数票，以及分页、详情、统计与 HTTP 查询的一致性。
+
 架构 v2 第 4d 步在原地重建：读写新表 `invoice_raw_records`、`invoice_headers`、`invoice_items`（[数据库设计](../../../docs/architecture/database.md)第 4.4 节）。旧两表 `invoices`、`invoice_lines` 不再读写，旧数据不迁移。
 
 **2026-10-15 接入与版本修订**：本期柠檬云 `GetInvoice` 人民币进项票和现有柠檬云 Excel 通道在适配时明确写入 `CNY`，不因接口无币种字段逐票转待核实；已记录 `currency_source=source_rule` 与 `source_rule_version=lemon_cny_v1`。这是本期来源范围约定，不依赖 NS 采购币种推断发票币种。
@@ -78,3 +84,11 @@ API 业务类型支持多选，默认“采购固定资产”和“采购支出�
 重新按原账套、日期范围拉取即可给既有票头补全，保持发票 ID；内容相同不重复建版或建议。完成后通过现有 InvoicesImported 自动生成建议；发票后续变化沿用 InvoiceChanging/InvoiceChanged 使已确认分配待复核。无需新增表或迁移。完整性统计读取保存后的真实投影，不能把明细完整等同已匹配。
 
 详情协议、默认版边界与验证范围见[接入说明](../../../docs/lemon-invoice-sync-plan.md#专业版商品明细与匹配2026-10-19)。
+
+### 列表定向补拉与未补齐原因
+
+`read_lemon_refresh_targets(connection, invoice_ids)` 经 `public.py` 返回补拉所需来源身份、原账套命名空间、日期及当前版本，不暴露原始正文。sync 根据这些数据复用原拉票用例，invoice 继续通过同一事件与版本服务保存。
+
+修正已有空票头补拉不完整行时仍显示 0 行的问题：无历史逻辑行时保存实际收到的商品行用于展示，仍保持 pending、禁止确认匹配；已有逻辑行时继续保留原投影与分配。结果的 `detailIssues` 给出空商品行、缺少匹配字段或身份歧义的具体原因，最多返回 100 张，`detailIssueCount` 为总数。来源为空时不会伪造商品行。
+
+验证：`tests/sync/test_lemon_detail_refresh.py` 覆盖空票头补行、空响应原因与重复版本；既有匹配测试继续检查版本失效和占用保护。无需数据库迁移。

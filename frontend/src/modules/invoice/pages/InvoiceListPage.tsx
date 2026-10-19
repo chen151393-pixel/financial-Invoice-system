@@ -14,6 +14,8 @@ import { emptyFilters, InvoiceFilters } from "../components/InvoiceFilters";
 import { InvoiceDetailDrawer } from "../components/InvoiceDetailDrawer";
 import { InvoiceSummary } from "../components/InvoiceSummary";
 import { InvoiceTable } from "../components/InvoiceTable";
+import { InvoiceDetailRefresh } from "../components/InvoiceDetailRefresh";
+import { useDetailRefresh } from "../hooks/useDetailRefresh";
 import type { InvoiceDetail, InvoiceListResult } from "../types/invoice";
 import "./invoice-list.css";
 
@@ -48,6 +50,11 @@ export function InvoiceListPage() {
     setQuery(next);
   }
   const refresh = () => updateQuery({ ...query, version: query.version + 1 });
+  const detailRefresh = useDetailRefresh(data?.rows.map((row) => row.id) ?? [], refresh);
+  function changeQuery(next: Query) {
+    detailRefresh.clearSelection();
+    updateQuery(next);
+  }
 
   useEffect(() => {
     // 浏览器返回缓存页时重新查询，避免显示过期的比对状态。
@@ -141,13 +148,13 @@ export function InvoiceListPage() {
           loading={loading}
           onChange={setDraft}
           onSubmit={() =>
-            updateQuery({ ...draft, page: 1, pageSize: query.pageSize, version: query.version + 1 })
+            changeQuery({ ...draft, page: 1, pageSize: query.pageSize, version: query.version + 1 })
           }
           onReset={() => {
             setDraft(emptyFilters);
-            updateQuery({ ...emptyFilters, page: 1, pageSize: query.pageSize, version: query.version + 1 });
+            changeQuery({ ...emptyFilters, page: 1, pageSize: query.pageSize, version: query.version + 1 });
           }}
-          onRefresh={refresh}
+          onRefresh={() => changeQuery({ ...query, version: query.version + 1 })}
         />
         <div className="invoice-list__context">
           <span>数据范围：已导入的进项发票，统计覆盖当前筛选的全部页</span>
@@ -155,6 +162,7 @@ export function InvoiceListPage() {
           <span>票面税额不代表可抵扣税额</span>
           <span>待复核金额与待匹配金额可能重叠，不应相加</span>
         </div>
+        <InvoiceDetailRefresh state={detailRefresh} />
         {loading && (
           <p className="invoice-list__message" role="status">
             正在读取数据库发票…
@@ -186,6 +194,7 @@ export function InvoiceListPage() {
                 rows={data.rows}
                 matching={matching}
                 matchingError={matchingError}
+                refresh={detailRefresh}
                 onMatch={openMatching}
                 onDetail={(id) => {
                   setDetail(null);
@@ -202,8 +211,8 @@ export function InvoiceListPage() {
               pageSize={data.pageSize}
               pageSizes={[10, 20, 50, 100]}
               disabled={loading}
-              onPageChange={(page) => updateQuery({ ...query, page })}
-              onPageSizeChange={(pageSize) => updateQuery({ ...query, page: 1, pageSize })}
+              onPageChange={(page) => changeQuery({ ...query, page })}
+              onPageSizeChange={(pageSize) => changeQuery({ ...query, page: 1, pageSize })}
             />
           </>
         )}

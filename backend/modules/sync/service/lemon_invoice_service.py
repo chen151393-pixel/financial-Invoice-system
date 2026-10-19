@@ -1,15 +1,15 @@
 """手动拉票用例：持久请求、事务外读取、事件原子保存。"""
 
-import hashlib
 from datetime import date
 
 from sqlalchemy.exc import SQLAlchemyError
 
 from backend.core.errors import ApiError
 from backend.core.write_lock import transaction
-from backend.modules.invoice.public import lemon_detail_ids
+from backend.modules.invoice.public import lemon_detail_ids, read_lemon_refresh_targets
 
 from ..dao import lemon_run_dao as runs
+from ..policy.lemon_detail_policy import account_namespace, selected_records
 from ..policy.lemon_invoice_policy import run_business_types
 from ..public import LemonInvoicesFetched
 from ..vo.lemon_invoice_vo import run_view
@@ -28,11 +28,14 @@ class LemonInvoiceService:
             raise ApiError(404, "未找到当前账号的同步记录，请刷新同步状态")
         return run_view(row)
 
-    def _start(self, owner, body):
+    def _start(self, owner, body, targets=None):
+        invoice_ids = sorted((str(row["id"]) for row in targets or []), key=int)
         with self.engine.begin() as connection:
             scope, binding = self.accounts.context(connection, owner, lock=True)
             previous = runs.get(connection, scope, body.requestId)
             if previous:
+                if (previous["result"] or {}).get("invoiceIds", []) != invoice_ids:
+                    raise ApiError(409, "同一请求编号不能用于不同补拉范围")
                 if set(run_business_types(previous)) != set(body.businessTypes):
                     raise ApiError(409, "同一请求编号不能用于不同业务类型，请查询原结果")
                 if (previous["asid"], str(previous["start_date"]), str(previous["end_date"])) != (
@@ -57,52 +60,61 @@ class LemonInvoiceService:
                     "end_date": date.fromisoformat(body.endDate),
                     "status": "running",
                     # JSON 中保留本次请求筛选快照；失败和进程重启也不能丢失幂等依据。
-                    "result": {"businessTypes": body.businessTypes},
+                    "result": {"businessTypes": body.businessTypes, "invoiceIds": invoice_ids},
                 },
             )
         return scope, binding, None
 
-    def pull(self, owner, body):
+    def pull(self, owner, body, *, targets=None):
         try:
-            scope, binding, previous = self._start(owner, body)
+            scope, binding, previous = self._start(owner, body, targets)
             if previous:
                 return run_view(previous)
-            self._execute(owner, body, scope, binding)
+            self._execute(owner, body, scope, binding, targets)
             return self.read(owner, body.requestId)
         except SQLAlchemyError:
             # 提交响应丢失时可能已成功；不清除 running，不自动重拉。
             raise ApiError(503, "同步数据库结果待核实，请刷新查询原请求；不要重新发起拉取") from None
 
-    def _execute(self, owner, body, scope, binding):
+    def _fetch(self, body, binding, targets):
+        token = self.client.user_token(binding["mobile"])
+        accounts = self.accounts.authorized_accounts(token)
+        chosen = next((row for row in accounts if row["asid"] == body.asid), None)
+        if chosen is None:
+            raise ApiError(403, "当前账号已无该账套访问权限，本次未保存")
+        professional = chosen.get("edition") == "professional"
+        if targets is not None and not professional:
+            raise ApiError(409, "当前账套已不是专业版，不能补拉原专业版发票")
+        reader = self.client.professional_invoices if professional else self.client.invoices
+        records = selected_records(reader(token, body.asid, body.startDate, body.endDate), targets)
+        selected_ids = (
+            {row["InvoiceId"] for row in records}
+            if targets is not None
+            else lemon_detail_ids(records, body.businessTypes)
+        )
+        records = self.client.invoice_details(
+            token, body.asid, records, selected_ids, professional=professional
+        )
+        return professional, records
+
+    def _execute(self, owner, body, scope, binding, targets):
         try:
-            token = self.client.user_token(binding["mobile"])
-            accounts = self.accounts.authorized_accounts(token)
-            chosen = next((row for row in accounts if row["asid"] == body.asid), None)
-            if chosen is None:
-                raise ApiError(403, "当前账号已无该账套访问权限，本次未保存")
-            professional = chosen.get("edition") == "professional"
-            reader = self.client.professional_invoices if professional else self.client.invoices
-            records = reader(token, body.asid, body.startDate, body.endDate)
-            records = self.client.invoice_details(
-                token,
-                body.asid,
-                records,
-                lemon_detail_ids(records, body.businessTypes),
-                professional=professional,
-            )
-            namespace = hashlib.sha256(
-                f"{self.accounts.binding.settings.lemon_host}|{body.asid}".encode()
-            ).hexdigest()
+            professional, records = self._fetch(body, binding, targets)
+            namespace = account_namespace(self.accounts.binding.settings.lemon_host, body.asid, professional)
             with transaction(self.engine) as connection:
                 _, current = self.accounts.context(connection, owner, lock=True)
                 if current["mobile"] != binding["mobile"] or current["selected_asid"] != body.asid:
                     raise ApiError(409, "拉取期间绑定或账套已变化，本次未保存")
+                if targets is not None:
+                    current_targets = read_lemon_refresh_targets(connection, [row["id"] for row in targets])
+                    if current_targets != targets:
+                        raise ApiError(409, "补拉期间发票版本已变化，本次未保存，请刷新后重新补拉")
                 self.events.publish(
                     connection,
                     LemonInvoicesFetched(
                         scope,
                         body.requestId,
-                        ("professional:" if professional else "open2:") + namespace,
+                        namespace,
                         date.fromisoformat(body.startDate),
                         date.fromisoformat(body.endDate),
                         tuple(records),
@@ -118,5 +130,7 @@ class LemonInvoiceService:
 
 
 def on_lemon_invoices_stored(connection, event):
-    if runs.finish(connection, event.scope, event.request_id, "completed", result=event.result) != 1:
+    original = runs.get(connection, event.scope, event.request_id)
+    result = {**(original["result"] or {}), **event.result} if original else event.result
+    if runs.finish(connection, event.scope, event.request_id, "completed", result=result) != 1:
         raise ApiError(409, "同步记录状态已变化，发票保存已回滚")

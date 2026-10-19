@@ -13,6 +13,8 @@ class InvoiceRow(StrictModel):
     businessType: str | None
     status: str
     sourceStatus: str
+    displayStatus: str
+    statusNotice: str | None
     currency: str
     net: str | None
     tax: str | None

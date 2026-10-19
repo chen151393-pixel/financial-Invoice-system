@@ -70,7 +70,9 @@ def projection(header, rows, old):
     head = dict(header)
     if not rows or head.get("detail_status", "complete") != "complete":
         head["detail_status"] = "pending"
-        return head, old
+        # 既有票头尚无任何逻辑行时，允许展示来源实际返回的不完整商品行。
+        # 已有行可能被分配引用，仍保留原投影并阻止确认。
+        return head, old if old else rows
     if ambiguous(old, rows):
         head["detail_status"] = "failed"
         return head, old

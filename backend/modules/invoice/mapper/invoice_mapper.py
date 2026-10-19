@@ -2,9 +2,9 @@
 
 from datetime import UTC
 
+from ..policy.invoice_status_policy import LABELS, NOTICES, display_status
 from ..vo.invoice_vo import InvoiceDetail, InvoiceLine, InvoiceRow
 
-STATUS_LABELS = {"normal": "正常", "red_offset": "已红冲", "void": "作废", "unknown": "未知"}
 SOURCE_LABELS = {
     "lemon_excel": "Excel导入",
     "lemon_open2": "柠檬云接口",
@@ -22,6 +22,7 @@ def tax_rate(value):
 
 
 def row(header, line_count):
+    status = display_status(header)
     return InvoiceRow(
         id=str(header["id"]),
         number=header["invoice_no"],
@@ -30,8 +31,10 @@ def row(header, line_count):
         sellerTaxNo=header["seller_tax_no"],
         type=header["invoice_type"],
         businessType=header["business_type"],
-        status=STATUS_LABELS[header["status"]],
+        status=LABELS[status],
         sourceStatus=header["status"],
+        displayStatus=status,
+        statusNotice=NOTICES.get(status),
         currency=header["currency"],
         net=text(header["amount_excluding_tax"]),
         tax=text(header["tax_amount"]),

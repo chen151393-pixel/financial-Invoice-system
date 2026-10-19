@@ -163,6 +163,20 @@ export function LemonInvoiceView({
                       </div>
                     ))}
                   </dl>
+                  {Boolean(latest.result.detailIssues?.length) && (
+                    <details>
+                      <summary>
+                        查看未补齐原因（{latest.result.detailIssueCount} 张，最多展示 100 张）
+                      </summary>
+                      <ul>
+                        {latest.result.detailIssues?.map((issue) => (
+                          <li key={issue.number}>
+                            {issue.number}：{issue.reason}
+                          </li>
+                        ))}
+                      </ul>
+                    </details>
+                  )}
                 </>
               )}
               <p className="lemon-invoices__request">请求编号：{latest.requestId}</p>

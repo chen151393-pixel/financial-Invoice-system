@@ -35,6 +35,8 @@ def save_version(connection, item, existing, events, now):
         head, projected = rules.projection(head, rows, old_items)
         if head["detail_status"] == "complete":
             item_dao.replace_projection(connection, invoice_id, projected, rules.identity, now)
+        elif not old_items and projected:
+            item_dao.insert_items(connection, invoice_id, projected, now)
         # 身份不明或明细不完整时保留原逻辑明细及占用；作废/红冲仍传播。
         version_dao.project(connection, invoice_id, head, now)
     else:

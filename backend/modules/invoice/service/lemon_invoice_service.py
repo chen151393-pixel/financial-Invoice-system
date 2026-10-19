@@ -6,6 +6,7 @@ from backend.core.errors import ApiError
 
 from ..dao import header_dao, item_dao, lemon_invoice_dao, raw_record_dao
 from ..mapper.lemon_invoice_mapper import prepare
+from ..policy.lemon_detail_feedback import detail_feedback
 from ..policy.lemon_detail_policy import validate_details
 from ..policy.lemon_invoice_policy import validate
 from ..policy.lemon_scope_policy import describe_lemon_result
@@ -67,7 +68,7 @@ def on_lemon_invoices_fetched(connection, event, *, events):
                     **counts,
                     "fetched": len(event.records),
                     "excluded": len(event.records) - len(prepared),
-                    **detail_counts(connection, event.account, keys),
+                    **detail_counts(connection, event.account, prepared),
                     "businessTypes": list(event.business_types),
                     "availableBusinessTypes": available_types,
                 }
@@ -76,10 +77,14 @@ def on_lemon_invoices_fetched(connection, event, *, events):
     )
 
 
-def detail_counts(connection, account, keys):
-    saved = header_dao.by_keys(connection, account, keys)
+def detail_counts(connection, account, prepared):
+    saved = header_dao.by_keys(connection, account, [item["key"] for item in prepared])
     complete = sum(row["detail_status"] == "complete" for row in saved.values())
-    return {"completeDetails": complete, "pendingDetails": len(saved) - complete}
+    return {
+        "completeDetails": complete,
+        "pendingDetails": len(saved) - complete,
+        **detail_feedback(prepared, saved),
+    }
 
 
 def selected_batch(prepared, existing, sources, business_types):

@@ -10,7 +10,7 @@ class InvoiceQuery(BaseModel):
     q: str = Field(default="", max_length=100)
     page: int = Field(default=1, ge=1, le=100000)
     page_size: int = Field(default=20, ge=1, le=100)
-    status: Literal["", "normal", "red_offset", "void", "unknown"] = ""
+    status: Literal["", "normal", "red_letter", "red_offset", "void", "unknown"] = ""
     date_from: date | None = None
     date_to: date | None = None
 

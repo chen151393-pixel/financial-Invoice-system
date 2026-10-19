@@ -197,9 +197,12 @@ def build_documents(heads, lines):
             raise ApiError(422, f"{label}缺少供应商名称或税号")
         head.update(
             invoice_direction="input",
-            invoice_status={"正常": "normal", "已红冲": "red_offset", "作废": "void"}.get(
-                raw["发票状态"], "unknown"
-            ),
+            invoice_status={
+                "正常": "normal",
+                "已红冲": "red_offset",
+                "已被红冲": "red_offset",
+                "作废": "void",
+            }.get(raw["发票状态"], "unknown"),
         )
         documents[no] = {"head": head, "lines": [], "rawHead": {"row": row, "values": raw}, "rawLines": []}
     if not documents or len(documents) > 1000:

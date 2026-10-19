@@ -89,7 +89,7 @@ class LemonBindingService:
             },
             "sync": {
                 "allowed": False,
-                "reason": "已支持手动 API 拉票，请在下方查询账套；定时同步与商品明细待接入",
+                "reason": "已支持专业版商品明细拉取及列表补拉，请在下方选择账套；默认版明细与定时同步待接入",
             },
         }
 

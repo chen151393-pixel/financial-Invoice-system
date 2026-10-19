@@ -10,6 +10,11 @@
   --color-table-border: #d4dbe3;
   --color-table-purchase: #eaf3fa;
   --color-feedback: #a54119;
+  --color-danger-text: #a12622;
+  --color-danger-surface: #fff2f0;
+  --color-warning-surface: #fff4e5;
+  --color-inactive-text: #5b6474;
+  --color-inactive-surface: #f0f2f5;
   --color-demo-bg: #fff1bd;
   --color-demo-text: #573e00;
   --color-nav-bg: #111c38;

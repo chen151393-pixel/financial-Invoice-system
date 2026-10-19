@@ -10,7 +10,7 @@ from backend.core.dto import StrictModel
 
 class InvoiceTotalsQuery(StrictModel):
     q: str = Field(default="", max_length=100)
-    status: Literal["", "normal", "red_offset", "void", "unknown"] = ""
+    status: Literal["", "normal", "red_letter", "red_offset", "void", "unknown"] = ""
     date_from: date | None = Field(default=None, strict=False)
     date_to: date | None = Field(default=None, strict=False)
 

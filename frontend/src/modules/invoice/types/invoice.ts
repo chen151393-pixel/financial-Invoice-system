@@ -9,6 +9,8 @@ export type InvoiceRow = {
   businessType: string | null;
   status: string;
   sourceStatus: "normal" | "red_offset" | "void" | "unknown";
+  displayStatus: "normal" | "red_letter" | "red_offset" | "void" | "unknown";
+  statusNotice: string | null;
   currency: string;
   net: string | null;
   tax: string | null;
