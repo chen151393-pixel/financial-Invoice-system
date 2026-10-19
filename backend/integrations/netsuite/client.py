@@ -16,6 +16,7 @@ from backend.core.errors import ApiError
 from .auth import assertion
 from .record_projection import read_projected_records
 from .relation_sources import read_relation_rows
+from .request_stats import record_request
 
 logger = logging.getLogger("ns_api.netsuite")
 
@@ -113,6 +114,7 @@ class NetSuite:
         except httpx.HTTPError as error:
             log_failure("restlet", "POST", started_at, error_type=type(error).__name__)
             raise ApiError(502, "NS 查询连接失败或超时；前一只读请求可能仍在执行，请稍后手动查询") from None
+        record_request("restlet", started_at)
         try:
             import json
 
@@ -167,6 +169,7 @@ class NetSuite:
                 )
                 raise ApiError(502, "NS Token 响应不完整") from None
             self._cached = value, time.monotonic() + expiry
+            record_request("token", started_at)
             return value
 
     def validate(self, record_type, record_id=None):
@@ -239,6 +242,7 @@ class NetSuite:
         except ValueError:
             log_failure("record", method, started_at, error_type="InvalidJSON", status=response.status_code)
             raise ApiError(502, "NS 返回非 JSON 响应") from None
+        record_request("record", started_at)
         return {"data": data, "location": response.headers.get("location"), "status": response.status_code}
 
     def filtered_ids(self, record_type, field, value, *, reference=False):

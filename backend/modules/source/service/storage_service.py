@@ -1,5 +1,6 @@
 """NS 来源保存：账户锁覆盖"读取 NS → 保存"全过程，数据库写入在一个短事务内完成，不写 NS。"""
 
+from contextlib import ExitStack
 from datetime import datetime, timezone
 
 from sqlalchemy.exc import SQLAlchemyError
@@ -8,6 +9,7 @@ from backend.core import named_lock, write_lock
 from backend.core.database import check_business_database
 from backend.core.errors import ApiError
 from backend.core.events import EventBus
+from backend.integrations.netsuite import request_stats
 from backend.integrations.netsuite.read_batch import quiet_progress
 
 from ..dao import (
@@ -87,9 +89,12 @@ class StorageService:
         account = self.account()
         lock = sync_lock_name(self.engine, account)
         try:
-            with write_lock.locked(self.engine) as connection:
-                with connection.begin():
-                    acquired = named_lock.acquire(connection, lock)
+            with ExitStack() as stack:
+                # 账本锁最多等待 10 秒；计入批次耗时，便于区分锁等待与 NS 读取。
+                with request_stats.phase("lock_wait"):
+                    connection = stack.enter_context(write_lock.locked(self.engine))
+                    with connection.begin():
+                        acquired = named_lock.acquire(connection, lock)
                 if not acquired:
                     raise ApiError(409, "当前账户已有采购报关保存操作，请完成后再试")
                 try:
@@ -115,6 +120,11 @@ class StorageService:
         return PartialSyncService(self).run(kind, read_page, progress)
 
     def _save_locked(self, connection, collect, config, account, lock, read_relations, report):
+        bundle = self.read_bundle(collect, config, read_relations, report)
+        return self.commit(connection, bundle, config, account, lock, report)
+
+    def read_bundle(self, collect, config, read_relations, report):
+        """事务外读取完整来源数据包；只读 NS，不访问数据库。"""
         bundle = collect()
         bundle["parent_reference_checks"] = verify_missing_parents(self.ns, bundle, config, report)
         if read_relations:
@@ -122,13 +132,17 @@ class StorageService:
             bundle["relation_evidence"] = RelationReader(self.ns, report).collect(bundle, match=True)
             report("读取母采购单并核验币种")
             bundle["parent_orders"] = read_parent_orders(self.ns, bundle)
+        return bundle
+
+    def commit(self, connection, bundle, config, account, lock, report):
+        """校验并在一个短事务内写入已读取的数据包；调用方须持有账户锁。"""
         now = datetime.now(timezone.utc).replace(tzinfo=None)
         report("校验完整来源数据")
         documents = map_bundle(bundle, config, now)
         bundle["warnings"].extend(missing_field_warnings(bundle, config))
         bundle["warnings"].extend(unit_price_warnings(documents, config))
         report("保存到本地数据库，等待整批提交")
-        with connection.begin():
+        with request_stats.phase("db_write"), connection.begin():
             if not named_lock.owns(connection, lock):
                 raise ApiError(409, "同步连接已失去占用，未保存，请重新读取")
             counts = self._write(connection, account, bundle, documents, now)

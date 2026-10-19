@@ -40,13 +40,14 @@ def test_projection_keeps_line_links_amounts_and_review_digest(source, engine, m
     assert rows(engine, AMOUNTS) == amounts
 
 
-def test_partial_save_reuses_only_pl_names_within_one_page(batch, engine):
+def test_partial_save_reads_whole_page_once_and_rereads_pl_next_page(batch, engine):
     ns, page, records, calls = batch
     service = StorageService(ns, engine)
     result = service.sync_partial_page("customs-declarations", lambda: page_result(page))
     assert result["batch"]["counts"]["saved"] == 20
-    # 20 组原有 120 个详情 GET；现在 40 个明细批次 + 21 个单头/PL GET。
-    assert Counter(kind for kind, *_ in calls) == {"list": 60, "batch": 40, "detail": 21}
+    assert result["batch"]["status"] == "completed"
+    # 20 组逐组读取时为 60 次列表 + 40 次明细批次；整页一次读取后按组提交，只需 3 次列表 + 2 次明细批次。
+    assert Counter(kind for kind, *_ in calls) == {"list": 3, "batch": 2, "detail": 21}
     pl = ns.settings.pl_lookup["pl"]
     records[pl["type"], "783"][pl["number"]] = "PL002"
     calls.clear()

@@ -1,6 +1,7 @@
 """有界只读详情读取；单次读取器复用身份，不跨保存批次缓存。"""
 
 from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
+from contextvars import copy_context
 
 from backend.core.errors import ApiError
 
@@ -41,7 +42,8 @@ class RecordReader:
                         identity = next(remaining, None)
                         if identity is None:
                             break
-                        futures[pool.submit(self.fetch, record_type, identity)] = identity
+                        # 复制上下文，让并发 GET 计入当前批次的耗时汇总。
+                        futures[pool.submit(copy_context().run, self.fetch, record_type, identity)] = identity
                     if not futures:
                         break
                     done, _ = wait(futures, return_when=FIRST_COMPLETED)

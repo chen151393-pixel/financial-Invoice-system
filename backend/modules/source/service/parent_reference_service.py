@@ -6,6 +6,7 @@ from ..policy.parent_reference_policy import (
     PARENT_FIELD,
     confirmed_empty,
     document_error,
+    missing_parent_warnings,
     supports_verification,
 )
 
@@ -43,10 +44,5 @@ def verify_missing_parents(ns, bundle, config, report):
             verified[identity] = confirmed_empty(by_id[identity], identity, pending[identity])
     if identities:
         report("母采购单引用核实完成", len(identities), len(identities))
-    for identity, head in pending.items():
-        number = head.get("name") or identity
-        bundle["warnings"].append(
-            f"子采购单 {number}（内部编号 {identity}）经 NS 查询确认未关联母采购单；"
-            "基础数据已保存，币种待核实，数量和金额保留 NS 原值。"
-        )
+    bundle["warnings"].extend(missing_parent_warnings(bundle["purchases"]))
     return verified

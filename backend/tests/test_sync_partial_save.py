@@ -98,7 +98,7 @@ def test_detail_read_failure_isolated_to_complete_group(batch, engine):
 def test_unknown_commit_keeps_prior_counts_and_stops_remaining(batch, engine, monkeypatch):
     ns, page, _, _ = batch
     service = StorageService(ns, engine)
-    original = service._save_locked
+    original = service.commit
     calls = []
 
     def save(*args):
@@ -109,7 +109,7 @@ def test_unknown_commit_keeps_prior_counts_and_stops_remaining(batch, engine, mo
             raise OperationalError("", {}, Exception("connection lost"))
         return saved
 
-    monkeypatch.setattr(service, "_save_locked", save)
+    monkeypatch.setattr(service, "commit", save)
     result = service.sync_partial_page("customs-declarations", lambda: page_result(page[:3]))
     assert result["batch"]["counts"] == {"saved": 1, "failed": 0, "unknown": 1, "not_processed": 1}
     assert result["batch"]["status"] == "interrupted" and not result["batch"]["canContinue"]
@@ -190,7 +190,7 @@ def test_saved_group_can_be_reviewed_and_generate_tasks(batch, engine):
 def test_lock_conflict_stops_later_groups_without_losing_prior_success(batch, engine, monkeypatch):
     ns, page, _, _ = batch
     service = StorageService(ns, engine)
-    original = service._save_locked
+    original = service.commit
     calls = []
 
     def save(*args):
@@ -199,7 +199,7 @@ def test_lock_conflict_stops_later_groups_without_losing_prior_success(batch, en
             raise ApiError(409, "同步连接已失去占用，未保存")
         return original(*args)
 
-    monkeypatch.setattr(service, "_save_locked", save)
+    monkeypatch.setattr(service, "commit", save)
     result = service.sync_partial_page("customs-declarations", lambda: page_result(page[:3]))
     assert result["batch"]["counts"] == {"saved": 1, "failed": 1, "unknown": 0, "not_processed": 1}
     assert not result["batch"]["canContinue"] and len(calls) == 2

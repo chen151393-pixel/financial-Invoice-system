@@ -1137,3 +1137,25 @@ flowchart LR
 | `updated_at` | DATETIME | 否 | 本地记录最后更新时间，UTC；由 DAO 更新 |
 
 notification_id、request_id 各自唯一；企业和非空 channel_message_id 联合唯一。群守卫以企业和群作为复合主键。两表均不允许通过降级清除发送证据。结构与状态规则以[数据库设计第 13 节](../architecture/database.md#13-企微通知执行与群守卫2026-10-19)为准。
+
+
+## NS 后台保存批次（0024，2026-10-19）
+
+### `sync_ns_runs`
+
+NS 来源按批后台保存记录与结果，不保存令牌。
+
+| 字段 | 类型 | 可空 | 含义 |
+| --- | --- | --- | --- |
+| `id` | BIGINT | 否 | 同步批次记录主键 |
+| `scope_key` | VARCHAR(64) | 否 | NS 账户与认证身份摘要 |
+| `request_id` | VARCHAR(36) | 否 | 调用方请求编号，重复提交只查询原结果 |
+| `kind` | VARCHAR(32) | 否 | sub-purchase-orders 或 customs-declarations |
+| `request` | JSON | 否 | 本批分页与日期条件快照 |
+| `status` | VARCHAR(20) | 否 | running / completed / partial / interrupted / failed / unknown |
+| `result` | JSON | 是 | 本批实际保存结果，含逐单状态 |
+| `error` | VARCHAR(500) | 是 | 脱敏失败原因 |
+| `created_at` | DATETIME | 否 | 本地记录创建时间，UTC |
+| `updated_at` | DATETIME | 否 | 本地记录最后更新时间，UTC；由 DAO 更新 |
+
+`scope_key` 与 `request_id` 联合唯一；按 `scope_key, status` 建索引。running 记录在当前进程无执行时按待核实展示，迁移不允许降级删除。接口与状态说明见[同步模块](../../backend/modules/sync/README.md#后台保存批次与耗时日志2026-10-19)。

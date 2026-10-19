@@ -136,3 +136,36 @@ API 拉票支持 `businessTypes` 文本多选，默认“采购固定资产、�
 分页完成后，sync 通过 invoice 公开规则 `lemon_detail_ids` 取得所选类型的发票 ID，在事务外调用 `professional_invoice_details.py` 读取详情。重新建立独立只读会话并复核所选账套上下文，单票最多一万行，明细阶段总读取限时 120 秒，超时或任一详情读取失败整批不保存。默认版继续保留票头 pending；不猜测未验证接口。
 
 入库复用原 LemonInvoicesFetched → invoice 版本/匹配事件 → LemonInvoicesStored 事务。响应新增 `result.completeDetails`；`pendingDetails` 包含待补齐与身份待核实，统计来自保存后的状态。恢复规则不变，同一请求只查询原结果；用户重新补全须创建新请求，不能复用旧请求编号。详情失败阶段日志不输出票据、Token 或加密上下文。
+
+
+## 后台保存批次与耗时日志（2026-10-19）
+
+问题：单批保存可能超过 2 分钟，页面用一个长连接等待最终结果，线上 Nginx 代理先返回 504，而后端仍继续保存并最终返回 200，页面结果与数据库不一致。代理超时值在仓库中没有配置，需线上 `nginx -T` 核实；本方案不依赖调大超时。
+
+### 接口
+
+- `POST /api/sync/ns/runs`（202）：请求 `{requestId: UUID, kind: "sub-purchase-orders" | "customs-declarations", offset, limit, startDate, endDate, requireDateRange}`，分页与日期规则同 `PullRequest`；不接受 `progressId`、`partialSave`（固定按关联组部分保存）。先同步检查 NS 与存储配置，配置问题直接返回原因、不建记录；通过后写入 `sync_ns_runs`（running）并交给后台线程执行，立即返回批次视图。
+- `GET /api/sync/ns/runs/{requestId}`：仅原认证身份可查。返回 `status`、中文 `statusLabel`、执行中的临时 `progress`、结束后的 `result`（与原 `/pull-save` 部分保存响应相同，含 `batch` 逐单结果）及脱敏 `error`。
+- 同一编号重复提交只返回原记录，不重新执行；同编号换类型或分页条件返回 409。
+
+### 状态
+
+| 状态 | 含义 |
+| --- | --- |
+| running | 本进程正在执行或排队 |
+| completed / partial / interrupted | 已结束，以 `result.batch` 逐单状态为准；HTTP 200 或 completed 进度都不代表每张单据成功 |
+| failed | 在任何关联组提交之前失败（NS 列表读取失败、锁冲突等），本批未写入 |
+| unknown | 待核实：数据库中断（503）、未预期异常，或记录仍为 running 但当前进程没有执行（服务重启、结束状态未写入）。须先核对本地记录，不自动重试 |
+
+### 约束
+
+- `service/ns_run_service.py` 使用单线程执行器排队，同一账户的保存仍由原账户锁串行。执行标记与阶段进度复用进程内 `ProgressService`，适用于当前单进程部署；多进程需改为共享进度与执行者标记。
+- 服务停止时不再接收新批次，排队未开始的批次记为 failed，正在执行的批次等待结束。启动时不改动遗留的 running 记录，查询时显示为待核实。
+- 迁移 `0024_sync_ns_runs`（接在 `0023_sync_background` 之后） 新增 `sync_ns_runs`，降级被拒绝，以免丢弃待核实记录。`result` 保存本批完整响应（含单头原始字段，用于页面展示）。
+- 旧 `/api/ns/sync/{kind}/pull-save` 与 `/api/sync/ns/progress*` 保留一个版本供未刷新的旧页面使用，新页面不再调用；确认无调用方后删除。
+
+### 每批耗时日志（A0）
+
+`integrations/netsuite/request_stats.py` 在每批结束时输出一行 INFO：`ns_sync_timing batch=<kind>@<offset> outcome=ok|error total_ms=… ns_record=次数/总毫秒/max最长 ns_suiteql=… ns_restlet=… ns_token=… lock_wait=… db_write=…`。只含类别、次数与毫秒数，不含 URL、查询、单据或令牌。单次请求耗时以 DEBUG 输出（`ns_request_completed`），默认不打印。并发详情 GET 通过复制上下文计入同一批次。可用于在线上区分 NS 往返、锁等待与写库耗时。
+
+验证：`tests/sync/test_ns_runs.py`（幂等、结果持久化、失败/待核实映射、执行中进度、重启后待核实不重跑、停止、旧开关拒绝、HTTP 身份与配置失败不建记录）、`tests/sync/test_sync_timing.py`。MySQL 上的 `sync_ns_runs` 结构由 `test_schema_baseline.py` 的 MySQL 用例覆盖，需提供专用 MySQL 连接才会执行；真实 NS 耗时需上线后按日志确认。

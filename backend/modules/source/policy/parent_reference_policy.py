@@ -24,3 +24,13 @@ def confirmed_empty(row, identity, head):
             head,
         )
     return {"source": "suiteql", "recordId": identity, "field": PARENT_FIELD, "state": "empty"}
+
+
+def missing_parent_warnings(purchases):
+    """REST 未返回母单引用、且已核实为空的子采购提示；按数据包内子采购生成，便于按组拆分。"""
+    return [
+        f"子采购单 {head.get('name') or identity}（内部编号 {identity}）经 NS 查询确认未关联母采购单；"
+        "基础数据已保存，币种待核实，数量和金额保留 NS 原值。"
+        for identity, head, _ in purchases
+        if PARENT_FIELD not in head
+    ]

@@ -49,19 +49,12 @@ export type PullResult = {
   rows: { id: string; number: string; record: Record<string, unknown> }[];
 };
 export const getSources = () => http<Sources>("/ns/sync/sources");
-export const pullRecords = (
-  kind: SourceKind,
-  offset: number,
-  range: DateRange,
-  save = false,
-  progressId?: string,
-) =>
-  http<PullResult>(`/ns/sync/${kind}/${save ? "pull-save" : "pull"}`, "POST", {
+/** 只读拉取一批，不入库；保存改用后台批次 startRun。 */
+export const pullRecords = (kind: SourceKind, offset: number, range: DateRange) =>
+  http<PullResult>(`/ns/sync/${kind}/pull`, "POST", {
     offset,
     limit: 20,
     requireDateRange: true,
-    ...(save ? { partialSave: true } : {}),
-    ...(progressId ? { progressId } : {}),
     ...range,
   });
 
@@ -72,5 +65,25 @@ export type SyncProgress = {
   total: number | null;
   elapsedSeconds: number;
 };
-export const createProgress = () => http<{ progressId: string }>("/sync/ns/progress", "POST", {});
-export const getProgress = (identity: string) => http<SyncProgress>(`/sync/ns/progress/${identity}`);
+export type SaveKind = Exclude<SourceKind, "purchase-orders">;
+export type NsRun = {
+  requestId: string;
+  kind: SaveKind;
+  request: DateRange & { offset: number; limit: number };
+  status: "running" | "completed" | "partial" | "interrupted" | "failed" | "unknown";
+  statusLabel: string;
+  progress: SyncProgress | null;
+  result: PullResult | null;
+  error: string | null;
+};
+/** 提交后立即返回；同一请求编号重复提交只返回原记录，不会重新执行。 */
+export const startRun = (kind: SaveKind, requestId: string, offset: number, range: DateRange) =>
+  http<NsRun>("/sync/ns/runs", "POST", {
+    requestId,
+    kind,
+    offset,
+    limit: 20,
+    requireDateRange: true,
+    ...range,
+  });
+export const getRun = (requestId: string) => http<NsRun>(`/sync/ns/runs/${encodeURIComponent(requestId)}`);

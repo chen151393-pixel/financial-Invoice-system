@@ -47,6 +47,7 @@ from .modules.sync.controller import create_router as sync_router
 from .modules.sync.controller.lemon_batch_controller import create_router as lemon_batch_router
 from .modules.sync.controller.lemon_binding_controller import create_router as lemon_binding_router
 from .modules.sync.controller.lemon_invoice_controller import create_router as lemon_invoice_router
+from .modules.sync.controller.ns_run_controller import create_router as ns_run_router
 from .modules.sync.public import LemonInvoicesFetched
 from .modules.sync.pull_service import PullService
 from .modules.sync.service import ConnectionService
@@ -57,6 +58,7 @@ from .modules.sync.service.lemon_invoice_service import LemonInvoiceService, on_
 from .modules.sync.service.lemon_job_service import LemonJobService
 from .modules.sync.service.lemon_plan_service import LemonPlanService
 from .modules.sync.service.lemon_worker import LemonWorker
+from .modules.sync.service.ns_run_service import NsRunService
 from .modules.task.controller.delivery_controller import create_router as delivery_router
 from .modules.task.controller.external_group_controller import create_router as external_group_router
 from .modules.task.controller.supplier_group_controller import create_router as task_group_router
@@ -106,6 +108,8 @@ def create_app(settings=None, ns=None, engine=None, wecom=None, lemon=None, lemo
                 await asyncio.to_thread(app.state.lemon_worker.stop)
             if hasattr(app.state, "contract_worker"):
                 await asyncio.to_thread(app.state.contract_worker.stop)
+            if hasattr(app.state, "ns_runs"):
+                await asyncio.to_thread(app.state.ns_runs.stop)
             if owns_lemon_invoices:
                 lemon_invoices.close()
             if owns_lemon:
@@ -217,6 +221,7 @@ def _register_business(app, settings, ns, contract_ns, wecom, engine, lemon_invo
             ProposalService(engine),
         )
     )
-    app.include_router(
-        sync_router(ConnectionService(settings, ns), PullService(settings, ns, source_storage))
-    )
+    pulls = PullService(settings, ns, source_storage)
+    app.include_router(sync_router(ConnectionService(settings, ns), pulls))
+    app.state.ns_runs = NsRunService(engine, pulls)
+    app.include_router(ns_run_router(app.state.ns_runs))

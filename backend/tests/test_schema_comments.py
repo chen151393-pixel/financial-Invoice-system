@@ -16,6 +16,7 @@ from sqlalchemy import inspect, text
 TABLES = ALL_TABLES - {
     "sync_lemon_bindings",
     "sync_lemon_runs",
+    "sync_ns_runs",
     "sync_lemon_plans",
     "sync_lemon_jobs",
     "task_external_groups",

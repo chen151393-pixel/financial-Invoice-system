@@ -108,7 +108,7 @@ export function PullPanel({
           </Button>
         </div>
       )}
-      {task.busy && <PullProgress progress={task.progress} unavailable={task.progressUnavailable} />}
+      {task.busy && <PullProgress run={task.run} unavailable={task.progressUnavailable} />}
       {task.status === "completed" && (
         <p className="sync-page__result-summary" role="status">
           所选时间段拉取完成，共完成 {task.pages.length} 批。
@@ -120,6 +120,11 @@ export function PullPanel({
           所选时间段已处理完，共 {task.pages.length} 批，存在失败单据。成功数据已保存，请逐批查看失败原因。
         </p>
       )}
+      {task.status === "recovered" && (
+        <p className="sync-page__scope-change" role="status">
+          已恢复刷新前最后一批的保存结果，见下方逐单结果；该时间段后续批次未继续，如需继续请重新拉取。
+        </p>
+      )}
       {task.status === "stopped" && (
         <p className="sync-page__scope-change" role="status">
           已停止，完成 {task.pages.length} 批；所选时间段尚未拉取完。已提交的保存结果保留。
@@ -127,8 +132,8 @@ export function PullPanel({
       )}
       {task.error && (
         <p role="alert" className="sync-page__error">
-          {task.error}。本次未完整完成，已完成 {task.pages.length}{" "}
-          批；已提交的数据保留。保存请求连接中断时，请先核实本地记录再重新拉取。
+          {task.error}。本次未完整完成，已完成 {task.pages.length} 批；已提交的数据保留。
+          结果待核实时，请先在财务核对页核对本地记录，再决定是否重新拉取。
         </p>
       )}
       {!result && task.status === "idle" && (

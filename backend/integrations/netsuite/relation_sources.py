@@ -2,11 +2,14 @@
 
 import json
 import re
+import time
 from decimal import Decimal
 
 import httpx
 
 from backend.core.errors import ApiError
+
+from .request_stats import record_request
 
 QUERIES = {
     # REST 省略空引用时，显式查询空值状态，不能把字段不可读当成无母单。
@@ -64,6 +67,7 @@ def read_suiteql_rows(ns, query, *, identity_fields=("id",)):
     rows, seen, size = [], set(), 0
     # 不使用远端 next 链接，限制整次返回行数与字节数；任意页失败不返回部分成功。
     for offset in range(0, 5000, 1000):
+        started_at = time.monotonic()
         try:
             with ns.client.stream(
                 "POST",
@@ -83,6 +87,7 @@ def read_suiteql_rows(ns, query, *, identity_fields=("id",)):
                         raise ApiError(422, "关联依据超过读取上限，请缩小每页单据数")
                     chunks.append(chunk)
             data = json.loads(b"".join(chunks), parse_float=Decimal)
+            record_request("suiteql", started_at)
         except httpx.HTTPError:
             raise ApiError(502, "NS 关联依据读取超时或失败，未保存本页") from None
         except (ValueError, UnicodeError):

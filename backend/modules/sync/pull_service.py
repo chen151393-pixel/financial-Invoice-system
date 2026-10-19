@@ -5,6 +5,7 @@ from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
 
 from backend.core.errors import ApiError
+from backend.integrations.netsuite import request_stats
 from backend.integrations.netsuite.read_batch import RecordReader, quiet_progress
 
 from .service.progress_service import ProgressService
@@ -92,19 +93,32 @@ class PullService:
             "lemon": {"allowed": False, "reason": "请进入柠檬云同步页选择账套手动拉票"},
         }
 
+    def ensure_storage(self, kind):
+        """后台批次发起前同步检查配置，配置问题直接返回原因而不创建批次。"""
+        if self.storage is None:
+            raise ApiError(503, "尚未配置业务存储")
+        self.record_type(kind)
+        if self.settings.missing():
+            raise ApiError(503, "NS 连接配置不完整，请联系管理员")
+        storage = self.storage.configuration()
+        if not storage["allowed"]:
+            raise ApiError(503, storage["reason"])
+
     def pull_and_save(self, kind, request, owner=None):
         if self.storage is None:
             raise ApiError(503, "尚未配置业务存储")
         save = self.storage.sync_partial_page if request.partialSave else self.storage.sync_page
         options = {"partial": True} if request.partialSave else {}
-        if request.progressId:
-            with self.progress.track(request.progressId, owner) as report:
-                return save(
-                    kind,
-                    lambda: self.pull(kind, request, report, **options),
-                    progress=report,
-                )
-        return save(kind, lambda: self.pull(kind, request, **options))
+        # 每批输出一行耗时汇总（NS 各类请求次数/耗时、锁等待、写库），不含单据内容。
+        with request_stats.collect(f"{kind}@{request.offset}"):
+            if request.progressId:
+                with self.progress.track(request.progressId, owner) as report:
+                    return save(
+                        kind,
+                        lambda: self.pull(kind, request, report, **options),
+                        progress=report,
+                    )
+            return save(kind, lambda: self.pull(kind, request, **options))
 
     def pull(self, kind, request, progress=None, *, partial=False):
         report = progress or quiet_progress
