@@ -16,6 +16,7 @@ def by_keys(connection, account, keys):
             headers.c.source,
             headers.c.business_type,
             headers.c.current_version_id,
+            headers.c.detail_status,
             raw_records.c.payload_sha256,
         )
         .select_from(headers.outerjoin(raw_records, raw_records.c.id == headers.c.raw_record_id))
@@ -50,11 +51,8 @@ def _conditions(query):
     return conditions
 
 
-def page(connection, query):
-    """返回 (总数, 按币种汇总, 本页票头含明细行数)；同日期按主键倒序稳定分页。"""
-    conditions = _conditions(query)
-    total = connection.scalar(select(func.count()).select_from(headers).where(*conditions))
-    amounts = connection.execute(
+def amounts(connection, query):
+    result = connection.execute(
         select(
             headers.c.currency,
             func.count().label("count"),
@@ -62,10 +60,36 @@ def page(connection, query):
             func.sum(headers.c.tax_amount).label("tax"),
             func.sum(headers.c.amount_including_tax).label("gross"),
         )
-        .where(*conditions)
+        .where(*_conditions(query))
         .group_by(headers.c.currency)
         .order_by(headers.c.currency)
     ).mappings()
+    return [dict(row) for row in result]
+
+
+def amount_page(connection, query, after_id, limit):
+    """统计范围按主键分批读取，只返回匹配汇总需要的票头字段。"""
+    result = connection.execute(
+        select(
+            headers.c.id,
+            headers.c.currency,
+            headers.c.status,
+            headers.c.detail_status,
+            headers.c.current_version_id,
+            headers.c.amount_including_tax,
+        )
+        .where(*_conditions(query), headers.c.id > after_id)
+        .order_by(headers.c.id)
+        .limit(limit)
+    ).mappings()
+    return [dict(row) for row in result]
+
+
+def page(connection, query):
+    """返回 (总数, 按币种汇总, 本页票头含明细行数)；同日期按主键倒序稳定分页。"""
+    conditions = _conditions(query)
+    total = connection.scalar(select(func.count()).select_from(headers).where(*conditions))
+    totals = amounts(connection, query)
     line_count = (
         select(func.count())
         .select_from(items)
@@ -80,7 +104,7 @@ def page(connection, query):
         .offset((query.page - 1) * query.page_size)
         .limit(query.page_size)
     ).mappings()
-    return total, [dict(row) for row in amounts], [dict(row) for row in rows]
+    return total, totals, [dict(row) for row in rows]
 
 
 def by_ids(connection, invoice_ids, *, lock=False):

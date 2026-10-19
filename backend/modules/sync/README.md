@@ -116,3 +116,9 @@ test_sync_pull.py 覆盖三类映射、身份、参数、金额精度、空结�
 旧文档中的“整页失败／整页事务”适用于 `partialSave=false`；新模式对应完整关联组，不把失败组的部分明细保存为完整单据。本次不新增表、不调整数值精度、不写 NS，也不提供持久断点续跑。
 
 API 拉票支持 `businessTypes` 文本多选，默认“采购固定资产、采购支出”；默认值及候选项由 invoice 门面提供。选中集合在创建请求时写入 `sync_lemon_runs.result.businessTypes`，失败仍保留，完成统计包含该快照，不新增数据库字段。响应把条件单独返回，只有 completed 返回统计。同一请求编号不得更改集合；旧记录按原固定资产范围解释。详见接入说明和 `tests/sync/test_lemon_business_types.py`。
+
+## 专业版商品明细补全（2026-10-19）
+
+分页完成后，sync 通过 invoice 公开规则 `lemon_detail_ids` 取得所选类型的发票 ID，在事务外调用 `professional_invoice_details.py` 读取详情。重新建立独立只读会话并复核所选账套上下文，单票最多一万行，明细阶段总读取限时 120 秒，超时或任一详情读取失败整批不保存。默认版继续保留票头 pending；不猜测未验证接口。
+
+入库复用原 LemonInvoicesFetched → invoice 版本/匹配事件 → LemonInvoicesStored 事务。响应新增 `result.completeDetails`；`pendingDetails` 包含待补齐与身份待核实，统计来自保存后的状态。恢复规则不变，同一请求只查询原结果；用户重新补全须创建新请求，不能复用旧请求编号。详情失败阶段日志不输出票据、Token 或加密上下文。

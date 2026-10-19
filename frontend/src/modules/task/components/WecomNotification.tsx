@@ -1,21 +1,10 @@
 import { useState } from "react";
 import { Button } from "../../../shared/components/Button";
 import type { DeliveryController } from "../types/delivery";
-import type { TaskNotification } from "../types/task";
 import { formatTime } from "./format";
 import { NotificationDialog } from "./NotificationDialog";
 
-export function WecomNotification({
-  controller: ui,
-  notification,
-  dirty,
-  disabled,
-}: {
-  controller: DeliveryController;
-  notification: TaskNotification;
-  dirty: boolean;
-  disabled: boolean;
-}) {
+export function WecomNotification({ controller: ui }: { controller: DeliveryController }) {
   const [reason, setReason] = useState("");
   const latest = ui.items[0];
   return (
@@ -24,14 +13,6 @@ export function WecomNotification({
       <p className="it-help">
         从已归档合同上传附件，提交后由群主在企微确认。目标群以预览中的供应商绑定为准。
       </p>
-      <Button
-        variant="primary"
-        disabled={disabled || ui.busy || dirty || !notification.send.allowed}
-        onClick={() => void ui.prepare(notification.revision, notification.supplierGroup?.revision ?? 0)}
-      >
-        {ui.busy ? "正在处理…" : "提交企微群发"}
-      </Button>
-      <p className="it-help">{dirty ? "请先保存通知，再预览提交。" : notification.send.reason}</p>
       {ui.error && <p role="alert">{ui.error}</p>}
       {ui.loading ? (
         <p role="status">正在读取发送记录…</p>
@@ -42,7 +23,7 @@ export function WecomNotification({
           <p role="status">
             <strong>{latest.statusLabel}</strong>
           </p>
-          <dl className="itn-facts">
+          <dl className="itn-facts itn-record-facts">
             <dt>目标群</dt>
             <dd>
               {latest.groupName} · {latest.chatId}
@@ -59,7 +40,11 @@ export function WecomNotification({
             <dd>{latest.msgid || "尚未取得"}</dd>
           </dl>
           {latest.error && <p role="alert">{latest.error}</p>}
-          <div className="itn-actions">
+        </>
+      )}
+      <div className="itn-actions" role="group" aria-label="发送记录操作">
+        {latest && (
+          <>
             <Button disabled={ui.busy || !latest.refresh.allowed} onClick={() => void ui.refresh(latest.id)}>
               刷新发送结果
             </Button>
@@ -69,44 +54,56 @@ export function WecomNotification({
             >
               核实发送记录
             </Button>
-          </div>
-          {ui.candidates && (
-            <div>
-              <p>{ui.candidates.reason}</p>
-              {ui.candidates.items.map((candidate) => (
-                <div key={candidate.candidateId}>
-                  <p>
-                    {candidate.description} · {candidate.candidateId}
-                  </p>
-                  <label className="itn-field">
-                    核实说明
-                    <textarea value={reason} onChange={(event) => setReason(event.target.value)} />
-                  </label>
-                  <Button disabled={ui.busy} onClick={() => void ui.reconcile(latest.id, candidate, reason)}>
-                    确认关联原群发
-                  </Button>
-                </div>
-              ))}
+          </>
+        )}
+        <Button disabled={ui.busy || ui.loading} onClick={() => void ui.reload()}>
+          重新读取记录
+        </Button>
+      </div>
+      {latest && ui.candidates && (
+        <div>
+          <p>{ui.candidates.reason}</p>
+          {ui.candidates.items.map((candidate) => (
+            <div key={candidate.candidateId}>
+              <p>
+                {candidate.description} · {candidate.candidateId}
+              </p>
+              <label className="itn-field">
+                核实说明
+                <textarea value={reason} onChange={(event) => setReason(event.target.value)} />
+              </label>
+              <Button disabled={ui.busy} onClick={() => void ui.reconcile(latest.id, candidate, reason)}>
+                确认关联原群发
+              </Button>
             </div>
-          )}
-        </>
+          ))}
+        </div>
       )}
-      <Button disabled={ui.busy} onClick={() => void ui.reload()}>
-        重新读取记录
-      </Button>
       {ui.items.map((item) => (
         <details key={item.id}>
           <summary>
             版本 {item.revision} · {item.statusLabel} · {formatTime(item.createdAt)}
           </summary>
-          <p>
-            企业：{item.corpId} · 目标群：{item.groupName}（{item.chatId}）
-          </p>
-          <p>
-            群主：{item.employee} · {item.userid}
-          </p>
-          <p>合同：{item.files.map((file) => file.filename).join("、")}</p>
-          <p>渠道发送时间：{item.sentAt ? formatTime(item.sentAt) : "尚无成功回执"}</p>
+          <dl className="itn-facts itn-record-facts">
+            <dt>企业 ID</dt>
+            <dd>{item.corpId}</dd>
+            <dt>目标群</dt>
+            <dd>
+              {item.groupName}（{item.chatId}）
+            </dd>
+            <dt>群主</dt>
+            <dd>
+              {item.employee} · {item.userid}
+            </dd>
+            <dt>合同</dt>
+            <dd>
+              {item.files.map((file) => (
+                <div key={file.sha256 + file.filename}>{file.filename}</div>
+              ))}
+            </dd>
+            <dt>渠道发送时间</dt>
+            <dd>{item.sentAt ? formatTime(item.sentAt) : "尚无成功回执"}</dd>
+          </dl>
           <pre>{item.message}</pre>
           {item.error && <p>{item.error}</p>}
         </details>

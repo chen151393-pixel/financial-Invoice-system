@@ -63,3 +63,16 @@ def digest(header, items):
 def ambiguous(old, new):
     left, right = [identity(r) for r in old if r["is_active"]], [identity(r) for r in new]
     return len(left) != len(set(left)) or len(right) != len(set(right))
+
+
+def projection(header, rows, old):
+    """预估与保存共用完整性规则，避免待补齐或歧义票反复产生相同版本。"""
+    head = dict(header)
+    if not rows or head.get("detail_status", "complete") != "complete":
+        head["detail_status"] = "pending"
+        return head, old
+    if ambiguous(old, rows):
+        head["detail_status"] = "failed"
+        return head, old
+    head["detail_status"] = "complete"
+    return head, rows

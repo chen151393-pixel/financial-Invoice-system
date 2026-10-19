@@ -135,7 +135,8 @@ test("显示本次真实范围和提交统计，明细待补齐不声称已匹�
         created: 1,
         updated: 0,
         unchanged: 1,
-        pendingDetails: 2,
+        pendingDetails: 1,
+        completeDetails: 1,
         message: "拉取结果已提交",
         saved: true,
       },
@@ -144,7 +145,11 @@ test("显示本次真实范围和提交统计，明细待补齐不声称已匹�
   assert.match(html, /2026-10-01/);
   assert.match(html, /拉取结果已提交/);
   assert.match(html, /明细待补齐/);
-  assert.match(html, /暂不生成逐行匹配建议/);
+  assert.match(html, /<dt>明细完整<\/dt><dd>1 张<\/dd>/);
+  assert.match(html, /href="\/matching"[^>]*>审核匹配建议/);
+  assert.match(html, /默认版暂只读取票头/);
+  assert.match(html, /须人工确认/);
+  assert.doesNotMatch(html, /已匹配|匹配完成/);
 });
 
 test("业务类型由后端提供，多选和实际提交范围独立展示", () => {

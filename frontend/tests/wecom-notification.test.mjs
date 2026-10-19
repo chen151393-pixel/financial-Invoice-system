@@ -4,8 +4,9 @@ import { fileURLToPath } from "node:url";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { createServer } from "vite";
+import { MemoryRouter } from "react-router";
 
-let server, api, Panel;
+let server, api, Panel, TaskPanel;
 before(async () => {
   server = await createServer({
     configFile: fileURLToPath(new URL("../vite.config.ts", import.meta.url)),
@@ -16,6 +17,9 @@ before(async () => {
   api = await server.ssrLoadModule("/src/modules/task/api/delivery.ts");
   ({ WecomNotification: Panel } = await server.ssrLoadModule(
     "/src/modules/task/components/WecomNotification.tsx",
+  ));
+  ({ TaskNotification: TaskPanel } = await server.ssrLoadModule(
+    "/src/modules/task/components/TaskNotification.tsx",
   ));
 });
 after(async () => {
@@ -56,11 +60,6 @@ test("提交只传版本和摘要，失败不重放，也不传任意群或路�
 });
 
 test("待确认不是已发送，未知结果展示核实而非重发", () => {
-  const notification = {
-    revision: 1,
-    supplierGroup: { revision: 1 },
-    send: { allowed: false, reason: "存在未决通知" },
-  };
   const item = {
     id: "1",
     revision: 1,
@@ -83,14 +82,78 @@ test("待确认不是已发送，未知结果展示核实而非重发", () => {
   };
   const html = renderToStaticMarkup(
     createElement(Panel, {
-      notification,
-      dirty: false,
-      disabled: false,
       controller: { items: [item], loading: false, busy: false, error: "", preview: null, candidates: null },
     }),
   );
   for (const label of ["核实发送记录", "结果待核实", "创建请求超时", "尚无成功回执", "群主在企微确认"])
     assert.ok(html.includes(label));
-  assert.match(html, /disabled=""[^>]*>提交企微群发/);
+  const actions = html.match(/aria-label="发送记录操作"[^>]*>(.*?)<\/div>/s)?.[1];
+  assert.ok(actions);
+  for (const label of ["刷新发送结果", "核实发送记录", "重新读取记录"]) assert.ok(actions.includes(label));
+  assert.ok(!html.includes("提交企微群发"));
   assert.ok(!html.includes("自动发送（未接入）"));
+});
+
+const notification = {
+  revision: 1,
+  groupName: "测试群",
+  employee: "张三",
+  message: "请开票",
+  defaultMessage: "请开票",
+  statusLabel: "待通知",
+  groupConfigReason: "已绑定默认群",
+  supplierGroup: { revision: 2, groupName: "测试群", chatId: "wr001", employee: "张三", userid: "buyer" },
+  edit: { allowed: true, reason: "可编辑" },
+  record: { allowed: true, reason: "在企微实际发送后登记。" },
+  send: { allowed: false, reason: "存在未决通知" },
+  history: [],
+};
+const controller = { items: [], loading: false, busy: false, error: "", preview: null, candidates: null };
+
+test("群发入口紧随保存及人工操作，保留后端禁用条件", () => {
+  for (const allowed of [false, true]) {
+    const html = renderToStaticMarkup(
+      createElement(
+        MemoryRouter,
+        null,
+        createElement(TaskPanel, {
+          detail: {
+            task: { supplier: "测试供应商", company: "测试公司" },
+            documents: [],
+            notification: {
+              ...notification,
+              send: { allowed, reason: allowed ? "可提交" : "存在未决通知" },
+            },
+          },
+          delivery: controller,
+        }),
+      ),
+    );
+    const actions = html.match(/aria-label="通知操作"[^>]*>(.*?)<\/div>/s)?.[1];
+    assert.ok(actions);
+    const labels = [...actions.matchAll(/<button[^>]*>(.*?)<\/button>/g)].map((match) => match[1]);
+    assert.deepEqual(labels, ["保存通知", "登记已人工发送", "提交企微群发"]);
+    assert.match(
+      html,
+      /class="task-notification-message">[\s\S]*?<textarea[\s\S]*?aria-label="复制通知正文"/,
+    );
+    assert.equal((html.match(/aria-label="复制通知正文"/g) || []).length, 1);
+    assert.equal((html.match(/>提交企微群发</g) || []).length, 1);
+    assert.equal(/disabled=""[^>]*>提交企微群发/.test(actions), !allowed);
+    assert.ok(html.includes(allowed ? "可提交" : "存在未决通知"));
+  }
+});
+
+test("发送记录加载、空结果和失败时仍有读取入口", () => {
+  for (const state of [
+    { loading: true, label: "正在读取发送记录…" },
+    { label: "暂无企微提交记录。" },
+    { error: "读取失败，请重试", label: "读取失败，请重试" },
+  ]) {
+    const html = renderToStaticMarkup(createElement(Panel, { controller: { ...controller, ...state } }));
+    assert.ok(html.includes(state.label));
+    assert.ok(html.includes("重新读取记录"));
+    assert.equal(/disabled=""[^>]*>重新读取记录/.test(html), !!state.loading);
+    if (state.error) assert.match(html, /role="alert"/);
+  }
 });

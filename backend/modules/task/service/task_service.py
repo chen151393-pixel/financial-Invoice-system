@@ -49,12 +49,13 @@ class TaskService:
                 total, keys = task_dao.group_page(connection, where, query.groupBy, offset, query.pageSize)
                 rows = task_dao.in_groups(connection, where, query.groupBy, keys)
                 lines = task_line_dao.by_tasks(connection, [row["id"] for row in rows])
+                contacts = notification_dao.latest_sent_by_tasks(connection, [row["id"] for row in rows])
                 status_counts = task_dao.status_counts(connection, where)
                 accounts = task_dao.accounts(connection)
         except SQLAlchemyError:
             raise ApiError(503, READ_ERROR) from None
         names = self._names(rows, lines)
-        groups = [self._group(query.groupBy, key, rows, lines, names) for key in keys]
+        groups = [self._group(query.groupBy, key, rows, lines, names, contacts) for key in keys]
         return TaskList(
             groupBy=query.groupBy,
             groups=groups,
@@ -74,11 +75,13 @@ class TaskService:
             line_ids=[line["purchase_line_id"] for line in lines],
         )
 
-    def _group(self, group_by, key, rows, lines, names):
+    def _group(self, group_by, key, rows, lines, names, contacts):
         column = "supplier_id" if group_by == "supplier" else "customs_declaration_id"
         selected = [row for row in rows if row[column] == key]
         summaries = [
-            task_mapper.summary(row, [line for line in lines if line["task_id"] == row["id"]], names)
+            task_mapper.summary(
+                row, [line for line in lines if line["task_id"] == row["id"]], names, contacts.get(row["id"])
+            )
             for row in selected
         ]
         if group_by == "supplier":
@@ -106,6 +109,7 @@ class TaskService:
                     "documents": document_dao.by_task(connection, task_id),
                     "contract_jobs": contract_job_dao.by_task(connection, task_id),
                     "notifications": notification_dao.history(connection, task_id),
+                    "contact": notification_dao.latest_sent_by_tasks(connection, [task_id]).get(task_id),
                     "deliveries": notification_delivery_dao.history(connection, task_id),
                     "delivery_blocked": bool(
                         notification_delivery_dao.overlapping(connection, task_id, ACTIVE)
@@ -125,7 +129,7 @@ class TaskService:
         data = self._load(task_id)
         task, lines = data["task"], data["lines"]
         names = self._names([task], lines)
-        summary = task_mapper.summary(task, lines, names)
+        summary = task_mapper.summary(task, lines, names, data["contact"])
         documents = self._documents(
             task, self.order_ids(lines), data["documents"], names, data["contract_jobs"]
         )

@@ -142,3 +142,18 @@ MySQL 命名锁保证多实例单消费者，并对同一任务的同一子采�
 新增预览/提交/本地历史/回执刷新/候选核实接口；DTO 只接受版本、摘要和记录 ID。记录及候选只读查询不创建群发。所有操作复用认证身份、来源依据保护和账本写锁，外部调用不占事务。
 
 验证入口：`test_deliveries.py`、`test_delivery_recovery.py`、`test_wecom_messaging.py`、`test_deliveries_mysql.py`；真实渠道联调及专用 MySQL 并发未在本次执行。
+
+## 跟进列表展示字段
+
+`POST /api/tasks/query` 请求和分组分页不变，`groups[].tasks[]` 与详情 `task` 增加以下只读字段，无需迁移：
+
+| 字段 | 口径 |
+| --- | --- |
+| `outstandingAmount` | 未结束任务行逐行 `max(应开金额 - 有效已收金额, 0)` 后汇总的十进制字符串；已结束（含差异结束）、被替代行不再待收。任一应开金额缺失或无明细为 null |
+| `receiptPercent` | 有效已收金额合计 / 应开金额合计 × 100，Decimal 四舍五入至一位小数；超收保留超过 100 的实际值。应开金额缺失或合计非正为 null，不判断任务完成 |
+| `receiptBarPercent` | 同一进度限制在 0–100 的展示条宽字符串；无法计算为 null |
+| `lastContactAt` | 本任务已发送通知中最大的实际发送时间（UTC ISO）；无记录为 null。人工登记与企微确认均计入，草稿、失败、待确认不计入 |
+| `followupEmployee` | 上述最近发送记录的员工姓名；不是采购负责人，缺失为空字符串 |
+| `waitingLabel` | 自任务创建起经过的完整天数；完成与被替代任务只返回终态文案 |
+
+`policy/followup_policy.py` 负责只读计算，`notification_dao.latest_sent_by_tasks` 一次批量查询本页任务的最近已发送记录。不读取 matching 私有表，不新增状态转换或写入。针对性验证见 `backend/tests/test_task_followup.py`。

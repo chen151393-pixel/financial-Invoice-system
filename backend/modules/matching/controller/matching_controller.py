@@ -2,10 +2,11 @@
 
 from typing import Annotated
 
-from fastapi import APIRouter, Path
+from fastapi import APIRouter, Path, Query
 
 from backend.core.dependencies import Owner
 
+from ..dto.invoice_totals_dto import InvoiceTotalsQuery
 from ..dto.matching_dto import (
     BatchBody,
     CancelBody,
@@ -18,6 +19,7 @@ from ..dto.matching_dto import (
     ReplaceBody,
     SummaryBody,
 )
+from ..vo.invoice_totals_vo import InvoiceTotals
 from ..vo.matching_vo import BatchResult, Candidates, GenerateResult, InvoiceMatching, Queue, Summaries
 
 Id = Annotated[int, Path(ge=1, le=2**63 - 1)]
@@ -25,6 +27,10 @@ Id = Annotated[int, Path(ge=1, le=2**63 - 1)]
 
 def create_router(queries, allocations, proposals):
     router = APIRouter(prefix="/api/matching", tags=["发票比对"])
+
+    @router.get("/invoice-totals", response_model=InvoiceTotals)
+    def invoice_totals(query: Annotated[InvoiceTotalsQuery, Query()], owner: Owner):
+        return queries.invoice_totals(query)
 
     @router.get("/invoices/{invoice_id}", response_model=InvoiceMatching)
     def invoice(invoice_id: Id, owner: Owner):

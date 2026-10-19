@@ -20,6 +20,8 @@ flowchart LR
   R -->|ReviewApproved| T[task 生成后继]
   R -->|ReviewApproved / PurchaseBasisInvalidated| M[matching 台账]
   E[Excel 文件] --> I[invoice 版本]
+  L[柠檬云专业版票头及商品明细] --> SY[sync 事务外读取]
+  SY -->|LemonInvoicesFetched| I
   I -->|InvoiceChanged / InvoicesImported| M
   M -->|AllocationChanged 绝对合计| T
 ```
@@ -41,3 +43,5 @@ flowchart LR
 下一阶段是第 5 步持久调度和 open2 真实明细接入；自动通知、权限角色、NS 回写另行设计。本次不触发真实 NS 写入。
 
 2026-10-16 补充：柠檬云已支持管理员选账套按开票日期手动拉取进项票头，通过 sync→invoice→sync 事件链原子保存票头、不可变版本和同步结果。API 明细仍待补齐，不生成逐行匹配建议；完整 Excel 通道继续运行。定时同步仍未实施，部署与边界见[柠檬云接入说明](lemon-invoice-sync-plan.md)。
+
+2026-10-19 商品明细补充：专业版已接入只读详情并沿用 invoice/matching 版本与事件链；完整明细生成待审核建议，人工通过后更新任务。默认版 open2 仍只读票头。重新按原账套日期拉取可补全既有票头，不重复创建发票。此次无表迁移，真实明细接口和远端部署仍需在已绑定环境验收。

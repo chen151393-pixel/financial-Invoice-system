@@ -28,6 +28,12 @@ class TaskSummary(StrictModel):
     orderNumbers: list[str]
     lineCount: int
     expectedAmount: str | None = None
+    outstandingAmount: str | None
+    receiptPercent: str | None
+    receiptBarPercent: str | None
+    followupEmployee: str
+    lastContactAt: str | None
+    waitingLabel: str
 
 
 class TaskCounts(StrictModel):

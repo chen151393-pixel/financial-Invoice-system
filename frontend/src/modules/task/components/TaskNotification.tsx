@@ -1,11 +1,11 @@
-import { useState } from "react";
-import { Link } from "react-router";
-import { paths } from "../../../app/paths";
+import { useId, useState } from "react";
 import { Button } from "../../../shared/components/Button";
 import type { NotificationDraft, NotificationRecord, TaskDetail } from "../types/task";
 import type { DeliveryController } from "../types/delivery";
 import { WecomNotification } from "./WecomNotification";
+import { NotificationCopyButton } from "./NotificationCopyButton";
 import { NotificationDialog } from "./NotificationDialog";
+import { NotificationRecipients } from "./NotificationRecipients";
 import { NotificationHistory } from "./NotificationHistory";
 import { NotificationRecordForm, type RecordInput } from "./NotificationRecordForm";
 import "./task-notification.css";
@@ -24,6 +24,8 @@ export function TaskNotification({
   delivery: DeliveryController;
 }) {
   const notification = detail.notification;
+  const messageId = useId();
+  const [copiedMessage, setCopiedMessage] = useState<string | null>(null);
   const [draft, setDraft] = useState({
     groupName: notification.groupName,
     employee: notification.employee,
@@ -38,6 +40,7 @@ export function TaskNotification({
     draft.employee !== notification.employee ||
     draft.message !== notification.message;
   const readonly = !notification.edit.allowed;
+  const copied = copiedMessage === draft.message;
 
   async function submit(action: () => Promise<void>) {
     if (busy) return;
@@ -59,8 +62,10 @@ export function TaskNotification({
   const record = (value: RecordInput) =>
     submit(() => onRecord({ ...value, revision: notification.revision }));
   async function copy() {
+    setCopiedMessage(null);
     try {
       await navigator.clipboard.writeText(draft.message);
+      setCopiedMessage(draft.message);
       setFeedback({ error: false, text: "通知正文已复制，请在企微外部群粘贴，并从共享盘添加对应合同。" });
     } catch {
       setFeedback({ error: true, text: "复制失败，请选中通知正文手动复制。" });
@@ -71,18 +76,6 @@ export function TaskNotification({
       {feedback.text}
     </p>
   );
-  const field = (key: "groupName" | "employee", label: string, max: number, placeholder: string) => (
-    <label className="itn-field">
-      {label}
-      <input
-        value={draft[key]}
-        disabled={readonly || busy}
-        maxLength={max}
-        placeholder={placeholder}
-        onChange={(e) => setDraft({ ...draft, [key]: e.target.value })}
-      />
-    </label>
-  );
   return (
     <div className="itn">
       <header className="itn-heading">
@@ -92,36 +85,14 @@ export function TaskNotification({
         </div>
         <Button onClick={() => setDialog("preview")}>预览通知</Button>
       </header>
-      <p className="it-help">{notification.send.reason}</p>
       {!dialog && feedbackNode}
       <div className="itn-columns">
-        <section aria-label="接收信息">
-          <h3>接收信息</h3>
-          <p className="it-help">{notification.groupConfigReason}</p>
-          {notification.supplierGroup && (
-            <dl className="itn-facts">
-              <dt>默认通知群</dt>
-              <dd>{notification.supplierGroup.groupName}</dd>
-              <dt>外部群 ID</dt>
-              <dd>{notification.supplierGroup.chatId}</dd>
-              <dt>群主</dt>
-              <dd>
-                {notification.supplierGroup.employee} · {notification.supplierGroup.userid}
-              </dd>
-            </dl>
-          )}
-          <Link to={paths.supplierGroups}>维护供应商档案</Link>
-          <dl className="itn-facts">
-            <dt>供应商</dt>
-            <dd>{detail.task.supplier}</dd>
-            <dt>采购公司</dt>
-            <dd>{detail.task.company}</dd>
-          </dl>
-          {field("groupName", "人工发送群名称", 200, "仅用于人工发送登记")}
-          {field("employee", "人工发送员工", 100, "仅用于人工发送登记")}
-          <p className="it-help">已保存的通知保留原内容，默认群配置变化不会覆盖历史记录。</p>
-          <p className="it-help">{notification.edit.reason}</p>
-        </section>
+        <NotificationRecipients
+          detail={detail}
+          draft={draft}
+          disabled={readonly || busy}
+          onChange={setDraft}
+        />
         <section aria-label="本次通知">
           <div className="itn-heading">
             <h3>本次通知</h3>
@@ -132,17 +103,21 @@ export function TaskNotification({
               恢复默认内容
             </Button>
           </div>
-          <label className="itn-field">
-            通知正文
-            <textarea
-              rows={11}
-              value={draft.message}
-              readOnly={readonly}
-              disabled={busy}
-              maxLength={4000}
-              onChange={(e) => setDraft({ ...draft, message: e.target.value })}
-            />
-          </label>
+          <div className="itn-field">
+            <label htmlFor={messageId}>通知正文</label>
+            <div className="task-notification-message">
+              <textarea
+                id={messageId}
+                rows={11}
+                value={draft.message}
+                readOnly={readonly}
+                disabled={busy}
+                maxLength={4000}
+                onChange={(e) => setDraft({ ...draft, message: e.target.value })}
+              />
+              <NotificationCopyButton copied={copied} disabled={busy} onCopy={() => void copy()} />
+            </div>
+          </div>
           <p className="it-help">
             系统根据审核任务生成默认内容，支持发送前手动编辑。
             {dirty
@@ -163,19 +138,26 @@ export function TaskNotification({
           <p className="it-help">企微群发由系统上传合同；人工发送时请从共享盘添加。正文不包含内部路径。</p>
         </section>
       </div>
-      <div className="itn-actions">
-        <Button variant="primary" disabled={readonly || busy} onClick={() => void save()}>
-          {busy ? "保存中…" : "保存通知"}
-        </Button>
-        <Button disabled={busy} onClick={() => void copy()}>
-          复制通知正文
+      <div className="itn-actions" role="group" aria-label="通知操作">
+        <Button disabled={readonly || busy} onClick={() => void save()}>
+          {saving ? "保存中…" : "保存通知"}
         </Button>
         <Button disabled={!notification.record.allowed || dirty || busy} onClick={() => setDialog("record")}>
           登记已人工发送
         </Button>
+        <Button
+          variant="primary"
+          disabled={busy || dirty || !notification.send.allowed}
+          onClick={() =>
+            void delivery.prepare(notification.revision, notification.supplierGroup?.revision ?? 0)
+          }
+        >
+          提交企微群发
+        </Button>
       </div>
       <p className="it-help">{dirty ? "请先保存修改后的通知，再登记发送。" : notification.record.reason}</p>
-      <WecomNotification controller={delivery} notification={notification} dirty={dirty} disabled={saving} />
+      <p className="it-help">{dirty ? "请先保存通知，再预览提交。" : notification.send.reason}</p>
+      <WecomNotification controller={delivery} />
       <NotificationHistory history={notification.history} />
       {dialog && (
         <NotificationDialog

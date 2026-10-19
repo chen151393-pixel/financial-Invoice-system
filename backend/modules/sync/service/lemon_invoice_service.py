@@ -7,6 +7,7 @@ from sqlalchemy.exc import SQLAlchemyError
 
 from backend.core.errors import ApiError
 from backend.core.write_lock import transaction
+from backend.modules.invoice.public import lemon_detail_ids
 
 from ..dao import lemon_run_dao as runs
 from ..policy.lemon_invoice_policy import run_business_types
@@ -82,6 +83,13 @@ class LemonInvoiceService:
             professional = chosen.get("edition") == "professional"
             reader = self.client.professional_invoices if professional else self.client.invoices
             records = reader(token, body.asid, body.startDate, body.endDate)
+            records = self.client.invoice_details(
+                token,
+                body.asid,
+                records,
+                lemon_detail_ids(records, body.businessTypes),
+                professional=professional,
+            )
             namespace = hashlib.sha256(
                 f"{self.accounts.binding.settings.lemon_host}|{body.asid}".encode()
             ).hexdigest()

@@ -58,30 +58,73 @@
   resize: vertical;
   line-height: 1.8;
 }
+.task-notification-message {
+  position: relative;
+}
+.itn .task-notification-message textarea {
+  display: block;
+  padding-top: calc(var(--space-layout) * 2);
+}
+.task-notification-copy {
+  position: absolute;
+  top: var(--space-small);
+  right: var(--space-small);
+  display: grid;
+  place-items: center;
+  padding: var(--space-small);
+}
+.task-notification-copy:hover:not(:disabled) {
+  color: var(--color-primary);
+  background: var(--color-canvas);
+}
 .itn .itn-field :disabled,
 .itn .itn-field [readonly] {
   background: var(--color-canvas);
 }
 .itn-actions {
   display: flex;
+  align-items: center;
   flex-wrap: wrap;
-  gap: 12px;
+  gap: var(--space-small) var(--space-control);
 }
 .itn-files {
   padding-block: 16px;
   overflow-wrap: anywhere;
 }
 .itn-history {
-  margin-top: 24px;
-  padding-top: 24px;
+  margin-top: var(--space-layout);
+  padding-top: var(--space-layout);
   border-top: 1px solid var(--color-border);
 }
+.itn-history h3 {
+  margin: 0 0 var(--space-control);
+}
+.itn-record-facts {
+  grid-template-columns: 7em minmax(0, 1fr);
+  gap: var(--space-small) var(--space-control);
+  margin-block: var(--space-control);
+}
+.itn-history .itn-actions {
+  margin-block: var(--space-control);
+}
 .itn-history details {
-  padding-block: 12px;
+  padding-block: var(--space-control);
+}
+.itn-history details + details {
+  border-top: 1px solid var(--color-border);
 }
 .itn-history summary {
   cursor: pointer;
   color: var(--color-primary);
+  overflow-wrap: anywhere;
+}
+.itn-history summary:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+.itn-history pre {
+  margin: var(--space-control) 0 0;
+  padding: var(--space-control) var(--space-layout);
 }
 .itn pre,
 .itn-dialog pre {

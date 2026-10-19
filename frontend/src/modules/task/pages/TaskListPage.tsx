@@ -5,7 +5,9 @@ import { Button } from "../../../shared/components/Button";
 import { Pagination } from "../../../shared/components/Pagination";
 import { openLocalSession } from "../../identity/api";
 import { listTasks } from "../api/task";
-import { TaskCountList, TaskGroupTable } from "../components/TaskGroupTable";
+import { TaskCountList } from "../components/TaskCountList";
+import { TaskFollowupTable } from "../components/TaskFollowupTable";
+import { TaskListToolbar } from "../components/TaskListToolbar";
 import type { TaskList, TaskListQuery } from "../types/task";
 import "./task.css";
 
@@ -96,40 +98,26 @@ export function TaskListPage() {
           筛选条件已修改，点击「查询」生效；当前结果仍使用上次提交的条件。
         </p>
       )}
-      <div className="it-toolbar">
-        <div className="it-switch" role="group" aria-label="任务分组方式">
-          <Button
-            aria-pressed={query.groupBy === "supplier"}
-            disabled={busy}
-            onClick={() => change({ groupBy: "supplier" })}
-          >
-            按供应商
-          </Button>
-          <Button
-            aria-pressed={query.groupBy === "declaration"}
-            disabled={busy}
-            onClick={() => change({ groupBy: "declaration" })}
-          >
-            按报关单
-          </Button>
-        </div>
-        <label>
-          任务版本
-          <select
-            aria-label="任务版本"
-            value={query.status}
-            disabled={busy}
-            onChange={(e) => change({ status: e.target.value as TaskListQuery["status"] })}
-          >
-            <option value="current">当前任务</option>
-            <option value="superseded">已被替代</option>
-            <option value="all">全部版本</option>
-          </select>
-        </label>
-      </div>
-      <p className="it-help">
-        两种视图展示同一批任务。待开票包含待保存合同、待通知供应商、等待开票及部分收票的任务，待处理可与其重叠；收票进度由发票比对通过的分配自动汇总。按完整分组分页。
-      </p>
+      <TaskListToolbar
+        query={query}
+        busy={busy}
+        onChange={change}
+        onClear={(filter) => {
+          if (filter === "all") {
+            setKeyword("");
+            setAccount("");
+            change({ keyword: "", account: "", status: "current" });
+          } else if (filter === "keyword") {
+            setKeyword("");
+            change({ keyword: "" });
+          } else if (filter === "account") {
+            setAccount("");
+            change({ account: "" });
+          } else {
+            change({ status: "current" });
+          }
+        }}
+      />
       {state.kind === "loading" && (
         <div className="it-empty" role="status">
           正在读取开票任务…
@@ -151,19 +139,13 @@ export function TaskListPage() {
       )}
       {state.kind === "ready" && (
         <>
-          <p className="it-help">
-            当前查询范围：{query.keyword ? `“${query.keyword}”` : "全部关键词"} ·{" "}
-            {query.account || "全部 NS 环境"}
-          </p>
           <div className="it-result" role="status">
             共 {state.data.counts.tasks} 个任务 · {state.data.total} 个
             {query.groupBy === "supplier" ? "供应商分组" : "报关单分组"}
             <TaskCountList counts={state.data.counts} />
           </div>
           {state.data.groups.length ? (
-            state.data.groups.map((group, index) => (
-              <TaskGroupTable key={`${query.groupBy}:${group.id}`} group={group} first={index === 0} />
-            ))
+            <TaskFollowupTable groups={state.data.groups} />
           ) : (
             <div className="it-empty">
               <h2>

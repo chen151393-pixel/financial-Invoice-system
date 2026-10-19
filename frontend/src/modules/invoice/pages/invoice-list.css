@@ -20,6 +20,11 @@
 .invoice-list__metric:last-child {
   border-right: 0;
 }
+.invoice-list__metric-help {
+  display: block;
+  margin-top: var(--space-small);
+  line-height: 1.6;
+}
 .invoice-list__metric strong {
   display: block;
   font-size: 21px;

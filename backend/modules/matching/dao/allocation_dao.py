@@ -47,6 +47,27 @@ def by_invoices(connection, invoice_ids):
     return [dict(row) for row in connection.execute(query).mappings()]
 
 
+def confirmed_for_totals(connection, invoice_ids):
+    """只取已确认分配的金额与版本依据，不把建议、驳回或取消计入。"""
+    if not invoice_ids:
+        return []
+    fields = (
+        "invoice_id",
+        "amount",
+        "verification_status",
+        "invoice_version_id",
+        "purchase_line_id",
+        "purchase_basis_id",
+        "verification_history",
+    )
+    result = connection.execute(
+        select(*(allocations.c[key] for key in fields)).where(
+            allocations.c.invoice_id.in_(invoice_ids), allocations.c.status == "confirmed"
+        )
+    ).mappings()
+    return [dict(row) for row in result]
+
+
 def active_item_ids(connection, item_ids):
     """已有待审核建议或已通过分配的发票行。"""
     if not item_ids:

@@ -10,6 +10,7 @@ import httpx
 from backend.core.errors import ApiError
 
 from .professional_accounts import LemonProfessionalAccounts
+from .professional_invoice_details import LemonProfessionalInvoiceDetails
 from .professional_invoices import LemonProfessionalInvoices
 
 logger = logging.getLogger("ns_api.lemon")
@@ -119,6 +120,12 @@ class LemonInvoiceClient:
 
     def professional_invoices(self, token, asid, start, end):
         return LemonProfessionalInvoices(self.professional).query(token, asid, start, end)
+
+    def invoice_details(self, token, asid, records, selected_ids, *, professional):
+        if not professional:
+            # open2 尚无已核实的商品明细协议；明确保留票头待补齐，不猜测接口。
+            return records
+        return LemonProfessionalInvoiceDetails(self.professional).enrich(token, asid, records, selected_ids)
 
     def accounts(self, token):
         data = self._post(

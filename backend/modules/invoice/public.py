@@ -9,9 +9,10 @@ from dataclasses import dataclass
 from .policy.lemon_scope_policy import (
     describe_lemon_result,
     lemon_business_type_options,
+    lemon_detail_ids,
     lemon_import_defaults,
 )
-from .service.invoice_reader import lock_invoice, read_invoices
+from .service.invoice_reader import lock_invoice, read_invoice_amount_scope, read_invoices
 
 
 @dataclass(frozen=True)
@@ -25,9 +26,11 @@ __all__ = [
     "InvoicesImported",
     "lock_invoice",
     "read_invoices",
+    "read_invoice_amount_scope",
     "describe_lemon_result",
     "lemon_business_type_options",
     "lemon_import_defaults",
+    "lemon_detail_ids",
 ]
 
 

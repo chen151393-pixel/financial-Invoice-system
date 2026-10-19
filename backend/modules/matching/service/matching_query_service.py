@@ -25,6 +25,7 @@ from ..vo.matching_vo import (
     QueueRow,
     Summaries,
 )
+from .invoice_totals_service import InvoiceTotalsService
 
 READ_ERROR = "发票比对读取失败，请检查业务数据库及迁移状态"
 TIERS = {"all": (None, None), "high": (HIGH, None), "medium": (MEDIUM, HIGH), "low": (None, MEDIUM)}
@@ -33,6 +34,9 @@ TIERS = {"all": (None, None), "high": (HIGH, None), "medium": (MEDIUM, HIGH), "l
 class MatchingQueryService:
     def __init__(self, engine):
         self.engine = engine
+
+    def invoice_totals(self, query):
+        return InvoiceTotalsService(self.engine).read(query)
 
     def _read(self, action):
         try:

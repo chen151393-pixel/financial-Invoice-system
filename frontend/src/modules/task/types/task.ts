@@ -28,6 +28,13 @@ export interface TaskSummary {
   orderNumbers: string[];
   lineCount: number;
   expectedAmount: string | null;
+  // 兼容尚未更新的任务查询服务；缺失字段只展示待获取，不在前端补算。
+  outstandingAmount?: string | null;
+  receiptPercent?: string | null;
+  receiptBarPercent?: string | null;
+  followupEmployee?: string;
+  lastContactAt?: string | null;
+  waitingLabel?: string;
 }
 export interface TaskCounts {
   tasks: number;

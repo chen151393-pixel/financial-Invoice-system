@@ -4,6 +4,7 @@ from datetime import UTC
 
 from backend.modules.source.public import unit_label
 
+from ..policy.followup_policy import fields as followup_fields
 from ..policy.task_policy import LINE_STATUS_LABELS, STATUS_LABELS, STATUS_REASONS, event_label
 from ..vo.capability import Capability
 from ..vo.task_vo import TaskCounts, TaskEvent, TaskLine, TaskStep, TaskSummary
@@ -34,7 +35,7 @@ def order_numbers(lines, names):
     return sorted(names["orders"].get(order_id) or "单号缺失" for order_id in order_ids)
 
 
-def summary(task, lines, names):
+def summary(task, lines, names, contact=None):
     supplier = names["suppliers"].get(task["supplier_id"]) or {}
     return TaskSummary(
         id=str(task["id"]),
@@ -52,6 +53,7 @@ def summary(task, lines, names):
         orderNumbers=order_numbers(lines, names),
         lineCount=len(lines),
         expectedAmount=expected_total(lines),
+        **followup_fields(task, lines, contact),
     )
 
 

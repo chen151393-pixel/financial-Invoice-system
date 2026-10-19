@@ -6,9 +6,10 @@ from backend.core.errors import ApiError
 
 from ..dao import header_dao, item_dao, lemon_invoice_dao, raw_record_dao
 from ..mapper.lemon_invoice_mapper import prepare
+from ..policy.lemon_detail_policy import validate_details
 from ..policy.lemon_invoice_policy import validate
 from ..policy.lemon_scope_policy import describe_lemon_result
-from ..policy.version_policy import digest
+from ..policy.version_policy import digest, projection
 from ..public import InvoicesImported, LemonInvoicesStored
 from .version_service import save_version
 
@@ -17,7 +18,8 @@ def prepared_batch(event):
     result, seen, ids = [], set(), set()
     for raw in event.records:
         values = validate(raw, event.start, event.end)
-        item = prepare(raw, values, event.account)
+        detail_rows, detail_status = validate_details(raw, values)
+        item = prepare(raw, values, event.account, detail_rows, detail_status)
         if item["key"] in seen or raw["InvoiceId"] in ids:
             raise ApiError(422, "本次来源存在重复票号或记录编号，整批未保存")
         seen.add(item["key"])
@@ -32,7 +34,11 @@ def classify(connection, item, existing):
     old = header_dao.by_ids(connection, [existing["id"]])[0]
     if old["source"] != item["header"]["source"] or old["external_id"] != item["header"]["external_id"]:
         raise ApiError(409, "同票来源身份冲突，整批未保存，请核实原记录")
-    if digest(old, item_dao.by_invoices(connection, [old["id"]])) == digest(item["header"], []):
+    old_rows = item_dao.by_invoices(connection, [old["id"]])
+    if digest(old, old_rows) == digest(item["header"], item["rows"]):
+        return "unchanged"
+    head, rows = projection(item["header"], item["rows"], old_rows)
+    if digest(old, old_rows) == digest(head, rows):
         return "unchanged"
     return "updated"
 
@@ -61,13 +67,19 @@ def on_lemon_invoices_fetched(connection, event, *, events):
                     **counts,
                     "fetched": len(event.records),
                     "excluded": len(event.records) - len(prepared),
-                    "pendingDetails": len(prepared),
+                    **detail_counts(connection, event.account, keys),
                     "businessTypes": list(event.business_types),
                     "availableBusinessTypes": available_types,
                 }
             ),
         ),
     )
+
+
+def detail_counts(connection, account, keys):
+    saved = header_dao.by_keys(connection, account, keys)
+    complete = sum(row["detail_status"] == "complete" for row in saved.values())
+    return {"completeDetails": complete, "pendingDetails": len(saved) - complete}
 
 
 def selected_batch(prepared, existing, sources, business_types):

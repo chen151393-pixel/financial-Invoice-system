@@ -18,6 +18,7 @@ export type LemonRun = {
     updated: number;
     unchanged: number;
     pendingDetails: number;
+    completeDetails?: number;
     saved: boolean;
     message: string;
   };

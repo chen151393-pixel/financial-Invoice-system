@@ -1,6 +1,7 @@
 """供其他模块在同一事务中读取发票（经 public.py 暴露）：返回普通字典，不暴露表结构。"""
 
 from ..dao import header_dao, item_dao
+from ..dto.invoice_dto import InvoiceQuery
 
 HEADER_FIELDS = (
     "current_version_id",
@@ -45,3 +46,10 @@ def read_invoices(connection, invoice_ids):
 def lock_invoice(connection, invoice_id):
     """在调用方事务中锁定发票头（加锁顺序：任务行之后、分配之前）；返回是否存在。"""
     return bool(header_dao.by_ids(connection, [invoice_id], lock=True))
+
+
+def read_invoice_amount_scope(connection, filters, *, after_id=0):
+    """复用列表筛选；首次返回全范围票面汇总，每次返回至多 500 张统计票头。"""
+    query = InvoiceQuery(**filters)
+    totals = header_dao.amounts(connection, query) if after_id == 0 else None
+    return totals, header_dao.amount_page(connection, query, after_id, 500)

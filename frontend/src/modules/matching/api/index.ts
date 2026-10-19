@@ -1,5 +1,6 @@
 import { http, HttpError } from "../../../shared/api/http";
 import { openLocalSession } from "../../identity/api";
+import type { InvoiceTotals, InvoiceTotalsFilters } from "../types/invoice-totals";
 import type {
   Candidate,
   ConfirmBody,
@@ -11,6 +12,7 @@ import type {
 } from "../types/matching";
 
 export type { MatchingSummary } from "../types/matching";
+export type { InvoiceTotals } from "../types/invoice-totals";
 
 const allocation = (id: string) => `/matching/allocations/${encodeURIComponent(id)}`;
 
@@ -30,6 +32,12 @@ export const getInvoiceMatching = (invoiceId: string) =>
 export const getMatchingQueue = (query: QueueQuery) => read<Queue>("/matching/queue", "POST", query);
 export const getMatchingSummaries = (invoiceIds: string[]) =>
   read<{ rows: MatchingSummary[] }>("/matching/summaries", "POST", { invoiceIds });
+export function getInvoiceTotals(filters: InvoiceTotalsFilters) {
+  const params = new URLSearchParams();
+  for (const key of ["q", "status", "date_from", "date_to"] as const)
+    if (filters[key]) params.set(key, filters[key]);
+  return read<InvoiceTotals>(`/matching/invoice-totals?${params}`);
+}
 export const findCandidates = (invoiceId: string, invoiceItemId: string, keyword: string) =>
   read<{ rows: Candidate[]; total: number }>("/matching/candidates/query", "POST", {
     invoiceId,

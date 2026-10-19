@@ -73,6 +73,18 @@
 - `python -m backend.manage rebuild-ledger` 用持久台账修复任务缓存，不自动核实历史。
 - 回归增加 `test_ledger_versions.py`、`test_ledger_migration.py`，覆盖版本、换算、复核、差异结束、原子替换和恢复。旧 business/reconciliation 测试已随退休实现移除；新链路承担业务验收。
 
+## 发票列表金额统计（2026-10-19）
+
+`GET /api/matching/invoice-totals` 接收 `q`、`status`、`date_from`、`date_to`，与发票列表同筛选，不接收页码。`service/invoice_totals_service.py` 通过 invoice 只读门面读取全范围票面汇总及分批票头，只通过本模块 DAO 读取确认分配，通过 review 门面核实当前依据；MySQL 查询期间使用 REPEATABLE READ 快照，返回连接池后恢复原隔离级别。
+
+响应 `amounts[]` 按币种包含 `currency/count/gross/tax/pendingAmount/pendingCount/reviewAmount/reviewCount`；金额均为十进制字符串，计数为对应发票去重数量。价税合计和票面税额包含筛选范围内的红字金额，不表示抵扣认定。
+
+`policy/invoice_totals_policy.py` 定义口径：正常发票的待匹配金额为含税金额减有效确认金额，逐票取不小于零；有效确认须为 valid、明细完整，且核实历史中的发票版本、开票依据与当前允许的依据一致。建议、驳回、取消不抵减；作废、红冲、未知状态的票不计待匹配。已确认但不满足有效条件的分配全部计入待复核金额，不因票面失效隐去历史占用。待复核与待匹配可重叠，不能相加，也不等同所有业务异常的金额。
+
+无结果返回空分组；读取失败返回 503，不冒充零。原列表与单票匹配接口保留。测试见 `backend/tests/test_invoice_totals.py`、`backend/tests/test_invoice_totals_mysql.py` 和 `frontend/tests/invoice-totals.test.mjs`，无需数据库迁移。
+
 ## 单位名称展示（2026-10-16）
 
 发票比对采购侧与单位比对项通过 source 只读门面解析为单位名称，仅影响展示，不修改原始编号、数量金额或审核／比对结论。字典缺失、停用及未知编号保留原值，规则与兼容表归属见 [source 单位说明](../source/README.md)；验证见 `backend/tests/test_unit_display.py`。
+
+2026-10-19：专业版 API 商品明细补全后沿用 InvoicesImported 订阅生成建议，不新增匹配算法或自动确认入口。明细不完整时禁止确认；发票先拉取、采购后审核时仍通过“重新生成建议”进入队列。完整拉票到收齐、重排去重、换版待复核、作废红冲、撤销和事务回滚见 `backend/tests/sync/test_lemon_detail_matching.py`，MySQL 复用验证见 `test_lemon_detail_mysql.py`。

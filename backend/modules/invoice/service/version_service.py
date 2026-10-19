@@ -32,17 +32,13 @@ def save_version(connection, item, existing, events, now):
         old_head = header_dao.by_ids(connection, [invoice_id], lock=True)[0]
         old_version = old_head["current_version_id"]
         old_items = item_dao.by_invoices(connection, [invoice_id])
-        if not rows:
-            head["detail_status"] = "pending"
-        elif rules.ambiguous(old_items, rows):
-            head["detail_status"] = "failed"
-            # 身份不明时保留原逻辑明细及占用；明确作废/红冲仍立即传播。
-        else:
-            item_dao.replace_projection(connection, invoice_id, rows, rules.identity, now)
-            head["detail_status"] = "complete" if rows else "pending"
+        head, projected = rules.projection(head, rows, old_items)
+        if head["detail_status"] == "complete":
+            item_dao.replace_projection(connection, invoice_id, projected, rules.identity, now)
+        # 身份不明或明细不完整时保留原逻辑明细及占用；作废/红冲仍传播。
         version_dao.project(connection, invoice_id, head, now)
     else:
-        head["detail_status"] = "complete" if rows else "pending"
+        head["detail_status"] = head.get("detail_status", "complete") if rows else "pending"
         invoice_id = header_dao.insert_header(connection, head, now)
         item_dao.insert_items(connection, invoice_id, rows, now)
     saved = item_dao.by_invoices(connection, [invoice_id])

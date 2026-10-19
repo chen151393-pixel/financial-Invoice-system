@@ -128,7 +128,8 @@ export function LemonInvoiceView({
           </form>
           <p>{data.sync.reason}。单次最多 366 天、2000 张；超限时缩小日期范围。</p>
           <p className="lemon-invoices__note">
-            当前接口仅提供票头，商品明细标记待补齐，暂不生成逐行匹配建议。定时同步与附件同步尚未接入。
+            专业版拉取时同步读取商品明细；明细完整后按已审核子采购行生成建议，须人工确认。
+            专业版已入库票头可按原日期范围重新拉取补齐。默认版暂只读取票头；定时同步与附件同步尚未接入。
           </p>
           {latest && (
             <div className="lemon-invoices__result" role="status">
@@ -153,7 +154,8 @@ export function LemonInvoiceView({
                       ["新增", latest.result.created],
                       ["更新版本", latest.result.updated],
                       ["重复跳过", latest.result.unchanged],
-                      ["明细待补齐", latest.result.pendingDetails],
+                      ["明细完整", latest.result.completeDetails ?? "—"],
+                      ["明细待补齐或待核实", latest.result.pendingDetails],
                     ].map(([label, value]) => (
                       <div key={label}>
                         <dt>{label}</dt>
@@ -165,6 +167,8 @@ export function LemonInvoiceView({
               )}
               <p className="lemon-invoices__request">请求编号：{latest.requestId}</p>
               <Link to={paths.invoices}>查看发票台账</Link>
+              {" · "}
+              <Link to={paths.matching}>审核匹配建议</Link>
             </div>
           )}
         </>

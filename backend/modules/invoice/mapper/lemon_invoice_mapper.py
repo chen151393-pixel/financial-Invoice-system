@@ -4,9 +4,10 @@ from backend.core.names import normalize_name
 
 from ..entity import headers
 from .import_mapper import checked, invoice_key, json_safe, payload_digest
+from .lemon_detail_mapper import item_values
 
 
-def prepare(raw, values, account):
+def prepare(raw, values, account, detail_rows=(), detail_status="pending"):
     seller = raw.get("Name") or None
     header = {
         "source": "lemon_professional" if account.startswith("professional:") else "lemon_open2",
@@ -30,13 +31,13 @@ def prepare(raw, values, account):
         "tax_amount": values["tax"],
         "amount_including_tax": values["gross"],
         "remark": raw.get("Note"),
-        "detail_status": "pending",
+        "detail_status": detail_status,
     }
     checked(headers, header, raw["Number"])
     payload = json_safe(raw)
     return {
         "header": header,
-        "rows": [],
+        "rows": item_values(detail_rows, raw["Number"]),
         "key": header["invoice_key"],
         "payload": payload,
         "digest": payload_digest(payload),

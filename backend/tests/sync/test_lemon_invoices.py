@@ -64,6 +64,9 @@ class FakeInvoices:
             raise self.failure
         return deepcopy(self.rows)
 
+    def invoice_details(self, token, asid, records, selected_ids, *, professional):
+        return records
+
 
 def make_services(engine, settings):
     binding = LemonBindingService(settings, engine, FakeLemon())
