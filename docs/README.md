@@ -12,6 +12,7 @@
 | --- | --- |
 | [架构设计 v2](architecture/README.md) | 目标模块、数据库收口、删除清单、实施顺序 |
 | [数据库设计](architecture/database.md) | 初版 24 张表与已追加的两张版本表、币种和状态规则、补强顺序及验收 |
+| [表与迁移对照](mysql/schema-map.md) | 自动生成：按模块列出全部表的中文说明、新建与修改迁移、字典链接，以及每个迁移涉及的表；`npm.cmd run db:map` 更新 |
 | [当前表设计与字段字典](mysql/current-data-dictionary.md) | 当前 26 张业务表、422 个字段的中文含义、类型、可空性、默认值、关联与实现边界 |
 | [后端规则](architecture/backend-rules.md)、[前端规则](architecture/frontend-rules.md) | 分层目录、模块解耦、公共能力复用、文件大小 |
 | [项目 README](../README.md) | 当前能力、安装、启动与检查命令 |

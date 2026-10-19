@@ -1,5 +1,7 @@
 # 当前表设计与字段字典
 
+> 查某张表由哪个迁移新建或修改，先看自动生成的[表与迁移对照](schema-map.md)。
+
 基础字典核对日期：2026-10-16，基础章节覆盖实体与 `0001`—`0016` 迁移（27 张业务表、430 个字段）。后续新增表不计入上述历史统计；2026-10-19 补充 `0022` 企微执行台账和群守卫字段，见文末。本文不能证明目标库已升级或已有实际数据。
 
 本文解释现有字段；对应实体已补齐中文 `comment`，数据库备注由新增 `0010`—`0015` 迁移写入。设计决策以[数据库设计](../architecture/database.md)为准；本文列出的是当前实现字段，不把旧六表、八表历史 SQL 当作当前结构。
@@ -1159,3 +1161,123 @@ NS 来源按批后台保存记录与结果，不保存令牌。
 | `updated_at` | DATETIME | 否 | 本地记录最后更新时间，UTC；由 DAO 更新 |
 
 `scope_key` 与 `request_id` 联合唯一；按 `scope_key, status` 建索引。running 记录在当前进程无执行时按待核实展示，迁移不允许降级删除。接口与状态说明见[同步模块](../../backend/modules/sync/README.md#后台保存批次与耗时日志2026-10-19)。
+
+## 漏录表补齐（2026-10-19 核对）
+
+以下 6 张表此前已由迁移建表，但本字典未收录；字段取自当前实体定义（`entity/`）。标注“区分大小写”的字段使用 `utf8mb4_bin` 排序规则。各表由哪个迁移新建或修改见[表与迁移对照](schema-map.md)。
+
+<a id="task_external_groups"></a>
+
+### task_external_groups｜Excel 导入的外部群目录
+
+迁移 `0017` 新建，`0019`、`0020` 将群创建时间、群人数改为可空。一行一个企微外部群，供应商关联由人工维护。`chat_id` 唯一。
+
+| 字段 | 类型 | 可空 | 默认 | 说明 |
+| --- | --- | --- | --- | --- |
+| id | BIGINT UNSIGNED | 否 | 自增 | 主键 |
+| chat_id | VARCHAR(190) | 否 | — | 企微外部群身份，区分大小写，唯一 |
+| group_name | VARCHAR(200) | 否 | — | 导入群名 |
+| owner_name | VARCHAR(100) | 否 | — | 导入群主姓名 |
+| owner_userid | VARCHAR(190) | 否 | — | 群主企微用户 ID，区分大小写 |
+| member_count | INT | 是 | — | 导入时群人数，文件未提供时为空 |
+| department | VARCHAR(255) | 否 | — | 群主所在部门 |
+| group_created_at | DATETIME(6) | 是 | — | 群创建时间，UTC；文件未提供时为空 |
+| filename | VARCHAR(255) | 否 | — | 最近一次导入的文件名 |
+| version | INT | 否 | — | 目录乐观版本 |
+| updated_by | VARCHAR(200) | 否 | — | 最后确认导入的认证身份 |
+| created_at | DATETIME(6) | 否 | CURRENT_TIMESTAMP(6) | 记录创建时间，UTC |
+| updated_at | DATETIME(6) | 否 | CURRENT_TIMESTAMP(6) | DAO 更新的最近修改时间，UTC |
+
+<a id="task_group_imports"></a>
+
+### task_group_imports｜外部群导入预览与确认留痕
+
+迁移 `0017` 新建。一行一次导入预览；不保存原始文件，只保存服务端解析后的不可变快照，确认结果用于幂等重放。
+
+| 字段 | 类型 | 可空 | 默认 | 说明 |
+| --- | --- | --- | --- | --- |
+| id | VARCHAR(36) | 否 | — | 随机导入预览编号，区分大小写，主键 |
+| owner | VARCHAR(200) | 否 | — | 创建预览的认证身份 |
+| filename | VARCHAR(255) | 否 | — | 原始文件名 |
+| status | VARCHAR(20) | 否 | — | pending 待确认、confirmed 已确认 |
+| snapshot | LONGTEXT | 否 | — | 解析行与候选的不可变 JSON 快照 |
+| confirmation | LONGTEXT | 是 | — | 确认请求与真实结果 JSON |
+| created_at | DATETIME(6) | 否 | CURRENT_TIMESTAMP(6) | 记录创建时间，UTC |
+| updated_at | DATETIME(6) | 否 | CURRENT_TIMESTAMP(6) | DAO 更新的最近修改时间，UTC |
+
+<a id="task_contract_jobs"></a>
+
+### task_contract_jobs｜合同自动归档队列
+
+迁移 `0021` 新建。财务审核提交时在同一事务登记，一行对应“任务 × 子采购单”（联合唯一）；不保存 PDF。`task_id` 外键指向 `task_tasks`，`purchase_order_id` 属于 source 模块，只存 ID。按 `status, id` 建索引供后台取待处理作业。
+
+| 字段 | 类型 | 可空 | 默认 | 说明 |
+| --- | --- | --- | --- | --- |
+| id | BIGINT UNSIGNED | 否 | 自增 | 主键 |
+| task_id | BIGINT UNSIGNED | 否 | — | 开票任务 ID |
+| purchase_order_id | BIGINT UNSIGNED | 否 | — | 子采购单 ID，不建跨模块外键 |
+| actor | VARCHAR(190) | 否 | — | 触发归档的财务审核身份 |
+| status | VARCHAR(20) | 否 | pending | CHECK：pending 待处理、completed 已归档、failed 失败待人工重试 |
+| error_message | VARCHAR(500) | 是 | — | 脱敏失败原因，成功后清空 |
+| created_at | DATETIME(6) | 否 | CURRENT_TIMESTAMP(6) | 记录创建时间，UTC |
+| updated_at | DATETIME(6) | 否 | CURRENT_TIMESTAMP(6) | DAO 更新的最近修改时间，UTC |
+
+<a id="sync_lemon_runs"></a>
+
+### sync_lemon_runs｜柠檬云拉票记录
+
+迁移 `0018` 新建，`0023` 增加 `background`。一行一次单账套拉票（手动或后台分片），不保存令牌。`scope_key, request_id` 联合唯一，重复提交只返回原结果；按 `scope_key, status` 建索引。running 记录不能当作普通失败重发。
+
+| 字段 | 类型 | 可空 | 默认 | 说明 |
+| --- | --- | --- | --- | --- |
+| id | BIGINT UNSIGNED | 否 | 自增 | 主键 |
+| scope_key | VARCHAR(64) | 否 | — | 环境、应用与认证身份摘要，区分大小写 |
+| request_id | VARCHAR(36) | 否 | — | 调用方请求编号，区分大小写 |
+| asid | VARCHAR(32) | 否 | — | 授权账套编号 |
+| account_name | VARCHAR(255) | 否 | — | 账套名称快照 |
+| start_date | DATE | 否 | — | 起始开票日期 |
+| end_date | DATE | 否 | — | 结束开票日期（含当天） |
+| status | VARCHAR(20) | 否 | — | running 执行中或待核实、completed 已提交、failed 未保存 |
+| result | JSON | 是 | — | 已提交的实际保存统计 |
+| error | VARCHAR(500) | 是 | — | 脱敏失败原因 |
+| background | BOOLEAN | 否 | false | 是否由后台队列执行 |
+| created_at | DATETIME(6) | 否 | CURRENT_TIMESTAMP(6) | 记录创建时间，UTC |
+| updated_at | DATETIME(6) | 否 | CURRENT_TIMESTAMP(6) | DAO 更新的最近修改时间，UTC |
+
+<a id="sync_lemon_plans"></a>
+
+### sync_lemon_plans｜柠檬云每日同步计划
+
+迁移 `0023` 新建。一行对应一个应用、环境与管理员身份（`scope_key` 唯一）；配置快照不含凭据。计划规则见[后台同步说明](../lemon-background-sync.md)。
+
+| 字段 | 类型 | 可空 | 默认 | 说明 |
+| --- | --- | --- | --- | --- |
+| id | BIGINT UNSIGNED | 否 | 自增 | 主键 |
+| scope_key | VARCHAR(64) | 否 | — | 应用、环境与管理员身份摘要，区分大小写，唯一 |
+| owner | VARCHAR(190) | 否 | — | 计划授权身份 |
+| enabled | BOOLEAN | 否 | — | 是否启用 |
+| revision | INT | 否 | — | 编辑版本，防止覆盖并发修改 |
+| configuration | JSON | 否 | — | 账套范围、每日时间与滚动天数快照 |
+| next_run_at | DATETIME(6) | 是 | — | 下一次触发时间，UTC |
+| created_at | DATETIME(6) | 否 | CURRENT_TIMESTAMP(6) | 记录创建时间，UTC |
+| updated_at | DATETIME(6) | 否 | CURRENT_TIMESTAMP(6) | DAO 更新的最近修改时间，UTC |
+
+<a id="sync_lemon_jobs"></a>
+
+### sync_lemon_jobs｜柠檬云后台账套拉取分片
+
+迁移 `0023` 新建。后台批次（`sync_runs`）按账套与日期拆成分片，一行一个分片；`run_id` 外键指向 `sync_runs`，`request_id` 唯一并对应 `sync_lemon_runs` 的请求编号。按 `run_id, status` 建索引。
+
+| 字段 | 类型 | 可空 | 默认 | 说明 |
+| --- | --- | --- | --- | --- |
+| id | BIGINT UNSIGNED | 否 | 自增 | 主键 |
+| run_id | BIGINT UNSIGNED | 否 | — | 所属批次 |
+| request_id | VARCHAR(36) | 否 | — | 对应 `sync_lemon_runs.request_id`，区分大小写，唯一 |
+| asid | VARCHAR(32) | 否 | — | 授权账套编号 |
+| account_name | VARCHAR(255) | 否 | — | 发现时的账套名称 |
+| start_date | DATE | 否 | — | 起始开票日期 |
+| end_date | DATE | 否 | — | 结束开票日期（含当天） |
+| status | VARCHAR(20) | 否 | — | queued、running、completed、failed、unknown、split |
+| error | VARCHAR(500) | 是 | — | 脱敏原因 |
+| created_at | DATETIME(6) | 否 | CURRENT_TIMESTAMP(6) | 记录创建时间，UTC |
+| updated_at | DATETIME(6) | 否 | CURRENT_TIMESTAMP(6) | DAO 更新的最近修改时间，UTC |

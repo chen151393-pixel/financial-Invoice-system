@@ -770,7 +770,8 @@ documents_pending → notify_pending → awaiting_invoice → partially_received
   - 生成列使用 `CASE` / `COALESCE`；`updated_at` 由 DAO 写入，不用 `ON UPDATE`（第 3 节）。
 - **后续迁移**：`0004` 增加 `source_parent_orders.exchange_rate`、`source_purchase_orders.currency_source`、`currency_issue`（子采购单币种取自母采购单）；`0002` 增加 `source_purchase_orders.parent_order_no`；`0003` 增加 `task_tasks.review_revision`（task 不读取 review，审核版本随事件写入）、`task_notifications.sender_name`、`note`（人工发送的员工与登记说明）。
 - **旧迁移链**：4e 已从代码移除，历史保留在 Git；不删除数据库中的旧表、旧版本表和记录。
-- **命令**：`npm.cmd run db:upgrade` 仅在线升级新迁移链（含 v2 基线回填）；`python -m backend.manage schema-sql` 输出新表结构的 MySQL DDL 供审阅，不包含数据回填；正式启动只核对 `schema_version` 在最新版本。
+- **命令**：`npm.cmd run db:upgrade` 仅在线升级新迁移链（含 v2 基线回填）；`python -m backend.manage schema-sql` 输出新表结构的 MySQL DDL 供审阅，不包含数据回填；正式启动只核对 `schema_version` 在最新版本；`npm.cmd run db:map` 依据离线 DDL 重新生成[表与迁移对照](../mysql/schema-map.md)，不连接数据库。
+- **定位与防撞号**：`backend/tests/test_schema_map.py` 检查迁移链只有一个最新版本、文件名为连续编号的 `NNNN_<module>_<说明>`、单个迁移只改本模块的表（历史 `0001`、`0003` 除外）、字段字典覆盖全部实体表，以及对照文档未过期。并行分支各自新增迁移时，合并后把较晚的迁移改为下一个编号并让 `down_revision` 指向另一个。
 - **验证**：`backend/tests/test_schema_baseline.py` 在 SQLite 上验证建表、关键唯一约束、CHECK 约束与向前升级；提供 `BUSINESS_MIGRATION_TEST_SERVER_URL` 时在随机新建的 MySQL 库上执行同样的检查。
 - **旧表**：代码不删除数据库中的旧表。管理员须先确认实际库清单、保留需求及回写未知结果，再决定是否手工处理；也可以直接新建空库使用。代码侧历史表清单见下方。
 - **实施顺序**（架构第 4 步，每个模块一个 PR，按依赖顺序）：source → review → task → invoice → matching → sync。每个模块切换时同时改为分层目录，在 `entity/` 中定义本模块的表并由测试比对与迁移结果一致，调整调用它的门面；之后的模块从新表读取。

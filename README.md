@@ -69,7 +69,7 @@ npm.cmd start
 
 按配置的 `PORT` / `APP_ORIGIN` 访问后端托管页面，首页进入发票工作台；未改默认配置时可打开[本地系统](http://localhost:3000)。打开页面后使用配置的工作台账号密码登录，右上角可退出；会话有效期 8 小时，后端重启后需重新登录。按 `Ctrl+C` 停止服务。Linux/macOS 使用 `npm` 和 `.venv/bin/python`，详细步骤见后端文档。
 
-`npm.cmd run db:upgrade` 只执行 `backend/migrations` 新迁移链，支持空库初始化及已有新表升级；无需历史六表。`0005`—`0009` 保存版本、回填既有 v2 记录；缺少可还原证据的历史占用进入待复核。旧库表和数据不删除、不迁移，`db:business:upgrade` 是同一命令的兼容入口。
+`npm.cmd run db:upgrade` 只执行 `backend/migrations` 新迁移链，支持空库初始化及已有新表升级；无需历史六表。`0005`—`0009` 保存版本、回填既有 v2 记录；缺少可还原证据的历史占用进入待复核。旧库表和数据不删除、不迁移，`db:business:upgrade` 是同一命令的兼容入口。查表与迁移的对应关系见[表与迁移对照](docs/mysql/schema-map.md)，新增迁移后用 `npm.cmd run db:map` 重新生成。
 
 ## 开发启动
 

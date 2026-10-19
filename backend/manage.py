@@ -75,12 +75,19 @@ def main():
             "business-upgrade",
             "business-sql",
             "rebuild-ledger",
+            "schema-map",
         ],
-        help="upgrade：升级新迁移链；schema-sql：仅输出结构 DDL 供审阅，不能代替在线数据升级",
+        help="upgrade：升级新迁移链；schema-sql：仅输出结构 DDL 供审阅，不能代替在线数据升级；"
+        "schema-map：重新生成 docs/mysql/schema-map.md 表与迁移对照，不连接数据库",
     )
     args = parser.parse_args()
     if args.command in ("schema-sql", "mysql-sql", "business-sql"):
         upgrade_schema(OFFLINE_MYSQL_URL, sql=True)
+        return
+    if args.command == "schema-map":
+        from .migrations.schema_map import write
+
+        print(f"已生成 {write().relative_to(ROOT).as_posix()}")
         return
     settings = load_settings()
     if args.command == "rebuild-ledger":

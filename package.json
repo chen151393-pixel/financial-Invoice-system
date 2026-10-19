@@ -26,6 +26,7 @@
     "check:architecture": "npm --prefix frontend run check:architecture && node scripts/python.mjs -m pytest backend/tests/test_architecture.py",
     "db:upgrade": "node scripts/python.mjs -m backend.manage upgrade",
     "db:sql:mysql": "node scripts/python.mjs -m backend.manage mysql-sql",
+    "db:map": "node scripts/python.mjs -m backend.manage schema-map",
     "db:business:check": "node scripts/python.mjs -m backend.manage business-check",
     "db:business:upgrade": "node scripts/python.mjs -m backend.manage business-upgrade",
     "db:business:sql": "node scripts/python.mjs -m backend.manage business-sql",

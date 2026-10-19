@@ -170,7 +170,7 @@ events.subscribe(ReviewApproved, task_services.task.on_review_approved)
 - 金额、数量用 `DECIMAL`，Python 中用 `Decimal`，禁止 `float`；接口中以十进制字符串传递。
 - 模块内建外键；**跨模块只保存 ID，不建外键**。
 - 表在模块 `entity/` 中用 `Table(...)` 显式定义，不用 `autoload_with` 反射；测试比对 `entity/` 定义与迁移结果一致。
-- 迁移只写入 `backend/migrations`，文件名 `NNNN_<module>_<说明>.py`；一个迁移只修改一个模块的表；提供 `downgrade`，无法回退时在文件开头写明原因。已执行过的迁移文件不修改。
+- 迁移只写入 `backend/migrations`，文件名 `NNNN_<module>_<说明>.py`；一个迁移只修改一个模块的表；提供 `downgrade`，无法回退时在文件开头写明原因。已执行过的迁移文件不修改。新增或修改迁移、实体后运行 `npm.cmd run db:map` 更新[表与迁移对照](../mysql/schema-map.md)，并在[字段字典](../mysql/current-data-dictionary.md)补充 `### 表名` 小节，`test_schema_map.py` 会检查。
 - 业务记录不物理删除：来源停用用 `is_active`，业务记录用状态（`superseded`、`rejected`、`cancelled`）。
 - 文件（合同等）不存数据库，只保存路径和 SHA256。
 - 2026-10-15 已实现 `review_purchase_bases`、`invoice_versions` 的实体定义及 `0006`、`0008` 建表迁移。在线升级保留已进入 v2 的审核、发票和分配：复制原审核快照、冻结既有发票版本，将历史依据或换算证据不足的记录标记待复核并保留原占用；不能套用“旧测试数据不迁移”而清空 v2 台账。
