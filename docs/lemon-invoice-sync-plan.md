@@ -134,6 +134,8 @@ Content-Type: application/json
 
 ## 读取失败诊断（2026-10-16）
 
+若页面出现 `options is not iterable`，先检查配置接口是否包含数组 `businessTypeOptions`、`defaultBusinessTypes`，以及最近同步记录的 `businessTypes`。前端热更新而后端仍运行旧进程时会缺少这些字段。前端现已在配置、选账套及同步结果响应入口校验，缺失或格式异常时显示中文恢复提示，不将异常数据交给多选组件，也不自动重发保存。本地 Windows 开发脚本关闭了 Python 自动重载，修改后端后须重启后端服务；Docker 部署须重新构建并重建 app 容器。
+
 本地请求校验未通过会返回 400，具体查看浏览器响应中的中文原因；起止日期颠倒、超过范围等错误返回具体日期提示。返回 502 时，响应现在明确指出获取用户授权、查询授权账套或查询进项发票的阶段，并区分上游 HTTP 状态、超时、网络传输、无效 JSON 与业务拒绝。
 
 服务器日志新增 `lemon_read_failed`，只记录 `operation`（user_token/accounts/invoices）、异常类别、`upstream_status`、页码、整数 `State/SubState` 与耗时；不记录手机号、账套、URL 查询串、Token、上游 Msg 或正文。`upstream_status=403` 表示上游 HTTP 拒绝，不能仅凭它断言是账号权限还是网关策略；具体仍须按阶段核查应用权限或网关。`invalid_json` 表示响应无法按 JSON 解析；`timeout` 表示客户端等待超时。上述诊断不会自动重试。

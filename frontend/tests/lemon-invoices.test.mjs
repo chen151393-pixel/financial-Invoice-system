@@ -77,7 +77,7 @@ test("查询原结果是只读请求，账号选择只提交账套编号", async
   const calls = [];
   t.mock.method(globalThis, "fetch", async (url, options) => {
     calls.push({ url, options });
-    return Response.json({});
+    return Response.json(url.includes("/runs/") ? { businessTypes: ["采购支出"] } : config);
   });
   await api.queryLemonAccounts();
   assert.equal(calls[0].options.headers["Content-Type"], "application/json");
@@ -183,4 +183,41 @@ test("全部跳过时展示后端未保存说明", () => {
   assert.match(html, /本次未保存发票/);
   assert.match(html, /本次业务类型：办公费/);
   assert.doesNotMatch(html, /保存成功|拉取结果已提交/);
+});
+
+test("旧后端或异常业务类型配置返回可恢复错误，正常响应不改写默认范围", async (t) => {
+  let response = config;
+  t.mock.method(globalThis, "fetch", async () => Response.json(response));
+  const oldConfig = { ...config };
+  delete oldConfig.businessTypeOptions;
+  delete oldConfig.defaultBusinessTypes;
+  for (const value of [undefined, null, {}, "采购支出", [], [null]]) {
+    for (const field of ["businessTypeOptions", "defaultBusinessTypes"]) {
+      response = { ...config, [field]: value };
+      await assert.rejects(api.lemonConfiguration(), /更新并重启后端/);
+      await assert.rejects(api.selectLemonAccount("7"), /更新并重启后端/);
+    }
+  }
+  response = oldConfig;
+  const error = await api.lemonConfiguration().catch((cause) => cause);
+  const html = render(null, { error: error.message });
+  assert.match(html, /role="alert"/);
+  assert.match(html, /刷新同步状态/);
+  assert.doesNotMatch(html, /type="checkbox"|拉取并保存<\/button>/);
+  response = config;
+  assert.deepEqual(await api.lemonConfiguration(), config);
+});
+
+test("旧同步结果缺少范围时不进入展示，也不自动重发保存", async (t) => {
+  const calls = [];
+  let response = { status: "completed" };
+  t.mock.method(globalThis, "fetch", async (url) => {
+    calls.push(url);
+    return Response.json(response);
+  });
+  await assert.rejects(api.pullLemonInvoices({ businessTypes: ["采购支出"] }), /更新并重启后端/);
+  assert.equal(calls.length, 1);
+  await assert.rejects(api.getLemonRun("old"), /更新并重启后端/);
+  response = { ...config, latest: response };
+  await assert.rejects(api.lemonConfiguration(), /更新并重启后端/);
 });
