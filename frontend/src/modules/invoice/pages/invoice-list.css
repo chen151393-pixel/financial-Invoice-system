@@ -102,6 +102,16 @@
 .invoice-list__toolbar > input {
   width: 280px;
 }
+.invoice-list__filters .invoice-list__account-filter {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  max-width: 100%;
+}
+.invoice-list__account-filter select {
+  width: 260px;
+  min-width: 0;
+}
 .invoice-list :where(.ui-button) {
   font-size: 12px;
   min-height: 34px;

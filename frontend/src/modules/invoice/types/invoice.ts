@@ -55,7 +55,14 @@ export type InvoiceDetail = InvoiceRow & {
   remark: string | null;
   lines: InvoiceLine[];
 };
-export type InvoiceFilters = { q: string; status: string; date_from: string; date_to: string };
+export type InvoiceFilters = {
+  q: string;
+  account: string;
+  status: string;
+  date_from: string;
+  date_to: string;
+};
+export type InvoiceAccountOption = { value: string; label: string };
 
 export type ImportFile = { filename: string; content: string };
 export type ImportConfiguration = { allowed: boolean; reason: string; maxBytes: number };

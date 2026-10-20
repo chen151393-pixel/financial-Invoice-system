@@ -1,12 +1,14 @@
 import { useState } from "react";
 import { Button } from "../../../shared/components/Button";
-import type { InvoiceFilters as Filters } from "../types/invoice";
+import type { InvoiceAccountOption, InvoiceFilters as Filters } from "../types/invoice";
 import "./invoice-status.css";
 
-export const emptyFilters: Filters = { q: "", status: "", date_from: "", date_to: "" };
+export const emptyFilters: Filters = { q: "", account: "", status: "", date_from: "", date_to: "" };
 
 export function InvoiceFilters({
   draft,
+  applied,
+  accounts,
   loading,
   onChange,
   onSubmit,
@@ -14,6 +16,8 @@ export function InvoiceFilters({
   onRefresh,
 }: {
   draft: Filters;
+  applied?: Filters;
+  accounts?: { items: InvoiceAccountOption[]; loading: boolean; error: string };
   loading: boolean;
   onChange: (draft: Filters) => void;
   onSubmit: () => void;
@@ -21,6 +25,8 @@ export function InvoiceFilters({
   onRefresh: () => void;
 }) {
   const [expanded, setExpanded] = useState(false);
+  const pending =
+    applied && (Object.keys(emptyFilters) as (keyof Filters)[]).some((key) => draft[key] !== applied[key]);
   return (
     <form
       className="invoice-list__filters"
@@ -37,6 +43,21 @@ export function InvoiceFilters({
           placeholder="搜索发票 / 供应商 / 税号"
           onChange={(event) => onChange({ ...draft, q: event.target.value })}
         />
+        <label className="invoice-list__account-filter">
+          账套
+          <select
+            value={draft.account}
+            disabled={accounts?.loading || (!accounts?.items.length && !!accounts?.error)}
+            onChange={(event) => onChange({ ...draft, account: event.target.value })}
+          >
+            <option value="">{accounts?.loading ? "正在读取账套…" : "全部账套"}</option>
+            {accounts?.items.map((account) => (
+              <option key={account.value} value={account.value}>
+                {account.label}
+              </option>
+            ))}
+          </select>
+        </label>
         <label className="invoice-list__status-filter">
           票面状态
           <select
@@ -67,6 +88,12 @@ export function InvoiceFilters({
           </Button>
         </div>
       </div>
+      {accounts?.error && (
+        <p role="alert" className="invoice-list__error">
+          {accounts.error}，可点击“刷新数据”重试。
+        </p>
+      )}
+      {pending && <p role="status">筛选条件已修改，请点击“查询”应用；当前结果仍对应上次查询。</p>}
       {expanded && (
         <div className="invoice-list__more-filters" id="invoice-more-filters">
           <label>

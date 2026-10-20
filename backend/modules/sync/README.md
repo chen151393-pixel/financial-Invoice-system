@@ -169,3 +169,7 @@ API 拉票支持 `businessTypes` 文本多选，默认“采购固定资产、�
 `integrations/netsuite/request_stats.py` 在每批结束时输出一行 INFO：`ns_sync_timing batch=<kind>@<offset> outcome=ok|error total_ms=… ns_record=次数/总毫秒/max最长 ns_suiteql=… ns_restlet=… ns_token=… lock_wait=… db_write=…`。只含类别、次数与毫秒数，不含 URL、查询、单据或令牌。单次请求耗时以 DEBUG 输出（`ns_request_completed`），默认不打印。并发详情 GET 通过复制上下文计入同一批次。可用于在线上区分 NS 往返、锁等待与写库耗时。
 
 验证：`tests/sync/test_ns_runs.py`（幂等、结果持久化、失败/待核实映射、执行中进度、重启后待核实不重跑、停止、旧开关拒绝、HTTP 身份与配置失败不建记录）、`tests/sync/test_sync_timing.py`。MySQL 上的 `sync_ns_runs` 结构由 `test_schema_baseline.py` 的 MySQL 用例覆盖，需提供专用 MySQL 连接才会执行；真实 NS 耗时需上线后按日志确认。
+
+## 进项发票账套选项
+
+`GET /api/sync/lemon/invoices/accounts` 返回 `{items: [{value, label}]}`，仅管理员可读。经 invoice 门面获取已入库账套，复用当前环境和身份的拉票记录、绑定记录补充名称；不调用上游、不切换当前同步账套、不要求绑定仍有效。专业版与默认版按各自命名空间区分，Excel 显示“账套未对齐”，无法还原名称的历史账套保留原标识。选项不受列表筛选或分页影响。验证见 `backend/tests/sync/test_invoice_accounts.py`。

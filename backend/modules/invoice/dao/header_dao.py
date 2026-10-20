@@ -33,6 +33,8 @@ def insert_header(connection, values, now):
 
 def _conditions(query):
     conditions = []
+    if query.account:
+        conditions.append(headers.c.lemon_account == query.account)
     keyword = query.q.strip()
     if keyword:
         conditions.append(
@@ -57,6 +59,13 @@ def _conditions(query):
     if query.date_to:
         conditions.append(headers.c.invoice_date <= query.date_to)
     return conditions
+
+
+def accounts(connection):
+    """读取全部已入库账套，不受当前页或列表筛选影响。"""
+    return list(
+        connection.scalars(select(headers.c.lemon_account).distinct().order_by(headers.c.lemon_account))
+    )
 
 
 def amounts(connection, query):

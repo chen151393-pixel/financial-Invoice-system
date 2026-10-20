@@ -20,6 +20,15 @@ class LemonAccounts(BaseModel):
     items: list[LemonAccount]
 
 
+class InvoiceAccountOption(BaseModel):
+    value: str
+    label: str
+
+
+class InvoiceAccountOptions(BaseModel):
+    items: list[InvoiceAccountOption]
+
+
 class LemonRun(BaseModel):
     requestId: str
     asid: str

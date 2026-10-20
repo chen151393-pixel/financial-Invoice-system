@@ -32,6 +32,11 @@ ITEM_FIELDS = (
 )
 
 
+def read_invoice_accounts(connection):
+    """返回已入库发票的来源账套标识，供同步模块补充账套名称。"""
+    return header_dao.accounts(connection)
+
+
 def read_invoices(connection, invoice_ids):
     """[{发票头字段..., "items": [发票行字段...]}]，按 ID 顺序；不存在的 ID 不返回。"""
     headers = header_dao.by_ids(connection, sorted(set(invoice_ids)))

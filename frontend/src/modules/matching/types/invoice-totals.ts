@@ -11,4 +11,10 @@ export type InvoiceTotals = {
   }[];
 };
 
-export type InvoiceTotalsFilters = { q: string; status: string; date_from: string; date_to: string };
+export type InvoiceTotalsFilters = {
+  q: string;
+  account: string;
+  status: string;
+  date_from: string;
+  date_to: string;
+};

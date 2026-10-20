@@ -34,7 +34,7 @@ export const getMatchingSummaries = (invoiceIds: string[]) =>
   read<{ rows: MatchingSummary[] }>("/matching/summaries", "POST", { invoiceIds });
 export function getInvoiceTotals(filters: InvoiceTotalsFilters) {
   const params = new URLSearchParams();
-  for (const key of ["q", "status", "date_from", "date_to"] as const)
+  for (const key of ["q", "account", "status", "date_from", "date_to"] as const)
     if (filters[key]) params.set(key, filters[key]);
   return read<InvoiceTotals>(`/matching/invoice-totals?${params}`);
 }

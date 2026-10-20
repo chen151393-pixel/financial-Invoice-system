@@ -16,6 +16,7 @@ import { InvoiceSummary } from "../components/InvoiceSummary";
 import { InvoiceTable } from "../components/InvoiceTable";
 import { InvoiceDetailRefresh } from "../components/InvoiceDetailRefresh";
 import { useDetailRefresh } from "../hooks/useDetailRefresh";
+import { useInvoiceAccounts } from "../hooks/useInvoiceAccounts";
 import type { InvoiceDetail, InvoiceListResult } from "../types/invoice";
 import "./invoice-list.css";
 
@@ -36,6 +37,7 @@ export function InvoiceListPage() {
   const [selected, setSelected] = useState<string | null>(null);
   const [detail, setDetail] = useState<InvoiceDetail | null>(null);
   const [detailError, setDetailError] = useState("");
+  const accounts = useInvoiceAccounts(query.version);
 
   function updateQuery(next: Query) {
     setLoading(true);
@@ -92,7 +94,7 @@ export function InvoiceListPage() {
         totalsStarted = true;
         void loadTotals();
         const params = new URLSearchParams({ page: String(query.page), page_size: String(query.pageSize) });
-        for (const key of ["q", "status", "date_from", "date_to"] as const)
+        for (const key of ["q", "account", "status", "date_from", "date_to"] as const)
           if (query[key]) params.set(key, query[key]);
         const response = await listInvoices(params);
         if (!active) return;
@@ -145,6 +147,8 @@ export function InvoiceListPage() {
       <section className="invoice-list__panel" aria-label="进项发票查询">
         <InvoiceFilters
           draft={draft}
+          applied={query}
+          accounts={accounts}
           loading={loading}
           onChange={setDraft}
           onSubmit={() =>

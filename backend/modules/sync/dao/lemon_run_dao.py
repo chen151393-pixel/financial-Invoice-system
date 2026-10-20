@@ -2,12 +2,23 @@
 
 from datetime import datetime, timezone
 
-from sqlalchemy import insert, select, update
+from sqlalchemy import func, insert, select, update
 
 from ..entity.lemon_run import lemon_runs as table
 
 # 排队和已拆分的分片还不是（或已不再是）一次真实拉取，“最近一次拉票”不展示它们。
 PULLED = ("running", "completed", "failed")
+
+
+def account_names(connection, scope):
+    """按最近记录优先返回本身份保存过的账套名称，避免逐条加载同步历史。"""
+    query = (
+        select(table.c.asid, table.c.account_name)
+        .where(table.c.scope_key == scope, table.c.account_name.is_not(None), table.c.account_name != "")
+        .group_by(table.c.asid, table.c.account_name)
+        .order_by(func.max(table.c.id).desc())
+    )
+    return [dict(row) for row in connection.execute(query).mappings()]
 
 
 def get(connection, scope, request_id):

@@ -92,3 +92,7 @@ API 业务类型支持多选，默认“采购固定资产”和“采购支出�
 修正已有空票头补拉不完整行时仍显示 0 行的问题：无历史逻辑行时保存实际收到的商品行用于展示，仍保持 pending、禁止确认匹配；已有逻辑行时继续保留原投影与分配。结果的 `detailIssues` 给出空商品行、缺少匹配字段或身份歧义的具体原因，最多返回 100 张，`detailIssueCount` 为总数。来源为空时不会伪造商品行。
 
 验证：`tests/sync/test_lemon_detail_refresh.py` 覆盖空票头补行、空响应原因与重复版本；既有匹配测试继续检查版本失效和占用保护。无需数据库迁移。
+
+## 按账套筛选
+
+`GET /api/invoices` 新增可选 `account`（最长 100 字符，空值表示全部），按票头 `lemon_account` 精确筛选，与关键字、票面状态和日期取交集。分页总数、票面汇总和 `read_invoice_amount_scope` 共用条件；未知账套返回空结果。`read_invoice_accounts(connection)` 只读返回全量已入库账套标识，供 sync 补充本地名称，不依赖当前页。无需数据库迁移。

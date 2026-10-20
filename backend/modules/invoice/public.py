@@ -12,7 +12,12 @@ from .policy.lemon_scope_policy import (
     lemon_detail_ids,
     lemon_import_defaults,
 )
-from .service.invoice_reader import lock_invoice, read_invoice_amount_scope, read_invoices
+from .service.invoice_reader import (
+    lock_invoice,
+    read_invoice_accounts,
+    read_invoice_amount_scope,
+    read_invoices,
+)
 from .service.invoice_trend_reader import invoice_daily_amounts, latest_invoice_date
 from .service.lemon_refresh_reader import read_lemon_refresh_targets
 
@@ -31,6 +36,7 @@ __all__ = [
     "InvoicesImported",
     "lock_invoice",
     "read_invoices",
+    "read_invoice_accounts",
     "read_invoice_amount_scope",
     "describe_lemon_result",
     "lemon_business_type_options",

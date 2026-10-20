@@ -7,12 +7,16 @@ from ..dao import lemon_binding_dao as bindings
 from ..dao import lemon_run_dao as runs
 from ..policy.lemon_binding_policy import configuration_reason
 from ..vo.lemon_invoice_vo import run_view
+from .invoice_account_service import invoice_accounts
 
 
 class LemonAccountService:
     def __init__(self, binding, client):
         self.binding, self.client = binding, client
         self.engine = binding.engine
+
+    def invoice_accounts(self, owner):
+        return invoice_accounts(self.binding, owner)
 
     def context(self, connection, owner, *, lock=False):
         self.binding._check(owner)
