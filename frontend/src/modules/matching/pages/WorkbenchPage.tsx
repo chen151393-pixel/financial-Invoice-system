@@ -1,8 +1,8 @@
 import { Button } from "../../../shared/components/Button";
-import { WorkbenchAttention } from "../components/WorkbenchAttention";
 import { WorkbenchMetrics } from "../components/WorkbenchMetrics";
-import { WorkbenchReports } from "../components/WorkbenchReports";
+import { WorkbenchSuppliers } from "../components/WorkbenchSuppliers";
 import { WorkbenchTodos } from "../components/WorkbenchTodos";
+import { WorkbenchTrend } from "../components/WorkbenchTrend";
 import type { useWorkbench } from "../hooks/useWorkbench";
 import "../components/workbench.css";
 
@@ -29,7 +29,12 @@ export function WorkbenchPage({ state }: { state: ReturnType<typeof useWorkbench
       )}
       {state.data && (
         <>
-          <WorkbenchMetrics counts={state.data.counts} selected={state.query.kind} onSelect={select} />
+          <WorkbenchMetrics
+            counts={state.data.counts}
+            month={state.data.month}
+            selected={state.query.kind}
+            onSelect={select}
+          />
           {state.exportNotice && (
             <p className="wb-feedback" role="status">
               {state.exportNotice}
@@ -43,11 +48,13 @@ export function WorkbenchPage({ state }: { state: ReturnType<typeof useWorkbench
               exporting={state.exporting}
               onExport={() => void state.download()}
             />
-            <WorkbenchAttention data={state.data} onSelect={select} />
+            <aside className="wb-aside" aria-label="收票情况">
+              <WorkbenchSuppliers data={state.data} />
+            </aside>
           </div>
-          <WorkbenchReports data={state.data} change={state.change} />
+          <WorkbenchTrend data={state.data} change={state.change} />
           <details className="wb-definitions">
-            <summary>统计口径与处理流程</summary>
+            <summary>统计口径</summary>
             <p>
               待核对以报关单计数；比对待办按发票与采购账套计数，含待审核建议与待复核分配；待开票以未完成、未被替代的任务计数。不同类型可能涉及同一业务，合计为待办事项数，不是唯一单据数。
             </p>

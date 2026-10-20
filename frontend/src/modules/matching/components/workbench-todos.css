@@ -53,7 +53,7 @@
 .wb-table {
   width: 100%;
   border-collapse: collapse;
-  min-width: 840px;
+  min-width: 680px;
   table-layout: fixed;
   font-size: 12px;
 }
@@ -100,18 +100,38 @@
   padding: 14px 20px;
 }
 
+.wb-col-kind {
+  width: 10%;
+}
 .wb-col-document {
-  width: 25%;
+  width: 20%;
 }
 .wb-col-supplier {
   width: 22%;
 }
 .wb-col-amount {
-  width: 18%;
+  width: 16%;
 }
 .wb-col-status {
-  width: 26%;
+  width: 24%;
 }
 .wb-col-action {
-  width: 9%;
+  width: 8%;
+}
+.wb-kind {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 6px;
+  font-size: 12px;
+  white-space: nowrap;
+  background: var(--color-table-purchase);
+  color: var(--color-primary);
+}
+.wb-kind[data-kind="matching"] {
+  background: var(--color-progress-surface);
+  color: var(--color-progress-text);
+}
+.wb-kind[data-kind="task"] {
+  background: var(--color-success-surface);
+  color: var(--color-success-text);
 }

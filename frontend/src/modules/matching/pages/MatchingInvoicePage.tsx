@@ -14,10 +14,13 @@ import {
   reverifyAllocation,
   replaceAllocation,
 } from "../api";
-import { AllocationCard } from "../components/AllocationCard";
-import { ManualAllocation } from "../components/ManualAllocation";
-import type { InvoiceMatching, ManualBody } from "../types/matching";
+import { groupAllocations } from "../components/allocation-groups";
+import { InvoiceLineNav } from "../components/InvoiceLineNav";
+import { InvoiceLinePanel } from "../components/InvoiceLinePanel";
+import type { InvoiceMatching } from "../types/matching";
 import "./matching.css";
+import "./matching-parts.css";
+import "../components/matching-detail.css";
 
 type Remote =
   | { kind: "loading" }
@@ -30,7 +33,7 @@ export function MatchingInvoicePage({ invoiceId }: { invoiceId: string }) {
   const [refresh, setRefresh] = useState(0);
   const [busy, setBusy] = useState(false);
   const [feedback, setFeedback] = useState<Feedback>(null);
-  const [manualItem, setManualItem] = useState<string | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -102,29 +105,38 @@ export function MatchingInvoicePage({ invoiceId }: { invoiceId: string }) {
       </div>
     );
   const { invoice, items, generate } = state.data;
+  // 默认选中第一条有待处理事项的发票行，否则选第一行；仅是展示选择，不改变业务数据。
+  const selected =
+    items.find((item) => item.id === selectedId) ??
+    items.find((item) => groupAllocations(item.allocations).pending.length > 0) ??
+    items[0];
+  const replacements = items.flatMap((row) =>
+    row.allocations
+      .filter((a) => a.replace.allowed)
+      .map((a) => ({ id: a.id, label: `${a.purchase?.orderNo ?? ""} · ${a.amount}` })),
+  );
   return (
     <div className="matching-page">
-      <section className="matching-panel" aria-label="发票信息">
-        <div className="matching-heading">
-          <h2>发票 {invoice.number}</h2>
+      <section className="matching-panel matching-panel--flush" aria-label="发票信息">
+        <div className="matching-panel__head">
           <div className="matching-row">
-            <Button
-              disabled={busy || !generate.allowed}
-              title={generate.reason}
-              onClick={() => void regenerate()}
-            >
-              重新生成建议
-            </Button>
-            <Link to={paths.matching}>返回审核队列</Link>
+            <h2>发票 {invoice.number}</h2>
+            <span className="matching-tag">{invoice.statusLabel}</span>
           </div>
+          <Button
+            disabled={busy || !generate.allowed}
+            title={generate.reason}
+            onClick={() => void regenerate()}
+          >
+            重新生成建议
+          </Button>
         </div>
-        <dl className="matching-facts">
+        <dl className="matching-facts matching-facts--strip">
           {[
             ["销售方", invoice.seller],
             ["购买方", invoice.buyer ?? "导入文件未提供"],
             ["开票日期", invoice.date],
             ["价税合计", `${invoice.gross ?? "—"} ${invoice.currency}`],
-            ["票面状态", invoice.statusLabel],
             ["备注", invoice.remark],
           ].map(([label, value]) => (
             <div key={label}>
@@ -133,75 +145,43 @@ export function MatchingInvoicePage({ invoiceId }: { invoiceId: string }) {
             </div>
           ))}
         </dl>
-        <p className="matching-help">
-          {generate.reason}。全部建议需人工审核；通过后自动更新开票任务的收票进度。
+        {!generate.allowed && <p className="matching-help matching-body">{generate.reason}</p>}
+      </section>
+      {feedback && (
+        <p className="matching-feedback" role={feedback.error ? "alert" : "status"}>
+          {feedback.text}
         </p>
-        {feedback && (
-          <p className="matching-feedback" role={feedback.error ? "alert" : "status"}>
-            {feedback.text}
-          </p>
-        )}
-      </section>
-      <section className="matching-panel" aria-label="发票行比对">
-        <h2>发票行（{items.length}）</h2>
-        {items.map((item) => (
-          <div key={item.id} className="matching-item">
-            <div className="matching-heading">
-              <h3>
-                {!item.active && "【历史明细】"}
-                {item.lineNo}. {item.item ?? "—"} {item.specification && `· ${item.specification}`}
-              </h3>
-              <span>
-                {item.quantity ?? "—"} {item.unit ?? ""} · 含税 {item.amount ?? "—"} · 已占用（含待复核）{" "}
-                {item.confirmedQuantity} / {item.confirmedAmount}
-              </span>
-            </div>
-            {item.allocations.length === 0 && (
-              <p className="matching-help">暂无建议：没有可召回的已审核子采购行。</p>
-            )}
-            {item.allocations.map((allocation) => (
-              <AllocationCard
-                key={`${allocation.id}:${allocation.status}:${allocation.verificationStatus}:${allocation.currentInvoiceVersionId}`}
-                allocation={allocation}
-                busy={busy}
-                onConfirm={(body) =>
-                  void act(() => confirmAllocation(allocation.id, body), "已通过，任务收票进度已更新。")
-                }
-                onReverify={(body) =>
-                  void act(() => reverifyAllocation(allocation.id, body), "已重新核实，任务收票进度已更新。")
-                }
-                onReject={(note) => void act(() => rejectAllocation(allocation.id, note), "已驳回该建议。")}
-                onCancel={(reason) =>
-                  void act(() => cancelAllocation(allocation.id, reason), "已取消分配，任务收票进度已回退。")
-                }
-              />
-            ))}
-            <Button disabled={busy} onClick={() => setManualItem(manualItem === item.id ? null : item.id)}>
-              {manualItem === item.id ? "收起人工分配" : "人工分配到其他子采购行"}
-            </Button>
-            {manualItem === item.id && (
-              <ManualAllocation
-                invoiceId={invoiceId}
-                invoiceVersionId={invoice.versionId}
-                item={item}
-                busy={busy}
-                search={(keyword) => findCandidates(invoiceId, item.id, keyword)}
-                replacements={items.flatMap((row) =>
-                  row.allocations
-                    .filter((a) => a.replace.allowed)
-                    .map((a) => ({ id: a.id, label: `${a.purchase?.orderNo ?? ""} · ${a.amount}` })),
-                )}
-                onCreate={(body: ManualBody, replaceId: string, reason: string) =>
-                  act(
-                    () => (replaceId ? replaceAllocation(replaceId, body, reason) : createAllocation(body)),
-                    replaceId ? "已替换原占用，新分配已通过。" : "人工分配已保存并通过。",
-                  )
-                }
-              />
-            )}
-          </div>
-        ))}
-      </section>
+      )}
+      {selected ? (
+        <div className="matching-detail">
+          <InvoiceLineNav items={items} selectedId={selected.id} onSelect={setSelectedId} />
+          <InvoiceLinePanel
+            key={selected.id}
+            item={selected}
+            invoiceId={invoiceId}
+            invoiceVersionId={invoice.versionId}
+            replacements={replacements}
+            busy={busy}
+            actions={{
+              confirm: (id, body) =>
+                void act(() => confirmAllocation(id, body), "已通过，任务收票进度已更新。"),
+              reverify: (id, body) =>
+                void act(() => reverifyAllocation(id, body), "已重新核实，任务收票进度已更新。"),
+              reject: (id, note) => void act(() => rejectAllocation(id, note), "已驳回该建议。"),
+              cancel: (id, reason) =>
+                act(() => cancelAllocation(id, reason), "已删除关联，任务收票进度已回退。"),
+              create: (body, replaceId, reason) =>
+                act(
+                  () => (replaceId ? replaceAllocation(replaceId, body, reason) : createAllocation(body)),
+                  replaceId ? "已替换原关联，新关联已通过。" : "手动关联已保存并通过。",
+                ),
+              search: (keyword) => findCandidates(invoiceId, selected.id, keyword),
+            }}
+          />
+        </div>
+      ) : (
+        <p className="matching-panel matching-empty">这张发票没有可比对的发票行。</p>
+      )}
     </div>
   );
 }

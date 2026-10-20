@@ -30,7 +30,7 @@ export function PullPanel({
             <h2>{source.label}</h2>
             <span className="sync-page__tag">不修改 NS</span>
           </div>
-          <p>{source.reason}</p>
+          {!source.allowed && <p>{source.reason}</p>}
         </div>
       </div>
       <form
@@ -67,14 +67,14 @@ export function PullPanel({
               />
             </label>
             <Button type="submit" disabled={!source.allowed || task.busy}>
-              拉取时间段数据
+              仅拉取查看
             </Button>
             <Button
               variant="primary"
               disabled={!source.storageAllowed || task.busy}
               onClick={() => void task.start(range, true)}
             >
-              拉取时间段并保存
+              拉取并保存
             </Button>
             <Button
               disabled={task.busy || (!range.startDate && !range.endDate)}
@@ -83,13 +83,16 @@ export function PullPanel({
               清空日期
             </Button>
           </div>
-          <p id={`${source.kind}-date-help`}>
-            按 NS 查询时区，包含起止当天。选择开始和结束日期后，自动分批拉取该时间段全部数据，每批最多 20 张。
-          </p>
-          <p>
-            {source.storageReason}
-            。按完整报关关联组分别保存，成功组立即提交，失败组单独列出；关联单据可能超出筛选日期，重复同步更新原记录。
-          </p>
+          <p id={`${source.kind}-date-help`}>按 NS 查询时区，包含起止当天；自动分批拉取，每批最多 20 张。</p>
+          <details className="sync-page__rules">
+            <summary>保存规则</summary>
+            <ul>
+              <li>{source.storageReason}</li>
+              <li>按完整报关关联组分别保存，成功组立即提交，失败组单独列出。</li>
+              <li>关联单据可能超出筛选日期；重复同步会更新原记录。</li>
+              <li>仅拉取查看的结果刷新后清除；保存成功的主单及明细保留在 MySQL。</li>
+            </ul>
+          </details>
         </fieldset>
       </form>
       {changed && (

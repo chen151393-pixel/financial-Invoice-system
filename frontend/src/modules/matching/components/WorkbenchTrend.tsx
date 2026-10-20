@@ -3,6 +3,7 @@ import { paths } from "../../../app/paths";
 import { money } from "../../../shared/format/money";
 import type { Workbench, WorkbenchQuery } from "../types/workbench";
 import { WorkbenchTrendRange } from "./WorkbenchTrendRange";
+import "./workbench-reports.css";
 
 export function WorkbenchTrend({
   data,
@@ -12,14 +13,11 @@ export function WorkbenchTrend({
   change: (patch: Partial<WorkbenchQuery>) => void;
 }) {
   return (
-    <section className="wb-panel">
+    <section className="wb-panel wb-trend-panel">
       <div className="wb-panel__head">
         <h2>已开票金额趋势</h2>
         <Link to={paths.invoices}>查看进项发票 →</Link>
       </div>
-      <p className="wb-report-note">
-        按票面开票日期逐日汇总价税合计 · 仅含已导入的正常进项发票 · 仅展示有开票记录的日期
-      </p>
       <WorkbenchTrendRange data={data} change={change} />
       {!data.trend.length && (
         <div className="wb-empty">

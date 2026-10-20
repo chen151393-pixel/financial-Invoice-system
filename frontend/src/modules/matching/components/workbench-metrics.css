@@ -1,72 +1,93 @@
-.wb-metrics {
+/* 工作台环节卡片：按处理顺序排列，点击筛选待办。 */
+.wb-flow {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 20px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 14px;
 }
-.wb .wb-metric {
+.wb .wb-flow__card {
   display: flex;
   flex-direction: column;
   align-items: stretch;
-  gap: 16px;
-  min-height: 156px;
-  text-align: left;
-  white-space: normal;
-  padding: 20px;
+  justify-content: flex-start;
+  gap: 6px;
+  min-height: 150px;
+  padding: 18px 20px;
   border: 1px solid var(--color-border);
   border-radius: var(--radius-panel);
   background: var(--color-surface);
   color: var(--color-text);
+  font-weight: 400;
+  text-align: left;
+  text-decoration: none;
+  white-space: normal;
 }
-.wb .wb-metric:hover,
-.wb .wb-metric[aria-pressed="true"] {
+.wb .wb-flow__card:hover {
   border-color: var(--color-primary);
   background: var(--color-surface);
 }
-.wb-metric__label,
-.wb-metric__foot {
+.wb .wb-flow__card[aria-pressed="true"] {
+  border-color: var(--color-primary);
+  box-shadow: inset 0 0 0 1px var(--color-primary);
+}
+.wb-flow__card:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+.wb-flow__step {
   display: flex;
-  justify-content: space-between;
   align-items: center;
-  gap: 10px;
-}
-.wb-metric__label {
+  gap: var(--space-small);
   color: var(--color-muted);
+  font-size: 12px;
 }
-.wb-metric__icon {
+.wb-flow__step b {
   display: grid;
   place-items: center;
-  width: 32px;
-  height: 32px;
-  border-radius: 7px;
+  width: 20px;
+  height: 20px;
+  border-radius: 999px;
   background: var(--color-canvas);
-  color: var(--color-primary);
-  font-size: 20px;
+  font-size: 11px;
 }
-.wb-metric--matching .wb-metric__icon {
-  color: var(--color-feedback);
+.wb-flow__card[aria-pressed="true"] .wb-flow__step b {
+  background: var(--color-primary);
+  color: var(--color-surface);
 }
-.wb-metric__value {
+.wb-flow__value {
   display: flex;
   align-items: baseline;
-  gap: 9px;
+  flex-wrap: wrap;
+  gap: 6px;
 }
-.wb-metric__value strong {
-  font-size: 34px;
-  line-height: 1.1;
+.wb-flow__value strong {
+  font-size: 30px;
+  line-height: 1.2;
   font-weight: 600;
   font-variant-numeric: tabular-nums;
 }
-.wb-metric__value > span,
-.wb-metric__foot {
-  font-size: 11px;
+.wb-flow__value > span,
+.wb-flow__note {
   color: var(--color-muted);
+  font-size: 12px;
 }
-.wb-metric__foot > :last-child {
-  color: var(--color-primary);
+.wb-flow__note--warn {
+  color: var(--color-feedback);
 }
-
-.wb-metric__foot {
+.wb-flow__go {
   margin-top: auto;
-  flex-wrap: wrap;
-  row-gap: 6px;
+  color: var(--color-primary);
+  font-size: 12px;
+}
+.wb-flow .wb-track > span {
+  background: var(--color-success-text);
+}
+@media (max-width: 1100px) {
+  .wb-flow {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (max-width: 760px) {
+  .wb-flow {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }

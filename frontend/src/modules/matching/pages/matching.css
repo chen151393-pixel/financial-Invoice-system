@@ -48,15 +48,29 @@
   margin: 2px 0 0;
   overflow-wrap: anywhere;
 }
-.matching-tabs {
+/* 无内边距面板：标题栏、页签和内容区各自控制留白。 */
+.matching-panel--flush {
+  padding: 0;
+  gap: 0;
+}
+.matching-panel__head {
   display: flex;
   flex-wrap: wrap;
-  gap: var(--space-small);
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-small) var(--space-control);
+  padding: 14px 20px;
+  border-bottom: 1px solid var(--color-border);
 }
-.matching-tabs [aria-pressed="true"] {
-  border-color: var(--color-primary);
-  color: var(--color-primary);
-  font-weight: 600;
+.matching-panel__head h2 {
+  margin: 0;
+  font-size: 16px;
+}
+.matching-body {
+  display: grid;
+  gap: var(--space-control);
+  padding: 16px 20px 20px;
+  min-width: 0;
 }
 .matching-item {
   display: grid;
@@ -119,8 +133,10 @@
   vertical-align: top;
 }
 .matching-table th {
-  background: var(--color-table-heading);
-  font-weight: 600;
+  background: var(--color-canvas);
+  color: var(--color-muted);
+  font-weight: 500;
+  white-space: nowrap;
 }
 .matching-table small {
   display: block;

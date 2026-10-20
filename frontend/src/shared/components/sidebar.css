@@ -112,18 +112,26 @@
 }
 .app-sidebar__footer {
   margin: 0 -14px;
-  padding: 17px 20px;
+  padding: 14px 20px;
   border-top: 1px solid #ffffff1a;
   background: #0e1830;
-  font-size: 11px;
+  color: var(--color-nav-text);
+  font-size: 12px;
   line-height: 1.6;
 }
-.app-sidebar__footer strong,
-.app-sidebar__footer span {
-  display: block;
+/* 侧栏底部的按钮使用深色背景上的次要样式。 */
+.app-sidebar__footer .ui-button {
+  border-color: #ffffff2e;
+  background: transparent;
+  color: var(--color-nav-text);
 }
-.app-sidebar__footer span {
-  color: var(--color-nav-muted);
+.app-sidebar__footer .ui-button:hover:not(:disabled) {
+  border-color: #ffffff66;
+  color: var(--color-surface);
+}
+.app-sidebar__footer .ui-button:focus-visible {
+  outline: 2px solid #b8c9ff;
+  outline-offset: 2px;
 }
 @media (max-width: 760px) {
   .app-sidebar {
@@ -136,9 +144,19 @@
   .app-sidebar__brand-text,
   .app-sidebar__label,
   .app-sidebar__item-text,
-  .app-sidebar__badge,
-  .app-sidebar__footer {
+  .app-sidebar__badge {
     display: none;
+  }
+  /* 窄屏仍保留退出入口，按钮文字可换行。 */
+  .app-sidebar__footer {
+    margin: 0 -8px;
+    padding: 10px 6px;
+  }
+  .app-sidebar__footer .ui-button {
+    width: 100%;
+    padding: 4px;
+    font-size: 11px;
+    white-space: normal;
   }
   .app-sidebar__item {
     justify-content: center;

@@ -19,24 +19,18 @@ export default function MatchingWorkspacePage() {
       activeId="match"
       onNavigate={navigateView}
       title={invoiceId ? "发票比对" : "比对审核队列"}
-      subtitle="发票行与已审核子采购行逐项比对，人工通过后更新开票任务收票进度"
-      mode="live"
-      dataLabel="已导入发票 · 已审核子采购"
-      notice="系统生成带置信度的建议，全部需要人工审核；不一致只降低置信度。币种待核实、作废红冲、超出发票行等情况不能通过。不写回 NS。"
+      breadcrumb={invoiceId ? <Link to={paths.matching}>比对审核队列</Link> : undefined}
       actions={
-        <div className="matching-row">
-          {invoiceId && (
-            <Link className="ui-button" to={paths.matching}>
-              审核队列
+        invoiceId ? undefined : (
+          <div className="matching-row">
+            <Link className="ui-button ui-button--secondary" to={paths.invoices}>
+              进项发票
             </Link>
-          )}
-          <Link className="ui-button" to={paths.invoices}>
-            进项发票
-          </Link>
-          <Link className="ui-button" to={paths.tasks}>
-            开票跟进
-          </Link>
-        </div>
+            <Link className="ui-button ui-button--secondary" to={paths.tasks}>
+              开票跟进
+            </Link>
+          </div>
+        )
       }
     >
       {invoiceId ? <MatchingInvoicePage key={invoiceId} invoiceId={invoiceId} /> : <MatchingQueuePage />}

@@ -1,5 +1,3 @@
-import { Link } from "react-router";
-import { paths } from "../../app/paths";
 import { useEffect, useState, type ReactNode } from "react";
 import { openLocalSession } from "../identity/api";
 import { Button } from "../../shared/components/Button";
@@ -42,12 +40,6 @@ export default function SyncPage({
   }, [attempt, source]);
   return (
     <div className={`sync-page${source === "ns" ? " sync-page--ns" : ""}`}>
-      {source !== "overview" && (
-        <nav className="sync-page__nav" aria-label="返回上级">
-          <Link to={paths.sync}>← 返回数据同步中心</Link>
-          {source === "ns" && <span>NetSuite / 单据拉取</span>}
-        </nav>
-      )}
       {source === "overview" && <SyncOverview />}
       {error && (
         <div role="alert" className="sync-page__panel">
@@ -66,8 +58,7 @@ export default function SyncPage({
       {source === "ns" && sources && (
         <div className="sync-page__workspace">
           <fieldset className="sync-page__selector" disabled={pulling}>
-            <legend>选择单据类型</legend>
-            <p>切换类型后，已拉取的结果仍保留在当前页面。</p>
+            <legend>单据类型</legend>
             <div className="sync-page__choices">
               {sources.sources.map((item) => (
                 <label
@@ -86,7 +77,12 @@ export default function SyncPage({
                   />
                   <span>
                     <strong>{item.label}</strong>
-                    <small>{item.allowed ? "按需读取单据详情" : "暂不可拉取，查看原因"}</small>
+                    <small
+                      className="sync-page__kind-tag"
+                      data-level={item.storageAllowed ? "save" : item.allowed ? "read" : "off"}
+                    >
+                      {item.storageAllowed ? "可保存" : item.allowed ? "仅读取" : "暂不可拉取"}
+                    </small>
                   </span>
                 </label>
               ))}
@@ -98,13 +94,6 @@ export default function SyncPage({
               <PullPanel source={item} onBusyChange={setPulling} />
             </div>
           ))}
-          <div className="sync-page__footnote">
-            <strong>结果保留范围</strong>
-            <span>
-              仅拉取的结果刷新后清除；“拉取并保存”成功后主单及明细保留在
-              MySQL，页面可查看本次已完成的各批结果；关闭页面会停止后续拉取，正在提交的批次需核实结果。
-            </span>
-          </div>
         </div>
       )}
       {source === "lemon" && children}

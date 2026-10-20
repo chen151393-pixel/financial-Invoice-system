@@ -27,13 +27,13 @@ export default function TaskWorkspacePage() {
               ? "开票任务详情"
               : "开票跟进"
       }
-      subtitle={
-        groupsPage
-          ? "按供应商名称匹配外部群，核对群主并维护默认通知对象。"
-          : "审核通过后自动生成任务，按供应商协作，按报关单追溯。"
+      breadcrumb={
+        externalPage ? (
+          <Link to={paths.supplierGroups}>供应商档案</Link>
+        ) : taskId ? (
+          <Link to={paths.tasks}>开票跟进</Link>
+        ) : undefined
       }
-      mode="live"
-      dataLabel={groupsPage ? "供应商群映射配置" : "审核后生成的真实任务"}
       actions={
         <div className="it-workspace-actions">
           <Link
@@ -48,13 +48,6 @@ export default function TaskWorkspacePage() {
             返回财务核对
           </Link>
         </div>
-      }
-      notice={
-        groupsPage
-          ? "支持 Excel 群目录导入与人工关联，也可通过企微查询群信息；群绑定用于开票任务中的通知预览。维护群信息不会发送消息。"
-          : taskId
-            ? "财务审核通过后按供应商、采购公司和币种生成任务，合同归档到共享盘。通知支持提交企微群发并等待群主确认，也可登记人工发送；收票进度由发票比对确认自动汇总。"
-            : null
       }
     >
       {externalPage ? (

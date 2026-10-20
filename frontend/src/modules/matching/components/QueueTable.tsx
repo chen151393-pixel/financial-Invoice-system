@@ -10,11 +10,15 @@ export function QueueTable({
   rows,
   selected,
   onToggle,
+  onToggleAll,
 }: {
   rows: QueueRow[];
   selected: string[];
   onToggle: (id: string, checked: boolean) => void;
+  onToggleAll: (checked: boolean) => void;
 }) {
+  const candidates = rows.filter(batchable);
+  const allChecked = candidates.length > 0 && candidates.every((row) => selected.includes(row.allocation.id));
   return (
     <div
       className="matching-table-wrap"
@@ -23,14 +27,27 @@ export function QueueTable({
       // eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex -- 宽表容器支持键盘聚焦滚动。
       tabIndex={0}
     >
-      <table className="matching-table">
+      <table className="matching-table matching-table--queue">
         <thead>
           <tr>
-            <th scope="col">选择</th>
-            <th scope="col">发票 / 销售方</th>
+            <th scope="col">
+              <input
+                type="checkbox"
+                aria-label="选择本页全部可批量通过的建议"
+                disabled={candidates.length === 0}
+                checked={allChecked}
+                onChange={(event) => onToggleAll(event.target.checked)}
+              />
+            </th>
+            <th scope="col">发票号码 / 销售方</th>
             <th scope="col">发票行</th>
             <th scope="col">子采购单 / 品名</th>
-            <th scope="col">分配数量 / 含税</th>
+            <th scope="col" className="matching-number">
+              分配数量
+            </th>
+            <th scope="col" className="matching-number">
+              含税金额
+            </th>
             <th scope="col">置信度</th>
             <th scope="col">审核条件</th>
             <th scope="col">操作</th>
@@ -59,22 +76,20 @@ export function QueueTable({
                   {allocation.purchase?.orderNo || "—"}
                   <small>{allocation.purchase?.item || "—"}</small>
                 </td>
-                <td>
-                  {allocation.quantity}
-                  <small>{allocation.amount}</small>
-                </td>
+                <td className="matching-number">{allocation.quantity}</td>
+                <td className="matching-number">{allocation.amount}</td>
                 <td>
                   <span className="matching-badge" data-tier={allocation.tier}>
                     {allocation.confidence ?? "—"} · {tierLabels[allocation.tier]}
                   </span>
                 </td>
-                <td className={allocation.confirm.allowed ? "" : "matching-warning"}>
+                <td className={allocation.confirm.allowed ? "matching-ok" : "matching-warning"}>
                   {allocation.noteReasons.length
                     ? `需说明：${allocation.noteReasons.join("、")}`
                     : allocation.confirm.reason}
                 </td>
                 <td>
-                  <Link to={matchingInvoicePath(row.invoiceId)}>审核</Link>
+                  <Link to={matchingInvoicePath(row.invoiceId)}>审核 →</Link>
                 </td>
               </tr>
             );

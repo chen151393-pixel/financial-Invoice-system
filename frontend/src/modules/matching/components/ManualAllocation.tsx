@@ -1,7 +1,8 @@
 import { ConversionFields, defaultConversion } from "./ConversionFields";
 import { useState } from "react";
 import { Button } from "../../../shared/components/Button";
-import { tierLabels, type Candidate, type InvoiceItem, type ManualBody } from "../types/matching";
+import type { Candidate, InvoiceItem, ManualBody } from "../types/matching";
+import { CandidateTable } from "./CandidateTable";
 import { ChecksTable } from "./ChecksTable";
 
 type Search =
@@ -52,7 +53,7 @@ export function ManualAllocation({
     <div className="matching-form">
       {replacements.length > 0 && (
         <label>
-          分配方式
+          关联方式
           <select
             value={replaceId}
             disabled={busy}
@@ -61,7 +62,7 @@ export function ManualAllocation({
               setRequestId(crypto.randomUUID());
             }}
           >
-            <option value="">新增分配</option>
+            <option value="">新增关联</option>
             {replacements.map((row) => (
               <option key={row.id} value={row.id}>
                 替换记录 {row.id} · {row.label}
@@ -72,7 +73,7 @@ export function ManualAllocation({
       )}
       {replaceId && (
         <label>
-          替换原因（新分配失败时原占用保持不变）
+          替换原因（候选显示替换前的剩余应开；新分配失败时原占用保持不变）
           <textarea
             value={reason}
             maxLength={300}
@@ -81,9 +82,6 @@ export function ManualAllocation({
           />
         </label>
       )}
-      <p className="matching-help">
-        从已审核的应开范围中选择子采购行，按实际开票填写本次分配的数量与含税金额；保存后直接通过并更新任务收票进度。
-      </p>
       <form
         className="matching-row"
         onSubmit={(event) => {
@@ -108,34 +106,24 @@ export function ManualAllocation({
           {state.message}
         </p>
       )}
-      {state.kind === "ready" && state.rows.length === 0 && (
-        <p className="matching-empty">没有符合条件的未结束子采购行。</p>
+      {state.kind === "ready" && !state.rows.length && (
+        <p className="matching-empty">没有符合条件的子采购行。</p>
       )}
-      {state.kind === "ready" &&
-        state.rows.map((candidate) => (
-          <label key={candidate.purchase.purchaseLineId} className="matching-check">
-            <input
-              type="radio"
-              name={`candidate-${item.id}`}
-              checked={chosen?.purchase.purchaseLineId === candidate.purchase.purchaseLineId}
-              onChange={() => {
-                setChosen(candidate);
-                setRequestId(crypto.randomUUID());
-              }}
-            />
-            {candidate.purchase.orderNo} · {candidate.purchase.item} · 剩余{" "}
-            {candidate.purchase.remainingQuantity ?? "—"} / {candidate.purchase.remainingAmount ?? "—"} ·
-            置信度 {candidate.confidence}（{tierLabels[candidate.tier]}）
-            {candidate.block && <span className="matching-warning"> · {candidate.block}</span>}
-          </label>
-        ))}
+      {state.kind === "ready" && state.rows.length > 0 && (
+        <CandidateTable
+          rows={state.rows}
+          name={`candidate-${item.id}`}
+          chosenId={chosen?.purchase.purchaseLineId ?? null}
+          onChoose={(candidate) => {
+            setChosen(candidate);
+            setRequestId(crypto.randomUUID());
+          }}
+        />
+      )}
       {state.kind === "ready" && state.total > state.rows.length && (
         <p className="matching-help">
           共 {state.total} 条，仅显示置信度最高的 {state.rows.length} 条，请输入关键字缩小范围。
         </p>
-      )}
-      {replaceId && (
-        <p className="matching-help">候选显示替换前的剩余应开。提交时会先扣除原分配，再核算新分配。</p>
       )}
       {chosen && (
         <form
@@ -167,7 +155,10 @@ export function ManualAllocation({
             });
           }}
         >
-          <ChecksTable checks={chosen.checks} caption="与所选子采购行逐项比对" />
+          <details>
+            <summary>与所选子采购行逐项比对</summary>
+            <ChecksTable checks={chosen.checks} caption="与所选子采购行逐项比对" />
+          </details>
           <div className="matching-row">
             <label>
               分配数量
@@ -198,7 +189,7 @@ export function ManualAllocation({
             />
           </label>
           <Button type="submit" variant="primary" disabled={busy || !!chosen.block}>
-            {busy ? "保存中…" : replaceId ? "替换并通过" : "保存并通过"}
+            {busy ? "保存中…" : replaceId ? "替换并通过" : "保存关联并通过"}
           </Button>
         </form>
       )}

@@ -36,9 +36,7 @@ export function WorkbenchTodos({
   return (
     <section className="wb-panel wb-todos" aria-labelledby="wb-todos-title">
       <div className="wb-panel__head">
-        <h2 id="wb-todos-title">
-          待办处理 <small>把需要处理的单据集中在这里</small>
-        </h2>
+        <h2 id="wb-todos-title">待办处理</h2>
         <span className="wb-count">共 {data.counts.all} 项</span>
       </div>
       <div className="wb-tabs" aria-label="待办分类">
@@ -96,6 +94,7 @@ export function WorkbenchTodos({
       <div className="wb-table-scroll" role="region" aria-label="待办表格，可横向滚动">
         <table className="wb-table">
           <colgroup>
+            <col className="wb-col-kind" />
             <col className="wb-col-document" />
             <col className="wb-col-supplier" />
             <col className="wb-col-amount" />
@@ -104,16 +103,22 @@ export function WorkbenchTodos({
           </colgroup>
           <thead>
             <tr>
+              <th>类型</th>
               <th>关联单据</th>
               <th>供应商</th>
               <th className="wb-number">待处理金额</th>
-              <th>状态 / 关注原因</th>
+              <th>关注原因</th>
               <th>操作</th>
             </tr>
           </thead>
           <tbody>
             {data.items.map((row) => (
               <tr key={row.key}>
+                <td>
+                  <span className="wb-kind" data-kind={row.kind}>
+                    {todoLabels[row.kind]}
+                  </span>
+                </td>
                 <td>
                   <Link to={destination(row)}>{row.title}</Link>
                   <small>{row.subtitle || "—"}</small>

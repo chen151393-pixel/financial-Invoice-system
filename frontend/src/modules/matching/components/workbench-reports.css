@@ -1,22 +1,10 @@
-.wb-reports {
-  display: grid;
-  grid-template-columns: minmax(0, 1.45fr) minmax(0, 1fr);
-  gap: 20px;
-  align-items: stretch;
-}
-.wb-reports > .wb-panel {
-  display: flex;
-  flex-direction: column;
-  min-height: 290px;
-}
-.wb-reports .wb-empty {
-  flex: 1;
+.wb-trend-panel .wb-empty {
   display: flex;
   flex-direction: column;
   justify-content: center;
 }
-.wb-reports .wb-panel__head > a {
-  font-size: 11px;
+.wb-trend-panel .wb-panel__head > a {
+  font-size: 12px;
 }
 .wb-report-note {
   color: var(--color-muted);
@@ -136,9 +124,6 @@
   margin-top: 12px;
 }
 @media (max-width: 1150px) {
-  .wb-reports {
-    grid-template-columns: minmax(0, 1fr);
-  }
 }
 
 .wb-trend-range {

@@ -137,13 +137,15 @@ export function InvoiceTable({
                         className="invoice-list__view"
                         disabled={refresh.blocked || !refresh.actions[row.id]?.allowed}
                         title={refresh.actions[row.id]?.reason ?? "正在读取补拉权限"}
+                        aria-label={
+                          refresh.actions[row.id]?.allowed === false
+                            ? `重新拉取商品明细（${refresh.actions[row.id]?.reason}）`
+                            : undefined
+                        }
                         onClick={() => void refresh.execute([row.id])}
                       >
                         重新拉取商品明细
                       </Button>
-                      {!refresh.actions[row.id]?.allowed && (
-                        <small>{refresh.actions[row.id]?.reason ?? "正在读取补拉权限…"}</small>
-                      )}
                     </div>
                   )}
                 </td>

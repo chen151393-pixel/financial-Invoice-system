@@ -1,3 +1,4 @@
+/* 柠檬云后台同步：面板、表单与表格。颜色、间距只用 tokens.css 中的变量。 */
 .sync-background {
   background: var(--color-surface);
   border: 1px solid var(--color-border);
@@ -6,49 +7,69 @@
   color: var(--color-text);
   min-width: 0;
 }
+/* 无内边距面板：标题栏、页签、内容区和底部操作栏各自控制留白。 */
+.sync-background--flush {
+  padding: 0;
+}
+.sync-background__stack {
+  display: grid;
+  gap: 18px;
+}
 .sync-background h2 {
-  margin: 0 0 var(--space-small);
-  font-size: 18px;
+  margin: 0;
+  font-size: 16px;
 }
 .sync-background p {
   line-height: 1.65;
 }
-.sync-background__heading,
+.sync-background__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--space-small) var(--space-control);
+  padding: 14px 20px;
+  border-bottom: 1px solid var(--color-border);
+}
+.sync-background__title {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 4px var(--space-small);
+}
+.sync-background__title small {
+  margin: 0;
+}
+.sync-background__body {
+  display: grid;
+  gap: var(--space-control);
+  padding: 16px 20px 20px;
+  min-width: 0;
+}
 .sync-background__inline {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
   gap: var(--space-control);
 }
-.sync-background__heading {
-  justify-content: space-between;
-  margin-bottom: var(--space-layout);
-}
-.sync-background__heading p {
-  margin: 0;
-  color: var(--color-muted);
-}
-.sync-background__notice {
-  color: var(--color-muted);
-}
-.sync-background__tabs {
-  display: flex;
-  gap: var(--space-small);
-  margin: var(--space-layout) 0;
-  border-bottom: 1px solid var(--color-border);
-  padding-bottom: var(--space-control);
-}
-.sync-background__tabs [aria-pressed="true"] {
-  color: var(--color-primary);
-  border-color: var(--color-primary);
-}
-.sync-background__form {
+.sync-background__fields {
   display: grid;
-  gap: var(--space-layout);
+  gap: 20px;
+  padding: 20px;
 }
-.sync-background__form > p {
+.sync-background__foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--space-control);
+  padding: 14px 20px;
+  border-top: 1px solid var(--color-border);
+  border-radius: 0 0 var(--radius-panel) var(--radius-panel);
+  background: var(--color-canvas);
+}
+.sync-background__foot small {
   margin: 0;
-  color: var(--color-muted);
 }
 .sync-background label {
   display: inline-flex;
@@ -57,8 +78,8 @@
 }
 .sync-background input:not([type="checkbox"]):not([type="radio"]),
 .sync-background select {
-  min-height: 40px;
-  padding: var(--space-small) var(--space-control);
+  min-height: 36px;
+  padding: 6px 10px;
   border: 1px solid var(--color-input-border);
   border-radius: var(--radius-control);
   background: var(--color-surface);
@@ -67,51 +88,44 @@
   max-width: 100%;
 }
 .sync-background input[type="number"] {
-  width: 100px;
+  width: 90px;
 }
 .sync-background input[type="checkbox"],
 .sync-background input[type="radio"] {
   accent-color: var(--color-primary);
 }
-.sync-background__scope,
-.sync-background__schedule {
+.sync-background__scope {
   border: 0;
   padding: 0;
   margin: 0;
   min-width: 0;
 }
 .sync-background legend {
+  margin-bottom: 10px;
+  padding: 0;
   font-weight: 600;
-  margin-bottom: var(--space-control);
 }
 .sync-background__scope p {
+  margin: 8px 0 0;
   color: var(--color-muted);
+  font-size: 12px;
 }
 .sync-background__accounts {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(320px, 100%), 1fr));
-  gap: var(--space-control);
+  grid-template-columns: repeat(auto-fill, minmax(min(240px, 100%), 1fr));
+  gap: var(--space-small);
   margin: var(--space-control) 0;
+  padding: var(--space-control);
   max-height: 300px;
   overflow: auto;
-}
-.sync-background__schedule {
-  display: grid;
-  gap: var(--space-control);
-  justify-items: start;
-}
-.sync-background__form > button {
-  justify-self: start;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-control);
+  background: var(--color-canvas);
 }
 .sync-background__error {
+  margin: 0;
   color: var(--color-feedback);
   overflow-wrap: anywhere;
-}
-.sync-background__filters {
-  margin: var(--space-layout) 0;
-}
-.sync-background__filters > span {
-  color: var(--color-muted);
 }
 .sync-background__table {
   overflow-x: auto;
@@ -121,78 +135,67 @@
   width: 100%;
   border-collapse: collapse;
   font-variant-numeric: tabular-nums;
-  font-size: 13px;
+  font-size: 12px;
 }
 .sync-background th {
   background: var(--color-canvas);
+  color: var(--color-muted);
   text-align: left;
-  font-weight: 600;
+  font-weight: 500;
+  white-space: nowrap;
 }
 .sync-background th,
 .sync-background td {
-  padding: var(--space-control);
+  padding: 10px 12px;
   border-bottom: 1px solid var(--color-border);
   vertical-align: top;
-  min-width: 90px;
 }
 .sync-background td:first-child {
-  min-width: 200px;
+  min-width: 180px;
+}
+.sync-background__number {
+  text-align: right;
+  white-space: nowrap;
 }
 .sync-background small {
   display: block;
   color: var(--color-muted);
-  margin-top: var(--space-small);
+  margin-top: 2px;
   overflow-wrap: anywhere;
-}
-.sync-background__status {
-  display: inline-block;
-  border: 1px solid var(--color-border);
-  padding: var(--space-small);
-  border-radius: var(--radius-control);
-  white-space: nowrap;
-}
-.sync-background__facts {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-layout);
-  margin: var(--space-layout) 0;
-}
-.sync-background__facts dt {
-  color: var(--color-muted);
-  margin-bottom: var(--space-small);
-}
-.sync-background__facts dd {
-  margin: 0;
-}
-.sync-background__request {
-  overflow-wrap: anywhere;
-  color: var(--color-muted);
 }
 .sync-background summary {
   cursor: pointer;
-  margin: var(--space-control) 0;
   color: var(--color-primary);
 }
 .sync-background__windows {
-  padding-left: var(--space-layout);
-  min-width: 260px;
+  margin: var(--space-small) 0 0;
+  padding-left: 18px;
+  min-width: 240px;
   max-width: 420px;
 }
 .sync-background__windows li {
-  margin-bottom: var(--space-control);
+  margin-bottom: var(--space-small);
 }
 .sync-background__windows p {
-  margin: var(--space-small) 0;
+  margin: 4px 0;
+}
+.sync-background a:focus-visible,
+.sync-background summary:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
 }
 @media (max-width: 760px) {
   .sync-background {
     padding: var(--space-control);
   }
-  .sync-background__form .sync-background__inline {
+  .sync-background--flush {
+    padding: 0;
+  }
+  .sync-background__fields .sync-background__inline {
     align-items: flex-start;
     flex-direction: column;
   }
-  .sync-background__form label {
+  .sync-background__fields label {
     flex-wrap: wrap;
   }
 }

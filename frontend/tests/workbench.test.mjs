@@ -6,7 +6,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { MemoryRouter } from "react-router";
 import { createServer } from "vite";
 
-let server, Todos, Reports, Page, api;
+let server, Todos, Trend, Page, api;
 before(async () => {
   server = await createServer({
     configFile: fileURLToPath(new URL("../vite.config.ts", import.meta.url)),
@@ -17,8 +17,8 @@ before(async () => {
   ({ WorkbenchTodos: Todos } = await server.ssrLoadModule(
     "/src/modules/matching/components/WorkbenchTodos.tsx",
   ));
-  ({ WorkbenchReports: Reports } = await server.ssrLoadModule(
-    "/src/modules/matching/components/WorkbenchReports.tsx",
+  ({ WorkbenchTrend: Trend } = await server.ssrLoadModule(
+    "/src/modules/matching/components/WorkbenchTrend.tsx",
   ));
   ({ WorkbenchPage: Page } = await server.ssrLoadModule("/src/modules/matching/pages/WorkbenchPage.tsx"));
   api = await server.ssrLoadModule("/src/modules/matching/api/workbench-api.ts");
@@ -95,7 +95,7 @@ test("待办空结果明确显示，导出禁用", () => {
 });
 
 test("趋势只显示已开票，按币种逐日展示后端值与明确范围", () => {
-  const html = render(Reports, {
+  const html = render(Trend, {
     change() {},
     data: {
       ...data,
@@ -109,8 +109,6 @@ test("趋势只显示已开票，按币种逐日展示后端值与明确范围",
   assert.match(html, /120.500001/);
   assert.match(html, /height:60.2%/);
   assert.match(html, /dateTime="2026-10-19"/);
-  assert.match(html, /按票面开票日期逐日汇总价税合计/);
-  assert.match(html, /仅展示有开票记录的日期/);
   assert.equal((html.match(/role="listitem"/g) || []).length, 1);
   assert.doesNotMatch(html, /dateTime="2026-10-18"/);
   assert.doesNotMatch(html, /计划开票|超期/);

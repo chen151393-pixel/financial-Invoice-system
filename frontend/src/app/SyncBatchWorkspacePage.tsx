@@ -1,4 +1,6 @@
+import { Link } from "react-router";
 import { SyncBatchDetailPage } from "../modules/sync/pages/SyncBatchDetailPage";
+import { paths } from "./paths";
 import { AppFrame } from "./WorkspaceFrame";
 import { navigation } from "./navigation";
 import { useViewNavigate } from "./useViewNavigate";
@@ -10,11 +12,12 @@ export default function SyncBatchWorkspacePage() {
       groups={navigation}
       activeId="sync"
       onNavigate={navigate}
-      title="同步任务详情"
-      subtitle="查看每个账套的日期范围、保存统计和失败原因"
-      mode="live"
-      dataLabel="柠檬云 · 持久任务记录"
-      notice="本页展示柠檬云后台拉取的实际提交结果。明细完整后生成待审核建议，不自动通过比对，不写回 NS。"
+      title="同步批次详情"
+      breadcrumb={
+        <>
+          <Link to={paths.sync}>数据同步</Link> / <Link to={paths.sync}>执行记录</Link>
+        </>
+      }
     >
       <SyncBatchDetailPage />
     </AppFrame>

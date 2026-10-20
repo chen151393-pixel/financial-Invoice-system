@@ -62,7 +62,7 @@ test("定时计划按北京时间展示，保存与暂停有明确操作", () =>
   assert.match(html, /14:00/);
   assert.match(html, /保存同步计划/);
   assert.match(html, /暂停已保存计划/);
-  assert.match(html, /手动历史补拉/);
+  assert.match(html, /请用手动补拉/);
 });
 test("未授权不能提交，等待任务详情时不显示伪成功", () => {
   const html = render(Batch, {

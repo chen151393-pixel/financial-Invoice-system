@@ -13,10 +13,6 @@ export default function InvoiceWorkspacePage() {
       activeId="invoices"
       onNavigate={navigateView}
       title="进项发票"
-      subtitle="查询已导入数据库的发票与票面商品明细"
-      mode="live"
-      dataLabel="已导入的进项发票"
-      notice={null}
       actions={
         <Link className="ui-button ui-button--primary" to={paths.syncLemon}>
           导入发票

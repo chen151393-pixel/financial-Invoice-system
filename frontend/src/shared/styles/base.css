@@ -16,6 +16,12 @@ body {
   border-radius: var(--radius-control);
   cursor: pointer;
 }
+/* 以链接实现的按钮（跳转）与按钮外观一致，不显示下划线。 */
+a.ui-button {
+  display: inline-flex;
+  align-items: center;
+  text-decoration: none;
+}
 .ui-button--primary {
   background: var(--color-primary);
   color: var(--color-surface);

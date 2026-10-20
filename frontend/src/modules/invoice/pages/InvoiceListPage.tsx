@@ -156,12 +156,6 @@ export function InvoiceListPage() {
           }}
           onRefresh={() => changeQuery({ ...query, version: query.version + 1 })}
         />
-        <div className="invoice-list__context">
-          <span>数据范围：已导入的进项发票，统计覆盖当前筛选的全部页</span>
-          <span>金额按币种分别汇总，包含红字金额</span>
-          <span>票面税额不代表可抵扣税额</span>
-          <span>待复核金额与待匹配金额可能重叠，不应相加</span>
-        </div>
         <InvoiceDetailRefresh state={detailRefresh} />
         {loading && (
           <p className="invoice-list__message" role="status">

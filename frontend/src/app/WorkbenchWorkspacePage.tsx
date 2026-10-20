@@ -14,10 +14,6 @@ export default function WorkbenchWorkspacePage() {
       activeId="workbench"
       onNavigate={navigate}
       title="发票工作台"
-      subtitle="先处理待复核事项，再推进核对与开票，让每一笔业务及时闭环。"
-      mode="live"
-      dataLabel="已入库业务数据"
-      notice={null}
       actions={<WorkbenchToolbar state={state} />}
     >
       <WorkbenchPage state={state} />
