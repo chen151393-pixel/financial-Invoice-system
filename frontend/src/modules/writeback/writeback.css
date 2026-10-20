@@ -1,0 +1,123 @@
+/* NS 回写模块公共样式：面板、表格、状态标签，全部限定在 wb- 前缀内，颜色取自 tokens.css。 */
+.wb-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.wb-panel {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-panel);
+  padding: 16px 20px;
+  margin: 0;
+}
+
+.wb-panel--flush {
+  padding: 0;
+  overflow: hidden;
+}
+
+.wb-inline {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-small);
+}
+
+.wb-muted {
+  color: var(--color-muted);
+  font-size: 12px;
+}
+
+.wb-mono {
+  font-variant-numeric: tabular-nums;
+}
+
+.wb-strong {
+  font-weight: 700;
+}
+
+.wb-nowrap {
+  white-space: nowrap;
+}
+
+.wb-error {
+  color: var(--color-danger-text);
+  margin: 0;
+}
+
+.wb-state {
+  padding: 24px 20px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 12px;
+  margin: 0;
+  color: var(--color-muted);
+}
+
+.wb-tag {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+  background: var(--color-inactive-surface);
+  color: var(--color-inactive-text);
+}
+
+.wb-tag--pending {
+  background: var(--color-progress-surface);
+  color: var(--color-progress-text);
+}
+
+.wb-tag--executing {
+  background: color-mix(in srgb, var(--color-primary) 10%, var(--color-surface));
+  color: var(--color-primary);
+}
+
+.wb-tag--unknown {
+  background: var(--color-danger-surface);
+  color: var(--color-danger-text);
+}
+
+.wb-tag--failed {
+  background: var(--color-warning-surface);
+  color: var(--color-feedback);
+}
+
+.wb-tag--succeeded {
+  background: var(--color-success-surface);
+  color: var(--color-success-text);
+}
+
+.wb-note {
+  font-size: 12px;
+  color: var(--color-muted);
+}
+
+.wb-note--blocked,
+.wb-note--failed {
+  color: var(--color-feedback);
+}
+
+.wb-note--unknown {
+  color: var(--color-danger-text);
+}
+
+.wb-note--succeeded {
+  color: var(--color-success-text);
+  font-weight: 600;
+}
+
+@media (max-width: 760px) {
+  .wb-panel {
+    padding: 14px 16px;
+  }
+  .wb-panel--flush {
+    padding: 0;
+  }
+}

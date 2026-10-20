@@ -14,6 +14,7 @@ const SyncBatchWorkspacePage = lazy(() => import("./SyncBatchWorkspacePage"));
 const InvoiceWorkspacePage = lazy(() => import("./InvoiceWorkspacePage"));
 const MatchingWorkspacePage = lazy(() => import("./MatchingWorkspacePage"));
 const TaskWorkspacePage = lazy(() => import("./TaskWorkspacePage"));
+const WritebackWorkspacePage = lazy(() => import("./WritebackWorkspacePage"));
 
 function page(label: string, element: ReactNode) {
   return <Suspense fallback={<p role="status">正在加载{label}…</p>}>{element}</Suspense>;
@@ -54,6 +55,8 @@ export const router = createBrowserRouter([
             path: `${paths.syncBatches}/:requestId`,
             element: page("同步任务详情", <SyncBatchWorkspacePage />),
           },
+          { path: paths.writeback, element: page("NS 回写", <WritebackWorkspacePage />) },
+          { path: `${paths.writeback}/:requestId`, element: page("NS 回写", <WritebackWorkspacePage />) },
           // 首页及未知地址进入工作台；已有业务地址保持独立访问。
           { path: "*", element: <Navigate to={paths.workbench} replace /> },
         ],

@@ -13,6 +13,7 @@ export const paths = {
   syncNs: "/sync/ns",
   syncLemon: "/sync/lemon",
   syncBatches: "/sync/batches",
+  writeback: "/writeback",
 } as const;
 
 // 旧地址，路由中重定向到新地址；保留一个版本后删除。
@@ -25,6 +26,7 @@ export const legacyPaths = {
 
 export const taskPath = (id: string) => `${paths.tasks}/${encodeURIComponent(id)}`;
 export const syncBatchPath = (id: string) => `${paths.syncBatches}/${encodeURIComponent(id)}`;
+export const writebackRequestPath = (id: string) => `${paths.writeback}/${encodeURIComponent(id)}`;
 export const matchingInvoicePath = (invoiceId: string) =>
   `${paths.matching}/${encodeURIComponent(invoiceId)}`;
 
@@ -37,6 +39,7 @@ export type View =
   | "pl"
   | "finance"
   | "invoice-followup"
+  | "writeback"
   | "supplier-profiles";
 
 const viewPaths: Record<View, string> = {
@@ -47,6 +50,7 @@ const viewPaths: Record<View, string> = {
   pl: paths.pl,
   finance: paths.review,
   "invoice-followup": paths.tasks,
+  writeback: paths.writeback,
   "supplier-profiles": paths.supplierGroups,
 };
 

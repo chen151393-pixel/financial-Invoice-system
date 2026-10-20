@@ -66,6 +66,11 @@ export const navigation: readonly SidebarGroup<View>[] = [
         label: "采购报关联查",
         icon: <MenuIcon path="M3 4h18v16H3z M3 9h18 M3 14h18 M9 4v16" />,
       },
+      {
+        id: "writeback",
+        label: "NS 回写",
+        icon: <MenuIcon path="M4 12h12 M12 6l6 6-6 6 M20 4v16" />,
+      },
     ],
   },
   {
