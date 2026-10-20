@@ -16,6 +16,9 @@ from backend.manage import upgrade_schema
 from backend.modules.matching.dto.matching_dto import ConfirmBody, ManualBody, RejectBody
 from backend.tests.invoice_files import invoice
 from backend.tests.test_matching import FLUID, INK, import_invoices, invoice_id, proposals, task
+from backend.tests.test_matching import (
+    test_queue_counts_with_all_confidence_tiers as test_queue_counts_with_all_confidence_tiers,
+)
 from backend.tests.test_matching import world as world  # 共用夹具
 from backend.tests.test_source_storage import bundle, customs, purchase, rows, save
 from backend.tests.test_source_storage import ns as ns  # 共用夹具

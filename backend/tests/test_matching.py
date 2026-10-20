@@ -87,6 +87,29 @@ def proposals(world, number_id):
     ]
 
 
+def test_queue_counts_with_all_confidence_tiers(engine, world, reviewed):
+    assert world["queries"].queue(QueueQuery()).counts == {
+        "all": 0,
+        "high": 0,
+        "medium": 0,
+        "low": 0,
+    }
+    import_invoices(
+        world,
+        [
+            invoice("26000000000000008901", [INK, FLUID], remark="SUB-200"),
+            invoice("26000000000000008902", [INK]),
+            invoice("26000000000000008903", [("其他商品", "箱", "1000", "100000", "0")]),
+        ],
+    )
+    expected = {"all": 4, "high": 2, "medium": 1, "low": 1}
+    for tier, total in expected.items():
+        result = world["queries"].queue(QueueQuery(tier=tier, pageSize=1))
+        assert result.total == total and len(result.rows) == 1
+        assert result.pages == total and result.counts == expected
+        assert all(type(value) is int for value in result.counts.values())
+
+
 def test_full_chain_from_review_to_completed_task(engine, world, reviewed):
     import_invoices(world, [invoice("26000000000000008001", [INK, FLUID], remark="请款 SUB-200")])
     target = invoice_id(engine, "26000000000000008001")

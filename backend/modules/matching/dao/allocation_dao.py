@@ -136,7 +136,8 @@ def proposal_counts(connection, high, medium):
         func.sum(case((confidence >= high, 1), else_=0)),
         func.sum(case(((confidence >= medium) & (confidence < high), 1), else_=0)),
     ).where(allocations.c.status == "proposed")
-    total, high_count, medium_count = (value or 0 for value in connection.execute(query).one())
+    # MySQL 的 SUM(CASE ...) 返回 Decimal；计数统一为整数，避免严格响应模型校验失败。
+    total, high_count, medium_count = (int(value or 0) for value in connection.execute(query).one())
     return {
         "all": total,
         "high": high_count,

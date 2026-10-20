@@ -96,3 +96,7 @@
 ## 发票金额统计的账套条件
 
 `GET /api/matching/invoice-totals` 接收可选 `account`（最长 100 字符，空值表示全部），通过 invoice 门面复用列表精确筛选；价税合计、票面税额、待匹配金额和待复核金额均覆盖所选账套的全部符合条件发票，不受页码影响。
+
+## 队列分档计数类型（2026-10-20）
+
+MySQL 的 `SUM(CASE ...)` 返回 Decimal，待审核建议非空时曾导致队列严格响应模型的整数校验失败。`allocation_dao.proposal_counts` 现在统一返回整数计数，保持空队列、高中低分档与分页口径不变。回归用例 `test_queue_counts_with_all_confidence_tiers` 在 SQLite 与独立 MySQL 测试库中共用，覆盖空队列、三档非空及分页；不改金额精度或比对规则。
