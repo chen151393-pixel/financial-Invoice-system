@@ -2,6 +2,7 @@ import { useEffect, useState, type Ref } from "react";
 import { Button } from "../../../shared/components/Button";
 import { Pagination } from "../../../shared/components/Pagination";
 import { formatTime } from "./format";
+import { WecomDirectoryStatus } from "./WecomDirectoryStatus";
 import type {
   WecomGroup,
   WecomGroupPage,
@@ -25,16 +26,15 @@ export function WecomGroupPicker({
   inputRef: Ref<HTMLInputElement>;
 }) {
   const [input, setInput] = useState("");
-  const [query, setQuery] = useState<SupplierGroupMatchQuery>({
-    supplierId: supplier.supplierId,
-    keyword: "",
-    page: 1,
-    refresh: false,
-  });
+  const [query, setQuery] = useState<SupplierGroupMatchQuery | null>(null);
   const [state, setState] = useState<
-    { kind: "loading" } | { kind: "error"; message: string } | { kind: "ready"; data: WecomGroupPage }
-  >({ kind: "loading" });
+    | { kind: "idle" }
+    | { kind: "loading" }
+    | { kind: "error"; message: string }
+    | { kind: "ready"; data: WecomGroupPage }
+  >({ kind: "idle" });
   useEffect(() => {
+    if (!query) return;
     let active = true;
     void load(query).then(
       (data) => {
@@ -51,15 +51,13 @@ export function WecomGroupPicker({
   }, [query, load]);
   function search(refresh = false) {
     setState({ kind: "loading" });
-    setQuery({ supplierId: supplier.supplierId, keyword: input, page: 1, refresh });
+    setQuery({ supplierId: supplier.supplierId, keyword: input.trim(), page: 1, refresh });
   }
   const busy = disabled || state.kind === "loading";
   return (
     <section className="sg-lookup" aria-label="匹配企微外部群">
       <h3>匹配外部群与群主</h3>
-      <p className="it-help">
-        按“{supplier.supplierName}”推荐候选群；名称相似不代表同一供应商，请核对后选择。
-      </p>
+      <p className="it-help">点击“查找外部群”开始查询；输入框留空时，自动按“{supplier.supplierName}”匹配。</p>
       <form
         className="sg-row"
         onSubmit={(event) => {
@@ -81,12 +79,23 @@ export function WecomGroupPicker({
         <Button type="submit" disabled={busy}>
           查找外部群
         </Button>
-        <Button disabled={busy} onClick={() => search(true)}>
-          重新拉取
-        </Button>
+        {query && (
+          <Button disabled={busy} onClick={() => search(true)}>
+            重新拉取
+          </Button>
+        )}
       </form>
-      {query && input !== query.keyword && <p className="it-help">群名已修改，点击查询生效。</p>}
-      {state.kind === "loading" && <p role="status">正在从企微查询客户群，首次拉取可能需要一些时间…</p>}
+      {state.kind === "idle" && <p className="it-help">尚未查询外部群。</p>}
+      {query && input.trim() !== query.keyword && (
+        <p className="it-help">查询条件已修改，点击查找外部群生效。</p>
+      )}
+      {state.kind === "loading" && (
+        <p role="status">
+          {query?.keyword
+            ? "正在从企微查询客户群，首次拉取可能需要一些时间…"
+            : `正在按“${supplier.supplierName}”自动匹配外部群，首次拉取可能需要一些时间…`}
+        </p>
+      )}
       {state.kind === "error" && (
         <p role="alert" className="sg-feedback">
           {state.message}{" "}
@@ -95,8 +104,9 @@ export function WecomGroupPicker({
           </Button>
         </p>
       )}
-      {state.kind === "ready" && (
+      {state.kind === "ready" && query && (
         <>
+          <WecomDirectoryStatus data={state.data} />
           <p className="it-help">
             查询“{query.keyword || supplier.supplierName}”：共 {state.data.total}{" "}
             个候选群。重名时请核对群主、人数及创建时间，系统不会自动绑定。
@@ -148,7 +158,7 @@ export function WecomGroupPicker({
             disabled={disabled}
             onPageChange={(page) => {
               setState({ kind: "loading" });
-              setQuery((previous) => ({ ...previous, page, refresh: false }));
+              setQuery({ ...query, page, refresh: false });
             }}
             onPageSizeChange={() => {}}
           />

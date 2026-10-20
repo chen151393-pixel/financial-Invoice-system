@@ -96,6 +96,18 @@ documents_pending → notify_pending → awaiting_invoice → partially_received
 - `/query`、`/suppliers/query`、`/wecom/query` 暂留一版本兼容原维护客户端；新页面仅使用档案查询和名称匹配，下一版本确认外部调用方迁移后再删除旧接口。
 - 新验证：`backend/tests/test_supplier_profiles.py` 覆盖候选排名/歧义、分页、权限、真实保存、绑定状态筛选、环境隔离与旧版本拒绝；渠道使用假实现，不代表真实企微已联调。
 
+### 企微群目录查询缓存
+
+`WeComGroups` 复用服务端内存目录，`wecom_group_cache.py` 管理快照与单个后台刷新任务；名称匹配仍在 task 的 `supplier_group_policy` 中完成。没有改用 Excel 导入目录，也不把文件资料视为实时企微数据。
+
+- 5 分钟内的目录直接复用；超过 5 分钟且未满 24 小时，普通查询立即使用已有目录，后台更新。多个查询共用同一次刷新，后台刷新完成后再次查找即可读取新目录。
+- 第一次查询、进程重启后首次查询、目录超过 24 小时及 `refresh=true` 的“重新拉取”需要等待完整读取；刷新依旧分页列出可见群 ID，再以最多 6 个并发读取群详情。该优化降低已有目录下的等待，不承诺冷启动查询耗时。
+- 刷新成功才整体替换目录；网络失败保留上次成功快照并返回错误说明，后台自动刷新冷却 60 秒。超过 24 小时不再返回旧目录；首次失败不能返回伪造的空结果。明确的凭证/授权失败清除旧目录；企业或 Secret 变化立即隔离缓存，旧任务不能覆盖新身份的目录。
+- `/wecom/match` 与兼容 `/wecom/query` 响应新增 `directoryUpdatedAt`（UTC 时间或 null）、`directoryStale`、`directoryRefreshing`、`directoryRefreshError`。缓存可能暂缺新增群或群名变化，页面须展示更新时间与刷新状态；保存绑定及发送前仍走原有实时群核验。
+- 仅缓存群识别字段，不缓存成员清单、不落盘、不新增数据库表；多进程各自维护缓存。应用关闭先等待目录刷新结束，再关闭企微 HTTP 客户端。
+
+验证：`test_wecom_group_cache.py` 使用受控时钟和线程事件验证缓存时效、慢上游下非阻塞读取、并发共享刷新、错误冷却及身份隔离；`test_wecom_groups.py` 验证凭证文件变化后重新读取。测试不访问真实企微，不代表生产网络时延已测量。
+
 
 ## 外部群 Excel 导入与手动关联
 

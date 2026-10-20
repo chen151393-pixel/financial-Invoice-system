@@ -9,6 +9,8 @@ import httpx
 
 from backend.core.errors import ApiError
 
+from .wecom_group_cache import WecomGroupCache
+
 BASE_URL = "https://qyapi.weixin.qq.com/cgi-bin/"
 
 
@@ -24,10 +26,10 @@ class WeComGroups:
         self.client = client or httpx.Client(timeout=20, follow_redirects=False, trust_env=False)
         self._token = None
         self._token_lock = Lock()
-        self._groups = None
-        self._groups_lock = Lock()
+        self._catalog = WecomGroupCache()
 
     def close(self):
+        self._catalog.close()
         self.client.close()
 
     def _credentials(self):
@@ -162,9 +164,9 @@ class WeComGroups:
             "createdAt": created if type(created) is int and 0 <= created <= 253402300799 else None,
         }
 
-    def _visible_group(self, chat_id):
+    def _visible_group(self, chat_id, expected_corp):
         try:
-            return self.group(chat_id)
+            return self.group(chat_id, expected_corp)
         except WeComError as error:
             # 列表可能短暂包含已失去访问权限或解散的群；明确计入未读取数量。
             if error.code in (60011, 41063):
@@ -172,41 +174,45 @@ class WeComGroups:
             raise
 
     def groups(self, *, refresh=False):
-        with self._groups_lock:
-            if not refresh and self._groups and self._groups[1] > time.monotonic():
-                return self._groups[0]
-            self._groups = None
-            ids, seen, cursors, cursor = [], set(), set(), ""
-            for _ in range(100):
-                data = self._read(
-                    "externalcontact/groupchat/list", {"status_filter": 0, "cursor": cursor, "limit": 100}
-                )
-                rows = data.get("group_chat_list")
-                if not isinstance(rows, list):
+        scope = self._credentials()
+        result = self._catalog.get(scope, lambda: self._load_groups(scope), refresh=refresh)
+        if self._credentials() != scope:
+            raise ApiError(409, "企微连接配置已变化，请重新查询")
+        return result
+
+    def _load_groups(self, scope):
+        ids, seen, cursors, cursor = [], set(), set(), ""
+        for _ in range(100):
+            data = self._read(
+                "externalcontact/groupchat/list",
+                {"status_filter": 0, "cursor": cursor, "limit": 100},
+                scope[0],
+            )
+            rows = data.get("group_chat_list")
+            if not isinstance(rows, list):
+                raise ApiError(502, "企微返回的客户群列表格式异常")
+            for row in rows:
+                chat_id = row.get("chat_id") if isinstance(row, dict) else None
+                if not isinstance(chat_id, str) or not chat_id:
                     raise ApiError(502, "企微返回的客户群列表格式异常")
-                for row in rows:
-                    chat_id = row.get("chat_id") if isinstance(row, dict) else None
-                    if not isinstance(chat_id, str) or not chat_id:
-                        raise ApiError(502, "企微返回的客户群列表格式异常")
-                    if chat_id not in seen:
-                        seen.add(chat_id)
-                        ids.append(chat_id)
-                if len(ids) > 5000:
-                    raise ApiError(502, "可见客户群超过查询上限，请缩小企微应用可见范围")
-                cursor = data.get("next_cursor", "")
-                if not isinstance(cursor, str) or cursor in cursors:
-                    raise ApiError(502, "企微分页数据异常，未使用不完整的群清单")
-                if not cursor:
-                    break
-                cursors.add(cursor)
-            else:
-                raise ApiError(502, "企微分页超过查询上限，请缩小应用可见范围")
-            # 仅缓存群识别信息，不保存成员清单；权限缺失明确展示，网络失败不缓存。
-            with ThreadPoolExecutor(max_workers=6) as pool:
-                rows = tuple(pool.map(self._visible_group, ids))
-            result = {
-                "items": tuple(row for row in rows if row is not None),
-                "unavailableCount": sum(row is None for row in rows),
-            }
-            self._groups = result, time.monotonic() + 300
-            return result
+                if chat_id not in seen:
+                    seen.add(chat_id)
+                    ids.append(chat_id)
+            if len(ids) > 5000:
+                raise ApiError(502, "可见客户群超过查询上限，请缩小企微应用可见范围")
+            cursor = data.get("next_cursor", "")
+            if not isinstance(cursor, str) or cursor in cursors:
+                raise ApiError(502, "企微分页数据异常，未使用不完整的群清单")
+            if not cursor:
+                break
+            cursors.add(cursor)
+        else:
+            raise ApiError(502, "企微分页超过查询上限，请缩小应用可见范围")
+        with ThreadPoolExecutor(max_workers=6) as pool:
+            rows = tuple(pool.map(lambda chat_id: self._visible_group(chat_id, scope[0]), ids))
+        if self._credentials() != scope:
+            raise ApiError(409, "企微连接配置已变化，请重新查询")
+        return {
+            "items": tuple(row for row in rows if row is not None),
+            "unavailableCount": sum(row is None for row in rows),
+        }

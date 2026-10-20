@@ -168,6 +168,39 @@ def test_missing_and_local_file_credentials(tmp_path):
         assert error.value.status == 503
     finally:
         client.close()
+
+
+def test_group_cache_is_invalidated_when_connection_file_credentials_change(tmp_path):
+    path = tmp_path / "wecom.json"
+    path.write_text(json.dumps({"corpid": "corp-a", "secret": "secret-a"}))
+    settings = replace(load_settings({}), wecom_connection_file=path)
+    tokens, lists = [], []
+
+    def handler(request):
+        if request.url.path.endswith("/gettoken"):
+            tokens.append(request.url.params["corpsecret"])
+            return httpx.Response(
+                200, json={"errcode": 0, "access_token": f"token-{len(tokens)}", "expires_in": 7200}
+            )
+        if request.url.path.endswith("/list"):
+            lists.append(1)
+            return httpx.Response(200, json={"errcode": 0, "group_chat_list": [{"chat_id": "wr_1"}]})
+        return httpx.Response(200, json=group("wr_1", name=f"目录-{len(lists)}"))
+
+    client = WeComGroups(settings, httpx.Client(transport=httpx.MockTransport(handler)))
+    try:
+        assert client.groups()["items"][0]["groupName"] == "目录-1"
+        path.write_text(json.dumps({"corpid": "corp-a", "secret": "secret-b"}))
+        assert client.groups()["items"][0]["groupName"] == "目录-2"
+        path.write_text(json.dumps({"corpid": "corp-b", "secret": "secret-c"}))
+        assert client.groups()["items"][0]["groupName"] == "目录-3"
+        assert tokens == ["secret-a", "secret-b", "secret-c"]
+    finally:
+        client.close()
+
+
+def test_local_file_credentials_are_used_and_redacted(tmp_path):
+    settings = load_settings({})
     path = tmp_path / "wecom.json"
     path.write_text(json.dumps({"corpid": "local-corp", "secret": "local-secret"}))
     settings = replace(settings, wecom_connection_file=path)

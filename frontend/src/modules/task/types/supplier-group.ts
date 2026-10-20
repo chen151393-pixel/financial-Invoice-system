@@ -46,6 +46,10 @@ export interface WecomGroup extends GroupFields {
 }
 export interface WecomGroupPage extends GroupPage<WecomGroup> {
   unavailableCount: number;
+  directoryUpdatedAt?: string | null;
+  directoryStale?: boolean;
+  directoryRefreshing?: boolean;
+  directoryRefreshError?: string;
 }
 export interface WecomGroupQuery {
   keyword: string;

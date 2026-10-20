@@ -115,7 +115,7 @@ def create_app(settings=None, ns=None, engine=None, wecom=None, lemon=None, lemo
             if owns_lemon:
                 lemon.close()
             if owns_wecom:
-                wecom.close()
+                await asyncio.to_thread(wecom.close)
             if owns_ns:
                 ns.close()
             if contract_ns is not ns:

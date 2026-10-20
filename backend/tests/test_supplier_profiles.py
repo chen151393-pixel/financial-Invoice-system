@@ -120,6 +120,22 @@ def test_identity_and_missing_supplier(setup):
     assert not wecom.refreshes
 
 
+def test_directory_cache_status_is_returned_without_changing_matching(setup, monkeypatch):
+    groups, _, supplier, wecom = setup
+    metadata = {
+        "directoryUpdatedAt": "2026-10-20T01:00:00+00:00",
+        "directoryStale": True,
+        "directoryRefreshing": True,
+        "directoryRefreshError": "上次网络读取失败",
+    }
+    monkeypatch.setattr(
+        wecom, "groups", lambda **_: {"items": wecom.items, "unavailableCount": 2, **metadata}
+    )
+    result = groups.match_wecom(SupplierGroupMatch(supplierId=supplier.supplierId, keyword="owner2"), USER)
+    assert [item.chatId for item in result.items] == ["exact2"]
+    assert {key: getattr(result, key) for key in metadata} == metadata
+
+
 def test_http_profiles_and_match(context, engine, setup):
     _, _, supplier, wecom = setup
     app = create_app(context.settings, context.ns, engine, wecom=wecom)

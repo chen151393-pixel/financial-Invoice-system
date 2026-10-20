@@ -4,7 +4,7 @@ import { fileURLToPath } from "node:url";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { createServer } from "vite";
-let server, api, Table, navigation, paths;
+let server, api, Table, Picker, DirectoryStatus, navigation, paths;
 before(async () => {
   server = await createServer({
     configFile: fileURLToPath(new URL("../vite.config.ts", import.meta.url)),
@@ -17,16 +17,52 @@ before(async () => {
     "/src/modules/task/components/SupplierProfilesTable.tsx",
   ));
   ({ navigation } = await server.ssrLoadModule("/src/app/navigation.tsx"));
+  ({ WecomGroupPicker: Picker } = await server.ssrLoadModule(
+    "/src/modules/task/components/WecomGroupPicker.tsx",
+  ));
+  ({ WecomDirectoryStatus: DirectoryStatus } = await server.ssrLoadModule(
+    "/src/modules/task/components/WecomDirectoryStatus.tsx",
+  ));
   paths = await server.ssrLoadModule("/src/app/paths.ts");
 });
 after(async () => {
   await server?.close();
+});
+
+test("外部群初始展示待查询，输入与查找可用，说明留空自动匹配", () => {
+  const html = renderToStaticMarkup(
+    createElement(Picker, {
+      supplier: { supplierId: "32", supplierName: "浙江洪皓工贸有限公司" },
+      search() {
+        assert.fail("初始不应查询");
+      },
+      onChoose() {},
+      disabled: false,
+      inputRef: null,
+    }),
+  );
+  assert.match(html, /尚未查询外部群/);
+  assert.match(html, /输入框留空时，自动按“浙江洪皓工贸有限公司”匹配/);
+  assert.doesNotMatch(html, /disabled|正在|没有匹配的外部群|重新拉取/);
 });
 test("供应商档案有独立基础资料导航和旧入口兼容路径", () => {
   const section = navigation.find((item) => item.label === "基础资料");
   assert.equal(section.items.find((item) => item.id === "supplier-profiles").label, "供应商档案");
   assert.equal(paths.viewPath("supplier-profiles"), "/suppliers");
   assert.equal(paths.legacyPaths.taskSupplierGroups, "/tasks/supplier-groups");
+});
+
+test("群目录缓存明确标注时间、后台更新和失败，不冒充最新结果", () => {
+  const render = (data) => renderToStaticMarkup(createElement(DirectoryStatus, { data }));
+  assert.equal(render({}), "");
+  const data = { directoryUpdatedAt: "2026-10-20T01:00:00Z", directoryStale: true };
+  assert.match(render({ ...data, directoryRefreshing: true }), /后台正在更新群目录/);
+  assert.match(render(data), /可能不包含最近新增或改名的群/);
+  assert.match(
+    render({ ...data, directoryRefreshError: "企微网络不可用" }),
+    /群目录更新失败：企微网络不可用/,
+  );
+  assert.match(render(data), /保存时会实时核验所选群与群主/);
 });
 test("未绑定供应商也展示维护入口，已绑定展示群与群主身份", () => {
   const html = renderToStaticMarkup(

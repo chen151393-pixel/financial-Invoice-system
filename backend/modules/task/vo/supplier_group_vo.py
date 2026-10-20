@@ -68,6 +68,10 @@ class WecomGroupItem(GroupItem):
 
 
 class WecomGroupList(StrictModel):
+    directoryUpdatedAt: str | None = None
+    directoryStale: bool = False
+    directoryRefreshing: bool = False
+    directoryRefreshError: str = ""
     unavailableCount: int
     items: list[WecomGroupItem]
     total: int

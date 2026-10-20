@@ -9,7 +9,7 @@ from backend.core.errors import ApiError
 
 from ..dao import supplier_group_dao
 from ..dto.supplier_group_dto import GroupFields
-from ..mapper.supplier_group_mapper import binding
+from ..mapper.supplier_group_mapper import binding, directory_status
 from ..policy.supplier_group_policy import match_group
 from ..vo.capability import Capability
 from ..vo.supplier_group_vo import GroupList, SupplierList, WecomGroupList
@@ -108,6 +108,7 @@ class SupplierGroupService:
             for group in selected[(query.page - 1) * query.pageSize : query.page * query.pageSize]
         ]
         return WecomGroupList(
+            **directory_status(catalog),
             unavailableCount=catalog["unavailableCount"],
             items=items,
             total=len(selected),
@@ -131,6 +132,7 @@ class SupplierGroupService:
         ranked.sort(key=lambda row: (row[0], row[1]["groupName"], row[1]["userid"], row[1]["chatId"]))
         selected = ranked[(query.page - 1) * query.pageSize : query.page * query.pageSize]
         return WecomGroupList(
+            **directory_status(catalog),
             unavailableCount=catalog["unavailableCount"],
             items=[
                 {

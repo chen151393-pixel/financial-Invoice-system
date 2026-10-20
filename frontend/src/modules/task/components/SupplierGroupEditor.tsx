@@ -61,9 +61,7 @@ export function SupplierGroupEditor({
           取消
         </Button>
       </div>
-      <p className="it-help">
-        系统按供应商名称推荐外部群；核对后选择，群主信息自动带入。每个供应商保留一个默认通知群。
-      </p>
+      <p className="it-help">查找外部群后核对选择，群主信息自动带入。每个供应商保留一个默认通知群。</p>
       {supplier && (
         <p className="sg-selection">
           <strong>{supplier.supplierName}</strong> · {supplier.account} · 供应商 ID：{supplier.supplierId}
@@ -86,7 +84,7 @@ export function SupplierGroupEditor({
           inputRef={groupInput}
         />
       ) : (
-        <p className="it-help">选择供应商后将自动查找匹配的企微外部群。</p>
+        <p className="it-help">选择供应商后，可点击“查找外部群”查询。</p>
       )}
       {group && (
         <div className="sg-selection">
