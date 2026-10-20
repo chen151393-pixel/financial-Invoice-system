@@ -6,7 +6,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { MemoryRouter } from "react-router";
 import { createServer } from "vite";
 
-let server, api, http, Table, Header, Records, Dialog, NotConnected;
+let server, api, http, demo, Table, Header, Records, Dialog, NotConnected;
 before(async () => {
   server = await createServer({
     configFile: fileURLToPath(new URL("../vite.config.ts", import.meta.url)),
@@ -22,6 +22,7 @@ before(async () => {
   ({ ResultRecords: Records } = await load("components/ResultRecords.tsx"));
   ({ ConfirmDialog: Dialog } = await load("components/ConfirmDialog.tsx"));
   ({ NotConnected } = await load("components/NotConnected.tsx"));
+  demo = await load("demo/demo-api.ts");
 });
 after(async () => {
   await server?.close();
@@ -159,4 +160,38 @@ test("确认弹窗在勾选核对前不能提交", () => {
   const html = render(Dialog, { data: request(), busy: false, onCancel() {}, onConfirm() {} });
   assert.match(html, /写入后不能在本系统撤销/);
   assert.match(html, /<button[^>]*disabled=""[^>]*>确认回写<\/button>/);
+});
+
+test("未接入页提供两套演示数据入口，并说明不会写入 NS", () => {
+  const html = render(NotConnected, { scope: "回写列表暂无可用数据。" });
+  assert.match(html, /href="\/writeback\?demo=1"/);
+  assert.match(html, /href="\/writeback\?demo=2"/);
+  assert.match(html, /不会写入 NS/);
+});
+
+const query = { phase: "", vendor: "", invoiceNo: "", dateFrom: "", dateTo: "", page: 1, pageSize: 20 };
+
+test("两套演示数据覆盖各回写状态，按状态筛选由数据源完成", async () => {
+  const first = await demo.demoList("1", query);
+  assert.deepEqual(
+    new Set(first.items.map((item) => item.phase)),
+    new Set(["ready", "blocked", "pending", "executing", "unknown", "failed", "succeeded"]),
+  );
+  const second = await demo.demoList("2", { ...query, phase: "ready" });
+  assert.ok(second.items.length >= 2 && second.items.every((item) => item.phase === "ready"));
+  assert.ok(second.items.some((item) => item.currency === "USD"));
+});
+
+test("演示数据二：校验未通过不能执行；确认后超时待核实，核实后转为已回写", async () => {
+  await assert.rejects(demo.demoExecute("2", "WB-D2-BLOCKED"), /超过 NS 未收/);
+  const created = await demo.demoCreatePreview("2", "d2-1", "aaaaaaaa-0000-4000-8000-000000000001");
+  assert.equal(created.lines.length, 3);
+  const unknown = await demo.demoExecute("2", created.requestId);
+  assert.equal(unknown.phase, "unknown");
+  assert.ok(unknown.bills.every((bill) => bill.after === null));
+  const done = await demo.demoVerify("2", created.requestId);
+  assert.equal(done.phase, "succeeded");
+  assert.equal(done.events.filter((event) => event.action === "确认回写").length, 1);
+  const list = await demo.demoList("2", query);
+  assert.equal(list.items.find((item) => item.invoiceId === "d2-1").phase, "succeeded");
 });

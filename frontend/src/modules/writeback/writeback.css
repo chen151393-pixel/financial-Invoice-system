@@ -121,3 +121,35 @@
     padding: 0;
   }
 }
+
+/* 演示数据标识：使用公共演示配色，与真实数据明显区分。 */
+.wb-demo {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 12px;
+  padding: 10px 16px;
+  border-radius: var(--radius-control);
+  background: var(--color-demo-bg);
+  color: var(--color-demo-text);
+  font-size: 13px;
+}
+.wb-demo a,
+.wb-not-connected__demo a {
+  color: inherit;
+  font-weight: 600;
+}
+.wb-not-connected__demo a {
+  color: var(--color-primary);
+  margin-right: 12px;
+}
+.wb-demo__links {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.wb-not-connected .wb-not-connected__demo {
+  margin: 12px 0 0;
+  color: var(--color-text);
+  font-size: 13px;
+}
