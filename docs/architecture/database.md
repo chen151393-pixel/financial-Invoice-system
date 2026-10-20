@@ -2,7 +2,7 @@
 
 状态：**v2 初版已确认（2026-10-10）；第 3 步建立基线迁移 `backend/migrations/versions/0001_baseline.py`，各模块在第 4 步切换到新表**。初版不迁移旧模块测试数据；本次在已有 v2 结构上追加版本与证据设计，保留 v2 台账。原增量方案已归档到[历史方案](../history/database-incremental.md)。总体规则见[后端规则](backend-rules.md)第 8 节。
 
-**2026-10-15 修订口径**：本次修订起点为 `test/e7422b7` 的 24 张表及迁移 `0001`—`0004`；当前工作区已完成第 10 节 A—D，追加 `0005`—`0009`，共 26 张业务表；另以 `0010`—`0015` 补齐字段中文备注，保留原类型、约束和数据。第 4 节保留初版表结构说明，新增字段与两张版本表见第 10 节；当前逐字段解释见[表设计与字段字典](../mysql/current-data-dictionary.md)。2026-10-16 追加 `0016_sync_lemon_bindings`，共 27 张业务表；open2 已有账号绑定已实现，发票拉取、定时同步与目标环境部署尚待核对或接入，不能据代码认定已上线。原“不迁移”仅指旧模块测试数据；本次补强保留已进入 v2 新表的审核、分配和审计。2026-10-19 追加 `0023_sync_background`（柠檬云后台批次与每日计划，见下文“柠檬云后台批次与每日计划”一节）及 `0024_sync_ns_runs`：NS 来源按批后台保存的请求编号、状态与结果，字段见[字段字典](../mysql/current-data-dictionary.md#ns-后台保存批次0024-2026-10-19)；`sync_cursors` 仍未启用。
+**2026-10-15 修订口径**：本次修订起点为 `test/e7422b7` 的 24 张表及迁移 `0001`—`0004`；当前工作区已完成第 10 节 A—D，追加 `0005`—`0009`，共 26 张业务表；另以 `0010`—`0015` 补齐字段中文备注，保留原类型、约束和数据。第 4 节保留初版表结构说明，新增字段与两张版本表见第 10 节；当前逐字段解释见[表设计与字段字典](../mysql/current-data-dictionary.md)。2026-10-16 追加 `0016_sync_lemon_bindings`，共 27 张业务表；open2 已有账号绑定已实现，发票拉取、定时同步与目标环境部署尚待核对或接入，不能据代码认定已上线。原“不迁移”仅指旧模块测试数据；本次补强保留已进入 v2 新表的审核、分配和审计。2026-10-19 追加 `0023_sync_background`（柠檬云后台批次与每日计划，见下文“柠檬云后台批次与每日计划”一节）及 `0024_sync_ns_runs`：NS 来源按批后台保存的请求编号、状态与结果，字段见[字段字典](../mysql/current-data-dictionary.md#ns-后台保存批次0024-2026-10-19)；`0025_sync_merge_lemon_jobs` 把柠檬云日期分片并入拉票记录并精简 `sync_runs`（见“柠檬云分片并表与批次精简”一节）；`sync_cursors` 仍未启用。
 
 ## 1. 已确认的决定
 
@@ -1009,6 +1009,8 @@ API 发票默认版使用 `source=lemon_open2`、`lemon_account=open2:` 加 `SHA
 
 ## 柠檬云后台批次与每日计划（2026-10-19，迁移 0023）
 
+> 以下为 `0023` 当时的结构。`0025` 已把 `sync_lemon_jobs` 并入 `sync_lemon_runs`、删除 `sync_runs` 的重复列，现行结构见下一节。
+
 当前追加 `0023_sync_background`，仅修改 sync 所属表，不删除旧数据：
 
 | 表 | 新增字段与约束 |
@@ -1023,3 +1025,17 @@ API 发票默认版使用 `source=lemon_open2`、`lemon_account=open2:` 加 `SHA
 计划和执行时间以 UTC 存储，接口返回 Z 时间并由页面转换为 Asia/Shanghai；开票日期 start_date/end_date 与 window_start/window_end 表示包含起止日的业务窗口，不是修改时间水位。当前不推进 sync_cursors。
 
 任务领取、计划触发和手动提交使用绑定行锁；消费者命名锁在外部读取期间保持数据库连接，但不保持事务。发票原子请求提交仍复用事件事务；结果未知不自动清理、重置或重试。详见[后台同步说明](../lemon-background-sync.md)。
+
+## 柠檬云分片并表与批次精简（2026-10-19，迁移 0025）
+
+`0023` 中每个分片在 `sync_lemon_jobs` 与 `sync_lemon_runs` 各存一行（账套、日期、请求编号相同），分片状态还要从拉票记录抄回分片表；`sync_runs` 另有与 `phase`、`scope_key`、`configuration` 重复的列。`0025_sync_merge_lemon_jobs` 收敛为“计划 → 批次 → 拉票记录”三层：
+
+| 表 | 变化 |
+| --- | --- |
+| `sync_lemon_runs` | 新增 `run_id`（指向 `sync_runs`，模块内外键；手动拉票为空）与 `(run_id,status)` 索引；状态增加 `queued`（分片待执行）、`split`（超量已拆分，保留原失败原因）；删除 `background`，改由 `run_id` 是否为空区分 |
+| `sync_runs` | 删除 `status`（及 `ck_sync_run_status`）、`account`（及 `ix_sync_run_source`）、`window_start`、`window_end`；`phase` 改为非空并加 `ck_sync_run_phase`，成为唯一批次状态；日期范围只存 `configuration` |
+| `sync_lemon_jobs` | 数据逐行并入 `sync_lemon_runs` 后代码不再读写；**表与数据保留在库中**，管理员核对后可手工删除，迁移不删表 |
+
+- “结果待核实”不再落库：`running` 的分片若不在本进程执行中，展示和汇总时按待核实处理（沿用单 API worker 约束）；拉票记录本身仍是唯一持久事实，不自动改写或重试。
+- 升级前逐行核对：`sync_runs` 待删列须能由保留列完整还原、每条后台拉票都能找到所属分片，否则在第一条 DDL 之前中止，库保持原样。核对通过后 MySQL 的 DDL 与数据合并分步提交，执行前仍须按部署文档备份。
+- SQLite（仅测试）重建被引用的 `sync_runs` 时会触发外键检查，迁移环境在 SQLite 上暂时关闭外键，提交前以 `PRAGMA foreign_key_check` 复核，有孤儿行即回滚；MySQL 不受影响。

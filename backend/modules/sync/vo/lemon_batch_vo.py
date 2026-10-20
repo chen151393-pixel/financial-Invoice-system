@@ -2,14 +2,14 @@
 
 from collections import defaultdict
 
-from ..policy.lemon_batch_policy import ACTIVE, LABELS, retry_allowed, summary
+from ..policy.lemon_batch_policy import ACTIVE, INTERRUPTED, LABELS, retry_allowed, shard_state, summary
 
 
 def iso(value):
     return value.isoformat() + "Z" if value else None
 
 
-def batch_view(row, jobs=None):
+def batch_view(row, shards=None, executing=frozenset()):
     config = row["configuration"] or {}
     view = {
         "requestId": row["request_id"],
@@ -32,17 +32,17 @@ def batch_view(row, jobs=None):
             "reason": "仅重新提交明确失败的日期分片；结果待核实的分片不能重试",
         },
     }
-    if jobs is not None:
+    if shards is not None:
         accounts = defaultdict(list)
-        for job in jobs:
-            accounts[job["asid"]].append(job)
-        view["accounts"] = [account_view(asid, rows) for asid, rows in accounts.items()]
+        for shard in shards:
+            accounts[shard["asid"]].append(shard)
+        view["accounts"] = [account_view(asid, rows, executing) for asid, rows in accounts.items()]
         view["poll"] = row["phase"] in ACTIVE
     return view
 
 
-def account_view(asid, rows):
-    phase, counts = summary(rows)
+def account_view(asid, rows, executing=frozenset()):
+    phase, counts = summary(rows, executing)
     leaves = [v for v in rows if v["status"] != "split"]
     return {
         "asid": asid,
@@ -56,8 +56,8 @@ def account_view(asid, rows):
             {
                 "startDate": v["start_date"].isoformat(),
                 "endDate": v["end_date"].isoformat(),
-                "label": LABELS[v["status"]],
-                "error": v["error"],
+                "label": LABELS[shard_state(v, executing)],
+                "error": INTERRUPTED if shard_state(v, executing) == "unknown" else v["error"],
                 "requestId": v["request_id"],
             }
             for v in leaves

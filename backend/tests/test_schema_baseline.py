@@ -265,9 +265,8 @@ def test_check_constraint_rejects_unknown_status(schema_engine):
                 connection,
                 "sync_runs",
                 source="ns_customs",
-                account="prod",
                 trigger_type="manual",
-                status="done",
+                phase="done",
                 started_by="admin",
                 started_at=NOW,
             )

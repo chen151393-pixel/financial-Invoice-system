@@ -57,9 +57,19 @@ def selected_accounts(items, configuration):
     return chosen
 
 
-def summary(jobs):
-    leaves = [row for row in jobs if row["status"] != "split"]
-    states = [row["status"] for row in leaves]
+INTERRUPTED = "执行曾中断，提交结果待核实；禁止直接重试"
+
+
+def shard_state(row, executing=frozenset()):
+    """分片展示状态。running 只在本进程正在执行时算执行中，否则提交结果待核实（沿用单 API worker 约束）。"""
+    if row["status"] == "running" and row["request_id"] not in executing:
+        return "unknown"
+    return row["status"]
+
+
+def summary(shards, executing=frozenset()):
+    leaves = [row for row in shards if row["status"] != "split"]
+    states = [shard_state(row, executing) for row in leaves]
     if any(v in ("queued", "running") for v in states):
         phase = "running"
     elif "unknown" in states:
@@ -71,7 +81,7 @@ def summary(jobs):
     else:
         phase = "failed"
     counts = {
-        key: sum((r.get("result") or {}).get(key, 0) for r in leaves if r["status"] == "completed")
+        key: sum((r["result"] or {}).get(key, 0) for r in leaves if r["status"] == "completed")
         for key in (
             "fetched",
             "created",

@@ -71,7 +71,7 @@ flowchart LR
 | [invoice_items](#invoice_items)                                 | 发票逻辑商品行         |     17 |
 | [invoice_versions](#invoice_versions)                           | 发票不可变业务版本     |     13 |
 | [matching_allocations](#matching_allocations)                   | 发票与采购行分配台账   |     35 |
-| [sync_runs](#sync_runs)                                         | 同步运行记录           |     17 |
+| [sync_runs](#sync_runs)                                         | 同步运行记录           |     18 |
 | [sync_cursors](#sync_cursors)                                   | 增量同步水位           |      6 |
 | [sync_lemon_bindings](#sync_lemon_bindings) | 柠檬云已有账号绑定状态 | 8 |
 
@@ -931,35 +931,36 @@ flowchart LR
 
 ### sync_runs｜同步运行记录
 
-一行一次同步运行。source 设计为 ns_customs / ns_purchase / lemon_invoice；status 为 running 运行中、succeeded 成功、partial 部分成功、failed 失败。表已在基线迁移定义，当前尚无持久运行记录接入。
+一行一次后台同步批次，目前只有柠檬云后台拉票写入（source=lemon_invoice）。`0023` 增加批次身份、计划和阶段字段；`0025` 删除与其重复的 status、account、window_start、window_end，`phase` 成为唯一批次状态，日期范围只存 `configuration`。每个日期分片是一条带 `run_id` 的 [sync_lemon_runs](#sync_lemon_runs) 记录，批次统计由分片结果汇总写入。
 
-结构依据：[表定义](../../backend/migrations/versions/0001_baseline.py)；业务说明：[sync 模块](../../backend/modules/sync/README.md)。
+结构依据：[基线](../../backend/migrations/versions/0001_baseline.py)、[0023](../../backend/migrations/versions/0023_sync_background.py)、[0025](../../backend/migrations/versions/0025_sync_merge_lemon_jobs.py)、[实体](../../backend/modules/sync/entity/sync_run.py)；业务说明：[后台同步](../lemon-background-sync.md)。
 
 | 字段            | MySQL 类型        | 可空 | 默认                 | 中文含义                                     |
 | --------------- | ----------------- | ---- | -------------------- | -------------------------------------------- |
-| `id`            | `BIGINT UNSIGNED` | 否   | 自增                 | 本地自增主键；与 NS 内部 ID、单号分开保存    |
-| `source`        | `VARCHAR(32)`     | 否   | —                    | 数据来源；具体取值见本表说明                 |
-| `account`       | `VARCHAR(100)`    | 否   | —                    | 同步来源账套；随 source 表示 NS 或柠檬云账套 |
-| `trigger_type`  | `VARCHAR(16)`     | 否   | —                    | 触发方式：schedule 定时；manual 手动         |
-| `status`        | `VARCHAR(16)`     | 否   | —                    | 本条记录的业务状态，含义见本表状态说明       |
-| `window_start`  | `DATETIME(6)`     | 是   | —                    | 本次同步的时间窗口起点，UTC                  |
-| `window_end`    | `DATETIME(6)`     | 是   | —                    | 本次同步的时间窗口终点，UTC                  |
-| `fetched_count` | `INTEGER`         | 否   | 0                    | 本次取得的来源记录数                         |
-| `created_count` | `INTEGER`         | 否   | 0                    | 本次新增记录数                               |
-| `updated_count` | `INTEGER`         | 否   | 0                    | 本次更新记录数                               |
-| `failed_count`  | `INTEGER`         | 否   | 0                    | 本次失败记录数                               |
-| `message`       | `TEXT`            | 是   | —                    | 同步结果或失败原因，不记录凭据               |
-| `started_by`    | `VARCHAR(200)`    | 否   | —                    | 发起操作者或 scheduler                       |
-| `started_at`    | `DATETIME(6)`     | 否   | —                    | 同步运行开始时间，UTC                        |
-| `finished_at`   | `DATETIME(6)`     | 是   | —                    | 同步运行结束时间，UTC                        |
+| `id`            | `BIGINT UNSIGNED` | 否   | 自增                 | 本地自增主键                                 |
+| `source`        | `VARCHAR(32)`     | 否   | —                    | 同步来源；当前为 lemon_invoice               |
+| `trigger_type`  | `VARCHAR(16)`     | 否   | —                    | 触发方式：schedule 定时；manual 手动或重试   |
+| `fetched_count` | `INTEGER`         | 否   | 0                    | 已完成分片取得的来源记录数合计               |
+| `created_count` | `INTEGER`         | 否   | 0                    | 已完成分片新增记录数合计                     |
+| `updated_count` | `INTEGER`         | 否   | 0                    | 已完成分片更新记录数合计                     |
+| `failed_count`  | `INTEGER`         | 否   | 0                    | 明确失败的分片数                             |
+| `message`       | `TEXT`            | 是   | —                    | 批次结果或失败原因，不记录凭据               |
+| `started_by`    | `VARCHAR(200)`    | 否   | —                    | 发起操作者                                   |
+| `started_at`    | `DATETIME(6)`     | 否   | —                    | 批次提交时间，UTC                            |
+| `finished_at`   | `DATETIME(6)`     | 是   | —                    | 批次结束时间，UTC；执行中或待核实时为空      |
+| `scope_key`     | `VARCHAR(64)`     | 是   | —                    | 应用、环境与管理员身份摘要，区分大小写       |
+| `request_id`    | `VARCHAR(36)`     | 是   | —                    | 幂等提交编号，区分大小写                     |
+| `plan_id`       | `BIGINT UNSIGNED` | 是   | —                    | 来源计划，手动提交为空                       |
+| `phase`         | `VARCHAR(20)`     | 否   | —                    | 唯一批次状态，取值见下                       |
+| `configuration` | `JSON`            | 是   | —                    | 不可变执行条件（账套范围、日期、业务类型）及授权绑定摘要 |
 | `created_at`    | `DATETIME(6)`     | 否   | CURRENT_TIMESTAMP(6) | 本地记录创建时间，UTC                        |
 | `updated_at`    | `DATETIME(6)`     | 否   | CURRENT_TIMESTAMP(6) | 本地记录最后更新时间，UTC；由 DAO 更新       |
 
 **关联与约束**
 
-- 主键：`id`。
-- 查询索引 `ix_sync_run_source`：`(source, account, started_at)`。
-- 数据库检查：`status IN ('running','succeeded','partial','failed')`。
+- 主键：`id`；`plan_id` 外键指向 [sync_lemon_plans](#sync_lemon_plans)。
+- 唯一键 `uq_sync_run_request`：`(scope_key, request_id)`；查询索引 `ix_sync_run_scope_phase`：`(scope_key, phase)`。
+- 数据库检查：`phase IN ('queued','discovering','running','completed','partial','failed','unknown')`，依次为排队、查询授权账套、执行中、完成、部分成功、失败、存在待核实分片。
 - 数据库检查：`trigger_type IN ('schedule','manual')`。
 
 <a id="sync_cursors"></a>
@@ -1164,7 +1165,7 @@ NS 来源按批后台保存记录与结果，不保存令牌。
 
 ## 漏录表补齐（2026-10-19 核对）
 
-以下 6 张表此前已由迁移建表，但本字典未收录；字段取自当前实体定义（`entity/`）。标注“区分大小写”的字段使用 `utf8mb4_bin` 排序规则。各表由哪个迁移新建或修改见[表与迁移对照](schema-map.md)。
+以下 6 张表此前已由迁移建表，但本字典未收录；字段取自实体定义（`entity/`），其中 `sync_lemon_runs` 已按 `0025` 更新，`sync_lemon_jobs` 为停用前结构。标注“区分大小写”的字段使用 `utf8mb4_bin` 排序规则。各表由哪个迁移新建或修改见[表与迁移对照](schema-map.md)。
 
 <a id="task_external_groups"></a>
 
@@ -1226,7 +1227,7 @@ NS 来源按批后台保存记录与结果，不保存令牌。
 
 ### sync_lemon_runs｜柠檬云拉票记录
 
-迁移 `0018` 新建，`0023` 增加 `background`。一行一次单账套拉票（手动或后台分片），不保存令牌。`scope_key, request_id` 联合唯一，重复提交只返回原结果；按 `scope_key, status` 建索引。running 记录不能当作普通失败重发。
+迁移 `0018` 新建；`0025` 新增 `run_id`、`queued`/`split` 状态并删除 `0023` 的 `background`。一行一次单账套日期范围拉票：手动拉票 `run_id` 为空；后台批次的每个日期分片也是一行，`run_id` 指向 [sync_runs](#sync_runs)，排队时即建行，领取后转为 running，提交结果写在同一行。不保存令牌。`scope_key, request_id` 联合唯一，重复提交只返回原结果；按 `scope_key, status` 与 `run_id, status` 建索引。running 记录不能当作普通失败重发；后台分片 running 而不在本进程执行时按“结果待核实”展示。
 
 | 字段 | 类型 | 可空 | 默认 | 说明 |
 | --- | --- | --- | --- | --- |
@@ -1237,10 +1238,10 @@ NS 来源按批后台保存记录与结果，不保存令牌。
 | account_name | VARCHAR(255) | 否 | — | 账套名称快照 |
 | start_date | DATE | 否 | — | 起始开票日期 |
 | end_date | DATE | 否 | — | 结束开票日期（含当天） |
-| status | VARCHAR(20) | 否 | — | running 执行中或待核实、completed 已提交、failed 未保存 |
-| result | JSON | 是 | — | 已提交的实际保存统计 |
-| error | VARCHAR(500) | 是 | — | 脱敏失败原因 |
-| background | BOOLEAN | 否 | false | 是否由后台队列执行 |
+| status | VARCHAR(20) | 否 | — | queued 后台分片待执行、running 执行中或待核实、completed 已提交、failed 未保存、split 超量已拆分为两个子分片 |
+| result | JSON | 是 | — | 请求快照（业务类型、补拉发票 ID）及已提交的实际保存统计 |
+| error | VARCHAR(500) | 是 | — | 脱敏失败原因；split 行保留原超量原因 |
+| run_id | BIGINT UNSIGNED | 是 | — | 所属后台批次，手动拉票为空；外键指向 sync_runs |
 | created_at | DATETIME(6) | 否 | CURRENT_TIMESTAMP(6) | 记录创建时间，UTC |
 | updated_at | DATETIME(6) | 否 | CURRENT_TIMESTAMP(6) | DAO 更新的最近修改时间，UTC |
 
@@ -1264,9 +1265,9 @@ NS 来源按批后台保存记录与结果，不保存令牌。
 
 <a id="sync_lemon_jobs"></a>
 
-### sync_lemon_jobs｜柠檬云后台账套拉取分片
+### sync_lemon_jobs｜柠檬云后台账套拉取分片（已停用）
 
-迁移 `0023` 新建。后台批次（`sync_runs`）按账套与日期拆成分片，一行一个分片；`run_id` 外键指向 `sync_runs`，`request_id` 唯一并对应 `sync_lemon_runs` 的请求编号。按 `run_id, status` 建索引。
+迁移 `0023` 新建；**`0025` 起停用**：每行数据已并入 [sync_lemon_runs](#sync_lemon_runs)（`run_id` 指向批次），代码不再读写，也没有实体定义。表与数据保留在库中，由管理员核对后手工删除。以下为停用前结构，供核对历史数据：后台批次（`sync_runs`）按账套与日期拆成分片，一行一个分片；`run_id` 外键指向 `sync_runs`，`request_id` 唯一并对应 `sync_lemon_runs` 的请求编号。按 `run_id, status` 建索引。
 
 | 字段 | 类型 | 可空 | 默认 | 说明 |
 | --- | --- | --- | --- | --- |

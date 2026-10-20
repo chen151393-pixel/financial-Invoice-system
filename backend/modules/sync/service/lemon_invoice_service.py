@@ -1,4 +1,4 @@
-"""手动拉票用例：持久请求、事务外读取、事件原子保存。"""
+"""拉票用例（手动及后台分片共用）：持久请求、事务外读取、事件原子保存。"""
 
 from datetime import date
 
@@ -65,26 +65,12 @@ class LemonInvoiceService:
             )
         return scope, binding, None
 
-    def prepare_background(self, connection, owner, body, account_name):
-        """与队列领取同事务；不读写页面当前账套，但仍复核绑定与账户互斥。"""
-        scope, binding = self.accounts.context(connection, owner, lock=True)
+    def claim_background(self, connection, scope, body):
+        """与队列领取同事务：复核同账套互斥后，把排队分片转为执行中；不读写页面当前账套。"""
         if runs.running(connection, scope, asid=body.asid):
             raise ApiError(409, "该账套已有执行中或结果待核实的拉取，本日期分片未执行")
-        runs.create(
-            connection,
-            {
-                "scope_key": scope,
-                "request_id": body.requestId,
-                "asid": body.asid,
-                "account_name": account_name,
-                "start_date": date.fromisoformat(body.startDate),
-                "end_date": date.fromisoformat(body.endDate),
-                "status": "running",
-                "background": True,
-                "result": {"businessTypes": body.businessTypes, "invoiceIds": []},
-            },
-        )
-        return scope, binding
+        if runs.claim(connection, scope, body.requestId) != 1:
+            raise ApiError(409, "分片已被领取或状态已变化，本次未执行")
 
     def pull(self, owner, body, *, targets=None):
         try:

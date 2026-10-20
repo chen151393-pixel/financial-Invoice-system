@@ -147,7 +147,7 @@ completed / partially_received → 按剩余有效收票回退到对应节点
 | task | `task_supplier_groups`、`task_tasks`、`task_lines`、`task_documents`、`task_notifications`、`task_events` |
 | invoice | `invoice_raw_records`、`invoice_headers`、`invoice_items`、`invoice_versions` |
 | matching | `matching_allocations` |
-| sync | `sync_runs`、`sync_cursors`、`sync_lemon_bindings`、`sync_lemon_runs`、`sync_lemon_plans`、`sync_lemon_jobs` |
+| sync | `sync_runs`、`sync_cursors`、`sync_lemon_bindings`、`sync_lemon_runs`、`sync_lemon_plans`、`sync_ns_runs`；`sync_lemon_jobs` 自 `0025` 起并入 `sync_lemon_runs`，旧表保留待管理员处理 |
 
 每张表只属于一个模块，只有该模块的 DAO 可以读写；跨模块只保存对方 ID，不建外键。
 

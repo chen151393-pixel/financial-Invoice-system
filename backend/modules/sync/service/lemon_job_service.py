@@ -1,4 +1,7 @@
-"""分片执行与提交核实。只有明确超量且未保存的日期范围可以自动拆分。"""
+"""分片执行与批次汇总。分片即 sync_lemon_runs 中带 run_id 的拉票记录，状态只存这一份。
+
+只有明确超量且未保存的日期范围可以自动拆分；running 却不在本进程执行的分片视为结果待核实，不重新执行。
+"""
 
 import logging
 from datetime import UTC, datetime, timedelta
@@ -7,12 +10,11 @@ from sqlalchemy.exc import SQLAlchemyError
 
 from backend.core.errors import ApiError
 
-from ..dao import lemon_job_dao as jobs
-from ..dao import lemon_run_dao as invoices
+from ..dao import lemon_run_dao as pulls
 from ..dao import sync_run_dao as runs
 from ..dto.lemon_invoice_dto import PullLemonInvoices
-from ..policy.lemon_batch_policy import binding_key, selected_accounts, summary
-from .lemon_batch_service import account_jobs, job_values
+from ..policy.lemon_batch_policy import binding_key, selected_accounts, shard_state, summary
+from .lemon_batch_service import account_shards, shard_values
 
 logger = logging.getLogger(__name__)
 
@@ -34,7 +36,7 @@ class LemonJobService:
                 runs.change(connection, batch["id"], phase="discovering")
             token = self.accounts.client.user_token(binding["mobile"])
             accounts = selected_accounts(self.accounts.authorized_accounts(token), config)
-            values = account_jobs(batch["id"], accounts, config)
+            values = account_shards(batch, accounts)
             with self.engine.begin() as connection:
                 _, current = self.accounts.context(connection, owner, lock=True)
                 self._binding(current, config)
@@ -42,7 +44,7 @@ class LemonJobService:
                 current_run = runs.get(connection, batch["scope_key"], batch["request_id"], lock=True)
                 if current_run["phase"] != "discovering":
                     return
-                jobs.create(connection, values)
+                pulls.create_shards(connection, values)
                 runs.change(
                     connection,
                     batch["id"],
@@ -58,7 +60,6 @@ class LemonJobService:
                     connection,
                     batch["id"],
                     phase="failed",
-                    status="failed",
                     message=error.message,
                     finished_at=datetime.now(UTC).replace(tzinfo=None),
                 )
@@ -68,87 +69,74 @@ class LemonJobService:
         if binding_key(binding) != config["bindingKey"]:
             raise ApiError(409, "授权绑定已变化，原任务未继续执行，请重新配置同步范围")
 
-    def execute(self, batch, job):
+    def execute(self, batch, shard):
         body = PullLemonInvoices(
-            requestId=job["request_id"],
-            asid=job["asid"],
-            startDate=job["start_date"].isoformat(),
-            endDate=job["end_date"].isoformat(),
+            requestId=shard["request_id"],
+            asid=shard["asid"],
+            startDate=shard["start_date"].isoformat(),
+            endDate=shard["end_date"].isoformat(),
             businessTypes=batch["configuration"]["businessTypes"],
         )
-        prepared = False
+        claimed = False
+        self.batches.executing.add(shard["request_id"])
         try:
             with self.engine.begin() as connection:
                 scope, binding = self.accounts.context(connection, batch["started_by"], lock=True)
-                current_job = jobs.get(connection, job["id"])
-                if current_job["status"] != "queued":
+                if pulls.lock_shard(connection, shard["id"])["status"] != "queued":
                     return
                 self._binding(binding, batch["configuration"])
-                self.invoices.prepare_background(connection, batch["started_by"], body, job["account_name"])
-                jobs.change(connection, job["id"], "running", datetime.now(UTC).replace(tzinfo=None))
-            prepared = True
+                self.invoices.claim_background(connection, scope, body)
+            claimed = True
             self.invoices._execute(batch["started_by"], body, scope, binding, background=True)
         except ApiError as error:
-            if error.code == "lemon_range_limit" and job["start_date"] < job["end_date"]:
-                self._split(batch, job)
-            elif not prepared:
-                self._finish(job, "failed", error.message)
-            # 已领取的请求以 sync_lemon_runs 的持久提交事实为准。
+            if error.code == "lemon_range_limit" and shard["start_date"] < shard["end_date"]:
+                self._split(batch, shard)
+            elif not claimed:
+                self._refuse(shard, error.message)
+            # 已领取的分片以本行持久提交事实为准，_execute 已写入 failed。
         except SQLAlchemyError:
-            logger.error("lemon_job_database_uncertain job=%s", job["id"])
+            logger.error("lemon_job_database_uncertain shard=%s", shard["id"])
         except Exception as error:  # noqa: BLE001 -- 后台隔离边界，保留未知结果且仅记录异常类型
             # 线程隔离边界：不回显异常正文或自动重试，保留原子请求供核实。
-            logger.error("lemon_job_unexpected job=%s type=%s", job["id"], type(error).__name__)
+            logger.error("lemon_job_unexpected shard=%s type=%s", shard["id"], type(error).__name__)
+        finally:
+            self.batches.executing.discard(shard["request_id"])
         self.reconcile(batch)
 
-    def _finish(self, job, status, error=None):
+    def _refuse(self, shard, message):
+        """领取前即被拒绝（绑定变化、同账套互斥）的分片没有执行，记为失败可重试。"""
         with self.engine.begin() as connection:
-            if jobs.get(connection, job["id"])["status"] != "queued":
-                return
-            jobs.change(connection, job["id"], status, datetime.now(UTC).replace(tzinfo=None), error)
+            pulls.lock_shard(connection, shard["id"])
+            pulls.mark(connection, shard["id"], "failed", expected="queued", error=message[:500])
 
-    def _split(self, batch, job):
-        middle = job["start_date"] + (job["end_date"] - job["start_date"]) // 2
+    def _split(self, batch, shard):
+        middle = shard["start_date"] + (shard["end_date"] - shard["start_date"]) // 2
         with self.engine.begin() as connection:
-            if jobs.get(connection, job["id"])["status"] == "split":
+            current = pulls.lock_shard(connection, shard["id"])
+            if current["status"] != "failed":
                 return
-            saved = invoices.get(connection, batch["scope_key"], job["request_id"])
-            if not saved or saved["status"] != "failed":
-                return
-            jobs.change(connection, job["id"], "split", datetime.now(UTC).replace(tzinfo=None))
-            jobs.create(
+            # 原失败原因保留在已拆分行上，两个子分片重新排队。
+            pulls.mark(connection, shard["id"], "split", expected="failed", error=current["error"])
+            pulls.create_shards(
                 connection,
                 [
-                    job_values(batch["id"], job, job["start_date"], middle),
-                    job_values(batch["id"], job, middle + timedelta(days=1), job["end_date"]),
+                    shard_values(batch, shard, shard["start_date"], middle),
+                    shard_values(batch, shard, middle + timedelta(days=1), shard["end_date"]),
                 ],
             )
 
     def reconcile(self, batch):
+        """只汇总，不改分片状态：批次阶段与统计由分片行实时计算后写入 sync_runs。"""
         now = datetime.now(UTC).replace(tzinfo=None)
+        executing = frozenset(self.batches.executing)
         with self.engine.begin() as connection:
-            rows = jobs.list_jobs(connection, batch["id"])
-            for job in rows:
-                if job["status"] not in ("running", "unknown"):
-                    continue
-                saved = invoices.get(connection, batch["scope_key"], job["request_id"])
-                state = saved["status"] if saved and saved["status"] in ("completed", "failed") else "unknown"
-                error = (
-                    saved["error"]
-                    if saved and state == "failed"
-                    else ("执行曾中断，提交结果待核实；禁止直接重试" if state == "unknown" else None)
-                )
-                jobs.change(connection, job["id"], state, now, error)
-            rows = jobs.list_jobs(connection, batch["id"])
-            phase, counts = summary(rows)
-            failed = sum(v["status"] == "failed" for v in rows)
+            rows = pulls.batch_shards(connection, batch["id"])
+            phase, counts = summary(rows, executing)
+            failed = sum(shard_state(v, executing) == "failed" for v in rows)
             runs.change(
                 connection,
                 batch["id"],
                 phase=phase,
-                status={"completed": "succeeded", "partial": "partial", "failed": "failed"}.get(
-                    phase, "running"
-                ),
                 fetched_count=counts["fetched"],
                 created_count=counts["created"],
                 updated_count=counts["updated"],

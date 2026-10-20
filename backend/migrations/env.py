@@ -39,14 +39,26 @@ else:
                 if connection.execute(text("SELECT GET_LOCK(:key, 0)"), {"key": lock}).scalar_one() != 1:
                     raise RuntimeError("已有迁移正在执行，请稍后重试")
                 connection.commit()
+            else:
+                # SQLite 批量改表要重建被引用的表（删旧表即违反外键）；迁移期间关闭外键，提交前整体复核。
+                connection.exec_driver_sql("PRAGMA foreign_keys=OFF")
+                connection.commit()
             try:
                 widen_schema_version(connection)
                 context.configure(connection=connection, version_table=VERSION_TABLE)
                 with context.begin_transaction():
                     context.run_migrations()
+                    if not mysql:
+                        orphans = connection.exec_driver_sql("PRAGMA foreign_key_check").fetchall()
+                        if orphans:
+                            raise RuntimeError(f"迁移后存在外键孤儿行，已回滚：{orphans[:5]}")
                 connection.commit()
             finally:
                 if lock:
                     connection.execute(text("SELECT RELEASE_LOCK(:key)"), {"key": lock})
+                if not mysql:
+                    connection.rollback()
+                    connection.exec_driver_sql("PRAGMA foreign_keys=ON")
+                    connection.commit()
     finally:
         engine.dispose()

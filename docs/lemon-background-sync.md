@@ -22,7 +22,7 @@
 
 发票仍使用原读取、版本去重、保存及事件服务，票据与原子请求 completed 结果在同一事务提交。后台汇总仅统计已提交结果；无新增可以正常完成，明细待补齐另行展示。入库不等于人工比对通过。
 
-进程中断后：未领取分片继续；已领取分片只核实 `sync_lemon_runs` 提交事实。没有确定提交结果的分片显示“结果待核实”，禁止直接重试和自动清锁，其他账套仍可执行。明确失败可生成新批次，仅包含失败日期分片；原记录保留。未知结果的管理端恢复入口尚未实现，须由管理员核实请求编号、原执行器与数据库提交事实后处理。
+分片就是 `sync_lemon_runs` 中带 `run_id` 的拉票记录：`queued` 待执行，领取时转为 `running`，提交结果直接写在同一行，超量拆分的父片记为 `split`。进程中断后：未领取分片继续；已领取分片只核实本行提交事实。`running` 却不在本进程执行中的分片显示“结果待核实”（不落库，沿用单 API worker 约束），禁止直接重试和自动清锁，其他账套仍可执行。明确失败可生成新批次，仅包含失败日期分片；原记录保留。未知结果的管理端恢复入口尚未实现，须由管理员核实请求编号、原执行器与数据库提交事实后处理。
 
 当前是开票日期回扫，不是修改时间增量游标：超过回扫窗口的迟到发票、历史修改需手动补拉；不推进 `sync_cursors`，不承诺上游分页快照完整。
 
@@ -43,15 +43,15 @@
 
 ## 代码与存储
 
-Controller：`backend/modules/sync/controller/lemon_batch_controller.py`。Service：`lemon_batch_service.py` 提交/读取、`lemon_plan_service.py` 计划、`lemon_job_service.py` 分片、`lemon_worker.py` 消费。DTO/policy 校验与汇总，DAO 只操作本模块表。`app.py` 仅装配及启停。
+Controller：`backend/modules/sync/controller/lemon_batch_controller.py`。Service：`lemon_batch_service.py` 提交/读取、`lemon_plan_service.py` 计划、`lemon_job_service.py` 分片执行与批次汇总、`lemon_worker.py` 消费。DTO/policy 校验与汇总，DAO 只操作本模块表。`app.py` 仅装配及启停。
 
-迁移 `0023_sync_background` 追加 `sync_lemon_plans`、`sync_lemon_jobs`，扩展 `sync_runs` 的范围、请求编号、计划、细分阶段和配置快照，以及 `sync_lemon_runs.background`。不删除或迁移旧表数据。计划和批次时间以 UTC 存储/返回，页面按上海时间展示；开票窗口是包含起止当天的业务日期。
+迁移 `0023_sync_background` 追加 `sync_lemon_plans`、`sync_lemon_jobs`，扩展 `sync_runs` 的范围、请求编号、计划、细分阶段和配置快照，以及 `sync_lemon_runs.background`。`0025_sync_merge_lemon_jobs` 把分片并入 `sync_lemon_runs`（新增 `run_id`，删除 `background`），并删除 `sync_runs` 中与 `phase`/`scope_key`/`configuration` 重复的 `status`、`account`、`window_start`、`window_end`；`sync_lemon_jobs` 表与数据保留在库中待管理员处理，详见[数据库设计](architecture/database.md)“柠檬云分片并表与批次精简”。计划和批次时间以 UTC 存储/返回，页面按上海时间展示；开票窗口是包含起止当天的业务日期。
 
 前端 `types/background.ts`、`api/background-api.ts`、`hooks/useBackground*.ts` / `useSyncBatch*.ts`、`components/Sync*Form.tsx` 与 `pages/` 负责契约、请求状态、表单及详情。路由集中在 `app/paths.ts`。移除同步中心未接入的管道卡片与虚构历史占位；NS 和单账套功能继续使用原实现。
 
 ## 部署与验证
 
-先按 [部署文档](docker-deploy.md)备份目标数据库，执行 `npm.cmd run db:upgrade` 升至 `0023_sync_background`，构建前端并重启后端。Docker 使用既有部署流程重新构建/重建容器。保留单 API worker 的现有会话约束；数据库消费者互斥不代表登录会话已支持多进程。
+先按 [部署文档](docker-deploy.md)备份目标数据库，执行 `npm.cmd run db:upgrade` 升至最新迁移（含 `0025_sync_merge_lemon_jobs`），构建前端并重启后端。Docker 使用既有部署流程重新构建/重建容器。保留单 API worker 的现有会话约束；数据库消费者互斥不代表登录会话已支持多进程。
 
 迁移和重启不会自动启用新计划。管理员登录后检查绑定及覆盖范围，先提交小日期范围检查真实结果，再保存并启用每日计划。后台依赖服务进程持续运行；附件、默认版商品明细、NS 定时任务不在本次实现内。
 

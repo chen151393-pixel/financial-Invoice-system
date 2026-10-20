@@ -134,7 +134,9 @@ def render():
             "| --- | --- | --- | --- | --- |",
         ]
         for entry in rows:
-            comment = entry.comment or ("（无实体定义，仅迁移中存在）" if entry.name not in tables else "")
+            comment = entry.comment or (
+                "（无实体定义，代码不读写；说明见字段字典）" if entry.name not in tables else ""
+            )
             link = f"[查看](current-data-dictionary.md#{entry.anchor})" if entry.anchor else "**缺失**"
             lines.append(
                 f"| `{entry.name}` | {_cell(comment)} | {_codes(entry.created_by)} "

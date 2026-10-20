@@ -2,7 +2,7 @@
 
 ## 全账套后台任务与每日计划（2026-10-19）
 
-已实现当前发现范围内全部授权账套/指定账套后台拉票、日期分片、持久任务历史及可配置每日计划。接口、文件职责、并发与未知结果保护、迁移 `0023_sync_background` 和部署步骤见[后台同步说明](../../../docs/lemon-background-sync.md)。后台与单账套入口复用 `LemonInvoiceService` 及原事件保存链路；NS 的分页拉取仍不属于持久后台队列。
+已实现当前发现范围内全部授权账套/指定账套后台拉票、日期分片、持久任务历史及可配置每日计划。接口、文件职责、并发与未知结果保护、迁移 `0023_sync_background`、`0025_sync_merge_lemon_jobs`（分片并入 `sync_lemon_runs`，`sync_runs` 只保留 `phase`）和部署步骤见[后台同步说明](../../../docs/lemon-background-sync.md)。后台与单账套入口复用 `LemonInvoiceService` 及原事件保存链路；NS 的分页拉取仍不属于持久后台队列。
 
 ## 进项发票列表定向补拉（2026-10-19）
 

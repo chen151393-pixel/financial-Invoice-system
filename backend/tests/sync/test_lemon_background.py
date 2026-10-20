@@ -1,22 +1,23 @@
 """持久队列、账套隔离、失败恢复与每日调度；上游使用替身，不写真实账套。"""
 
 from dataclasses import replace
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta
 from types import SimpleNamespace
 from uuid import uuid4
 
 import pytest
 from backend.core.errors import ApiError
 from backend.modules.invoice.entity import headers, versions
-from backend.modules.sync.dao import lemon_job_dao, lemon_plan_dao, sync_run_dao
+from backend.modules.sync.dao import lemon_plan_dao, lemon_run_dao, sync_run_dao
 from backend.modules.sync.dto.lemon_batch_dto import RetryBatch, SavePlan, SubmitBatch
 from backend.modules.sync.dto.lemon_invoice_dto import PullLemonInvoices
-from backend.modules.sync.policy.lemon_batch_policy import next_time
+from backend.modules.sync.policy.lemon_batch_policy import INTERRUPTED, next_time
 from backend.modules.sync.service.lemon_batch_service import LemonBatchService
 from backend.modules.sync.service.lemon_job_service import LemonJobService
 from backend.modules.sync.service.lemon_plan_service import LemonPlanService
 from backend.modules.sync.service.lemon_worker import LemonWorker
 from backend.tests.sync.test_lemon_invoices import OWNER, count, make_services
+from sqlalchemy import text
 
 
 def request(**changes):
@@ -86,6 +87,10 @@ def test_submit_is_persistent_no_upstream_and_all_accounts_isolated(world):
     assert drain(world, repeated.requestId)["created"] == 0
     assert count(world.engine, versions) == 2
     assert world.accounts.configuration(OWNER)["selected"]["asid"] == "8"
+    with world.engine.connect() as connection:
+        # 分片直接是带批次编号的拉票记录；旧分片表保留在库中但不再写入。
+        assert connection.scalar(text("SELECT COUNT(*) FROM sync_lemon_runs WHERE run_id IS NOT NULL")) == 4
+        assert connection.scalar(text("SELECT COUNT(*) FROM sync_lemon_jobs")) == 0
 
 
 def test_one_account_failure_does_not_block_others_and_retry_only_failed(world):
@@ -146,17 +151,19 @@ def test_restart_reconciles_committed_results_but_never_reexecutes_unknown(world
     world.worker.run_once()
     with world.engine.begin() as connection:
         batch = sync_run_dao.get(connection, world.worker.scope, body.requestId)
-        job = lemon_job_dao.list_jobs(connection, batch["id"])[0]
+        shard = lemon_run_dao.batch_shards(connection, batch["id"])[0]
         pull = PullLemonInvoices(
-            requestId=job["request_id"],
-            asid=job["asid"],
-            startDate=job["start_date"].isoformat(),
-            endDate=job["end_date"].isoformat(),
+            requestId=shard["request_id"],
+            asid=shard["asid"],
+            startDate=shard["start_date"].isoformat(),
+            endDate=shard["end_date"].isoformat(),
         )
-        scope, binding = world.invoices.prepare_background(connection, OWNER, pull, job["account_name"])
-        lemon_job_dao.change(connection, job["id"], "running", datetime.now(UTC))
+        scope, binding = world.accounts.context(connection, OWNER, lock=True)
+        world.invoices.claim_background(connection, scope, pull)
     result = drain(world, body.requestId)
     assert result["phase"] == "unknown" and world.upstream.pulls == 1  # 另一账套仍执行。
+    interrupted = next(v for v in result["accounts"] if v["asid"] == shard["asid"])["windows"][0]
+    assert interrupted["label"] == "结果待核实" and interrupted["error"] == INTERRUPTED
     assert not result["retry"]["allowed"]
     with pytest.raises(ApiError, match="不能重试"):
         world.batches.retry(OWNER, body.requestId, RetryBatch(requestId=str(uuid4())))
@@ -254,13 +261,13 @@ def test_stale_consumer_cannot_repeat_discovery_or_finished_job(world):
     world.jobs.discover(batch)
     world.jobs.discover(batch)
     with world.engine.connect() as connection:
-        rows = lemon_job_dao.list_jobs(connection, batch["id"])
+        rows = lemon_run_dao.batch_shards(connection, batch["id"])
     assert len(rows) == 2
-    job = rows[0]
-    world.jobs.execute(batch, job)
+    shard = rows[0]
+    world.jobs.execute(batch, shard)
     pulls = world.upstream.pulls
-    world.jobs.execute(batch, job)
-    world.jobs._finish(job, "failed", "过期消费者不能覆盖提交结果")
+    world.jobs.execute(batch, shard)
+    world.jobs._refuse(shard, "过期消费者不能覆盖提交结果")
     assert world.upstream.pulls == pulls
     with world.engine.connect() as connection:
-        assert lemon_job_dao.get(connection, job["id"])["status"] == "completed"
+        assert lemon_run_dao.get(connection, batch["scope_key"], shard["request_id"])["status"] == "completed"

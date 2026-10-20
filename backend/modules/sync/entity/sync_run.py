@@ -1,4 +1,4 @@
-"""同步批次：复用基线 sync_runs，phase 区分排队、执行及待核实。"""
+"""同步批次：复用基线 sync_runs，phase 是唯一的批次状态；条件与日期范围只存 configuration。"""
 
 from sqlalchemy import (
     JSON,
@@ -28,16 +28,7 @@ sync_runs = Table(
         nullable=False,
         comment="同步来源：ns_customs 报关；ns_purchase 采购；lemon_invoice 发票",
     ),
-    Column("account", String(100), nullable=False, comment="同步来源账套；随 source 表示 NS 或柠檬云账套"),
     Column("trigger_type", String(16), nullable=False, comment="触发方式：schedule 定时；manual 手动"),
-    Column(
-        "status",
-        String(16),
-        nullable=False,
-        comment="同步状态：running 运行中；succeeded 成功；partial 部分成功；failed 失败",
-    ),
-    Column("window_start", TIMESTAMP, comment="本次同步的时间窗口起点，UTC"),
-    Column("window_end", TIMESTAMP, comment="本次同步的时间窗口终点，UTC"),
     *[
         Column(
             name,
@@ -60,13 +51,23 @@ sync_runs = Table(
     Column("scope_key", identifier(64), comment="后台任务身份范围"),
     Column("request_id", identifier(36), comment="幂等提交编号"),
     Column("plan_id", ID, ForeignKey("sync_lemon_plans.id", name="fk_sync_run_plan"), comment="来源计划"),
-    Column("phase", identifier(20), comment="后台任务阶段"),
+    Column(
+        "phase",
+        identifier(20),
+        nullable=False,
+        comment=(
+            "批次状态：queued排队；discovering查询账套；running执行中；completed完成；"
+            "partial部分成功；failed失败；unknown存在待核实分片"
+        ),
+    ),
     Column("configuration", JSON, comment="不可变执行条件及授权绑定摘要"),
     *timestamps(),
     UniqueConstraint("scope_key", "request_id", name="uq_sync_run_request"),
-    Index("ix_sync_run_source", "source", "account", "started_at"),
     Index("ix_sync_run_scope_phase", "scope_key", "phase"),
-    CheckConstraint("status IN ('running','succeeded','partial','failed')", name="ck_sync_run_status"),
+    CheckConstraint(
+        "phase IN ('queued','discovering','running','completed','partial','failed','unknown')",
+        name="ck_sync_run_phase",
+    ),
     CheckConstraint("trigger_type IN ('schedule','manual')", name="ck_sync_run_trigger"),
     comment="同步运行记录",
     **table_options,

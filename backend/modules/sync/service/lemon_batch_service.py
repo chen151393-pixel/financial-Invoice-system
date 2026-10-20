@@ -1,12 +1,12 @@
 """提交和查询后台批次；提交接口不等待上游读取。"""
 
-from datetime import UTC, date, datetime, time
+from datetime import UTC, date, datetime
 from uuid import uuid4
 
 from backend.core.errors import ApiError
 
-from ..dao import lemon_job_dao as jobs
 from ..dao import lemon_plan_dao as plans
+from ..dao import lemon_run_dao as pulls
 from ..dao import sync_run_dao as runs
 from ..policy.lemon_batch_policy import ACTIVE, binding_key, retry_allowed, windows
 from ..vo.lemon_batch_vo import batch_view, plan_view
@@ -15,6 +15,8 @@ from ..vo.lemon_batch_vo import batch_view, plan_view
 class LemonBatchService:
     def __init__(self, accounts):
         self.accounts, self.engine = accounts, accounts.engine
+        # 本进程正在执行的分片请求编号；不在其中的 running 分片按“结果待核实”展示。
+        self.executing = set()
 
     def scope(self, owner):
         if owner != f"user:{self.accounts.binding.settings.admin_user}":
@@ -46,16 +48,12 @@ class LemonBatchService:
             connection,
             {
                 "source": "lemon_invoice",
-                "account": scope,
                 "scope_key": scope,
                 "request_id": request_id,
                 "plan_id": plan_id,
                 "trigger_type": "schedule" if plan_id else "manual",
-                "status": "running",
                 "phase": "queued",
                 "configuration": {**config, "bindingKey": binding_key(binding)},
-                "window_start": datetime.combine(date.fromisoformat(config["startDate"]), time()),
-                "window_end": datetime.combine(date.fromisoformat(config["endDate"]), time()),
                 "started_by": owner,
                 "started_at": now,
                 "message": "已提交，等待后台执行；关闭页面不影响任务",
@@ -68,7 +66,7 @@ class LemonBatchService:
             row = runs.get(connection, scope, request_id)
             if not row:
                 raise ApiError(404, "未找到当前账号的后台同步任务")
-            result = batch_view(row, jobs.list_jobs(connection, row["id"]))
+            result = batch_view(row, pulls.batch_shards(connection, row["id"]), frozenset(self.executing))
         total = len(result["accounts"])
         result.update(total=total, page=page, pageSize=20, pages=max(1, (total + 19) // 20))
         result["accounts"] = result["accounts"][(page - 1) * 20 : page * 20]
@@ -104,31 +102,37 @@ class LemonBatchService:
                 return batch_view(previous)
             if not retry_allowed(original):
                 raise ApiError(409, "当前任务不能重试；执行中或结果待核实的任务须先查询原结果")
-            failed = [v for v in jobs.list_jobs(connection, original["id"]) if v["status"] == "failed"]
+            failed = [v for v in pulls.batch_shards(connection, original["id"]) if v["status"] == "failed"]
             run_id = self.enqueue(connection, scope, owner, body.requestId, config, binding)
-            jobs.create(
-                connection, [job_values(run_id, row, row["start_date"], row["end_date"]) for row in failed]
+            batch = {"id": run_id, "scope_key": scope, "configuration": config}
+            pulls.create_shards(
+                connection, [shard_values(batch, row, row["start_date"], row["end_date"]) for row in failed]
             )
             runs.change(connection, run_id, phase="running")
         return self.read(owner, body.requestId)
 
 
-def job_values(run_id, account, start, end):
+def shard_values(batch, account, start, end):
+    """一个账套日期分片即一条排队中的拉票记录；领取时转为 running，结果直接写在本行。"""
     return {
-        "run_id": run_id,
+        "run_id": batch["id"],
+        "scope_key": batch["scope_key"],
         "request_id": str(uuid4()),
         "asid": account["asid"],
         "account_name": account.get("name", account.get("account_name")),
         "start_date": start,
         "end_date": end,
         "status": "queued",
+        # 与手动拉票相同的请求快照，补拉和幂等核对依赖这里的业务类型。
+        "result": {"businessTypes": batch["configuration"]["businessTypes"], "invoiceIds": []},
     }
 
 
-def account_jobs(run_id, accounts, config):
+def account_shards(batch, accounts):
+    config = batch["configuration"]
     start, end = date.fromisoformat(config["startDate"]), date.fromisoformat(config["endDate"])
     # 队列规模有界；超长历史请按年度提交，避免生成数百万分片。
     periods = list(windows(start, end))
     if len(periods) * len(accounts) > 12000:
         raise ApiError(422, "本次超过 12000 个账套日期分片，请缩小历史范围或减少账套")
-    return [job_values(run_id, account, a, b) for account in accounts for a, b in periods]
+    return [shard_values(batch, account, a, b) for account in accounts for a, b in periods]

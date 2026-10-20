@@ -3,7 +3,7 @@
 > 本文件由 `npm.cmd run db:map` 根据迁移链离线 MySQL DDL、实体定义和字段字典生成，请勿手工修改；迁移或实体变化后重新生成，`backend/tests/test_schema_map.py` 会检查是否过期。
 > “修改”含加列、改列、索引与中文备注；数据回填仅在线执行，不在离线 DDL 中体现。
 
-当前最新迁移：`0024_sync_ns_runs`；共 24 个迁移、35 张实体表。
+当前最新迁移：`0025_sync_merge_lemon_jobs`；共 25 个迁移、34 张实体表。
 
 ## 1. 按模块查表
 
@@ -65,13 +65,13 @@
 
 | 表 | 中文说明 | 新建 | 后续修改 | 字段字典 |
 | --- | --- | --- | --- | --- |
-| `sync_cursors` | （无实体定义，仅迁移中存在） | `0001` | `0015` | [查看](current-data-dictionary.md#sync_cursors) |
+| `sync_cursors` | （无实体定义，代码不读写；说明见字段字典） | `0001` | `0015` | [查看](current-data-dictionary.md#sync_cursors) |
 | `sync_lemon_bindings` | 柠檬云已有账号绑定状态，不保存凭据 | `0016` | `0018` | [查看](current-data-dictionary.md#sync_lemon_bindings) |
-| `sync_lemon_jobs` | 柠檬云后台账套拉取分片 | `0023` | — | [查看](current-data-dictionary.md#sync_lemon_jobs) |
+| `sync_lemon_jobs` | （无实体定义，代码不读写；说明见字段字典） | `0023` | — | [查看](current-data-dictionary.md#sync_lemon_jobs) |
 | `sync_lemon_plans` | 柠檬云每日同步计划 | `0023` | — | [查看](current-data-dictionary.md#sync_lemon_plans) |
-| `sync_lemon_runs` | 柠檬云手动拉票记录与结果，不保存令牌 | `0018` | `0023` | [查看](current-data-dictionary.md#sync_lemon_runs) |
+| `sync_lemon_runs` | 柠檬云拉票记录（手动或后台分片）与结果，不保存令牌 | `0018` | `0023`、`0025` | [查看](current-data-dictionary.md#sync_lemon_runs) |
 | `sync_ns_runs` | NS 来源按批后台保存记录与结果，不保存令牌 | `0024` | — | [查看](current-data-dictionary.md#sync_ns_runs) |
-| `sync_runs` | 同步运行记录 | `0001` | `0015`、`0023` | [查看](current-data-dictionary.md#sync_runs) |
+| `sync_runs` | 同步运行记录 | `0001` | `0015`、`0023`、`0025` | [查看](current-data-dictionary.md#sync_runs) |
 
 ## 2. 按迁移查表
 
@@ -101,3 +101,4 @@
 | [`0022_task_notifications`](../../backend/migrations/versions/0022_task_notifications.py) | `task_notification_deliveries`、`task_notification_group_guards` | `task_notifications` | 企微发送台账与群守卫；发送证据不得通过降级删除。 |
 | [`0023_sync_background`](../../backend/migrations/versions/0023_sync_background.py) | `sync_lemon_jobs`、`sync_lemon_plans` | `sync_lemon_runs`、`sync_runs` | 同步计划与持久任务队列。降级会丢弃待核实证据，明确禁止破坏性降级。 |
 | [`0024_sync_ns_runs`](../../backend/migrations/versions/0024_sync_ns_runs.py) | `sync_ns_runs` | — | sync：NS 来源按批后台保存的持久请求与结果；保留执行中/待核实记录，不能降级丢弃。 |
+| [`0025_sync_merge_lemon_jobs`](../../backend/migrations/versions/0025_sync_merge_lemon_jobs.py) | — | `sync_lemon_runs`、`sync_runs` | sync：柠檬云后台分片并入 sync_lemon_runs，sync_runs 只保留 phase 一个批次状态。 |
