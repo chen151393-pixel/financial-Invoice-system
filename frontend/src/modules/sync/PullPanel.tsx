@@ -83,7 +83,9 @@ export function PullPanel({
               清空日期
             </Button>
           </div>
-          <p id={`${source.kind}-date-help`}>按 NS 查询时区，包含起止当天；自动分批拉取，每批最多 20 张。</p>
+          <p id={`${source.kind}-date-help`}>
+            拉取所选日期内 NS 的全部单据，不限制总张数；日期包含起止当天，按 NS 查询时区。
+          </p>
           <details className="sync-page__rules">
             <summary>保存规则</summary>
             <ul>

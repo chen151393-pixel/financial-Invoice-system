@@ -31,7 +31,7 @@ controller/ns_controller.py接收 NS 请求；service/connection_service.py生�
 - `POST /api/ns/sync/sub-purchase-orders/pull`：子采购单，使用 `NETSUITE_PL_LOOKUP.purchase.type`。
 - `POST /api/ns/sync/customs-declarations/pull`：报关单，使用 `NETSUITE_PL_LOOKUP.customs.type`。
 
-请求为 `{"offset":0,"limit":20}`，offset 为 0～99980，limit 为 1～20，必须是整数。拒绝多余字段；所有记录类型必须在 NETSUITE_RECORD_TYPES 白名单内并具有远端读取权限，不自动扩大权限。
+单批请求为 `{"offset":0,"limit":20}`，limit 为 1～20，必须是整数；这是内部处理量，不是整个查询的总张数限制。当前页面额外提交 `cursor: {afterId: "0", throughId: null, offset: 0}` 开始自动范围拉取，后续原样传递响应 `nextCursor`；外层 offset 只累计已处理批次的位置，没有累计批数上限。拒绝多余字段；所有记录类型必须在 NETSUITE_RECORD_TYPES 白名单内并具有远端读取权限，不自动扩大权限。
 
 可选 `startDate`、`endDate` 按记录创建日期筛选，格式 `YYYY-MM-DD`，必须同时填写或同时留空，年份 1900～2100，开始日不得晚于结束日。例如 `{"offset":0,"limit":20,"startDate":"2026-09-01","endDate":"2026-09-16"}`。旧请求省略日期时保持不限定日期。
 
@@ -43,9 +43,15 @@ controller/ns_controller.py接收 NS 请求；service/connection_service.py生�
 
 服务器配置 `NETSUITE_SYNC_DATE_FORMAT` 控制发送给 NS 的日期格式，默认 `YYYY-MM-DD`，也支持 `M/D/YYYY`、`D/M/YYYY`。必须与 NS 账户的查询格式一致，修改后重启后端。浏览器请求仍使用 `YYYY-MM-DD`；后端先计算结束日的次日，再按配置转换。非法配置在启动时拒绝，不自动切换格式或去掉筛选重试。
 
-按 [Oracle 分页约束](https://docs.oracle.com/en/cloud/saas/netsuite/ns-online-help/section_156414087576.html)，offset 必须是 limit 的整数倍，最多 1000 页；下一页按 limit 递增偏移。达到上限且仍有数据时明确报错，不宣称已全部拉取。
+按 [Oracle 分页约束](https://docs.oracle.com/en/cloud/saas/netsuite/ns-online-help/section_156414087576.html)，单个 NS 集合查询最多 1000 页。`service/pull_cursor_service.py` 在读取范围首页时根据 `totalResults` 自动缩小内部 ID 上界，重新读取该范围；没有总数时以 ID 区间宽度控制范围。读完当前范围后继续读取更大 ID 的剩余范围，保留同一日期条件，直到全部范围结束。NS 返回顺序不必按 ID 排序，不能把一页最大 ID 当成已经读完的下界。范围内 offset 仍须与 limit 对齐，累计批数不受该上限限制；查询期间来源仍可能变化，异常响应或快速增长导致范围超页会明确失败，不报告完整成功。旧调用方省略 cursor 时保留原偏移分页协议和单查询上限，退出条件为旧调用方升级到游标协议。
 
-响应包含 rows（id、number、record 原始字段）、count、offset、hasMore、nextOffset、pulledAt、message。先读取列表 ID 再逐张读取详情；详情失败、重复 ID、分页异常时整页报错。金额小数返回十进制字符串，不跟随 NS 返回的链接。
+响应包含 rows（id、number、record 原始字段）、count、offset、hasMore、nextOffset、nextCursor、pulledAt、message。`nextCursor` 包含 afterId（排他下界）、throughId（包含上界，null 为无上界）及范围内 offset；ID 用十进制字符串传输。hasMore 表示还有下一页或尚未读取的 ID 范围；最后一个剩余范围可能返回空批，只有所有范围结束才为 false。后台保存请求也持久保存 cursor 并纳入同请求编号的范围一致性校验。先读取列表 ID 再逐张读取详情；详情失败、重复 ID、分页异常时整页报错。金额小数返回十进制字符串，不跟随 NS 返回的链接。
+
+`tests/sync/test_pull_cursor.py` 覆盖 20,005 张乱序单据跨越 1000 批完整读取、稀疏大 ID、日期保持、空范围及无效响应；前端范围测试覆盖只读和保存均持续传递游标。2026-10-20 已在当前配置的真实 NS 对三类单据各读取单张并验证 ID 上下界过滤，未保存业务数据或写入 NS；超大集合完整性仍由隔离合成数据验证，未执行生产部署。
+
+分页完整性保护：有后续页时当前页必须满额；上游若返回 offset、count 或 totalResults，须与本次请求和结束标记一致，否则停止并报告未完整拉取。前端在还有后续范围但游标缺失或未推进时保留当前批次并停止，不退回旧偏移模式；旧请求省略 cursor 的兼容仅保留在后端入口。查询不是 NS 数据快照，期间的增删或排序变化仍可能影响集合，不能据此承诺并发变化下的全量一致性。
+
+2026-10-21 提交前复核：补充短页、偏移/条数/总数矛盾、缺失及重复游标的失败保护；有总数和无总数均验证 20,005 张乱序记录完整读取。后端全量 983 项通过、49 项缺少专用 MySQL 环境而跳过；前端测试、NS 脚本 11 项、构建、前后端 lint、类型与架构检查通过，后端全量和本次前端文件格式检查通过。全仓前端格式检查仍有本次范围外的既有问题，未改动质量规则。浏览器以本地合成响应验证桌面加载、三批连续拉取、大 ID 字符串、空结果、读取失败及保存游标缺失后停止并保留结果；未进行小屏幕验收或真实 NS 大范围联调，本次未连接真实业务库或执行 NS 写入。
 
 ## 关键约束
 

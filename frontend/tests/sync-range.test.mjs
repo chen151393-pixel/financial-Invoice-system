@@ -7,9 +7,33 @@ const page = (offset, hasMore) => ({
   offset,
   hasMore,
   nextOffset: hasMore ? offset + 20 : null,
+  nextCursor: hasMore ? { afterId: String(offset + 20), throughId: null, offset: 0 } : null,
   rows: [],
   count: 0,
 });
+
+for (const save of [false, true]) {
+  test(`超过 1000 批仍传递服务端范围游标继续拉取：${save}`, async () => {
+    let batches = 0;
+    await pullDateRange({
+      range,
+      save,
+      shouldStop: () => false,
+      onPage: () => {},
+      readPage: async (offset, dates, persist, cursor) => {
+        assert.equal(persist, save);
+        assert.deepEqual(dates, range);
+        assert.deepEqual(cursor, { afterId: String(offset), throughId: null, offset: 0 });
+        batches++;
+        return {
+          ...page(offset, offset < 20020),
+          nextCursor: offset < 20020 ? { afterId: String(offset + 20), throughId: null, offset: 0 } : null,
+        };
+      },
+    });
+    assert.equal(batches, 1002);
+  });
+}
 
 for (const save of [false, true]) {
   test(`自动拉取所有批次并保持日期和保存模式：${save}`, async () => {
@@ -111,6 +135,28 @@ test("异常分页游标停止，避免循环请求", async () => {
     /分页位置异常/,
   );
 });
+
+for (const nextCursor of [undefined, null, { afterId: "0", throughId: null, offset: 0 }]) {
+  test(`缺失或未推进的范围游标停止，不退回全局偏移：${JSON.stringify(nextCursor)}`, async () => {
+    let calls = 0;
+    const received = [];
+    await assert.rejects(
+      pullDateRange({
+        range,
+        save: true,
+        shouldStop: () => calls > 1,
+        readPage: async () => {
+          calls++;
+          return { ...page(0, true), nextCursor };
+        },
+        onPage: (value) => received.push(value),
+      }),
+      /范围游标异常/,
+    );
+    assert.equal(calls, 1);
+    assert.equal(received.length, 1);
+  });
+}
 
 test("请求期间修改输入不改变已提交日期", async () => {
   const input = { ...range },

@@ -89,6 +89,19 @@ def test_same_request_with_other_page_is_rejected(engine):
     assert error.value.status == 409
 
 
+def test_cursor_is_persisted_passed_to_save_and_included_in_idempotency(engine):
+    cursor = {"afterId": "100", "throughId": None, "offset": 0}
+    request = body(offset=20000, cursor=cursor)
+    assert request.pull_request("a" * 32).cursor.model_dump() == cursor
+    service = NsRunService(engine, Pulls(), Immediate())
+    run = service.start("owner", request)
+    assert run["request"]["cursor"] == cursor
+    assert service.start("owner", request)["status"] == "completed"
+    with pytest.raises(ApiError) as error:
+        service.start("owner", body(offset=20000, cursor={**cursor, "afterId": "200"}))
+    assert error.value.status == 409
+
+
 @pytest.mark.parametrize(
     "failure,status",
     [

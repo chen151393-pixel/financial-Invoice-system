@@ -9,6 +9,7 @@ from backend.integrations.netsuite import request_stats
 from backend.integrations.netsuite.read_batch import RecordReader, quiet_progress
 
 from .service.progress_service import ProgressService
+from .service.pull_cursor_service import read_cursor_page
 
 SOURCES = {
     "purchase-orders": ("采购订单", None),
@@ -120,12 +121,7 @@ class PullService:
                     )
             return save(kind, lambda: self.pull(kind, request, **options))
 
-    def pull(self, kind, request, progress=None, *, partial=False):
-        report = progress or quiet_progress
-        report("读取当前批次单据列表")
-        record_type = self.record_type(kind)
-        if self.settings.missing():
-            raise ApiError(503, "NS 连接配置不完整，请联系管理员")
+    def _query_params(self, kind, request):
         query_params = {"limit": request.limit, "offset": request.offset}
         if request.startDate:
             start, end = (
@@ -137,12 +133,25 @@ class PullService:
             query_params["q"] = (
                 f'{field} ON_OR_AFTER "{self.query_date(start)}" AND {field} BEFORE "{self.query_date(end)}"'
             )
-        data = self.ns.request(
-            "GET",
-            record_type,
-            query_params=query_params,
-            exact_numbers=True,
-        )["data"]
+        return query_params
+
+    def pull(self, kind, request, progress=None, *, partial=False):
+        report = progress or quiet_progress
+        report("读取当前批次单据列表")
+        record_type = self.record_type(kind)
+        if self.settings.missing():
+            raise ApiError(503, "NS 连接配置不完整，请联系管理员")
+        query_params = self._query_params(kind, request)
+        cursor = None
+        if request.cursor is not None:
+            data, cursor = read_cursor_page(self.ns, record_type, query_params, request.cursor)
+        else:
+            data = self.ns.request(
+                "GET",
+                record_type,
+                query_params=query_params,
+                exact_numbers=True,
+            )["data"]
         if not isinstance(data, dict) or not isinstance(data.get("items"), list):
             raise ApiError(502, "NS 列表响应不完整")
         items, has_more = data["items"], data.get("hasMore")
@@ -150,8 +159,10 @@ class PullService:
             raise ApiError(502, "NS 分页响应无效，未返回不完整结果")
         ids, rows, failures = self._read_headers(record_type, items, report, partial)
         next_offset = request.offset + request.limit
-        if has_more and next_offset // request.limit >= 1000:
-            raise ApiError(422, "已达到分页查询上限，请联系管理员缩小数据范围")
+        if request.cursor is not None:
+            has_more = cursor is not None
+        elif has_more and next_offset // request.limit >= 1000:
+            raise ApiError(422, "旧版分页已到上限，请刷新同步页面后使用自动范围拉取")
         return {
             "kind": kind,
             "label": SOURCES[kind][0],
@@ -170,6 +181,7 @@ class PullService:
             "offset": request.offset,
             "hasMore": has_more,
             "nextOffset": next_offset if has_more else None,
+            "nextCursor": cursor,
             "pulledAt": datetime.now(timezone.utc).isoformat(),
             "message": "本页单据读取完成，未写入本地业务库",
             "dateRange": {

@@ -64,6 +64,24 @@ test("后台批次提交携带请求编号与日期，查询按原编号", async
   assert.equal(calls[1].url, `/api/sync/ns/runs/${REQUEST}`);
 });
 
+test("只读和后台保存均将范围游标原样发送给后端", async (t) => {
+  const bodies = [];
+  const cursor = { afterId: "9007199254740993", throughId: null, offset: 0 };
+  t.mock.method(globalThis, "fetch", async (_url, options) => {
+    bodies.push(JSON.parse(options.body));
+    return Response.json(running());
+  });
+  await api.pullRecords("customs-declarations", 20000, range, cursor);
+  await api.startRun("customs-declarations", REQUEST, 20000, range, cursor);
+  assert.equal(bodies.length, 2);
+  for (const body of bodies) {
+    assert.deepEqual(body.cursor, cursor);
+    assert.equal(body.offset, 20000);
+    assert.equal(body.startDate, range.startDate);
+    assert.equal(body.endDate, range.endDate);
+  }
+});
+
 test("提交连接中断只按原编号查询，不重新提交并返回实际结果", async () => {
   let submits = 0;
   const reads = [running({ state: "running", label: "整页读取", completed: 1, total: 3, elapsedSeconds: 2 })];

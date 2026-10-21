@@ -105,15 +105,15 @@ export function useRangePull(kind: SourceKind, onBusyChange: (busy: boolean) => 
       const outcome = await pullDateRange({
         range,
         save,
-        readPage: (offset, dates, persist) => {
-          if (!persist) return pullRecords(kind, offset, dates);
+        readPage: (offset, dates, persist, cursor) => {
+          if (!persist) return pullRecords(kind, offset, dates, cursor);
           if (kind === "purchase-orders") throw new Error("标准采购订单尚未配置独立存储，不能保存");
           const saveKind: SaveKind = kind;
           const requestId = crypto.randomUUID();
           writePending(kind, requestId);
           setRun(null);
           setProgressUnavailable(false);
-          return waitBatch(id, requestId, () => startRun(saveKind, requestId, offset, dates));
+          return waitBatch(id, requestId, () => startRun(saveKind, requestId, offset, dates, cursor));
         },
         shouldStop: () => stopRequested.current || id !== current.current,
         onPage: (page) => {

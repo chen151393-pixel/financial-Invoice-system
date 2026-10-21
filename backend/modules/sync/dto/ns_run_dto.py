@@ -31,6 +31,7 @@ class NsRunRequest(PullRequest):
             "startDate": self.startDate,
             "endDate": self.endDate,
             "requireDateRange": self.requireDateRange,
+            **({"cursor": self.cursor.model_dump()} if self.cursor is not None else {}),
         }
 
     def pull_request(self, progress_id):

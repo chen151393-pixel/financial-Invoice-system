@@ -11,6 +11,7 @@ export type Source = {
   storageReason: string;
 };
 export type DateRange = { startDate: string; endDate: string };
+export type PullCursor = { afterId: string; throughId: string | null; offset: number };
 export type Sources = { sources: Source[]; lemon: { allowed: boolean; reason: string } };
 export type PullResult = {
   batch?: {
@@ -29,6 +30,7 @@ export type PullResult = {
   offset: number;
   hasMore: boolean;
   nextOffset: number | null;
+  nextCursor?: PullCursor | null;
   pulledAt: string;
   message: string;
   storage?: {
@@ -50,11 +52,12 @@ export type PullResult = {
 };
 export const getSources = () => http<Sources>("/ns/sync/sources");
 /** 只读拉取一批，不入库；保存改用后台批次 startRun。 */
-export const pullRecords = (kind: SourceKind, offset: number, range: DateRange) =>
+export const pullRecords = (kind: SourceKind, offset: number, range: DateRange, cursor?: PullCursor) =>
   http<PullResult>(`/ns/sync/${kind}/pull`, "POST", {
     offset,
     limit: 20,
     requireDateRange: true,
+    ...(cursor ? { cursor } : {}),
     ...range,
   });
 
@@ -69,7 +72,7 @@ export type SaveKind = Exclude<SourceKind, "purchase-orders">;
 export type NsRun = {
   requestId: string;
   kind: SaveKind;
-  request: DateRange & { offset: number; limit: number };
+  request: DateRange & { offset: number; limit: number; cursor?: PullCursor };
   status: "running" | "completed" | "partial" | "interrupted" | "failed" | "unknown";
   statusLabel: string;
   progress: SyncProgress | null;
@@ -77,13 +80,20 @@ export type NsRun = {
   error: string | null;
 };
 /** 提交后立即返回；同一请求编号重复提交只返回原记录，不会重新执行。 */
-export const startRun = (kind: SaveKind, requestId: string, offset: number, range: DateRange) =>
+export const startRun = (
+  kind: SaveKind,
+  requestId: string,
+  offset: number,
+  range: DateRange,
+  cursor?: PullCursor,
+) =>
   http<NsRun>("/sync/ns/runs", "POST", {
     requestId,
     kind,
     offset,
     limit: 20,
     requireDateRange: true,
+    ...(cursor ? { cursor } : {}),
     ...range,
   });
 export const getRun = (requestId: string) => http<NsRun>(`/sync/ns/runs/${encodeURIComponent(requestId)}`);

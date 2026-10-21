@@ -10,12 +10,22 @@ from pydantic_core import PydanticCustomError
 SourceKind = Literal["purchase-orders", "sub-purchase-orders", "customs-declarations"]
 
 
+class PullCursor(BaseModel):
+    """内部 ID 范围内分页；ID 按字符串传输，避免浏览器数字精度损失。"""
+
+    model_config = ConfigDict(extra="forbid")
+    afterId: str = Field(pattern=r"^(0|[1-9][0-9]{0,39})$")
+    throughId: str | None = Field(default=None, pattern=r"^[1-9][0-9]{0,39}$")
+    offset: int = Field(default=0, ge=0, strict=True)
+
+
 class PullRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     partialSave: bool = Field(default=False, strict=True)
     progressId: str | None = Field(default=None, pattern=r"^[a-f0-9]{32}$")
-    offset: int = Field(default=0, ge=0, le=99980, strict=True)
+    offset: int = Field(default=0, ge=0, strict=True)
+    cursor: PullCursor | None = None
     limit: int = Field(default=20, ge=1, le=20, strict=True)
     startDate: str = Field(default="", max_length=10)
     endDate: str = Field(default="", max_length=10)
@@ -38,6 +48,10 @@ class PullRequest(BaseModel):
                 raise PydanticCustomError("sync_date_range", "日期须为 1900 至 2100 年的 YYYY-MM-DD")
         if self.startDate > self.endDate:
             raise PydanticCustomError("sync_date_range", "开始日期不能晚于结束日期")
-        if self.offset % self.limit or self.offset // self.limit >= 1000:
+        page_offset = self.cursor.offset if self.cursor else self.offset
+        if page_offset % self.limit or page_offset // self.limit >= 1000:
             raise ValueError("分页偏移必须与每页数量对齐，且不能超过 1000 页")
+        if self.cursor and self.cursor.throughId is not None:
+            if int(self.cursor.afterId) >= int(self.cursor.throughId):
+                raise ValueError("分页内部 ID 范围无效")
         return self
