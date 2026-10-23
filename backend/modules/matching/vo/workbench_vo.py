@@ -2,6 +2,8 @@
 
 from typing import Literal
 
+from pydantic import Field
+
 from backend.core.dto import StrictModel
 
 
@@ -17,6 +19,9 @@ class Todo(StrictModel):
     currency: str
     amountLabel: str
     statusLabel: str
+    # 业务状态：核对待办为待审批，比对待办为待核票，开票待办按任务状态归类
+    stage: str = ""
+    stageLabel: str = ""
     reason: str
     createdAt: str
     priority: int
@@ -30,6 +35,19 @@ class WorkbenchCounts(StrictModel):
     task: int = 0
     reverify: int = 0
     preparation: int = 0
+
+
+class StageCount(StrictModel):
+    """业务状态分区：按报关单计数（报关单下当前任务中最慢的阶段）。"""
+
+    key: Literal["pending_review", "notify", "invoicing", "documents", "completed"]
+    label: str
+    count: int
+
+
+class SupplierOption(StrictModel):
+    id: str
+    name: str
 
 
 class CurrencyAmount(StrictModel):
@@ -72,6 +90,11 @@ class Workbench(StrictModel):
     accounts: list[str]
     counts: WorkbenchCounts
     filteredCounts: WorkbenchCounts
+    stages: list[StageCount] = Field(default_factory=list)
+    # 审核通过但没有开票任务（供应商均关闭通知）的报关单，不进分区与待办
+    noTaskCount: int = 0
+    # 供应商筛选选项（有效报关单关联的供应商）；suppliers 为待收票排名
+    supplierOptions: list[SupplierOption] = Field(default_factory=list)
     items: list[Todo]
     total: int
     page: int

@@ -100,3 +100,20 @@
 ## 队列分档计数类型（2026-10-20）
 
 MySQL 的 `SUM(CASE ...)` 返回 Decimal，待审核建议非空时曾导致队列严格响应模型的整数校验失败。`allocation_dao.proposal_counts` 现在统一返回整数计数，保持空队列、高中低分档与分页口径不变。回归用例 `test_queue_counts_with_all_confidence_tiers` 在 SQLite 与独立 MySQL 测试库中共用，覆盖空队列、三档非空及分页；不改金额精度或比对规则。
+
+## 工作台业务状态分区与筛选、比对队列筛选（2026-10-23）
+
+- 工作台查询新增 `supplierId`、`createdFrom` / `createdTo`（报关单创建日期，中国日期）；作用于分区计数与核对、开票待办，比对待办只按账套与供应商筛选。响应新增 `stages`（五个分区：key、label、按报关单计数）、`noTaskCount`（无需开票张数）、`supplierOptions`；每条待办新增 `stage` / `stageLabel`，CSV 增加“业务状态”列。范围与分区规则在 `policy/workbench_scope.py`，业务状态归类复用 task 门面：
+
+| 业务状态 | 判定 |
+| --- | --- |
+| 待审批 | 报关单待财务审核，或来源变化需重新审核（review 判断，优先于任务状态） |
+| 待通知开票 | 任务处于待保存子采购合同、待通知供应商 |
+| 待核票 | 任务处于等待开票、部分收票 |
+| 资料已回 | 任务发票已收齐、资料待补齐（documents_incomplete） |
+| 开票完成 | 任务发票收齐且资料全部到齐（completed） |
+
+报关单级别取其当前任务中**最慢**的阶段；审核通过但没有任何当前任务（供应商均关闭通知）为“无需开票”，不进分区与待办。
+
+- 比对队列 `QueueQuery` 新增 `supplierId`（子采购单的供应商，经 source 门面 `supplier_line_ids` 取子采购行）与 `invoiceFrom` / `invoiceTo`（开票日期，经 invoice 门面 `invoice_ids_between` 取发票），三档计数同样按筛选条件统计；响应新增 `suppliers` 选项（待审核建议涉及的供应商）。
+- 验证：`backend/tests/test_business_stages.py`。

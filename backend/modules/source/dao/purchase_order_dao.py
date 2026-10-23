@@ -111,6 +111,16 @@ def with_declarations(connection, *, exact=None, within=None):
     return rows if exact is not None else [row for row in rows if row["order_no"] in within]
 
 
+def line_ids_by_supplier(connection, supplier_id):
+    """该供应商子采购单下的子采购行 ID（含已停用，供比对队列按供应商筛选）。"""
+    query = (
+        select(purchase_order_lines.c.id)
+        .join(purchase_orders, purchase_orders.c.id == purchase_order_lines.c.purchase_order_id)
+        .where(purchase_orders.c.supplier_id == supplier_id)
+    )
+    return list(connection.execute(query).scalars())
+
+
 def ids_like(connection, keyword, limit):
     """单号包含关键字的子采购单 ID（任务搜索用）。"""
     query = select(purchase_orders.c.id).where(purchase_orders.c.order_no.like(f"%{keyword}%")).limit(limit)

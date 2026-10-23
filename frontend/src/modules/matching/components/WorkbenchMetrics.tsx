@@ -1,76 +1,66 @@
 import { Link } from "react-router";
-import { paths } from "../../../app/paths";
-import { Button } from "../../../shared/components/Button";
+import { paths, reviewListPath, taskListPath } from "../../../app/paths";
 import { money } from "../../../shared/format/money";
-import type { TodoKind, Workbench, WorkbenchCounts } from "../types/workbench";
+import type { Workbench, WorkbenchQuery } from "../types/workbench";
 import "./workbench-metrics.css";
 
-/** 按处理环节排列的工作台卡片：点击筛选下方待办；第 4 张展示本月任务完成情况。 */
+const NOTES: Record<Workbench["stages"][number]["key"], string> = {
+  pending_review: "待财务审核或来源变化需重审",
+  notify: "待保存子采购合同或待通知供应商",
+  invoicing: "等待供应商开票或部分收票",
+  documents: "发票已收齐，资料待补齐",
+  completed: "发票收齐且资料全部到齐",
+};
+
+/** 五个业务状态分区：按报关单计数（取报关单下最慢的任务），点击进入带同样筛选条件的列表。 */
 export function WorkbenchMetrics({
-  counts,
+  stages,
+  noTaskCount,
   month,
-  selected,
-  onSelect,
+  query,
 }: {
-  counts: WorkbenchCounts;
+  stages: Workbench["stages"];
+  noTaskCount: number;
   month: Workbench["month"];
-  selected: TodoKind;
-  onSelect: (kind: TodoKind) => void;
+  query: WorkbenchQuery;
 }) {
-  const cards = [
-    {
-      kind: "review" as const,
-      label: "待财务核对",
-      value: counts.review,
-      unit: "张报关单",
-      note: "仅含已出库报关单，整单审核",
-      warn: false,
-      action: "查看核对待办",
-    },
-    {
-      kind: "task" as const,
-      label: "待开票任务",
-      value: counts.task,
-      unit: "项任务",
-      note: `${counts.preparation} 项待备资料或通知`,
-      warn: counts.preparation > 0,
-      action: "查看开票待办",
-    },
-    {
-      kind: "matching" as const,
-      label: "待比对 / 复核",
-      value: counts.matching,
-      unit: "项发票待办",
-      note: `${counts.reverify} 项已确认分配需复核`,
-      warn: counts.reverify > 0,
-      action: "查看比对待办",
-    },
-  ];
+  const scope = {
+    account: query.account,
+    supplierId: query.supplierId,
+    createdFrom: query.createdFrom,
+    createdTo: query.createdTo,
+  };
   return (
-    <div className="wb-flow" role="group" aria-label="按处理环节筛选待办">
-      {cards.map((card, index) => (
-        <Button
-          key={card.kind}
+    <div className="wb-flow" role="group" aria-label="按业务状态查看报关单">
+      {stages.map((stage, index) => (
+        <Link
+          key={stage.key}
           className="wb-flow__card"
-          aria-pressed={selected === card.kind}
-          onClick={() => onSelect(card.kind)}
+          to={
+            stage.key === "pending_review"
+              ? reviewListPath({ status: "pending", account: query.account })
+              : taskListPath({ ...scope, stage: stage.key })
+          }
         >
           <span className="wb-flow__step">
             <b>{index + 1}</b>
-            {card.label}
+            {stage.label}
           </span>
           <span className="wb-flow__value">
-            <strong>{card.value}</strong>
-            <span>{card.unit}</span>
+            <strong>{stage.count}</strong>
+            <span>张报关单</span>
           </span>
-          <span className={`wb-flow__note${card.warn ? " wb-flow__note--warn" : ""}`}>{card.note}</span>
-          <span className="wb-flow__go">{card.action} →</span>
-        </Button>
+          <span className="wb-flow__note">{NOTES[stage.key]}</span>
+          {stage.key === "completed" && noTaskCount > 0 && (
+            <span className="wb-flow__note">另有 {noTaskCount} 张无需开票（供应商关闭通知）</span>
+          )}
+          <span className="wb-flow__go">
+            {stage.key === "pending_review" ? "前往财务核对" : "查看开票任务"} →
+          </span>
+        </Link>
       ))}
       <Link className="wb-flow__card" to={paths.tasks}>
-        <span className="wb-flow__step">
-          <b>4</b>本月任务完成
-        </span>
+        <span className="wb-flow__step">本月任务完成</span>
         <span className="wb-flow__value">
           <strong>{month.percent === null ? "—" : `${month.percent}%`}</strong>
           <span>

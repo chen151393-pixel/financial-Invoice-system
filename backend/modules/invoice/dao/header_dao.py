@@ -61,6 +61,12 @@ def _conditions(query):
     return conditions
 
 
+def ids_between(connection, start, end):
+    """开票日期在 start—end（含）之间的发票 ID。"""
+    query = select(headers.c.id).where(headers.c.invoice_date >= start, headers.c.invoice_date <= end)
+    return list(connection.execute(query).scalars())
+
+
 def accounts(connection):
     """读取全部已入库账套，不受当前页或列表筛选影响。"""
     return list(

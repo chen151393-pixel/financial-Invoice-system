@@ -14,7 +14,13 @@ import type {
 const root = "/tasks";
 const task = (id: string) => `${root}/${encodeURIComponent(id)}`;
 
-export const listTasks = (query: TaskListQuery) => http<TaskList>(`${root}/query`, "POST", query);
+// 日期为空时提交 null，由后端按"不限"处理
+export const listTasks = (query: TaskListQuery) =>
+  http<TaskList>(`${root}/query`, "POST", {
+    ...query,
+    createdFrom: query.createdFrom || null,
+    createdTo: query.createdTo || null,
+  });
 
 export const getTask = (id: string) => http<TaskDetail>(task(id));
 

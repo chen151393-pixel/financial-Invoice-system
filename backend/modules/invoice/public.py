@@ -13,6 +13,7 @@ from .policy.lemon_scope_policy import (
     lemon_import_defaults,
 )
 from .service.invoice_reader import (
+    invoice_ids_between,
     lock_invoice,
     read_invoice_accounts,
     read_invoice_amount_scope,
@@ -30,6 +31,7 @@ class InvoicesImported:
 
 
 __all__ = [
+    "invoice_ids_between",
     "read_lemon_refresh_targets",
     "invoice_daily_amounts",
     "latest_invoice_date",

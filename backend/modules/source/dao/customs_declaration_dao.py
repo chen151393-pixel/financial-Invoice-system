@@ -75,6 +75,14 @@ def head(connection, declaration_id, *, lock=False):
     return dict(row) if row else None
 
 
+def ids_created_between(connection, start, end):
+    """NS 创建时间落在 [start, end) 的报关单 ID（UTC 无时区时间，调用方按中国日期换算）。"""
+    query = select(customs_declarations.c.id).where(
+        customs_declarations.c.ns_created_at >= start, customs_declarations.c.ns_created_at < end
+    )
+    return list(connection.execute(query).scalars())
+
+
 def archive_heads(connection, declaration_ids):
     """归档文件夹所需的单头：CD 编号、真实报关单号、NS 创建时间（含已停用的报关单）。"""
     if not declaration_ids:

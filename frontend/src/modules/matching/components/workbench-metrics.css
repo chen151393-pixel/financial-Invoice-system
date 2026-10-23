@@ -1,7 +1,7 @@
-/* 工作台环节卡片：按处理顺序排列，点击筛选待办。 */
+/* 工作台业务状态分区：五个状态卡片加本月完成情况，点击进入对应列表。 */
 .wb-flow {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 14px;
 }
 .wb .wb-flow__card {
@@ -80,6 +80,35 @@
 }
 .wb-flow .wb-track > span {
   background: var(--color-success-text);
+}
+/* 范围筛选：供应商、报关单创建日期 */
+.wb-filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--space-small) var(--space-control);
+  font-size: 12px;
+}
+.wb-filters label {
+  display: grid;
+  gap: 4px;
+  color: var(--color-muted);
+}
+.wb-filters :is(select, input) {
+  min-height: 34px;
+  min-width: 0;
+  padding: 4px 8px;
+  border: 1px solid var(--color-input-border);
+  border-radius: var(--radius-control);
+  font: inherit;
+  color: var(--color-text);
+  background: var(--color-surface);
+}
+.wb-filters select {
+  max-width: 240px;
+}
+.wb-filters__hint {
+  color: var(--color-muted);
 }
 @media (max-width: 1100px) {
   .wb-flow {

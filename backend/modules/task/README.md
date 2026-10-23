@@ -194,3 +194,21 @@ MySQL 命名锁保证多实例单消费者，并对同一任务的同一子采�
 - **任务详情**新增 `declarationDocuments`（类型、状态、文件路径、失败原因、尝试次数、`retry` 能力）、`signedContracts`（每张子采购单是否已上传）与 `completion`（是否齐全、尚缺资料）。
 - 资料到齐（报关资料归档、回签合同上传、子采购合同归档）时，在同一事务中重算相关任务状态。
 - 验证：`backend/tests/test_task_documents_completion.py`、`test_task_documents.py`（NS 适配器）；收票类测试使用 `tests/documents_ready.py` 补齐资料。
+
+## 业务状态与筛选（2026-10-23）
+
+规则只在 `policy/stage_policy.py` 一处，经 `public.py` 暴露 `STAGES`、`STAGE_LABELS`、`task_stage`、`declaration_stage` 供工作台汇总：
+
+| 业务状态 | 判定 |
+| --- | --- |
+| 待审批 | 报关单待财务审核，或来源变化需重新审核（review 判断，优先于任务状态） |
+| 待通知开票 | 任务处于待保存子采购合同、待通知供应商 |
+| 待核票 | 任务处于等待开票、部分收票 |
+| 资料已回 | 任务发票已收齐、资料待补齐（documents_incomplete） |
+| 开票完成 | 任务发票收齐且资料全部到齐（completed） |
+
+报关单级别取其当前任务中**最慢**的阶段；审核通过但没有任何当前任务（供应商均关闭通知）为“无需开票”，不进分区与待办。
+
+- 开票跟进列表新增条件：`stage`（notify / invoicing / documents / completed，按报关单所处阶段筛选，显示该报关单的全部当前任务）、`createdFrom` / `createdTo`（报关单 NS 创建时间的中国日期，须成对填写，经 source 门面换算）。每个任务返回 `stage` / `stageLabel`（本任务自身阶段）。
+- 状态只读汇总，不提供人工修改业务状态的接口。
+- 验证：`backend/tests/test_business_stages.py`。

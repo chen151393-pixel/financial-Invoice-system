@@ -2,6 +2,8 @@
 
 from datetime import UTC
 
+from backend.modules.task.public import STAGE_LABELS, task_stage
+
 from ..vo.workbench_vo import Todo
 
 
@@ -22,6 +24,8 @@ def review_todo(row):
         currency="",
         amountLabel="按子采购行核对",
         statusLabel="待财务核对",
+        stage="pending_review",
+        stageLabel=STAGE_LABELS["pending_review"],
         reason=row["reason"],
         createdAt=iso(row["created_at"]),
         priority=2,
@@ -43,6 +47,8 @@ def task_todo(row, declarations):
         currency=row["currency"] or "",
         amountLabel="待收含税金额",
         statusLabel=row["status_label"],
+        stage=task_stage(row["status"]) or "",
+        stageLabel=STAGE_LABELS.get(task_stage(row["status"]) or "", ""),
         reason=row["reason"],
         createdAt=iso(row["created_at"]),
         priority=3,
@@ -66,6 +72,8 @@ def matching_todo(key, rows, invoice, contexts):
         currency=invoice.get("currency") or "",
         amountLabel="进入比对查看分配",
         statusLabel="待复核" if reverify else "待比对审核",
+        stage="invoicing",
+        stageLabel=STAGE_LABELS["invoicing"],
         reason="已确认分配的有效性变化，请核实当前发票和采购依据"
         if reverify
         else f"{len(rows)} 条建议待人工审核，尚未计为收票",

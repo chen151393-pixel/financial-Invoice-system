@@ -1,9 +1,9 @@
 import { useId, useRef, useState } from "react";
 import { Button } from "../../../shared/components/Button";
-import type { TaskListQuery } from "../types/task";
+import { stageLabels, type TaskListQuery } from "../types/task";
 import "./task-list-toolbar.css";
 
-type Filter = "keyword" | "account" | "supplier" | "status";
+type Filter = "keyword" | "account" | "supplier" | "stage" | "created" | "status";
 type Props = {
   query: TaskListQuery;
   supplierName?: string;
@@ -21,6 +21,10 @@ export function TaskListToolbar({ query, supplierName, busy, onChange, onClear }
   if (query.account) filters.push({ key: "account", label: `NS 环境：${query.account}` });
   if (query.supplierId) {
     filters.push({ key: "supplier", label: `供应商：${supplierName ?? query.supplierId}` });
+  }
+  if (query.stage) filters.push({ key: "stage", label: `业务状态：${stageLabels[query.stage]}` });
+  if (query.createdFrom) {
+    filters.push({ key: "created", label: `报关单创建：${query.createdFrom} 至 ${query.createdTo}` });
   }
   if (query.status !== "current") {
     filters.push({ key: "status", label: `任务版本：${query.status === "all" ? "全部版本" : "已被替代"}` });

@@ -6,7 +6,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { MemoryRouter } from "react-router";
 import { createServer } from "vite";
 
-let server, Todos, Trend, Page, api;
+let server, Todos, Trend, Page, Metrics, api, paths;
 before(async () => {
   server = await createServer({
     configFile: fileURLToPath(new URL("../vite.config.ts", import.meta.url)),
@@ -22,6 +22,10 @@ before(async () => {
   ));
   ({ WorkbenchPage: Page } = await server.ssrLoadModule("/src/modules/matching/pages/WorkbenchPage.tsx"));
   api = await server.ssrLoadModule("/src/modules/matching/api/workbench-api.ts");
+  ({ WorkbenchMetrics: Metrics } = await server.ssrLoadModule(
+    "/src/modules/matching/components/WorkbenchMetrics.tsx",
+  ));
+  paths = await server.ssrLoadModule("/src/app/paths.ts");
 });
 after(async () => {
   await server?.close();
@@ -68,7 +72,25 @@ const data = {
   latestInvoiceDate: "2026-10-19",
   unknownSupplierAmounts: 0,
 };
-const query = { account: "", keyword: "", kind: "all", sort: "priority", page: 1, pageSize: 5 };
+const query = {
+  account: "",
+  supplierId: "",
+  createdFrom: "",
+  createdTo: "",
+  keyword: "",
+  kind: "all",
+  sort: "priority",
+  page: 1,
+  pageSize: 5,
+};
+const stages = [
+  { key: "pending_review", label: "待审批", count: 2 },
+  { key: "notify", label: "待通知开票", count: 1 },
+  { key: "invoicing", label: "待核票", count: 3 },
+  { key: "documents", label: "资料已回", count: 0 },
+  { key: "completed", label: "开票完成", count: 4 },
+];
+const month = { month: "2026-10", total: 0, completed: 0, percent: null, received: [] };
 const render = (component, props) =>
   renderToStaticMarkup(createElement(MemoryRouter, null, createElement(component, props)));
 
@@ -130,15 +152,42 @@ test("查询与导出携带相同筛选，导出结果完全取自后端", async
       url.endsWith("export") ? { filename: "result.csv", content: "真实导出", count: 52 } : data,
     );
   });
-  const selected = { ...query, account: "A", keyword: "供应商", page: 2 };
+  const selected = { ...query, account: "A", keyword: "供应商", page: 2, supplierId: "7" };
   await api.queryWorkbench(selected);
   assert.equal((await api.exportWorkbench(selected)).count, 52);
+  // 未填写的日期提交 null，由后端按"不限"处理
+  const sent = { ...selected, createdFrom: null, createdTo: null };
   assert.deepEqual(
     calls.map((call) => call.body),
-    [selected, selected],
+    [sent, sent],
   );
   assert.deepEqual(
     calls.map((call) => call.url),
     ["/api/matching/workbench/query", "/api/matching/workbench/export"],
   );
+});
+
+test("五个业务状态分区按报关单计数，点击带同样筛选进入对应列表", () => {
+  const scoped = {
+    ...query,
+    account: "A",
+    supplierId: "7",
+    createdFrom: "2026-10-01",
+    createdTo: "2026-10-31",
+  };
+  const html = render(Metrics, { stages, noTaskCount: 2, month, query: scoped });
+  for (const label of ["待审批", "待通知开票", "待核票", "资料已回", "开票完成"])
+    assert.ok(html.includes(label));
+  assert.match(html, /href="\/review\?status=pending&amp;account=A"/);
+  assert.match(
+    html,
+    /href="\/tasks\?account=A&amp;supplierId=7&amp;createdFrom=2026-10-01&amp;createdTo=2026-10-31&amp;stage=invoicing"/,
+  );
+  assert.match(html, /另有 2 张无需开票/);
+  assert.match(html, /<strong>3<\/strong><span>张报关单/);
+});
+
+test("列表地址只写入已填写的筛选条件", () => {
+  assert.equal(paths.taskListPath({ stage: "notify", supplierId: "" }), "/tasks?stage=notify");
+  assert.equal(paths.reviewListPath({}), "/review");
 });

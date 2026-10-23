@@ -5,9 +5,9 @@ from decimal import Decimal
 from sqlalchemy.exc import SQLAlchemyError
 
 from backend.core.errors import ApiError
-from backend.modules.invoice.public import read_invoices
+from backend.modules.invoice.public import invoice_ids_between, read_invoices
 from backend.modules.review.public import current_bases
-from backend.modules.source.public import purchase_lines, unit_label, unit_names
+from backend.modules.source.public import purchase_lines, supplier_line_ids, unit_label, unit_names
 from backend.modules.task.public import open_lines
 
 from ..dao import allocation_dao
@@ -24,6 +24,7 @@ from ..vo.matching_vo import (
     Queue,
     QueueRow,
     Summaries,
+    SupplierOption,
 )
 from .invoice_totals_service import InvoiceTotalsService
 
@@ -140,11 +141,20 @@ class MatchingQueryService:
 
     def queue(self, query):
         def action(connection):
+            scope = {
+                "line_ids": set(supplier_line_ids(connection, int(query.supplierId)))
+                if query.supplierId
+                else None,
+                "invoice_ids": set(invoice_ids_between(connection, query.invoiceFrom, query.invoiceTo))
+                if query.invoiceFrom
+                else None,
+            }
             total, rows = allocation_dao.queue(
                 connection,
                 tiers=TIERS[query.tier],
                 offset=(query.page - 1) * query.pageSize,
                 limit=query.pageSize,
+                **scope,
             )
             invoices = {
                 invoice["id"]: invoice
@@ -169,10 +179,16 @@ class MatchingQueryService:
                 )
             order = {row["id"]: index for index, row in enumerate(rows)}
             result.sort(key=lambda view: order[int(view.allocation.id)])
-            counts = allocation_dao.proposal_counts(connection, HIGH, MEDIUM)
+            counts = allocation_dao.proposal_counts(connection, HIGH, MEDIUM, **scope)
             pages = max(1, (total + query.pageSize - 1) // query.pageSize)
             return Queue(
-                rows=result, total=total, page=query.page, pageSize=query.pageSize, pages=pages, counts=counts
+                rows=result,
+                total=total,
+                page=query.page,
+                pageSize=query.pageSize,
+                pages=pages,
+                counts=counts,
+                suppliers=_supplier_options(connection),
             )
 
         return self._read(action)
@@ -279,3 +295,17 @@ class MatchingQueryService:
         )
         rows = open_lines(connection) + open_lines(connection, existing_ids)
         return list({row["purchase_line_id"]: row for row in rows}.values())
+
+
+def _supplier_options(connection):
+    """待审核建议涉及的供应商（按子采购单供应商），供队列筛选下拉使用。"""
+    contexts = purchase_lines(connection, allocation_dao.proposed_line_ids(connection))
+    found = {
+        context["supplier_id"]: context["supplier_name"] or f"供应商 {context['supplier_id']}"
+        for context in contexts.values()
+        if context["supplier_id"]
+    }
+    return [
+        SupplierOption(id=str(key), name=name)
+        for key, name in sorted(found.items(), key=lambda item: (item[1], item[0]))
+    ]

@@ -23,7 +23,8 @@ export function ReviewPage() {
     keyword: searchParams.get("keyword") || "",
     account: searchParams.get("account") || "",
     supplierId: "",
-    status: "all",
+    // 工作台"待审批"分区跳转时带 status=pending
+    status: searchParams.get("status") === "pending" ? "pending" : "all",
     page: 1,
     pageSize: 20,
   });

@@ -7,9 +7,9 @@ from .policy.admission_policy import admission_issues, admission_reason
 from .policy.unit_policy import unit_label
 from .service.contract_service import SubpoContractSource
 from .service.declaration_service import DeclarationService, digest, snapshot
-from .service.directory_service import SourceDirectory
+from .service.directory_service import SourceDirectory, china_day_range
 from .service.pl_comparison_service import PlScriptService
-from .service.purchase_context import purchase_lines
+from .service.purchase_context import purchase_lines, supplier_line_ids
 from .service.workbench_reader import workbench_declarations
 
 __all__ = [
@@ -31,6 +31,9 @@ __all__ = [
     "SourceDirectory",
     # 子采购行比对上下文（matching）：purchase_lines(connection, line_ids) → {ID: 上下文含 digest}
     "purchase_lines",
+    "supplier_line_ids",
+    # 中国日期区间换算为 UTC 区间（报关单创建日期筛选）
+    "china_day_range",
     "SourceChanged",
 ]
 

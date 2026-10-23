@@ -21,7 +21,14 @@ def read(connection):
         .where(customs_declarations.c.is_active.is_(True))
     ).mappings()
     result = {
-        row["id"]: {**dict(row), **states[row["id"]], "pls": set(), "suppliers": set()} for row in heads
+        row["id"]: {
+            **dict(row),
+            **states[row["id"]],
+            "pls": set(),
+            "suppliers": set(),
+            "supplier_ids": {},
+        }
+        for row in heads
     }
     for row in connection.execute(
         select(customs_lines.c.customs_declaration_id, customs_lines.c.pl_no).where(
@@ -31,7 +38,7 @@ def read(connection):
         if row.customs_declaration_id in result and row.pl_no:
             result[row.customs_declaration_id]["pls"].add(row.pl_no)
     query = (
-        select(customs_purchase_links.c.customs_declaration_id, suppliers.c.name)
+        select(customs_purchase_links.c.customs_declaration_id, suppliers.c.id, suppliers.c.name)
         .join(purchase_orders, purchase_orders.c.id == customs_purchase_links.c.purchase_order_id)
         .outerjoin(suppliers, suppliers.c.id == purchase_orders.c.supplier_id)
         .where(customs_purchase_links.c.status == "active")
@@ -39,4 +46,7 @@ def read(connection):
     for row in connection.execute(query):
         if row.customs_declaration_id in result and row.name:
             result[row.customs_declaration_id]["suppliers"].add(row.name)
+        if row.customs_declaration_id in result and row.id:
+            # {供应商 ID: 名称}，供工作台按供应商筛选与生成选项
+            result[row.customs_declaration_id]["supplier_ids"][row.id] = row.name or f"供应商 {row.id}"
     return list(result.values())
