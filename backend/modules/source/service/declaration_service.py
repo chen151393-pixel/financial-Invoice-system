@@ -80,13 +80,22 @@ class DeclarationService:
             raise ApiError(503, "报关单读取失败，请检查业务数据库及迁移状态") from None
         return total, rows
 
-    def index(self, account, keyword):
+    def index(self, account, keyword, supplier_id=None):
         self._require_engine()
         try:
             with self.engine.connect() as connection:
-                return customs_declaration_dao.index(connection, account, keyword)
+                return customs_declaration_dao.index(connection, account, keyword, supplier_id)
         except SQLAlchemyError:
             raise ApiError(503, "报关单读取失败，请检查业务数据库及迁移状态") from None
+
+    def suppliers(self, account):
+        """有效报关单关联到的供应商：[{id, name}]，供财务核对按供应商筛选。"""
+        self._require_engine()
+        try:
+            with self.engine.connect() as connection:
+                return customs_declaration_dao.suppliers_of(connection, account)
+        except SQLAlchemyError:
+            raise ApiError(503, "供应商读取失败，请检查业务数据库及迁移状态") from None
 
     def accounts(self):
         self._require_engine()

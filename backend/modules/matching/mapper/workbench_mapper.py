@@ -10,7 +10,6 @@ def iso(value):
 
 
 def review_todo(row):
-    blocked = row["review_state"] == "blocked"
     return Todo(
         key=f"review:{row['id']}",
         kind="review",
@@ -22,11 +21,10 @@ def review_todo(row):
         amount=None,
         currency="",
         amountLabel="按子采购行核对",
-        statusLabel="关联待补齐" if blocked else "待财务核对",
+        statusLabel="待财务核对",
         reason=row["reason"],
         createdAt=iso(row["created_at"]),
-        priority=0 if blocked else 2,
-        attention=blocked,
+        priority=2,
     )
 
 

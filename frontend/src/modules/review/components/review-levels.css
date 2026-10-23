@@ -1,0 +1,50 @@
+/* 三级展开：报关单 → 报关行 → 子采购行。
+   每深一级向右缩进一级，左侧竖线标示从属关系；数值列只在同一层内对齐，不跨层共用列宽。 */
+.fr-level {
+  --fr-indent: 28px;
+  position: relative;
+  padding-left: var(--fr-indent);
+}
+.fr-level::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: calc(var(--fr-indent) / 2 - 1px);
+  border-left: 2px solid var(--fr-level-guide);
+}
+.fr-level--customs {
+  --fr-level-guide: var(--color-input-border);
+  padding-block: var(--space-small) var(--space-control);
+  padding-right: var(--space-control);
+  background: var(--color-canvas);
+}
+.fr-level--customs > .fr-table-scroll {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-control);
+  background: var(--color-surface);
+}
+.fr-level--customs .fr-customs-table {
+  min-width: 860px;
+}
+.fr-level--purchase {
+  --fr-level-guide: var(--color-primary);
+  padding-block: var(--space-small);
+  padding-right: var(--space-small);
+  background: var(--color-surface);
+}
+.fr-level--purchase::before {
+  opacity: 0.45;
+}
+.fr-level--purchase > .fr-purchase-scroll {
+  border-radius: var(--radius-control);
+  background: var(--color-table-purchase);
+}
+.fr-level--purchase .fr-purchase-table {
+  min-width: 800px;
+}
+@media (max-width: 760px) {
+  .fr-level {
+    --fr-indent: 16px;
+  }
+}

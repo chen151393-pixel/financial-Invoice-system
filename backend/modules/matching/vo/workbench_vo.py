@@ -28,7 +28,7 @@ class WorkbenchCounts(StrictModel):
     review: int = 0
     matching: int = 0
     task: int = 0
-    blocked: int = 0
+    unshipped: int = 0  # 未出库报关单数，不计入待办
     reverify: int = 0
     preparation: int = 0
 

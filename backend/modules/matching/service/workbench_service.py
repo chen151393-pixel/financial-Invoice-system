@@ -10,7 +10,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from backend.core.errors import ApiError
 from backend.modules.invoice.public import invoice_daily_amounts, latest_invoice_date, read_invoices
 from backend.modules.review.public import workbench_reviews
-from backend.modules.source.public import purchase_lines, workbench_declarations
+from backend.modules.source.public import admission_issues, purchase_lines, workbench_declarations
 from backend.modules.task.public import workbench_tasks
 
 from ..dao import workbench_allocation_dao
@@ -25,7 +25,6 @@ def counts(rows):
         review=sum(r.kind == "review" for r in rows),
         matching=sum(r.kind == "matching" for r in rows),
         task=sum(r.kind == "task" for r in rows),
-        blocked=sum(r.kind == "review" and r.attention for r in rows),
         reverify=sum(r.kind == "matching" and r.attention for r in rows),
         preparation=sum(r.kind == "task" and r.attention for r in rows),
     )
@@ -86,6 +85,13 @@ class WorkbenchService:
         )
         scoped = [r for r in rows if not query.account or r.account == query.account]
         selected, filtered_counts = select_rows(scoped, query)
+        # 未出库的报关单不进入待办，只在核对卡片上提示数量（按账套过滤，不受关键字影响）
+        unshipped = sum(
+            bool(admission_issues(row["declaration_no"], row["order_count"]))
+            for row in declarations
+            if not query.account or row["ns_account"] == query.account
+        )
+        filtered_counts = filtered_counts.model_copy(update={"unshipped": unshipped})
         if export:
             return export_csv(selected)
         scoped_tasks = [r for r in tasks if not query.account or r["ns_account"] == query.account]
@@ -101,7 +107,7 @@ class WorkbenchService:
         return Workbench(
             generatedAt=now.isoformat(),
             accounts=accounts,
-            counts=counts(scoped),
+            counts=counts(scoped).model_copy(update={"unshipped": unshipped}),
             filteredCounts=filtered_counts,
             items=selected[start : start + query.pageSize],
             total=total,

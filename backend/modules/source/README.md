@@ -30,6 +30,7 @@
 | | `ns_fields.py` | NS 字段取值、Decimal 安全转换 |
 | policy | `ns_config.py`、`relation_policy.py`、`local_relation_policy.py` | 字段映射配置、v3 完整性规则、本地行定位规则（由 business 移入） |
 | | `content_digest.py`、`currency_policy.py` | 内容摘要、子采购单币种规则（名称规范化在 `core/names.py`） |
+| | `admission_policy.py` | 报关单准入（已出库）：有真实报关单号且有关联子采购单（2026-10-21 业务确认） |
 
 ## 同步明细批量读取（2026-10-19）
 
@@ -102,7 +103,8 @@
 ## 公开接口（`public.py`）
 
 - `PlScriptService`、`SubpoContractSource`。
-- 报关单读取门面（第 4b 步加入，供 review 使用）：`DeclarationService`（索引、分页内容、账户锁 `locked`）、`snapshot`（锁内读取完整内容）、`digest`（重算内容摘要）。
+- 报关单读取门面（第 4b 步加入，供 review 使用）：`DeclarationService`（索引、分页内容、账户锁 `locked`）、`snapshot`（锁内读取完整内容）、`digest`（重算内容摘要）。2026-10-22 起索引返回真实报关单号并可按供应商筛选；`suppliers(account)` 返回有效报关单关联的供应商选项。
+- 报关单准入（2026-10-22 加入，供 review 与工作台使用）：`admission_issues(declaration_no, order_count)` 返回未出库原因列表，`admission_reason(issues)` 返回提示文案。只决定是否进入核对与待办，不改动来源数据。
 - 子采购行比对上下文（第 4d 步加入，供 matching 使用）：`purchase_lines(connection, line_ids)`——子采购单号、供应商与采购公司（含规范化名称）、品名、单位、数量金额、币种及来源、是否有效、内容摘要 `digest`（建议生成后来源变化即改变）。
 - 来源目录（第 4c 步加入，供 task 使用）：`SourceDirectory`（`service/directory_service.py`）——按 ID 批量取供应商、采购公司、子采购单号与行品名（含已停用记录，保证历史任务可显示），按名称 / 单号搜索 ID，有效供应商分页。
 

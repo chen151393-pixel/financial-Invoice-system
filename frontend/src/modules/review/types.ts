@@ -1,5 +1,6 @@
 // 与后端 /api/review 的响应一致；金额、数量为十进制字符串，前端不重算。
-export type ReviewStatus = "pending" | "approved" | "blocked";
+// unshipped：未出库（缺真实报关单号或无关联子采购单），不计入"全部"，单独筛选查看。
+export type ReviewStatus = "pending" | "approved" | "unshipped";
 export type ReviewFilter = "all" | ReviewStatus;
 export interface PurchaseLine {
   id: string;
@@ -66,6 +67,7 @@ export interface ComparisonResult {
   counts: Record<ReviewFilter | "customs" | "purchase" | "shown", number>;
   notices: string[];
   accounts: string[];
+  suppliers: { id: string; name: string }[];
   page: number;
   pageSize: number;
   total: number;
@@ -74,9 +76,19 @@ export interface ComparisonResult {
 export interface DeclarationListQuery {
   keyword: string;
   account: string;
+  supplierId: string;
   status: ReviewFilter;
   page: number;
   pageSize: number;
+}
+export interface BatchItemResult {
+  id: string;
+  recordNumber: string;
+  reason: string;
+}
+export interface BatchApproveResult {
+  approved: BatchItemResult[];
+  skipped: BatchItemResult[];
 }
 export type ComparisonState =
   | { kind: "ready"; result: ComparisonResult }

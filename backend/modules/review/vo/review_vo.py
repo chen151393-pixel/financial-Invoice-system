@@ -38,7 +38,7 @@ class CustomsLine(StrictModel):
 
 
 class ReviewState(StrictModel):
-    status: Literal["pending", "approved", "blocked"]
+    status: Literal["pending", "approved", "unshipped"]
     label: str
     allowed: bool
     reason: str
@@ -74,12 +74,31 @@ class Declaration(StrictModel):
     review: ReviewState
 
 
+class SupplierOption(StrictModel):
+    id: str
+    name: str
+
+
 class ReviewList(StrictModel):
     groups: list[Declaration]
     counts: dict[str, int]
     notices: list[str] = Field(default_factory=list)
     accounts: list[str] = Field(default_factory=list)
+    suppliers: list[SupplierOption] = Field(default_factory=list)
     page: int = 1
     pageSize: int = 20
     total: int = 0
     pages: int = 1
+
+
+class BatchItemResult(StrictModel):
+    id: str
+    recordNumber: str = ""
+    reason: str = ""
+
+
+class BatchApproveResult(StrictModel):
+    """逐张结果：approved 已审核通过；skipped 未通过及原因（如来源已变化、未出库）。"""
+
+    approved: list[BatchItemResult]
+    skipped: list[BatchItemResult]

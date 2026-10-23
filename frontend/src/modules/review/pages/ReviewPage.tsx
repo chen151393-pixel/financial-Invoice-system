@@ -3,11 +3,18 @@ import { useEffect, useRef, useState } from "react";
 import { useSearchParams } from "react-router";
 import { Pagination } from "../../../shared/components/Pagination";
 import { openLocalSession } from "../../identity/api";
-import { approveDeclaration, queryDeclarations } from "../api";
+import { approveDeclaration, approveDeclarations, queryDeclarations } from "../api";
+import { BatchApproveDialog } from "../components/BatchApproveDialog";
 import { FinanceSearchForm } from "../components/FinanceSearchForm";
 import { FinanceComparison } from "../components/FinanceComparison";
 import { ReviewDialog } from "../components/ReviewDialog";
-import type { ComparisonGroup, ComparisonState, DeclarationListQuery } from "../types";
+import type {
+  BatchApproveResult,
+  ComparisonGroup,
+  ComparisonResult,
+  ComparisonState,
+  DeclarationListQuery,
+} from "../types";
 
 export function ReviewPage() {
   const [searchParams] = useSearchParams();
@@ -15,6 +22,7 @@ export function ReviewPage() {
   const [query, setQuery] = useState<DeclarationListQuery>({
     keyword: searchParams.get("keyword") || "",
     account: searchParams.get("account") || "",
+    supplierId: "",
     status: "all",
     page: 1,
     pageSize: 20,
@@ -22,8 +30,13 @@ export function ReviewPage() {
   const [refresh, setRefresh] = useState(0);
   // 每次加载成功递增，用于重置列表的展开状态。
   const [loads, setLoads] = useState(0);
-  const [accounts, setAccounts] = useState<string[]>([]);
+  const [options, setOptions] = useState<Pick<ComparisonResult, "accounts" | "suppliers">>({
+    accounts: [],
+    suppliers: [],
+  });
   const [review, setReview] = useState<ComparisonGroup | null>(null);
+  const [batch, setBatch] = useState<ComparisonGroup[] | null>(null);
+  const [batchResult, setBatchResult] = useState<BatchApproveResult | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [approvalError, setApprovalError] = useState("");
   const [notice, setNotice] = useState("");
@@ -38,7 +51,7 @@ export function ReviewPage() {
         if (active) {
           setState({ kind: "ready", result });
           setLoads((value) => value + 1);
-          setAccounts(result.accounts || []);
+          setOptions({ accounts: result.accounts || [], suppliers: result.suppliers || [] });
         }
       } catch (error) {
         if (active)
@@ -73,16 +86,36 @@ export function ReviewPage() {
       setSubmitting(false);
     }
   }
+  async function approveBatch(note: string) {
+    if (!batch || submitLock.current) return;
+    submitLock.current = true;
+    setSubmitting(true);
+    setApprovalError("");
+    try {
+      const result = await approveDeclarations(batch, note);
+      setBatchResult(result);
+      if (result.approved.length) {
+        setNotice(`批量审核：${result.approved.length} 张已审核通过并生成开票任务，可前往「开票跟进」查看。`);
+      }
+    } catch (error) {
+      setApprovalError(error instanceof Error ? error.message : "批量审核失败，请刷新后查看结果");
+    } finally {
+      // 无论结果如何都重新读取：跳过的报关单可能已有新内容，失败时也可能部分已保存
+      setRefresh((value) => value + 1);
+      submitLock.current = false;
+      setSubmitting(false);
+    }
+  }
   return (
     <>
       <FinanceSearchForm
-        initialKeyword={query.keyword}
-        initialAccount={query.account}
+        initial={{ keyword: query.keyword, account: query.account, supplierId: query.supplierId }}
         busy={state.kind === "loading" || submitting}
-        accounts={accounts}
-        onSearch={(keyword, account) => {
+        accounts={options.accounts}
+        suppliers={options.suppliers}
+        onSearch={(criteria) => {
           setNotice("");
-          setQuery((current) => ({ ...current, keyword, account, status: "all", page: 1 }));
+          setQuery((current) => ({ ...current, ...criteria, page: 1 }));
         }}
         onRefresh={() => setRefresh((value) => value + 1)}
       />
@@ -99,6 +132,11 @@ export function ReviewPage() {
         onReview={(group) => {
           setApprovalError("");
           setReview(group);
+        }}
+        onBatchApprove={(groups) => {
+          setApprovalError("");
+          setBatchResult(null);
+          setBatch(groups);
         }}
         onRetry={() => setRefresh((value) => value + 1)}
         pagination={
@@ -127,6 +165,18 @@ export function ReviewPage() {
             if (!submitting) setReview(null);
           }}
           onApprove={(note, evidence) => void approve(note, evidence)}
+        />
+      )}
+      {batch && (
+        <BatchApproveDialog
+          groups={batch}
+          busy={submitting}
+          error={approvalError}
+          result={batchResult}
+          onClose={() => {
+            if (!submitting) setBatch(null);
+          }}
+          onApprove={(note) => void approveBatch(note)}
         />
       )}
     </>
