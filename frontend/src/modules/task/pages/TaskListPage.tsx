@@ -1,6 +1,7 @@
 import { Link } from "react-router";
 import { paths } from "../../../app/paths";
 import { useEffect, useState } from "react";
+import { useSearchParams } from "react-router";
 import { Button } from "../../../shared/components/Button";
 import { Pagination } from "../../../shared/components/Pagination";
 import { openLocalSession } from "../../identity/api";
@@ -9,24 +10,36 @@ import { SignedContractUpload } from "../components/SignedContractUpload";
 import { TaskCountList } from "../components/TaskCountList";
 import { TaskFollowupTable } from "../components/TaskFollowupTable";
 import { TaskListToolbar } from "../components/TaskListToolbar";
-import type { TaskList, TaskListQuery } from "../types/task";
+import { stageLabels, type TaskList, type TaskListQuery, type TaskStage } from "../types/task";
 import "./task.css";
 
 type Remote<T> = { kind: "loading" } | { kind: "error"; message: string } | { kind: "ready"; data: T };
 
+function initialStage(value: string | null): TaskStage {
+  return value && Object.hasOwn(stageLabels, value) ? (value as TaskStage) : "";
+}
+
 export function TaskListPage() {
+  // 工作台业务状态分区跳转时带入筛选条件
+  const [searchParams] = useSearchParams();
   const [query, setQuery] = useState<TaskListQuery>({
     keyword: "",
-    account: "",
-    supplierId: "",
+    account: searchParams.get("account") || "",
+    supplierId: searchParams.get("supplierId") || "",
+    stage: initialStage(searchParams.get("stage")),
+    createdFrom: searchParams.get("createdFrom") || "",
+    createdTo: searchParams.get("createdTo") || "",
     groupBy: "supplier",
     status: "current",
     page: 1,
     pageSize: 20,
   });
   const [keyword, setKeyword] = useState("");
-  const [account, setAccount] = useState("");
-  const [supplierId, setSupplierId] = useState("");
+  const [account, setAccount] = useState(query.account);
+  const [supplierId, setSupplierId] = useState(query.supplierId);
+  const [stage, setStage] = useState<TaskStage>(query.stage);
+  const [createdFrom, setCreatedFrom] = useState(query.createdFrom);
+  const [createdTo, setCreatedTo] = useState(query.createdTo);
   const [accounts, setAccounts] = useState<string[]>([]);
   const [suppliers, setSuppliers] = useState<TaskList["suppliers"]>([]);
   const [state, setState] = useState<Remote<TaskList>>({ kind: "loading" });
@@ -64,7 +77,7 @@ export function TaskListPage() {
         className="it-search"
         onSubmit={(event) => {
           event.preventDefault();
-          change({ keyword, account, supplierId });
+          change({ keyword, account, supplierId, stage, createdFrom, createdTo });
         }}
       >
         <label className="it-search__keyword">
@@ -97,6 +110,25 @@ export function TaskListPage() {
             ))}
           </select>
         </label>
+        <label>
+          业务状态
+          <select value={stage} onChange={(e) => setStage(initialStage(e.target.value))}>
+            <option value="">全部状态</option>
+            {Object.entries(stageLabels).map(([key, label]) => (
+              <option key={key} value={key}>
+                {label}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label>
+          报关单创建日期 从
+          <input type="date" value={createdFrom} onChange={(e) => setCreatedFrom(e.target.value)} />
+        </label>
+        <label>
+          至
+          <input type="date" value={createdTo} onChange={(e) => setCreatedTo(e.target.value)} />
+        </label>
         <Button variant="primary" type="submit" disabled={busy}>
           查询
         </Button>
@@ -125,7 +157,12 @@ export function TaskListPage() {
           }}
         />
       )}
-      {(keyword !== query.keyword || account !== query.account || supplierId !== query.supplierId) && (
+      {(keyword !== query.keyword ||
+        account !== query.account ||
+        supplierId !== query.supplierId ||
+        stage !== query.stage ||
+        createdFrom !== query.createdFrom ||
+        createdTo !== query.createdTo) && (
         <p className="it-help" role="status">
           筛选条件已修改，点击「查询」生效；当前结果仍使用上次提交的条件。
         </p>
@@ -140,7 +177,18 @@ export function TaskListPage() {
             setKeyword("");
             setAccount("");
             setSupplierId("");
-            change({ keyword: "", account: "", supplierId: "", status: "current" });
+            setStage("");
+            setCreatedFrom("");
+            setCreatedTo("");
+            change({
+              keyword: "",
+              account: "",
+              supplierId: "",
+              stage: "",
+              createdFrom: "",
+              createdTo: "",
+              status: "current",
+            });
           } else if (filter === "keyword") {
             setKeyword("");
             change({ keyword: "" });
@@ -150,6 +198,13 @@ export function TaskListPage() {
           } else if (filter === "supplier") {
             setSupplierId("");
             change({ supplierId: "" });
+          } else if (filter === "stage") {
+            setStage("");
+            change({ stage: "" });
+          } else if (filter === "created") {
+            setCreatedFrom("");
+            setCreatedTo("");
+            change({ createdFrom: "", createdTo: "" });
           } else {
             change({ status: "current" });
           }
@@ -186,7 +241,12 @@ export function TaskListPage() {
           ) : (
             <div className="it-empty">
               <h2>
-                {query.keyword || query.account || query.supplierId || query.status !== "current"
+                {query.keyword ||
+                query.account ||
+                query.supplierId ||
+                query.stage ||
+                query.createdFrom ||
+                query.status !== "current"
                   ? "没有符合条件的任务"
                   : "还没有开票任务"}
               </h2>

@@ -4,6 +4,8 @@
 含已停用的来源记录，保证历史任务仍能显示名称。
 """
 
+from datetime import datetime, time, timedelta
+
 from sqlalchemy.exc import SQLAlchemyError
 
 from backend.core.errors import ApiError
@@ -11,7 +13,16 @@ from backend.core.errors import ApiError
 from ..dao import company_dao, customs_declaration_dao, purchase_order_dao, supplier_dao
 from ..dao.unit_dictionary_dao import unit_names
 
+CHINA_OFFSET = timedelta(hours=8)
+
 SEARCH_LIMIT = 500
+
+
+def china_day_range(start, end):
+    """中国日期区间 [start, end] 换算为 UTC 无时区时间区间 [lower, upper)。"""
+    lower = datetime.combine(start, time.min) - CHINA_OFFSET
+    upper = datetime.combine(end + timedelta(days=1), time.min) - CHINA_OFFSET
+    return lower, upper
 
 
 class SourceDirectory:
@@ -46,6 +57,13 @@ class SourceDirectory:
         """归档用报关单头：{id: {record_no, declaration_no, created_at}}，created_at 为 NS 创建时间（UTC）。"""
         return self._read(
             lambda connection: customs_declaration_dao.archive_heads(connection, sorted(set(declaration_ids)))
+        )
+
+    def declaration_ids_created(self, start, end):
+        """NS 创建日期（中国日期）在 start—end（含）之间的报关单 ID。"""
+        lower, upper = china_day_range(start, end)
+        return self._read(
+            lambda connection: customs_declaration_dao.ids_created_between(connection, lower, upper)
         )
 
     def orders_by_number(self, order_no):

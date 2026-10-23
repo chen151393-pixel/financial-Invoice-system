@@ -1,10 +1,11 @@
 """发票比对请求：ID 与金额数量为十进制字符串；操作者来自认证身份，不接受前端提交。"""
 
+from datetime import date
 from decimal import Decimal
 from typing import Annotated, Literal
 from uuid import UUID
 
-from pydantic import Field, StringConstraints, field_validator
+from pydantic import Field, StringConstraints, field_validator, model_validator
 
 from backend.core.dto import StrictModel
 
@@ -85,8 +86,20 @@ class SummaryBody(StrictModel):
 
 class QueueQuery(StrictModel):
     tier: Literal["all", "high", "medium", "low"] = "all"
+    # 按子采购单的供应商筛选；按开票日期筛选（须成对填写）
+    supplierId: str = Field(default="", max_length=20, pattern=r"^([1-9][0-9]*)?$")
+    invoiceFrom: date | None = Field(default=None, strict=False)
+    invoiceTo: date | None = Field(default=None, strict=False)
     page: int = Field(default=1, ge=1, le=100000)
     pageSize: int = Field(default=20, ge=1, le=50)
+
+    @model_validator(mode="after")
+    def valid_dates(self):
+        if bool(self.invoiceFrom) != bool(self.invoiceTo):
+            raise ValueError("请同时填写开票开始日期与结束日期")
+        if self.invoiceFrom and self.invoiceFrom > self.invoiceTo:
+            raise ValueError("开票开始日期不能晚于结束日期")
+        return self
 
 
 class CandidateQuery(StrictModel):

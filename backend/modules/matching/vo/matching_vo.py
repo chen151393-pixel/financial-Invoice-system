@@ -2,6 +2,8 @@
 
 from typing import Literal
 
+from pydantic import Field
+
 from backend.core.dto import StrictModel
 
 Tier = Literal["high", "medium", "low", "manual"]
@@ -122,6 +124,11 @@ class QueueRow(StrictModel):
     itemName: str | None
 
 
+class SupplierOption(StrictModel):
+    id: str
+    name: str
+
+
 class Queue(StrictModel):
     rows: list[QueueRow]
     total: int
@@ -129,6 +136,7 @@ class Queue(StrictModel):
     pageSize: int
     pages: int
     counts: dict[str, int]
+    suppliers: list[SupplierOption] = Field(default_factory=list)
 
 
 class SummaryRow(StrictModel):

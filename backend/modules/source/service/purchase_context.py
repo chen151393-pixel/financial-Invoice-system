@@ -43,6 +43,11 @@ def line_digest(context):
     ).hexdigest()
 
 
+def supplier_line_ids(connection, supplier_id):
+    """该供应商的子采购行 ID，供比对队列按供应商筛选。"""
+    return purchase_order_dao.line_ids_by_supplier(connection, supplier_id)
+
+
 def purchase_lines(connection, line_ids, *, lock=False):
     """{子采购行 ID: 比对上下文}；active 为子采购单与行均有效。"""
     result = {}

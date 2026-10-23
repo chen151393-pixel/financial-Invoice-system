@@ -3,6 +3,7 @@ import { Button } from "../../../shared/components/Button";
 import { Pagination } from "../../../shared/components/Pagination";
 import { openLocalSession } from "../../identity/api";
 import { confirmBatch, getMatchingQueue } from "../api";
+import { QueueFilters } from "../components/QueueFilters";
 import { batchable, QueueTable } from "../components/QueueTable";
 import type { Queue, QueueQuery } from "../types/matching";
 import "./matching.css";
@@ -17,7 +18,15 @@ const TABS: [QueueQuery["tier"], string][] = [
 ];
 
 export function MatchingQueuePage() {
-  const [query, setQuery] = useState<QueueQuery>({ tier: "all", page: 1, pageSize: 20 });
+  const [query, setQuery] = useState<QueueQuery>({
+    tier: "all",
+    supplierId: "",
+    invoiceFrom: "",
+    invoiceTo: "",
+    page: 1,
+    pageSize: 20,
+  });
+  const [suppliers, setSuppliers] = useState<{ id: string; name: string }[]>([]);
   const [refresh, setRefresh] = useState(0);
   const [state, setState] = useState<Remote>({ kind: "loading" });
   const [selected, setSelected] = useState<string[]>([]);
@@ -30,7 +39,10 @@ export function MatchingQueuePage() {
       try {
         await openLocalSession();
         const data = await getMatchingQueue(query);
-        if (active) setState({ kind: "ready", data });
+        if (active) {
+          setState({ kind: "ready", data });
+          setSuppliers(data.suppliers ?? []);
+        }
       } catch (error) {
         if (active)
           setState({ kind: "error", message: error instanceof Error ? error.message : "审核队列读取失败" });
@@ -95,6 +107,16 @@ export function MatchingQueuePage() {
           </Button>
         </div>
         <div className="matching-body">
+          <QueueFilters
+            value={{
+              supplierId: query.supplierId,
+              invoiceFrom: query.invoiceFrom,
+              invoiceTo: query.invoiceTo,
+            }}
+            suppliers={suppliers}
+            busy={busy || state.kind === "loading"}
+            onApply={(filters) => change(filters)}
+          />
           {feedback && (
             <p className="matching-feedback" role={feedback.error ? "alert" : "status"}>
               {feedback.text}

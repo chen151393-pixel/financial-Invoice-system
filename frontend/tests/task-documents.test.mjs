@@ -6,7 +6,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { createServer } from "vite";
 
 // 合成样本只用于组件验证，不连接真实 NS、共享盘或业务数据库。
-let server, api, Declarations, Signed, Upload;
+let server, api, Declarations, Signed, Upload, Toolbar;
 before(async () => {
   server = await createServer({
     configFile: fileURLToPath(new URL("../vite.config.ts", import.meta.url)),
@@ -20,6 +20,9 @@ before(async () => {
   ));
   ({ SignedContracts: Signed } = await server.ssrLoadModule(
     "/src/modules/task/components/SignedContracts.tsx",
+  ));
+  ({ TaskListToolbar: Toolbar } = await server.ssrLoadModule(
+    "/src/modules/task/components/TaskListToolbar.tsx",
   ));
   ({ SignedContractUpload: Upload } = await server.ssrLoadModule(
     "/src/modules/task/components/SignedContractUpload.tsx",
@@ -135,4 +138,32 @@ test("报关资料重试与回签上传只提交必要字段，失败时返回�
       body: { files: [{ filename: "SUB-200.pdf", content: "JVBERi0=", orderNo: "" }] },
     },
   ]);
+});
+
+test("开票跟进显示业务状态与报关单创建日期筛选，可单独清除；未填日期提交 null", async (t) => {
+  const query = {
+    keyword: "",
+    account: "",
+    supplierId: "",
+    stage: "documents",
+    createdFrom: "2026-10-01",
+    createdTo: "2026-10-31",
+    groupBy: "supplier",
+    status: "current",
+    page: 1,
+    pageSize: 20,
+  };
+  const html = renderToStaticMarkup(
+    createElement(Toolbar, { query, busy: false, onChange() {}, onClear() {} }),
+  );
+  assert.match(html, /aria-label="清除业务状态：资料已回"/);
+  assert.match(html, /报关单创建：2026-10-01 至 2026-10-31/);
+  const calls = [];
+  t.mock.method(globalThis, "fetch", async (url, options) => {
+    calls.push(JSON.parse(options.body));
+    return Response.json({ error: "测试" }, { status: 503 });
+  });
+  await assert.rejects(api.listTasks({ ...query, createdFrom: "", createdTo: "" }));
+  assert.equal(calls[0].createdFrom, null);
+  assert.equal(calls[0].stage, "documents");
 });

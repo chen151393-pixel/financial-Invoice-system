@@ -10,12 +10,18 @@ from sqlalchemy.exc import SQLAlchemyError
 from backend.core.errors import ApiError
 from backend.modules.invoice.public import invoice_daily_amounts, latest_invoice_date, read_invoices
 from backend.modules.review.public import workbench_reviews
-from backend.modules.source.public import purchase_lines, workbench_declarations
+from backend.modules.source.public import (
+    admission_issues,
+    china_day_range,
+    purchase_lines,
+    workbench_declarations,
+)
 from backend.modules.task.public import workbench_tasks
 
 from ..dao import workbench_allocation_dao
 from ..mapper.workbench_mapper import matching_todo, review_todo, task_todo
 from ..policy.workbench_reports import BUSINESS_ZONE, invoice_trend, month_report, supplier_ranking
+from ..policy.workbench_scope import Scope, stage_counts, supplier_options
 from ..vo.workbench_vo import Workbench, WorkbenchCounts
 
 
@@ -46,9 +52,13 @@ def select_rows(rows, query):
     return selected, filtered_counts
 
 
-def matching_rows(connection):
+def matching_rows(connection, supplier_id=None):
     rows = workbench_allocation_dao.read(connection)
     contexts = purchase_lines(connection, [row["purchase_line_id"] for row in rows])
+    if supplier_id:
+        rows = [
+            row for row in rows if contexts.get(row["purchase_line_id"], {}).get("supplier_id") == supplier_id
+        ]
     invoices = {row["id"]: row for row in read_invoices(connection, [row["invoice_id"] for row in rows])}
     grouped = defaultdict(list)
     for row in rows:
@@ -77,9 +87,24 @@ class WorkbenchService:
         declarations = workbench_declarations(connection)
         tasks = workbench_tasks(connection, now)
         heads = {row["id"]: row for row in declarations}
-        rows = [review_todo(row) for row in workbench_reviews(connection, declarations)]
-        rows += matching_rows(connection)
-        rows += [task_todo(row, heads) for row in tasks if row["status"] != "completed"]
+        scope = Scope(
+            query, china_day_range(query.createdFrom, query.createdTo) if query.createdFrom else None
+        )
+        reviews = workbench_reviews(connection, declarations)
+        stages, no_task = stage_counts(
+            declarations,
+            {row["id"] for row in reviews},
+            tasks,
+            scope,
+            lambda row: not admission_issues(row["declaration_no"], row["order_count"]),
+        )
+        rows = [review_todo(row) for row in reviews if scope.declaration(row)]
+        rows += matching_rows(connection, scope.supplier_id)
+        rows += [
+            task_todo(row, heads)
+            for row in tasks
+            if row["status"] != "completed" and scope.task(row, heads.get(row["customs_declaration_id"]))
+        ]
         accounts = sorted(
             {row["ns_account"] for row in declarations + tasks} | {r.account for r in rows if r.account}
         )
@@ -102,6 +127,9 @@ class WorkbenchService:
             accounts=accounts,
             counts=counts(scoped),
             filteredCounts=filtered_counts,
+            stages=stages,
+            noTaskCount=no_task,
+            supplierOptions=supplier_options(declarations, query.account),
             items=selected[start : start + query.pageSize],
             total=total,
             page=page,
@@ -133,6 +161,7 @@ def export_csv(rows):
             "金额",
             "金额口径",
             "状态",
+            "业务状态",
             "关注原因",
         ]
     )
@@ -148,6 +177,7 @@ def export_csv(rows):
             row.amount or "",
             row.amountLabel,
             row.statusLabel,
+            row.stageLabel,
             row.reason,
         ]
         # CSV 单元格按文本打开，避免外部单号、供应商名被表格程序当公式执行。

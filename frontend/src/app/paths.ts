@@ -25,6 +25,21 @@ export const legacyPaths = {
 } as const;
 
 export const taskPath = (id: string) => `${paths.tasks}/${encodeURIComponent(id)}`;
+
+// 带筛选条件的列表地址（工作台业务状态分区跳转用）；空值不写入地址
+function withQuery(path: string, filters: Record<string, string>) {
+  const query = new URLSearchParams(Object.entries(filters).filter(([, value]) => value));
+  return query.size ? `${path}?${query}` : path;
+}
+export const reviewListPath = (filters: { status?: string; account?: string }) =>
+  withQuery(paths.review, filters);
+export const taskListPath = (filters: {
+  stage?: string;
+  account?: string;
+  supplierId?: string;
+  createdFrom?: string;
+  createdTo?: string;
+}) => withQuery(paths.tasks, filters);
 export const syncBatchPath = (id: string) => `${paths.syncBatches}/${encodeURIComponent(id)}`;
 export const writebackRequestPath = (id: string) => `${paths.writeback}/${encodeURIComponent(id)}`;
 export const matchingInvoicePath = (invoiceId: string) =>

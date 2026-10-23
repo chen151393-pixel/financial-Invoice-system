@@ -32,6 +32,11 @@ ITEM_FIELDS = (
 )
 
 
+def invoice_ids_between(connection, start, end):
+    """开票日期在 start—end（含）之间的发票 ID，供比对队列按开票日期筛选。"""
+    return header_dao.ids_between(connection, start, end)
+
+
 def read_invoice_accounts(connection):
     """返回已入库发票的来源账套标识，供同步模块补充账套名称。"""
     return header_dao.accounts(connection)

@@ -20,6 +20,7 @@ from ..dao import (
 )
 from ..mapper import document_mapper, notification_mapper, task_mapper
 from ..policy.delivery_policy import ACTIVE, BLOCK_REASON, LABELS, submit_reason
+from ..policy.stage_policy import declaration_stage
 from ..policy.task_policy import SUPERSEDED_REASON, missing_identity_reasons
 from ..vo.capability import Capability
 from ..vo.task_vo import SupplierOption, TaskDetail, TaskDocument, TaskGroup, TaskList
@@ -38,16 +39,28 @@ class TaskService:
         found = (
             self.directory.search(query.keyword) if query.keyword else {"supplier_ids": [], "order_ids": []}
         )
-        where = task_dao.conditions(
-            scope=query.status,
-            account=query.account,
-            keyword=query.keyword,
-            supplier_ids=found["supplier_ids"],
-            order_ids=found["order_ids"],
-            supplier_id=int(query.supplierId) if query.supplierId else None,
+        declaration_ids = (
+            set(self.directory.declaration_ids_created(query.createdFrom, query.createdTo))
+            if query.createdFrom
+            else None
         )
         try:
             with self.engine.connect() as connection:
+                if query.stage:
+                    statuses = task_dao.declaration_statuses(connection, query.account)
+                    staged = {
+                        key for key, value in statuses.items() if declaration_stage(value) == query.stage
+                    }
+                    declaration_ids = staged if declaration_ids is None else declaration_ids & staged
+                where = task_dao.conditions(
+                    scope=query.status,
+                    account=query.account,
+                    keyword=query.keyword,
+                    supplier_ids=found["supplier_ids"],
+                    order_ids=found["order_ids"],
+                    supplier_id=int(query.supplierId) if query.supplierId else None,
+                    declaration_ids=declaration_ids,
+                )
                 offset = (query.page - 1) * query.pageSize
                 total, keys = task_dao.group_page(connection, where, query.groupBy, offset, query.pageSize)
                 rows = task_dao.in_groups(connection, where, query.groupBy, keys)

@@ -1,6 +1,6 @@
 """开票任务：新增、加锁读取、状态更新与列表查询。"""
 
-from sqlalchemy import desc, func, insert, or_, select, update
+from sqlalchemy import desc, false, func, insert, or_, select, update
 
 from ..entity import task_lines, tasks
 
@@ -57,9 +57,16 @@ def set_status(connection, task_id, status, now, *, completed_at=None):
     )
 
 
-def conditions(*, scope, account, keyword, supplier_ids, order_ids, supplier_id=None):
-    """scope：current（未被替代）/ superseded / all；关键字匹配 CD 编号、供应商或子采购单；可按供应商筛选。"""
+def conditions(*, scope, account, keyword, supplier_ids, order_ids, supplier_id=None, declaration_ids=None):
+    """scope：current（未被替代）/ superseded / all；关键字匹配 CD 编号、供应商或子采购单；可按供应商筛选。
+
+    declaration_ids：业务状态、报关单创建日期等条件预先算出的报关单 ID 集合；None 为不限，空集合无结果。
+    """
     result = []
+    if declaration_ids is not None:
+        result.append(
+            tasks.c.customs_declaration_id.in_(sorted(declaration_ids)) if declaration_ids else false()
+        )
     if supplier_id:
         result.append(tasks.c.supplier_id == supplier_id)
     if scope == "current":
@@ -106,6 +113,17 @@ def in_groups(connection, where, group_by, keys):
 def status_counts(connection, where):
     query = select(tasks.c.status, func.count()).where(*where).group_by(tasks.c.status)
     return {status: count for status, count in connection.execute(query)}
+
+
+def declaration_statuses(connection, account):
+    """{报关单 ID: [当前任务状态]}，供按业务状态（报关单下最慢的阶段）筛选。"""
+    query = select(tasks.c.customs_declaration_id, tasks.c.status).where(tasks.c.status != "superseded")
+    if account:
+        query = query.where(tasks.c.ns_account == account)
+    result = {}
+    for row in connection.execute(query):
+        result.setdefault(row.customs_declaration_id, []).append(row.status)
+    return result
 
 
 def supplier_ids(connection, account):

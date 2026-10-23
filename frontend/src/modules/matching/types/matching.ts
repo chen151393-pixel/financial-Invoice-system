@@ -117,8 +117,18 @@ export type Queue = {
   pageSize: number;
   pages: number;
   counts: Record<"all" | "high" | "medium" | "low", number>;
+  // 待审核建议涉及的供应商（按子采购单），供筛选
+  suppliers?: { id: string; name: string }[];
 };
-export type QueueQuery = { tier: "all" | "high" | "medium" | "low"; page: number; pageSize: number };
+export type QueueQuery = {
+  tier: "all" | "high" | "medium" | "low";
+  // 供应商与开票日期筛选；空字符串为不限，日期为 YYYY-MM-DD
+  supplierId: string;
+  invoiceFrom: string;
+  invoiceTo: string;
+  page: number;
+  pageSize: number;
+};
 
 export type MatchingSummary = {
   invoiceId: string;

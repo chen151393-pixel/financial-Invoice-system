@@ -29,7 +29,13 @@ async function read<T>(path: string, method = "GET", body?: unknown): Promise<T>
 
 export const getInvoiceMatching = (invoiceId: string) =>
   read<InvoiceMatching>(`/matching/invoices/${encodeURIComponent(invoiceId)}`);
-export const getMatchingQueue = (query: QueueQuery) => read<Queue>("/matching/queue", "POST", query);
+// 日期为空时提交 null，由后端按"不限"处理
+export const getMatchingQueue = (query: QueueQuery) =>
+  read<Queue>("/matching/queue", "POST", {
+    ...query,
+    invoiceFrom: query.invoiceFrom || null,
+    invoiceTo: query.invoiceTo || null,
+  });
 export const getMatchingSummaries = (invoiceIds: string[]) =>
   read<{ rows: MatchingSummary[] }>("/matching/summaries", "POST", { invoiceIds });
 export function getInvoiceTotals(filters: InvoiceTotalsFilters) {

@@ -22,6 +22,8 @@ export interface TaskSummary {
   currency: string;
   status: TaskStatus;
   statusLabel: string;
+  stage?: string;
+  stageLabel?: string;
   reason: string;
   createdAt: string;
   reviewRevision: number;
@@ -50,10 +52,22 @@ export interface TaskGroup {
   counts: TaskCounts;
   tasks: TaskSummary[];
 }
+// 业务状态（按报关单下最慢的任务归类）；空为不限
+export type TaskStage = "" | "notify" | "invoicing" | "documents" | "completed";
+export const stageLabels: Record<Exclude<TaskStage, "">, string> = {
+  notify: "待通知开票",
+  invoicing: "待核票",
+  documents: "资料已回",
+  completed: "开票完成",
+};
 export interface TaskListQuery {
   keyword: string;
   account: string;
   supplierId: string;
+  stage: TaskStage;
+  // 报关单创建日期（YYYY-MM-DD），须同时填写
+  createdFrom: string;
+  createdTo: string;
   groupBy: "supplier" | "declaration";
   status: "current" | "superseded" | "all";
   page: number;

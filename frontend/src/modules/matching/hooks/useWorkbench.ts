@@ -5,6 +5,9 @@ import type { Workbench, WorkbenchQuery } from "../types/workbench";
 export function useWorkbench() {
   const [query, setQuery] = useState<WorkbenchQuery>({
     account: "",
+    supplierId: "",
+    createdFrom: "",
+    createdTo: "",
     keyword: "",
     kind: "all",
     sort: "priority",

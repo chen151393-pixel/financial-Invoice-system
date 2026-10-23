@@ -1,6 +1,6 @@
 """比对与分配记录：新增、加锁读取、状态更新、汇总与审核队列。"""
 
-from sqlalchemy import case, func, insert, select, update
+from sqlalchemy import case, false, func, insert, select, update
 
 from ..entity import allocations
 
@@ -109,9 +109,18 @@ def confirmed_by_purchase_lines(connection, purchase_line_ids):
     return {row[0]: (row[1], row[2], bool(row[3])) for row in connection.execute(query)}
 
 
-def queue(connection, *, tiers, offset, limit):
+def _scope(line_ids, invoice_ids):
+    """供应商、开票日期筛选：调用方经门面预先算出子采购行 / 发票 ID；None 为不限，空集合无结果。"""
+    where = []
+    for column, ids in ((allocations.c.purchase_line_id, line_ids), (allocations.c.invoice_id, invoice_ids)):
+        if ids is not None:
+            where.append(column.in_(sorted(ids)) if ids else false())
+    return where
+
+
+def queue(connection, *, tiers, offset, limit, line_ids=None, invoice_ids=None):
     """待审核建议，置信度高的在前；tiers 为置信度下限与上限 (low, high)，None 表示不限。"""
-    where = [allocations.c.status == "proposed"]
+    where = [allocations.c.status == "proposed", *_scope(line_ids, invoice_ids)]
     low, high = tiers
     if low is not None:
         where.append(allocations.c.confidence >= low)
@@ -128,14 +137,20 @@ def queue(connection, *, tiers, offset, limit):
     return total, [dict(row) for row in connection.execute(query).mappings()]
 
 
-def proposal_counts(connection, high, medium):
+def proposed_line_ids(connection):
+    """待审核建议涉及的子采购行，供生成供应商筛选选项。"""
+    query = select(allocations.c.purchase_line_id).distinct().where(allocations.c.status == "proposed")
+    return list(connection.execute(query).scalars())
+
+
+def proposal_counts(connection, high, medium, *, line_ids=None, invoice_ids=None):
     """待审核建议按置信度分档计数（高 >= high，中 >= medium，其余为低）。"""
     confidence = allocations.c.confidence
     query = select(
         func.count(),
         func.sum(case((confidence >= high, 1), else_=0)),
         func.sum(case(((confidence >= medium) & (confidence < high), 1), else_=0)),
-    ).where(allocations.c.status == "proposed")
+    ).where(allocations.c.status == "proposed", *_scope(line_ids, invoice_ids))
     # MySQL 的 SUM(CASE ...) 返回 Decimal；计数统一为整数，避免严格响应模型校验失败。
     total, high_count, medium_count = (int(value or 0) for value in connection.execute(query).one())
     return {

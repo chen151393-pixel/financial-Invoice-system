@@ -29,6 +29,9 @@ class TaskSummary(StrictModel):
     currency: str
     status: TaskStatus
     statusLabel: str
+    # 本任务所处业务状态（待通知开票、待核票、资料已回、开票完成）；已被替代的任务为空
+    stage: str = ""
+    stageLabel: str = ""
     reason: str
     createdAt: str
     predecessorTaskIds: list[str]

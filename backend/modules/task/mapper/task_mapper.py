@@ -5,6 +5,7 @@ from datetime import UTC
 from backend.modules.source.public import unit_label
 
 from ..policy.followup_policy import fields as followup_fields
+from ..policy.stage_policy import STAGE_LABELS, task_stage
 from ..policy.task_policy import LINE_STATUS_LABELS, STATUS_LABELS, STATUS_REASONS, event_label
 from ..vo.capability import Capability
 from ..vo.task_vo import TaskCounts, TaskEvent, TaskLine, TaskStep, TaskSummary
@@ -46,6 +47,8 @@ def summary(task, lines, names, contact=None):
         currency=task["currency"] or "",
         status=task["status"],
         statusLabel=STATUS_LABELS[task["status"]],
+        stage=task_stage(task["status"]) or "",
+        stageLabel=STAGE_LABELS.get(task_stage(task["status"]) or "", ""),
         reason=STATUS_REASONS[task["status"]],
         createdAt=iso(task["created_at"]),
         reviewRevision=task["review_revision"],
