@@ -104,7 +104,8 @@
 
 - `PlScriptService`、`SubpoContractSource`。
 - 报关单读取门面（第 4b 步加入，供 review 使用）：`DeclarationService`（索引、分页内容、账户锁 `locked`）、`snapshot`（锁内读取完整内容）、`digest`（重算内容摘要）。2026-10-22 起索引返回真实报关单号并可按供应商筛选；`suppliers(account)` 返回有效报关单关联的供应商选项。
-- 报关单准入（2026-10-22 加入，供 review 与工作台使用）：`admission_issues(declaration_no, order_count)` 返回未出库原因列表，`admission_reason(issues)` 返回提示文案。只决定是否进入核对与待办，不改动来源数据。
+- 报关单准入（2026-10-22 加入）：`admission_issues(declaration_no, order_count)` 返回未出库原因列表，`admission_reason(issues)` 返回提示文案。2026-10-23 起拉取时即按此跳过（见下节）；review 保留同一判断，只用于拦截库中遗留的旧数据。
+- 归档用报关单头（2026-10-23 加入，供 task 使用）：`SourceDirectory.declarations(ids)` 返回 `{id: {record_no, declaration_no, created_at}}`，`created_at` 为 NS 创建时间（UTC）。
 - 子采购行比对上下文（第 4d 步加入，供 matching 使用）：`purchase_lines(connection, line_ids)`——子采购单号、供应商与采购公司（含规范化名称）、品名、单位、数量金额、币种及来源、是否有效、内容摘要 `digest`（建议生成后来源变化即改变）。
 - 来源目录（第 4c 步加入，供 task 使用）：`SourceDirectory`（`service/directory_service.py`）——按 ID 批量取供应商、采购公司、子采购单号与行品名（含已停用记录，保证历史任务可显示），按名称 / 单号搜索 ID，有效供应商分页。
 
@@ -170,3 +171,11 @@
 验证由 `test_source_parent_reference.py` 覆盖两类入口与两种保存模式、独立核实失败时旧数据保留、超过 300 条分批、原始金额与证据留存、人工币种及重复同步、同组无母单和实际错误单号。使用隔离 SQLite 与合成 NS 数据；没有数据库结构变更或 NS 写入。
 
 2026-10-16 使用修复后的服务只读复核正式 NS：2226、2246、2251、2266 均明确无母单；2235 仍关联母单 371689。此联调未修改 NS 或本地业务数据，实际入库行为由上述隔离测试验证。
+
+## 拉取时出库准入与 NS 创建时间（2026-10-23）
+
+- 业务确认：没有真实报关单号、或 NS 反查不到关联子采购单的报关单**不拉取入库**；只因它被带出的子采购单一起跳过。规则复用 `policy/admission_policy.py`，数据包转换在 `mapper/admission_filter.py`，于 `StorageService.read_bundle` 读取单头与反查子采购之后、补读原始行和关联依据之前执行，整页与逐组两种保存方式都经过这里。
+- 响应：`storage.skipped` 列出跳过的报关单（id、number、reason），`storage.warnings` 首条写明“已跳过未出库报关单……”；部分保存模式下入口单据状态为 `skipped`，`batch.counts.skipped` 单独计数，不算失败。NS 补齐后重新拉取对应日期范围即可入库。
+- 不处理历史：之前已入库的未出库报关单保留在库中，不删除、不改写；review 列表不再显示它们，审核时仍会拒绝。
+- 报关单新增 `ns_created_at`（迁移 `0027_source_customs_created_at`），取 NS 系统字段 `created`（与同步页“按创建日期”筛选同一字段），按 UTC 保存，供归档月份使用。字段缺失或无法识别时保存为空，不用申报日期等其他日期代替；已入库的报关单在下次同步时补齐。**真实 NS 的 REST 单头是否返回 `created` 尚待一次只读核实。**
+- 验证：`backend/tests/source/test_admission_sync.py`。

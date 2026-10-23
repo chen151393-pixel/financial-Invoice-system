@@ -75,6 +75,26 @@ def head(connection, declaration_id, *, lock=False):
     return dict(row) if row else None
 
 
+def archive_heads(connection, declaration_ids):
+    """归档文件夹所需的单头：CD 编号、真实报关单号、NS 创建时间（含已停用的报关单）。"""
+    if not declaration_ids:
+        return {}
+    query = select(
+        customs_declarations.c.id,
+        customs_declarations.c.record_no,
+        customs_declarations.c.declaration_no,
+        customs_declarations.c.ns_created_at,
+    ).where(customs_declarations.c.id.in_(declaration_ids))
+    return {
+        row["id"]: {
+            "record_no": row["record_no"],
+            "declaration_no": row["declaration_no"],
+            "created_at": row["ns_created_at"],
+        }
+        for row in connection.execute(query).mappings()
+    }
+
+
 def _supplier_declarations(supplier_id):
     """有效关联中含该供应商子采购单的报关单 ID。"""
     return (

@@ -20,7 +20,7 @@ from ..mapper import notification_mapper, task_mapper
 from ..policy.delivery_policy import ACTIVE, BLOCK_REASON, LABELS, submit_reason
 from ..policy.task_policy import SUPERSEDED_REASON, missing_identity_reasons
 from ..vo.capability import Capability
-from ..vo.task_vo import TaskDetail, TaskDocument, TaskGroup, TaskList
+from ..vo.task_vo import SupplierOption, TaskDetail, TaskDocument, TaskGroup, TaskList
 from .basis_guard import reason as basis_reason
 
 READ_ERROR = "开票任务读取失败，请检查业务数据库及迁移状态"
@@ -42,6 +42,7 @@ class TaskService:
             keyword=query.keyword,
             supplier_ids=found["supplier_ids"],
             order_ids=found["order_ids"],
+            supplier_id=int(query.supplierId) if query.supplierId else None,
         )
         try:
             with self.engine.connect() as connection:
@@ -52,6 +53,7 @@ class TaskService:
                 contacts = notification_dao.latest_sent_by_tasks(connection, [row["id"] for row in rows])
                 status_counts = task_dao.status_counts(connection, where)
                 accounts = task_dao.accounts(connection)
+                supplier_ids = task_dao.supplier_ids(connection, query.account)
         except SQLAlchemyError:
             raise ApiError(503, READ_ERROR) from None
         names = self._names(rows, lines)
@@ -61,11 +63,20 @@ class TaskService:
             groups=groups,
             counts=task_mapper.counts(status_counts),
             accounts=accounts,
+            suppliers=self._supplier_options(supplier_ids),
             total=total,
             page=query.page,
             pageSize=query.pageSize,
             pages=max(1, (total + query.pageSize - 1) // query.pageSize),
         )
+
+    def _supplier_options(self, supplier_ids):
+        found = self.directory.describe(supplier_ids=supplier_ids)["suppliers"] if supplier_ids else {}
+        options = [
+            SupplierOption(id=str(key), name=(found.get(key) or {}).get("name") or f"供应商 {key}")
+            for key in supplier_ids
+        ]
+        return sorted(options, key=lambda option: (option.name, int(option.id)))
 
     def _names(self, tasks, lines):
         return self.directory.describe(

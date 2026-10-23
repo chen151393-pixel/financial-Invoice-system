@@ -95,6 +95,8 @@ def customs(customs_id="870", modified="2026-09-02T10:00:00Z"):
         "custrecord315": "2026-09-02",
         "custrecord_swc_piname": {"id": "8", "refName": "申报主体"},
         "lastmodifieddate": modified,
+        # NS 系统创建时间（UTC）；中国时间为 2026-09-02，归档月份 2026年09月
+        "created": "2026-09-01T16:30:00Z",
     }
     lines = []
     for index, name in enumerate(NAMES, 1):

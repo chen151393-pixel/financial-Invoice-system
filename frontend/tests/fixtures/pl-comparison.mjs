@@ -55,7 +55,7 @@ export function createPlComparisonState() {
     kind: "ready",
     result: {
       groups: [group],
-      counts: { all: 1, pending: 1, approved: 0, unshipped: 0, shown: 1, customs: 1, purchase: 1 },
+      counts: { all: 1, pending: 1, approved: 0, shown: 1, customs: 1, purchase: 1 },
       notices: [],
       accounts: ["prod"],
       suppliers: [{ id: "77", name: "合成供应商" }],

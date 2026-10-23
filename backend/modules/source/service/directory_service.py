@@ -8,7 +8,7 @@ from sqlalchemy.exc import SQLAlchemyError
 
 from backend.core.errors import ApiError
 
-from ..dao import company_dao, purchase_order_dao, supplier_dao
+from ..dao import company_dao, customs_declaration_dao, purchase_order_dao, supplier_dao
 from ..dao.unit_dictionary_dao import unit_names
 
 SEARCH_LIMIT = 500
@@ -41,6 +41,12 @@ class SourceDirectory:
             }
 
         return self._read(read)
+
+    def declarations(self, declaration_ids):
+        """归档用报关单头：{id: {record_no, declaration_no, created_at}}，created_at 为 NS 创建时间（UTC）。"""
+        return self._read(
+            lambda connection: customs_declaration_dao.archive_heads(connection, sorted(set(declaration_ids)))
+        )
 
     def search(self, keyword):
         """名称包含关键字的供应商 ID、单号包含关键字的子采购单 ID（各最多 500 个）。"""

@@ -44,13 +44,12 @@ def test_empty_auth_validation_and_export(engine, env):
 
 def test_review_to_task_to_receipt_and_version_review(engine, ns, world):
     save(ns, engine, bundle([purchase()], [customs("870")]))
-    save(ns, engine, bundle([], [customs("880")]))  # 未出库：无子采购单，不进入待办
+    save(ns, engine, bundle([], [customs("880")]))  # 未出库：无子采购单，拉取时跳过
     initial = read(engine)
-    assert initial.counts.review == 1 and initial.counts.unshipped == 1
+    assert initial.counts.review == 1
     assert [row.title for row in initial.items] == ["CD870"]
     assert initial.items[0].statusLabel == "待财务核对"
     assert all(row.amount is None for row in initial.items)
-    assert read(engine, account="missing").counts.unshipped == 0
     approve(world, "CD870")
     result = read(engine)
     assert (result.counts.review, result.counts.task) == (0, 1)

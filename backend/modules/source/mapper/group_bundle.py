@@ -14,8 +14,12 @@ def split_groups(bundle, kind, rows, config):
     membership = bundle.get("customs_purchase_membership", {})
     owners = {member: identity for identity, members in membership.items() for member in members}
     evidence = bundle.get("relation_evidence", {})
+    # 拉取时已跳过的未出库单据不成组，由调用方标记为"未出库，已跳过"
+    skipped = {item["id"] for item in bundle.get("skipped", [])}
     groups = {}
     for row in rows:
+        if row["id"] in skipped:
+            continue
         if kind == "customs-declarations":
             key = ("customs", row["id"])
         else:

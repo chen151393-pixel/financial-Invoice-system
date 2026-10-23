@@ -171,6 +171,7 @@ flowchart LR
 | `total_amount`         | `DECIMAL(24, 6)`  | 是   | —                    | 来源单头的整单金额；不能与行金额重复累加                                                  |
 | `source_status`        | `VARCHAR(100)`    | 是   | —                    | NS 原始业务状态，与本系统审核、任务状态分开                                               |
 | `source_modified_at`   | `DATETIME(6)`     | 是   | —                    | 来源系统修改时间，用于识别旧版本                                                          |
+| `ns_created_at`        | `DATETIME(6)`     | 是   | —                    | NS 报关单创建时间（created），UTC；归档月份按中国时间取（迁移 0027）                     |
 | `synced_at`            | `DATETIME(6)`     | 否   | —                    | 本次成功保存来源数据的时间，UTC                                                           |
 | `is_active`            | `BOOL`            | 否   | 1                    | 当前是否有效；停用保留历史记录，不物理删除                                                |
 | `raw_record_id`        | `BIGINT UNSIGNED` | 是   | —                    | 对应原始数据版本 ID；source 表指向 source_raw_records，invoice 表指向 invoice_raw_records |
@@ -558,6 +559,29 @@ flowchart LR
 
 - 主键：`id`。
 - 唯一约束 `uq_task_supplier_group`：`(supplier_id)`。
+
+<a id="task_supplier_settings"></a>
+
+### task_supplier_settings｜供应商通知设置
+
+供应商档案人工维护“是否开启供应商通知”（迁移 0026，2026-10-23）。没有记录视为开启；关闭后之后的财务审核不生成该供应商的开票任务，已有任务不变。
+
+结构依据：[表定义](../../backend/modules/task/entity/supplier_setting.py)；业务说明：[task 模块](../../backend/modules/task/README.md)。
+
+| 字段             | MySQL 类型        | 可空 | 默认                 | 中文含义                                                   |
+| ---------------- | ----------------- | ---- | -------------------- | ---------------------------------------------------------- |
+| `id`             | `BIGINT UNSIGNED` | 否   | 自增                 | 供应商设置主键                                             |
+| `supplier_id`    | `BIGINT UNSIGNED` | 否   | —                    | 供应商本地主键，指向 source_suppliers.id                   |
+| `notify_enabled` | `BOOL`            | 否   | 1                    | 是否开启供应商通知；关闭后审核通过不生成该供应商的开票任务 |
+| `version`        | `INTEGER`         | 否   | 1                    | 设置乐观锁版本，防止并发编辑覆盖                           |
+| `updated_by`     | `VARCHAR(200)`    | 否   | —                    | 最后修改设置的认证操作者                                   |
+| `created_at`     | `DATETIME(6)`     | 否   | CURRENT_TIMESTAMP(6) | 本地记录创建时间，UTC                                      |
+| `updated_at`     | `DATETIME(6)`     | 否   | CURRENT_TIMESTAMP(6) | 本地记录最后更新时间，UTC；由 DAO 更新                     |
+
+**关联与约束**
+
+- 主键：`id`。
+- 唯一约束 `uq_task_supplier_setting`：`(supplier_id)`。
 
 <a id="task_tasks"></a>
 

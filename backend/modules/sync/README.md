@@ -173,3 +173,7 @@ API 拉票支持 `businessTypes` 文本多选，默认“采购固定资产、�
 ## 进项发票账套选项
 
 `GET /api/sync/lemon/invoices/accounts` 返回 `{items: [{value, label}]}`，仅管理员可读。经 invoice 门面获取已入库账套，复用当前环境和身份的拉票记录、绑定记录补充名称；不调用上游、不切换当前同步账套、不要求绑定仍有效。专业版与默认版按各自命名空间区分，Excel 显示“账套未对齐”，无法还原名称的历史账套保留原标识。选项不受列表筛选或分页影响。验证见 `backend/tests/sync/test_invoice_accounts.py`。
+
+## 未出库报关单拉取时跳过（2026-10-23）
+
+保存时由 source 按出库准入跳过没有真实报关单号或没有关联子采购单的报关单（及只因它带出的子采购单），详见 [source 说明](../source/README.md)。部分保存模式的逐单结果新增状态 `skipped`（“未出库，已跳过”），`batch.counts.skipped` 单独计数，不计为失败，也不阻止翻页。同步页逐单结果表与汇总文字同步显示。

@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 
 from backend.modules.review.public import ApprovedLine
 
-from ..dao import contract_job_dao, event_dao, task_dao, task_line_dao
+from ..dao import contract_job_dao, event_dao, supplier_setting_dao, task_dao, task_line_dao
 from ..policy.task_policy import group_key
 from .task_status_service import change_status
 
@@ -47,8 +47,14 @@ def on_review_approved(connection, event):
     for task in previous.values():
         change_status(connection, task, "superseded", event.approved_by, "开票依据换版，生成后继任务", now)
     task_line_dao.supersede(connection, changed_tasks, now)
+    # 供应商档案关闭通知的，不生成开票任务（2026-10-23 业务确认，只影响之后的审核）
+    muted = supplier_setting_dao.disabled(
+        connection, sorted({line.supplier_id for line in replacements.values() if line.supplier_id})
+    )
     groups = {}
     for line in replacements.values():
+        if line.supplier_id in muted:
+            continue
         key = group_key(line.supplier_id, line.company_id, line.currency, line.purchase_order_id)
         groups.setdefault(key, []).append(line)
     for key, lines in groups.items():

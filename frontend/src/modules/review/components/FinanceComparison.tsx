@@ -9,7 +9,6 @@ const FILTER_LABELS: Record<ReviewFilter, string> = {
   all: "全部报关单",
   pending: "待审核",
   approved: "审核通过",
-  unshipped: "未出库",
 };
 
 export function FinanceComparison({
@@ -102,12 +101,6 @@ export function FinanceComparison({
           </button>
         </div>
       </div>
-      {filter === "unshipped" && (
-        <p className="fr-review-reason">
-          未出库：缺少真实报关单号或没有关联子采购单的报关单，不进入财务核对和待办；在 NS
-          补齐后重新同步即自动进入。
-        </p>
-      )}
       <div className="fr-results">
         <p>
           {result.counts.shown} 张报关单 · {result.counts.customs} 条报关行 · {result.counts.purchase}{" "}

@@ -36,9 +36,11 @@ def set_status(connection, task_id, status, now, *, completed_at=None):
     )
 
 
-def conditions(*, scope, account, keyword, supplier_ids, order_ids):
-    """scope：current（未被替代）/ superseded / all；关键字匹配 CD 编号、供应商或子采购单。"""
+def conditions(*, scope, account, keyword, supplier_ids, order_ids, supplier_id=None):
+    """scope：current（未被替代）/ superseded / all；关键字匹配 CD 编号、供应商或子采购单；可按供应商筛选。"""
     result = []
+    if supplier_id:
+        result.append(tasks.c.supplier_id == supplier_id)
     if scope == "current":
         result.append(tasks.c.status != "superseded")
     elif scope == "superseded":
@@ -83,6 +85,18 @@ def in_groups(connection, where, group_by, keys):
 def status_counts(connection, where):
     query = select(tasks.c.status, func.count()).where(*where).group_by(tasks.c.status)
     return {status: count for status, count in connection.execute(query)}
+
+
+def supplier_ids(connection, account):
+    """未被替代的任务涉及的供应商，供筛选下拉使用。"""
+    query = (
+        select(tasks.c.supplier_id)
+        .distinct()
+        .where(tasks.c.status != "superseded", tasks.c.supplier_id.is_not(None))
+    )
+    if account:
+        query = query.where(tasks.c.ns_account == account)
+    return list(connection.execute(query).scalars())
 
 
 def accounts(connection):

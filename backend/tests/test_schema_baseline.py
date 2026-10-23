@@ -31,6 +31,7 @@ TABLES = {
     "invoice_versions",
     "review_lines",
     "task_supplier_groups",
+    "task_supplier_settings",
     "task_external_groups",
     "task_group_imports",
     "task_tasks",

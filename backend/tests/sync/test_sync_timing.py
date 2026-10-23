@@ -82,5 +82,11 @@ def test_whole_page_failure_falls_back_to_group_reads(batch, engine, caplog):
             "customs-declarations", lambda: page_result(page[:3])
         )
     assert any("ns_sync_whole_page_fallback" in r.getMessage() for r in caplog.records)
-    assert result["batch"]["counts"] == {"saved": 2, "failed": 1, "unknown": 0, "not_processed": 0}
+    assert result["batch"]["counts"] == {
+        "saved": 2,
+        "skipped": 0,
+        "failed": 1,
+        "unknown": 0,
+        "not_processed": 0,
+    }
     assert len(rows(engine, "SELECT id FROM source_customs_declarations")) == 2

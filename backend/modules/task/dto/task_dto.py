@@ -11,6 +11,7 @@ from backend.core.dto import StrictModel
 class TaskListQuery(StrictModel):
     keyword: str = Field(default="", max_length=120)
     account: str = Field(default="", max_length=100, pattern=r"^[a-zA-Z0-9_-]*$")
+    supplierId: str = Field(default="", max_length=20, pattern=r"^([1-9][0-9]*)?$")
     groupBy: Literal["supplier", "declaration"] = "supplier"
     status: Literal["current", "superseded", "all"] = "current"
     page: int = Field(default=1, ge=1, le=100000)

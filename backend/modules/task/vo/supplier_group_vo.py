@@ -48,8 +48,18 @@ class SupplierList(StrictModel):
     pages: int
 
 
+class SupplierNotify(StrictModel):
+    """是否开启供应商通知；关闭后财务审核通过不生成该供应商的开票任务。"""
+
+    enabled: bool
+    revision: int
+    updatedBy: str = ""
+    updatedAt: str | None = None
+
+
 class SupplierProfile(SupplierOption):
     nsInternalId: str
+    notify: SupplierNotify
 
 
 class SupplierProfileList(StrictModel):

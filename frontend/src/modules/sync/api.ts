@@ -16,11 +16,12 @@ export type PullResult = {
   batch?: {
     status: "completed" | "partial" | "interrupted";
     canContinue: boolean;
-    counts: { saved: number; failed: number; unknown: number; not_processed: number };
+    // skipped：未出库（缺真实报关单号或无子采购单）的报关单及其子采购，拉取时跳过、不入库
+    counts: { saved: number; skipped?: number; failed: number; unknown: number; not_processed: number };
     items: {
       id: string;
       number: string;
-      status: "saved" | "failed" | "unknown" | "not_processed";
+      status: "saved" | "skipped" | "failed" | "unknown" | "not_processed";
       reason: string;
     }[];
   };

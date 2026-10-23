@@ -57,10 +57,11 @@ class ReviewService:
             )
             for row in index
         }
-        # "全部"只含已出库的报关单；未出库的单独计数、单独筛选查看
-        counts = {"all": 0, "pending": 0, "approved": 0, "unshipped": 0}
+        # 未出库的报关单自 2026-10-23 起拉取时即跳过；库中遗留的旧数据不显示、不计数
+        counts = {"all": 0, "pending": 0, "approved": 0}
         for state, _, _ in states.values():
-            counts[state] += 1
+            if state in counts:
+                counts[state] += 1
         counts["all"] = counts["pending"] + counts["approved"]
         wanted = {"all": ("pending", "approved")}.get(query.status, (query.status,))
         selected = [row["id"] for row in index if states[row["id"]][0] in wanted]

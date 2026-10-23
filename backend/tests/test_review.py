@@ -12,11 +12,12 @@ from backend.core.events import EventBus
 from backend.modules.review.dto.review_dto import ApproveRequest, BatchApproveRequest, DeclarationListQuery
 from backend.modules.review.public import ReviewApproved
 from backend.modules.review.service.review_service import ReviewService
-from backend.modules.source.public import DeclarationService
+from backend.modules.source.public import DeclarationService, digest, snapshot
 from backend.tests.test_source_storage import ACCOUNT, bundle, customs, purchase, rows, save
 from backend.tests.test_source_storage import engine as engine  # 共用夹具
 from backend.tests.test_source_storage import ns as ns  # 共用夹具
 from fastapi.testclient import TestClient
+from sqlalchemy import text
 
 USER = "user:admin"
 
@@ -41,7 +42,7 @@ def service(engine, events):
 @pytest.fixture
 def seeded(ns, engine):
     save(ns, engine, bundle([purchase()], [customs("870")]))
-    save(ns, engine, bundle([], [customs("880")]))  # 没有关联子采购单
+    save(ns, engine, bundle([], [customs("880")]))  # 没有关联子采购单：拉取时跳过，不入库
     return engine
 
 
@@ -54,11 +55,23 @@ def group(service, record_no, status="all"):
     return next(item for item in result.groups if item.recordNumber == record_no)
 
 
-def without_real_no(customs_id):
-    """有关联子采购单但没有真实报关单号的报关单（未出库）。"""
-    customs_id, head, lines = customs(customs_id)
-    head["custrecord_swc_realno"] = ""
-    return customs_id, head, lines
+def clear_real_no(engine, record_no):
+    """模拟 2026-10-23 前已入库、缺真实报关单号的旧数据（新拉取的不会再入库）。"""
+    with engine.begin() as connection:
+        connection.execute(
+            text("UPDATE source_customs_declarations SET declaration_no = NULL WHERE record_no = :r"),
+            {"r": record_no},
+        )
+        # 旧数据入库时的摘要与当时内容一致：按清空后的内容重算，避免被"来源已变化"先行拦截
+        identity = connection.execute(
+            text("SELECT id FROM source_customs_declarations WHERE record_no = :r"), {"r": record_no}
+        ).scalar()
+        current = digest(snapshot(connection, identity))
+        connection.execute(
+            text("UPDATE source_customs_declarations SET content_sha256 = :d WHERE id = :i"),
+            {"d": current, "i": identity},
+        )
+    return current
 
 
 def other_supplier(order_id, customs_id):
@@ -78,11 +91,12 @@ def approve(service, item, note="核对无误", actor=USER):
     return service.approve(int(item.id), ApproveRequest(contentSha256=item.contentSha256, note=note), actor)
 
 
-def test_list_states_counts_and_purchase_basis(service, seeded):
+def test_list_states_counts_and_purchase_basis(service, seeded, engine):
     result = service.browse(query())
-    # 未出库（CD880 无子采购单）不计入"全部"，只单独计数
-    assert result.counts["all"] == 1 and result.counts["pending"] == 1 and result.counts["unshipped"] == 1
+    # CD880 没有关联子采购单，拉取时已跳过，不出现在核对列表
+    assert result.counts == {"all": 1, "pending": 1, "approved": 0, "customs": 2, "purchase": 2, "shown": 1}
     assert [item.recordNumber for item in result.groups] == ["CD870"]
+    assert rows(engine, "SELECT id FROM source_customs_declarations WHERE record_no = 'CD880'") == []
     assert result.accounts == [ACCOUNT]
     pending = group(service, "CD870")
     assert pending.review.allowed and pending.review.status == "pending"
@@ -90,34 +104,27 @@ def test_list_states_counts_and_purchase_basis(service, seeded):
     line = pending.customsLines[0].purchaseLines[0]
     assert (line.quantity, line.unit, line.amount) == ("10", "个", "100.5")  # 开票口径：采购数量与单位
     assert "报关数量 5 千克" in line.note
-    unshipped = group(service, "CD880", "unshipped")
-    assert unshipped.review.status == "unshipped" and unshipped.review.label == "未出库"
-    assert not unshipped.review.allowed and "没有关联的子采购单" in unshipped.review.reason
 
 
 def test_status_filter_and_pagination(service, seeded, ns, engine):
     save(ns, engine, bundle([purchase("210", "890")], [customs("890")]))
-    assert [item.recordNumber for item in service.browse(query(status="unshipped")).groups] == ["CD880"]
     first = service.browse(query(pageSize=1, page=1))
     second = service.browse(query(pageSize=1, page=2))
     assert first.total == 2 and first.pages == 2 and len(first.groups) == len(second.groups) == 1
     assert first.groups[0].id != second.groups[0].id
-    assert service.browse(query(keyword="CD880")).total == 0  # 未出库不在"全部"中
-    assert service.browse(query(keyword="CD880", status="unshipped")).total == 1
+    assert service.browse(query(keyword="CD880")).total == 0
+    with pytest.raises(ValueError):
+        query(status="unshipped")  # 未出库不再作为列表筛选项
 
 
-def test_missing_real_declaration_number_is_unshipped(service, ns, engine):
-    save(ns, engine, bundle([purchase("210", "890")], [without_real_no("890")]))
-    result = service.browse(query())
-    assert result.counts["all"] == 0 and result.counts["unshipped"] == 1
-    item = group(service, "CD890", "unshipped")
-    assert "缺少真实报关单号" in item.review.reason and not item.review.allowed
+def test_legacy_row_without_real_number_is_hidden_and_refused(service, seeded, engine):
+    item = group(service, "CD870")
+    item = item.model_copy(update={"contentSha256": clear_real_no(engine, "CD870")})
+    assert service.browse(query()).counts["all"] == 0
     with pytest.raises(ApiError, match="缺少真实报关单号") as error:
         approve(service, item)
     assert error.value.status == 409
-    # NS 补齐真实报关单号后重新同步，自动进入待审核
-    save(ns, engine, bundle([purchase("210", "890")], [customs("890")]))
-    assert group(service, "CD890").review.status == "pending"
+    assert rows(engine, "SELECT id FROM review_records") == []
 
 
 def test_supplier_filter_and_options(service, seeded, ns, engine):
@@ -190,15 +197,11 @@ def test_source_change_after_approval_requires_new_review(service, seeded, ns, e
     assert received[1].superseded_review_id == received[0].review_id
 
 
-def test_unshipped_declaration_cannot_be_approved(service, seeded):
-    with pytest.raises(ApiError, match="没有关联的子采购单"):
-        approve(service, group(service, "CD880", "unshipped"))
-
-
 def test_batch_approve_reports_each_declaration(service, seeded, ns, engine, received):
     save(ns, engine, bundle([purchase("210", "890")], [customs("890")]))
-    first, second = group(service, "CD870"), group(service, "CD890")
-    unshipped = group(service, "CD880", "unshipped")
+    save(ns, engine, bundle([purchase("220", "891")], [customs("891")]))
+    first, second, unshipped = group(service, "CD870"), group(service, "CD890"), group(service, "CD891")
+    unshipped = unshipped.model_copy(update={"contentSha256": clear_real_no(engine, "CD891")})
     # 页面打开后 CD890 来源变化：该张被跳过，其余照常通过
     save(ns, engine, bundle([purchase("210", "890", amounts=("99.00", "20.00"))], [customs("890")]))
     result = batch(service, [first, second, unshipped])

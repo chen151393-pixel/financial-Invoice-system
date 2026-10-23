@@ -1,7 +1,7 @@
 // 与后端 /api/review 的响应一致；金额、数量为十进制字符串，前端不重算。
-// unshipped：未出库（缺真实报关单号或无关联子采购单），不计入"全部"，单独筛选查看。
+// unshipped：未出库。自 2026-10-23 起拉取时即跳过，列表不再返回；保留类型以显示后端兜底拒绝。
 export type ReviewStatus = "pending" | "approved" | "unshipped";
-export type ReviewFilter = "all" | ReviewStatus;
+export type ReviewFilter = "all" | "pending" | "approved";
 export interface PurchaseLine {
   id: string;
   name: string;

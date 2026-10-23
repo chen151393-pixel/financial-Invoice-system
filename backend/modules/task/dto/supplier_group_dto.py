@@ -44,6 +44,12 @@ class GroupSave(StrictModel):
     enabled: bool = True
 
 
+class SupplierNotifySave(StrictModel):
+    supplierId: SupplierId
+    enabled: bool
+    revision: int = Field(ge=0, description="当前设置版本，从未设置时为 0")
+
+
 class SupplierGroupMatch(StrictModel):
     supplierId: SupplierId
     keyword: Annotated[str, StringConstraints(strip_whitespace=True, max_length=120)] = ""

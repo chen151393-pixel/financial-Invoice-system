@@ -49,7 +49,7 @@ class PartialSyncService:
                 page = read_page()
                 result = PartialResult(page)
                 context = (connection, kind, config, account, lock, report, result)
-                groups = self._read_whole_page(kind, page["rows"], config, report)
+                groups = self._read_whole_page(kind, page["rows"], config, report, result)
                 if groups is None:
                     self._save_each_group(context, page["rows"])
                 else:
@@ -58,7 +58,7 @@ class PartialSyncService:
         except SQLAlchemyError:
             raise ApiError(503, "数据库连接中断，请先核实已保存单据，不要自动重试") from None
 
-    def _read_whole_page(self, kind, rows, config, report):
+    def _read_whole_page(self, kind, rows, config, report, result):
         """整页一次读取；返回按组拆分的数据包，业务读取失败时返回 None 交由逐组读取定位。"""
         if not rows:
             return []
@@ -75,6 +75,7 @@ class PartialSyncService:
             logger.info("ns_sync_whole_page_fallback kind=%s status=%s", kind, error.status)
             report("整页读取未通过，改为逐组读取以定位失败单据")
             return None
+        result.mark_skipped(bundle.get("skipped", []))
         return split_groups(bundle, kind, rows, config)
 
     def _commit_groups(self, context, groups):
@@ -141,6 +142,7 @@ class PartialSyncService:
                 return False
         else:
             result.add(saved)
+            result.mark_skipped(collected.get("skipped", []))
             section = "customs" if kind == "customs-declarations" else "purchases"
             saved_ids = {identity for identity, _, _ in collected[section]}
             # 初次单头读取失败的入口，若作为完整关联单据成功读回并提交，按实际结果更新状态。

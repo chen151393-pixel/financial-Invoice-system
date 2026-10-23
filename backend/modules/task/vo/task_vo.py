@@ -2,6 +2,8 @@
 
 from typing import Literal
 
+from pydantic import Field
+
 from backend.core.dto import StrictModel
 
 from .capability import Capability
@@ -51,11 +53,17 @@ class TaskGroup(StrictModel):
     tasks: list[TaskSummary]
 
 
+class SupplierOption(StrictModel):
+    id: str
+    name: str
+
+
 class TaskList(StrictModel):
     groupBy: Literal["supplier", "declaration"]
     groups: list[TaskGroup]
     counts: TaskCounts
     accounts: list[str]
+    suppliers: list[SupplierOption] = Field(default_factory=list)
     total: int
     page: int
     pageSize: int

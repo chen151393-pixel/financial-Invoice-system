@@ -26,8 +26,7 @@ export type Todo = {
   priority: number;
   attention: boolean;
 };
-// unshipped：未出库报关单数（缺真实报关单号或无子采购单），不计入待办。
-export type WorkbenchCounts = Record<TodoKind | "unshipped" | "reverify" | "preparation", number>;
+export type WorkbenchCounts = Record<TodoKind | "reverify" | "preparation", number>;
 export type Workbench = {
   generatedAt: string;
   accounts: string[];

@@ -8,10 +8,18 @@ from ..dto.supplier_group_dto import (
     GroupQuery,
     GroupSave,
     SupplierGroupMatch,
+    SupplierNotifySave,
     SupplierProfileQuery,
     WecomGroupQuery,
 )
-from ..vo.supplier_group_vo import GroupBinding, GroupList, SupplierList, SupplierProfileList, WecomGroupList
+from ..vo.supplier_group_vo import (
+    GroupBinding,
+    GroupList,
+    SupplierList,
+    SupplierNotify,
+    SupplierProfileList,
+    WecomGroupList,
+)
 
 
 def create_router(service, profiles):
@@ -20,6 +28,10 @@ def create_router(service, profiles):
     @router.post("/profiles/query", response_model=SupplierProfileList)
     def profile_list(body: SupplierProfileQuery, owner: Owner):
         return profiles.browse(body, owner)
+
+    @router.post("/profiles/notify", response_model=SupplierNotify)
+    def profile_notify(body: SupplierNotifySave, owner: Owner):
+        return profiles.set_notify(body, owner)
 
     @router.post("/query", response_model=GroupList)
     def browse(body: GroupQuery, owner: Owner):

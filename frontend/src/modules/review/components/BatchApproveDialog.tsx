@@ -62,7 +62,7 @@ export function BatchApproveDialog({
         ) : (
           <>
             <p className="fr-dialog__hint">
-              仅审核下列当前页已勾选的报关单，不包含其他页或未勾选的报关单。后端逐张重新核对来源，来源已变化或未出库的会被跳过并列出原因；需要补充结算币种证据的报关单请单张审核。
+              仅审核下列当前页已勾选的报关单，不包含其他页或未勾选的报关单。后端逐张重新核对来源，来源已变化的会被跳过并列出原因；需要补充结算币种证据的报关单请单张审核。
             </p>
             <ul className="fr-batch-list">
               {groups.map((group) => (

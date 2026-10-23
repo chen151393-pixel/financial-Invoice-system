@@ -166,21 +166,18 @@ test("后端不允许审核时禁用按钮并展示实际原因", () => {
   state.result.groups[0].review = {
     ...state.result.groups[0].review,
     allowed: false,
-    status: "unshipped",
-    label: "未出库",
-    reason: "未出库：缺少真实报关单号。补齐后重新同步即进入财务核对。",
+    reason: "NS未提供明确行关联",
   };
-  const html = render(state, { filter: "unshipped", onBatchApprove() {} });
-  assert.match(html, /缺少真实报关单号/);
+  const html = render(state, { onBatchApprove() {} });
+  assert.match(html, /NS未提供明确行关联/);
   assert.match(html, /<button[^>]*disabled=""[^>]*aria-label="审核通过：CDTEST001"/);
-  assert.match(html, /fr-status--unshipped/);
-  assert.match(html, /不进入财务核对和待办/);
   assert.doesNotMatch(html, /type="checkbox"/, "不可审核的报关单不提供批量勾选");
 });
 
-test("状态筛选含未出库；批量勾选只对后端允许审核的报关单开放", () => {
+test("状态筛选不再含未出库（拉取时已跳过）；批量勾选只对后端允许审核的报关单开放", () => {
   const html = render(createPlComparisonState(), { onBatchApprove() {} });
-  for (const label of ["全部报关单", "待审核", "审核通过", "未出库"]) assert.ok(html.includes(label));
+  for (const label of ["全部报关单", "待审核", "审核通过"]) assert.ok(html.includes(label));
+  assert.doesNotMatch(html, /未出库/);
   assert.match(html, /aria-label="选择报关单：CDTEST001"/);
   assert.match(html, /aria-label="选择当前页全部可审核的报关单"/);
   assert.doesNotMatch(render(), /type="checkbox"/, "未提供批量审核时不显示勾选");
