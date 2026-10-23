@@ -32,6 +32,8 @@ TABLES = {
     "review_lines",
     "task_supplier_groups",
     "task_supplier_settings",
+    "task_declaration_documents",
+    "task_signed_contracts",
     "task_external_groups",
     "task_group_imports",
     "task_tasks",

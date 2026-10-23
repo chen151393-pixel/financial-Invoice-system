@@ -61,10 +61,12 @@ from .modules.sync.service.lemon_worker import LemonWorker
 from .modules.sync.service.ns_run_service import NsRunService
 from .modules.task.controller.delivery_controller import create_router as delivery_router
 from .modules.task.controller.external_group_controller import create_router as external_group_router
+from .modules.task.controller.signed_contract_controller import create_router as signed_contract_router
 from .modules.task.controller.supplier_group_controller import create_router as task_group_router
 from .modules.task.controller.task_controller import create_router as task_router
 from .modules.task.service.closure_service import ClosureService
 from .modules.task.service.contract_worker import ContractWorker
+from .modules.task.service.declaration_document_service import DeclarationDocumentService
 from .modules.task.service.delivery_receipt_service import DeliveryReceiptService
 from .modules.task.service.delivery_reconcile_service import DeliveryReconcileService
 from .modules.task.service.delivery_submit_service import DeliverySubmitService
@@ -74,6 +76,7 @@ from .modules.task.service.group_import_preview import GroupImportPreview
 from .modules.task.service.group_import_service import GroupImportService
 from .modules.task.service.notification_service import NotificationService
 from .modules.task.service.progress_service import on_allocation_changed
+from .modules.task.service.signed_contract_service import SignedContractService
 from .modules.task.service.supplier_group_service import SupplierGroupService as TaskGroupService
 from .modules.task.service.supplier_profile_service import SupplierProfileService
 from .modules.task.service.task_generation_service import on_review_approved
@@ -196,7 +199,10 @@ def _register_business(app, settings, ns, contract_ns, wecom, engine, lemon_invo
         )
     )
     documents = DocumentService(engine, directory, SourceContracts(contract_ns), archive, task_queries)
-    app.state.contract_worker = ContractWorker(engine, documents)
+    declaration_documents = DeclarationDocumentService(
+        engine, directory, SourceContracts(contract_ns), archive, task_queries
+    )
+    app.state.contract_worker = ContractWorker(engine, documents, declaration_documents)
     app.include_router(
         task_group_router(
             TaskGroupService(engine, directory, wecom), SupplierProfileService(engine, directory)
@@ -208,8 +214,10 @@ def _register_business(app, settings, ns, contract_ns, wecom, engine, lemon_invo
             documents,
             NotificationService(engine, task_queries),
             ClosureService(engine, task_queries),
+            declaration_documents,
         )
     )
+    app.include_router(signed_contract_router(SignedContractService(engine, directory, archive)))
     # 发票导入 → matching 生成比对建议；比对通过 / 取消 → task 重算收票进度（均在发布方事务中）。
     app.include_router(invoice_router(ImportService(engine, events), InvoiceService(engine)))
     matching_queries = MatchingQueryService(engine)

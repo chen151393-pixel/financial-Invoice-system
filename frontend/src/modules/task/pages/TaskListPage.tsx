@@ -4,7 +4,8 @@ import { useEffect, useState } from "react";
 import { Button } from "../../../shared/components/Button";
 import { Pagination } from "../../../shared/components/Pagination";
 import { openLocalSession } from "../../identity/api";
-import { listTasks } from "../api/task";
+import { listTasks, uploadSignedContracts } from "../api/task";
+import { SignedContractUpload } from "../components/SignedContractUpload";
 import { TaskCountList } from "../components/TaskCountList";
 import { TaskFollowupTable } from "../components/TaskFollowupTable";
 import { TaskListToolbar } from "../components/TaskListToolbar";
@@ -30,6 +31,7 @@ export function TaskListPage() {
   const [suppliers, setSuppliers] = useState<TaskList["suppliers"]>([]);
   const [state, setState] = useState<Remote<TaskList>>({ kind: "loading" });
   const [refresh, setRefresh] = useState(0);
+  const [uploading, setUploading] = useState(false);
   useEffect(() => {
     let active = true;
     async function load() {
@@ -107,7 +109,22 @@ export function TaskListPage() {
         >
           刷新
         </Button>
+        <Button disabled={busy} onClick={() => setUploading(true)}>
+          批量上传回签合同
+        </Button>
       </form>
+      {uploading && (
+        <SignedContractUpload
+          upload={uploadSignedContracts}
+          onClose={(changed) => {
+            setUploading(false);
+            if (changed) {
+              setState({ kind: "loading" });
+              setRefresh((n) => n + 1);
+            }
+          }}
+        />
+      )}
       {(keyword !== query.keyword || account !== query.account || supplierId !== query.supplierId) && (
         <p className="it-help" role="status">
           筛选条件已修改，点击「查询」生效；当前结果仍使用上次提交的条件。

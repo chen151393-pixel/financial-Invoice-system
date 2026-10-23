@@ -1,0 +1,50 @@
+/* 回签合同批量上传窗口 */
+.itd-upload {
+  display: grid;
+  gap: var(--space-control);
+  padding-top: var(--space-control);
+}
+.itd-upload__picker {
+  display: grid;
+  gap: var(--space-small);
+  font-weight: 600;
+}
+.itd-upload__picker input {
+  font: inherit;
+  font-weight: 400;
+}
+.itd-upload__caption {
+  text-align: left;
+  font-weight: 600;
+  padding-bottom: var(--space-small);
+}
+.itd-upload table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+.itd-upload th,
+.itd-upload td {
+  padding: 8px;
+  border-bottom: 1px solid var(--color-border);
+  text-align: left;
+  vertical-align: top;
+  overflow-wrap: anywhere;
+}
+.itd-upload__assign {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-small);
+}
+.itd-upload__assign input {
+  min-width: 0;
+  width: 140px;
+  padding: 4px 8px;
+  border: 1px solid var(--color-input-border);
+  border-radius: var(--radius-control);
+  font: inherit;
+}
+.itd-upload .it-secondary {
+  display: block;
+  color: var(--color-muted);
+}

@@ -6,17 +6,26 @@ import { openLocalSession } from "../../identity/api";
 import {
   closeTaskLine,
   getTask,
+  prepareDeclarationDocument,
   prepareTaskDocument,
   recordTaskNotification,
   saveTaskNotification,
+  uploadSignedContracts,
 } from "../api/task";
+import { SignedContractUpload } from "../components/SignedContractUpload";
 import { TaskDocuments } from "../components/TaskDocuments";
 import { TaskHistory } from "../components/TaskHistory";
 import { TaskLines } from "../components/TaskLines";
 import { TaskNotification } from "../components/TaskNotification";
 import { useDelivery } from "../hooks/useDelivery";
 import { sectionLabels, TaskOverview, type Section } from "../components/TaskOverview";
-import type { ClosureRequest, NotificationDraft, NotificationRecord, TaskDetail } from "../types/task";
+import type {
+  ClosureRequest,
+  DeclarationDocumentType,
+  NotificationDraft,
+  NotificationRecord,
+  TaskDetail,
+} from "../types/task";
 import "./task.css";
 import "./task-detail.css";
 
@@ -42,6 +51,7 @@ export function TaskDetailPage({ id }: { id: string }) {
   const [section, setSection] = useState<Section>(readSection);
   const [busy, setBusy] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<Feedback>(null);
+  const [uploading, setUploading] = useState(false);
   const deliveryChanged = useCallback(async () => {
     const data = await getTask(id);
     setState({ kind: "ready", data });
@@ -85,6 +95,21 @@ export function TaskDetailPage({ id }: { id: string }) {
       setFeedback({ error: false, text: "子采购合同已保存到共享盘。" });
     } catch (error) {
       setFeedback({ error: true, text: error instanceof Error ? error.message : "获取原件失败，流程未推进" });
+    } finally {
+      setBusy(null);
+    }
+  }
+  async function retryDeclaration(type: DeclarationDocumentType) {
+    if (busy) return;
+    setBusy(type);
+    setFeedback(null);
+    try {
+      const data = await prepareDeclarationDocument(id, type);
+      setState({ kind: "ready", data });
+      setFeedback({ error: false, text: "报关资料已从 NS 下载并保存到共享盘。" });
+    } catch (error) {
+      setFeedback({ error: true, text: error instanceof Error ? error.message : "下载失败，可稍后重试" });
+      setRefresh((n) => n + 1);
     } finally {
       setBusy(null);
     }
@@ -190,7 +215,18 @@ export function TaskDetailPage({ id }: { id: string }) {
             detail={detail}
             busy={busy}
             onPrepare={(orderId) => void prepare(orderId)}
+            onRetryDeclaration={(type) => void retryDeclaration(type)}
+            onUploadSigned={() => setUploading(true)}
             onNotify={() => navigate("notification")}
+          />
+        )}
+        {uploading && (
+          <SignedContractUpload
+            upload={uploadSignedContracts}
+            onClose={(changed) => {
+              setUploading(false);
+              if (changed) setRefresh((n) => n + 1);
+            }}
           />
         )}
         <div hidden={section !== "notification"}>
@@ -219,7 +255,9 @@ export function TaskDetailPage({ id }: { id: string }) {
         {section === "completion" && (
           <Placeholder
             title={detail.task.status === "completed" ? "任务已完成" : "任务尚未完成"}
-            text="全部任务行已收齐或按当前依据人工登记差异结束后，任务自动完成。超开仍需核对数量和金额。"
+            text={`发票全部收齐（或按当前依据人工登记差异结束）且资料全部到齐后，任务自动完成。${
+              detail.completion ? `资料情况：${detail.completion.reason}。` : ""
+            }超开仍需核对数量和金额。`}
           />
         )}
         {section === "history" && <TaskHistory detail={detail} />}

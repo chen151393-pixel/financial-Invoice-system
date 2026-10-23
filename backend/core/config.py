@@ -32,6 +32,8 @@ class Settings:
     finance_source_deploy: str = ""
     subpo_contract_script: str = ""
     subpo_contract_deploy: str = ""
+    declaration_doc_script: str = ""
+    declaration_doc_deploy: str = ""
     subpo_connection_file: Path | None = field(default=None, repr=False)
     subpo_archive_root: Path | None = None
     origin: str = "http://localhost:3000"
@@ -153,6 +155,8 @@ def load_settings(source=None):
     finance_deploy = get("NETSUITE_FINANCE_SOURCE_DEPLOY").strip()
     contract_script = get("NETSUITE_SUBPO_CONTRACT_SCRIPT").strip()
     contract_deploy = get("NETSUITE_SUBPO_CONTRACT_DEPLOY").strip()
+    declaration_script = get("NETSUITE_DECLARATION_DOC_SCRIPT").strip()
+    declaration_deploy = get("NETSUITE_DECLARATION_DOC_DEPLOY").strip()
     archive_root = Path(get("NETSUITE_SUBPO_ARCHIVE_ROOT")) if get("NETSUITE_SUBPO_ARCHIVE_ROOT") else None
     if archive_root and not archive_root.is_absolute():
         raise ValueError("NETSUITE_SUBPO_ARCHIVE_ROOT 必须为绝对路径或 UNC 共享路径")
@@ -163,6 +167,8 @@ def load_settings(source=None):
         (finance_deploy, "customdeploy"),
         (contract_script, "customscript"),
         (contract_deploy, "customdeploy"),
+        (declaration_script, "customscript"),
+        (declaration_deploy, "customdeploy"),
     ):
         if value and not re.fullmatch(rf"(?:[0-9]{{1,20}}|{prefix}_[a-zA-Z0-9_]{{1,100}})", value):
             raise ValueError("RESTlet 脚本或部署编号无效")
@@ -170,6 +176,8 @@ def load_settings(source=None):
         raise ValueError("原始报关行接口的脚本和部署编号须同时填写")
     if bool(contract_script) != bool(contract_deploy):
         raise ValueError("子采购合同接口的脚本和部署编号须同时填写")
+    if bool(declaration_script) != bool(declaration_deploy):
+        raise ValueError("报关资料接口的脚本和部署编号须同时填写")
     wecom_send = get("WECOM_SEND_ENABLED", "false").lower()
     wecom_limit = get("WECOM_GROUP_DAILY_LIMIT", "1")
     if wecom_send not in {"true", "false"}:
@@ -195,6 +203,8 @@ def load_settings(source=None):
         finance_source_deploy=finance_deploy,
         subpo_contract_script=contract_script,
         subpo_contract_deploy=contract_deploy,
+        declaration_doc_script=declaration_script,
+        declaration_doc_deploy=declaration_deploy,
         subpo_archive_root=archive_root,
         subpo_connection_file=(ROOT / get("NETSUITE_SUBPO_CONNECTION_FILE")).resolve()
         if get("NETSUITE_SUBPO_CONNECTION_FILE")

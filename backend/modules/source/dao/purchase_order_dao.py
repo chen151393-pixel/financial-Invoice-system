@@ -1,8 +1,15 @@
 """子采购单与子采购行。"""
 
-from sqlalchemy import select, update
+from sqlalchemy import String, func, literal, select, update
 
-from ..entity import companies, purchase_order_lines, purchase_orders, raw_records, suppliers
+from ..entity import (
+    companies,
+    customs_purchase_links,
+    purchase_order_lines,
+    purchase_orders,
+    raw_records,
+    suppliers,
+)
 from . import document_dao
 
 
@@ -75,6 +82,33 @@ def numbers(connection, ids):
         return {}
     query = select(purchase_orders.c.id, purchase_orders.c.order_no).where(purchase_orders.c.id.in_(ids))
     return {row.id: row.order_no for row in connection.execute(query)}
+
+
+def with_declarations(connection, *, exact=None, within=None):
+    """有效子采购单及其有效关联报关单：exact 按单号精确查找；within 查找单号出现在该文本中的子采购单。
+
+    返回 [{id, order_no, customs_declaration_id}]；单号含通配字符时再以 Python 精确核对，不按模糊结果直接采用。
+    """
+    declaration = (
+        select(func.max(customs_purchase_links.c.customs_declaration_id))
+        .where(
+            customs_purchase_links.c.purchase_order_id == purchase_orders.c.id,
+            customs_purchase_links.c.status == "active",
+        )
+        .scalar_subquery()
+    )
+    query = select(
+        purchase_orders.c.id, purchase_orders.c.order_no, declaration.label("customs_declaration_id")
+    ).where(purchase_orders.c.is_active.is_(True), purchase_orders.c.order_no.is_not(None))
+    if exact is not None:
+        query = query.where(purchase_orders.c.order_no == exact)
+    else:
+        query = query.where(
+            func.length(purchase_orders.c.order_no) >= 3,
+            literal(within, String).contains(purchase_orders.c.order_no),
+        )
+    rows = [dict(row) for row in connection.execute(query.order_by(purchase_orders.c.id)).mappings()]
+    return rows if exact is not None else [row for row in rows if row["order_no"] in within]
 
 
 def ids_like(connection, keyword, limit):

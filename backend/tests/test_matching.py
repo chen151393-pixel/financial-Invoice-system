@@ -27,6 +27,7 @@ from backend.modules.matching.service.matching_query_service import MatchingQuer
 from backend.modules.matching.service.proposal_service import ProposalService
 from backend.modules.source.public import SourceDirectory
 from backend.modules.task.service.task_service import TaskService
+from backend.tests.documents_ready import complete_documents
 from backend.tests.invoice_files import invoice, workbook
 from backend.tests.test_source_storage import bundle, customs, purchase, rows, save
 from backend.tests.test_source_storage import engine as engine  # 共用夹具
@@ -121,18 +122,22 @@ def test_full_chain_from_review_to_completed_task(engine, world, reviewed):
     assert task(engine)["status"] == "partially_received"
     view = world["allocations"].confirm(int(second.id), ConfirmBody(), USER)
     assert all(a.status == "confirmed" for item in view.items for a in item.allocations)
+    waiting = task(engine)
+    # 发票已收齐但资料未到齐：停在"资料待补齐"，完成节点写明尚缺的资料
+    assert waiting["status"] == "documents_incomplete" and waiting["completed_at"] is None
+    steps = world["tasks"].detail(waiting["id"]).steps
+    assert [step.state for step in steps] == ["done", "current", "waiting", "done", "done", "waiting"]
+    assert "子采购合同" in steps[-1].description and "回签合同" in steps[-1].description
+    complete_documents(engine)
     done = task(engine)
     assert done["status"] == "completed" and done["completed_at"] is not None
-    # 发票先于合同与通知到达：节点按各自事实显示，不因任务完成而标记合同、通知已完成。
-    steps = world["tasks"].detail(done["id"]).steps
-    assert [step.state for step in steps] == ["done", "waiting", "waiting", "done", "done", "done"]
     lines = rows(engine, "SELECT status, received_amount FROM task_lines ORDER BY purchase_line_id")
     assert [(r["status"], Decimal(str(r["received_amount"]))) for r in lines] == [
         ("received", Decimal("100.5")),
         ("received", Decimal("20")),
     ]
     events = [e["to_status"] for e in rows(engine, "SELECT to_status FROM task_events ORDER BY id")]
-    assert events == ["documents_pending", "partially_received", "completed"]
+    assert events == ["documents_pending", "partially_received", "documents_incomplete", "completed"]
     summary = world["queries"].summaries(SummaryBody(invoiceIds=[str(target)])).rows[0]
     assert (summary.status, summary.confirmed) == ("confirmed", 2)
 
@@ -259,6 +264,7 @@ def test_reapproval_carries_received_progress(ns, engine, world, reviewed):
 
 
 def test_queue_batch_and_service_identity(engine, world, reviewed):
+    complete_documents(engine)  # 完结需资料齐全；本测试关注收票与账本
     import_invoices(world, [invoice("26000000000000008010", [INK, FLUID], remark="SUB-200")])
     queue = world["queries"].queue(QueueQuery(tier="high"))
     assert queue.total == 2 and queue.counts["high"] == 2
@@ -289,6 +295,7 @@ def test_http_matching_routes(context, ns, engine):
             json={"contentSha256": item["contentSha256"]},
             headers=headers,
         )
+        complete_documents(engine)  # 完结需资料齐全；本测试关注收票与账本
         content = workbook([invoice("26000000000000008011", [INK, FLUID], remark="SUB-200")])
         body = {"filename": "i.xlsx", "content": content}
         token = client.post("/api/invoices/import/preview", json=body, headers=headers).json()["previewToken"]

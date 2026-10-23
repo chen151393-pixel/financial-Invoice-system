@@ -1,5 +1,6 @@
-"""子采购单原件的公开只读服务。"""
+"""NS 原件的公开只读服务：子采购合同、报关资料（报关单、销售合同、发票）。"""
 
+from backend.integrations.netsuite import declaration_documents
 from backend.integrations.netsuite.subpo_contract import read_contract
 
 
@@ -20,3 +21,12 @@ class SubpoContractSource:
 
     def download(self, number, supplier, declaration):
         return read_contract(self.ns, number, supplier, declaration)
+
+    def declaration_unavailable_reason(self):
+        if self.ns.settings.missing():
+            return "报关资料下载连接配置不完整"
+        return declaration_documents.unavailable_reason(self.ns.settings)
+
+    def download_declaration(self, record_no, declaration_no, doc_type):
+        """按 CD 编号与真实报关单号定位报关单，返回 {ns_id, environment, files: [PDF 字节]}。"""
+        return declaration_documents.read_documents(self.ns, record_no, declaration_no, doc_type)

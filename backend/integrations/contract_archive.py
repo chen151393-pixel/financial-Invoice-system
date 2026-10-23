@@ -36,6 +36,15 @@ def contract_filename(order_number, supplier):
     )
 
 
+def document_filename(label, record_no, index=1, count=1, extension=".pdf"):
+    """报关资料、回签合同等：<单据类型>_<编号>[_序号]<扩展名>。"""
+    number = _clean(record_no)
+    if not number:
+        raise ApiError(409, f"{label}缺少编号，无法生成文件名")
+    suffix = f"_{index}" if count > 1 else ""
+    return _bounded(f"{label}_{number}{suffix}{extension}", f"{label}文件名过长，请核对编号")
+
+
 def declaration_folder(record_no, declaration_no):
     parts = [_clean(record_no), _clean(declaration_no)]
     if not all(parts):
@@ -56,10 +65,13 @@ class ContractArchive:
         self.root = Path(root) if root else None
 
     def save(self, declaration, order_number, supplier, content):
-        """declaration：{record_no, declaration_no, created_at}；返回 (完整路径, 文件名)。"""
+        """子采购合同；返回 (完整路径, 文件名)。"""
+        return self.save_file(declaration, contract_filename(order_number, supplier), content)
+
+    def save_file(self, declaration, filename, content):
+        """declaration：{record_no, declaration_no, created_at}；把一个文件存入该报关单文件夹，返回 (完整路径, 文件名)。"""
         if self.root is None:
             raise ApiError(503, "合同共享盘路径尚未配置，合同未归档")
-        filename = contract_filename(order_number, supplier)
         relative = Path(month_folder(declaration.get("created_at"))) / declaration_folder(
             declaration.get("record_no"), declaration.get("declaration_no")
         )
@@ -71,7 +83,9 @@ class ContractArchive:
                 target.stat().st_size != len(content)
                 or hashlib.sha256(target.read_bytes()).hexdigest() != digest
             ):
-                raise ApiError(409, "共享盘已存在同名但内容不同的合同，未覆盖；请人工核对该文件")
+                raise ApiError(
+                    409, f"共享盘已存在同名但内容不同的文件（{filename}），未覆盖；请人工核对该文件"
+                )
 
         try:
             root = self.root.resolve(strict=True)

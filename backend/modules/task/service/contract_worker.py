@@ -9,15 +9,16 @@ from sqlalchemy.exc import SQLAlchemyError
 from backend.core.errors import ApiError
 from backend.core.write_lock import transaction
 
-from ..dao import contract_job_dao
+from ..dao import contract_job_dao, declaration_document_dao
 from .contract_lock import BUSY_REASON, contract_lock
+from .declaration_document_service import BUSY_REASON as DECLARATION_BUSY
 
 logger = logging.getLogger(__name__)
 
 
 class ContractWorker:
-    def __init__(self, engine, documents):
-        self.engine, self.documents = engine, documents
+    def __init__(self, engine, documents, declarations=None):
+        self.engine, self.documents, self.declarations = engine, documents, declarations
         self.stopping = Event()
         self.thread = None
 
@@ -47,10 +48,15 @@ class ContractWorker:
                 return
             with self.engine.connect() as connection:
                 jobs = contract_job_dao.pending(connection)
+                declarations = declaration_document_dao.pending(connection) if self.declarations else []
             for job in jobs:
                 if self.stopping.is_set():
                     break
                 self._prepare(job)
+            for row in declarations:
+                if self.stopping.is_set():
+                    break
+                self._prepare_declaration(row)
 
     def _prepare(self, job):
         try:
@@ -65,6 +71,18 @@ class ContractWorker:
         except Exception:
             logger.exception("合同归档作业 %s 发生异常", job["id"])
             self._fail(job, "合同自动归档发生异常，请联系管理员检查日志后手动重试")
+
+    def _prepare_declaration(self, row):
+        try:
+            self.declarations.prepare(row["customs_declaration_id"], row["doc_type"], row["requested_by"])
+        except ApiError as error:
+            # 失败原因已由服务记录到资料记录；正在被人工重试时跳过
+            if error.message != DECLARATION_BUSY:
+                logger.warning("报关资料自动下载失败，记录 %s：%s", row["id"], error.message)
+        except SQLAlchemyError:
+            logger.exception("报关资料数据库暂不可用，记录 %s 保留待处理", row["id"])
+        except Exception:
+            logger.exception("报关资料记录 %s 发生异常", row["id"])
 
     def _fail(self, job, message):
         with transaction(self.engine) as connection:

@@ -9,6 +9,7 @@ export type TaskStatus =
   | "notify_pending"
   | "awaiting_invoice"
   | "partially_received"
+  | "documents_incomplete"
   | "completed"
   | "superseded";
 
@@ -114,6 +115,47 @@ export interface TaskEvent {
   reason: string;
 }
 
+// 报关资料：报关单、销售合同、发票按报关单各一份，由 NS 下载；每类可单独重试。
+export type DeclarationDocumentType = "customs_declaration" | "sales_contract" | "invoice";
+export interface DeclarationDocument {
+  type: DeclarationDocumentType;
+  label: string;
+  status: "unregistered" | "pending" | "archived" | "failed";
+  statusLabel: string;
+  files: { filename: string; path: string }[];
+  error: string;
+  attempts: number;
+  archivedAt: string | null;
+  retry: Capability;
+}
+export interface SignedContract {
+  orderId: string;
+  orderNumber: string;
+  uploaded: boolean;
+  filename: string;
+  archivePath: string | null;
+  uploadedAt: string | null;
+  uploadedBy: string;
+}
+// 资料齐全情况由后端判断；子采购合同、报关单、销售合同、发票、回签合同全部到齐才算齐全。
+export interface TaskCompletion {
+  ready: boolean;
+  missing: string[];
+  reason: string;
+}
+export interface SignedUploadFile {
+  filename: string;
+  content: string;
+  orderNo: string;
+}
+export interface SignedUploadItem {
+  filename: string;
+  orderNumber: string;
+  status: "saved" | "unmatched" | "ambiguous" | "conflict" | "failed";
+  reason: string;
+  archivePath: string | null;
+}
+
 export interface TaskDetail {
   task: TaskSummary;
   lines: TaskLine[];
@@ -125,6 +167,9 @@ export interface TaskDetail {
   compare: Capability;
   steps: { label: string; description: string; state: "done" | "current" | "waiting" }[];
   documents: TaskDocument[];
+  declarationDocuments: DeclarationDocument[];
+  signedContracts: SignedContract[];
+  completion: TaskCompletion | null;
   downloadEnvironment: string;
   notification: TaskNotification;
   events: TaskEvent[];

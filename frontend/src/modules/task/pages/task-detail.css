@@ -154,6 +154,15 @@
 .itd-document .ui-button {
   flex-shrink: 0;
 }
+.itd-document__error {
+  color: var(--color-feedback);
+}
+.itd-section-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
 .itd-file-type {
   color: var(--color-muted);
   background: var(--color-canvas);

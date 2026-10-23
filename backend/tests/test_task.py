@@ -37,9 +37,23 @@ class FakeContracts:
     def __init__(self):
         self.calls = []
         self.content = b"%PDF-1.4 contract"
+        self.declaration_calls = []
+        self.declaration_files = {}
+        self.declaration_reason = ""
 
     def unavailable_reason(self):
         return ""
+
+    def declaration_unavailable_reason(self):
+        return self.declaration_reason
+
+    def download_declaration(self, record_no, declaration_no, doc_type):
+        """报关资料假实现：每类返回一份 PDF；declaration_files 可按类型改为多份或抛出错误。"""
+        self.declaration_calls.append((record_no, declaration_no, doc_type))
+        found = self.declaration_files.get(doc_type, [self.content])
+        if isinstance(found, Exception):
+            raise found
+        return {"ns_id": "901", "environment": "prod", "files": found}
 
     def download(self, number, supplier, declaration):
         self.calls.append((number, supplier, declaration))

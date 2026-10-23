@@ -32,7 +32,7 @@ export function WorkbenchMetrics({
       label: "待开票任务",
       value: counts.task,
       unit: "项任务",
-      note: `${counts.preparation} 项待备合同或通知`,
+      note: `${counts.preparation} 项待备资料或通知`,
       warn: counts.preparation > 0,
       action: "查看开票待办",
     },

@@ -10,6 +10,7 @@ from backend.modules.matching.dto.matching_dto import CancelBody, CandidateQuery
 from backend.modules.review.dto.review_dto import ApproveRequest, DeclarationListQuery
 from backend.modules.task.dto.task_dto import ClosureRequest
 from backend.modules.task.service.closure_service import ClosureService
+from backend.tests.documents_ready import complete_documents
 from backend.tests.invoice_files import invoice
 from backend.tests.test_matching import FLUID, INK, import_invoices, invoice_id, proposals, task
 from backend.tests.test_matching import reviewed as reviewed
@@ -35,6 +36,7 @@ def confirm_all(engine, world, number="26000000000000008801"):
 
 
 def test_completed_basis_change_rebuilds_from_ledger_and_cancel_reopens(ns, engine, world, reviewed):
+    complete_documents(engine)  # 完结需资料齐全；本测试关注收票与账本
     target, found = confirm_all(engine, world)
     assert task(engine)["status"] == "completed"
     original = rows(engine, "SELECT * FROM matching_allocations WHERE status='confirmed'")
@@ -137,6 +139,7 @@ def test_unit_conversion_exactness_and_difference_closure_revoked(engine, world,
 
 
 def test_replacement_failure_rolls_back_original_and_retry_is_idempotent(engine, world, reviewed):
+    complete_documents(engine)  # 完结需资料齐全；本测试关注收票与账本
     target, found = confirm_all(engine, world)
     old = found[0]
     body = ReplaceBody(
@@ -212,6 +215,7 @@ def test_manual_currency_evidence_and_parent_change_fanout(ns, engine, world):
 
 
 def test_subscriber_failure_rolls_back_invoice_version_and_progress(engine, world, reviewed, monkeypatch):
+    complete_documents(engine)  # 完结需资料齐全；本测试关注收票与账本
     confirm_all(engine, world)
     from backend.modules.task.service import progress_service
 
@@ -229,6 +233,7 @@ def test_subscriber_failure_rolls_back_invoice_version_and_progress(engine, worl
 
 
 def test_rebuild_after_restart_uses_ledger_not_task_cache(engine, world, reviewed):
+    complete_documents(engine)  # 完结需资料齐全；本测试关注收票与账本
     from backend.app import create_events
     from backend.modules.matching.service.rebuild_service import rebuild
 
@@ -256,6 +261,7 @@ def test_same_purchase_on_second_declaration_does_not_duplicate_quota(ns, engine
 
 
 def test_replace_completed_line_is_selectable_without_false_overage(engine, world, reviewed):
+    complete_documents(engine)  # 完结需资料齐全；本测试关注收票与账本
     target, found = confirm_all(engine, world)
     old = found[0]
     candidates = world["queries"].candidates(

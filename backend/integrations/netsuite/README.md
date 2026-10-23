@@ -5,3 +5,19 @@
 通过构造函数注入HTTPX客户端；测试使用MockTransport/FakeNS。此目录不判断用户审批或匹配金额，不自行重试写入。身份、字段许可和执行状态由业务模块再次校验。
 
 验证：`npm.cmd run test:api` 中的签名、缓存、重定向与超时用例。
+
+## 原件只读下载
+
+- `restlet_file.py`：子采购合同与报关资料共用的 RESTlet 读取步骤（限长读取 JSON、兼容二次 JSON 字符串、解码并校验 PDF）。
+- `subpo_contract.py`：子采购合同，按子采购单号在下载环境重新定位并核对供应商、报关单后取 PDF。
+- `declaration_documents.py`（2026-10-23）：报关资料，按 CD 编号在下载环境重新定位报关单，并核对真实报关单号一致后才请求文件。
+
+### 报关资料 RESTlet 约定（需 NS 侧部署）
+
+配置 `NETSUITE_DECLARATION_DOC_SCRIPT` / `NETSUITE_DECLARATION_DOC_DEPLOY`（须同时填写），与子采购合同共用 `NETSUITE_SUBPO_CONNECTION_FILE` 专用只读连接，需要 `restlets` 与 `rest_webservices` 授权。
+
+- 请求：`GET restlet.nl?script=…&deploy=…&id=<报关单 customrecord_swc_declare_record 内部 ID>&type=<类型>`，类型为 `customs_declaration`（报关单）、`sales_contract`（销售合同）、`invoice`（发票）。
+- 响应：`{"id": "<同一内部 ID>", "type": "<同一类型>", "files": [{"filename": "…", "contentBase64": "<PDF base64>"}]}`；一类资料可返回多份，最多 10 份、合计不超过 20 MB，单份 PDF 不超过 7 MB。
+- 系统只保存校验通过的 PDF；`files` 为空返回“NS 中暂无该报关单的××文件”，ID、类型不符或 PDF 不完整一律不保存。文件名由系统按“类型_CD号[_序号].pdf”生成，不采用响应中的文件名。
+
+**状态：系统侧已实现并有模拟测试；NS 侧脚本尚未部署，真实接口未联调。** 未配置时任务详情显示“报关资料下载接口尚未配置”。

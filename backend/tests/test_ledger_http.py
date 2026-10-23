@@ -3,6 +3,7 @@
 from uuid import uuid4
 
 from backend.app import create_app
+from backend.tests.documents_ready import complete_documents
 from backend.tests.invoice_files import invoice
 from backend.tests.test_ledger_versions import active_lines, confirm_all
 from backend.tests.test_matching import FLUID, INK, import_invoices, task
@@ -14,6 +15,7 @@ from fastapi.testclient import TestClient
 
 
 def test_json_ledger_actions(context, engine, world, reviewed):
+    complete_documents(engine)  # 完结需资料齐全；本测试关注收票与账本
     target, found = confirm_all(engine, world)
     import_invoices(world, [invoice("26000000000000008801", [INK, FLUID], remark="SUB-200 修订")])
     with TestClient(create_app(context.settings, context.ns, engine)) as client:
