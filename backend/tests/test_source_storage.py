@@ -176,6 +176,15 @@ PARENT = {
 }
 
 
+# 销售单头（SuiteQL sales_headers）：报关申报价按其汇率换算为人民币，只用于申报幅度与价格校验。
+SALES = {
+    "id": "90",
+    "tranid": "SO1",
+    "currencyname": "美元",
+    "exchangerate": "7.1",
+}
+
+
 def bundle(purchases, declarations, with_evidence=True, parents=None):
     return {
         "purchases": purchases,
@@ -191,6 +200,7 @@ def bundle(purchases, declarations, with_evidence=True, parents=None):
             for customs_id, _, _ in declarations
         },
         "parent_orders": {"100": PARENT} if parents is None else parents,
+        "sales_orders": {"90": SALES},
         "relation_evidence": {customs_id: evidence(customs_id) for customs_id, _, _ in declarations}
         if with_evidence
         else {},
@@ -381,6 +391,9 @@ def test_sync_page_reads_ns_and_relations_then_saves(ns, engine, monkeypatch):
     monkeypatch.setattr(
         "backend.modules.source.service.storage_service.read_parent_orders", lambda ns, data: {"100": PARENT}
     )
+    monkeypatch.setattr(
+        "backend.modules.source.service.storage_service.read_sales_orders", lambda ns, data: {"90": SALES}
+    )
     # 此用例验证已配置追溯接口的完整路径；未配置及结构不可见由 optional_sync 测试覆盖
     for key in ("finance_source_script", "finance_source_deploy", "pl_restlet_script", "pl_restlet_deploy"):
         setattr(ns.settings, key, "configured")
@@ -431,6 +444,9 @@ def test_http_pull_save_uses_source_storage(context, engine, monkeypatch):
     monkeypatch.setattr("backend.modules.source.service.storage_service.RelationReader", FakeRelations)
     monkeypatch.setattr(
         "backend.modules.source.service.storage_service.read_parent_orders", lambda ns, data: {"100": PARENT}
+    )
+    monkeypatch.setattr(
+        "backend.modules.source.service.storage_service.read_sales_orders", lambda ns, data: {"90": SALES}
     )
     page = {"rows": [{"id": "870"}], "count": 1, "offset": 0, "hasMore": False, "nextOffset": None}
     monkeypatch.setattr(

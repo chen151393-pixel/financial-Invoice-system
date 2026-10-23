@@ -111,6 +111,16 @@ def with_declarations(connection, *, exact=None, within=None):
     return rows if exact is not None else [row for row in rows if row["order_no"] in within]
 
 
+def sales_order_ids(connection, order_ids):
+    """{子采购单 ID: 销售单本地 ID 或 None}。"""
+    if not order_ids:
+        return {}
+    query = select(purchase_orders.c.id, purchase_orders.c.sales_order_id).where(
+        purchase_orders.c.id.in_(order_ids)
+    )
+    return {row.id: row.sales_order_id for row in connection.execute(query)}
+
+
 def line_ids_by_supplier(connection, supplier_id):
     """该供应商子采购单下的子采购行 ID（含已停用，供比对队列按供应商筛选）。"""
     query = (

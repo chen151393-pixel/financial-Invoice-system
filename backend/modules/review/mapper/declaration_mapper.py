@@ -8,6 +8,7 @@ from decimal import Decimal
 
 from backend.modules.source.public import unit_label
 
+from ..policy.margin_policy import declared_margin
 from ..policy.review_policy import CHANGED_WARNING, STATUS_LABELS
 from ..public import ApprovedLine
 from ..vo.review_vo import CustomsLine, Declaration, PurchaseLine, ReviewState
@@ -88,7 +89,9 @@ def declaration(content, state, changed, active_review, allowed, reason):
     orders = {order["id"]: order for order in content["orders"]}
     bound = line_bindings(content)
     by_customs = defaultdict(list)
+    rows_by_customs = defaultdict(list)
     for row in content["purchase_lines"]:
+        rows_by_customs[bound.get(row["id"])].append(row)
         by_customs[bound.get(row["id"])].append(
             purchase_line(
                 orders[row["purchase_order_id"]],
@@ -97,6 +100,16 @@ def declaration(content, state, changed, active_review, allowed, reason):
                 content.get("unit_names"),
             )
         )
+    margins = {
+        row["id"]: declared_margin(
+            row,
+            rows_by_customs[row["id"]],
+            orders,
+            content.get("sales_orders", {}),
+            content.get("unit_names"),
+        )
+        for row in content["customs_lines"]
+    }
     customs_lines = [
         CustomsLine(
             id=f"customs-{row['id']}",
@@ -110,6 +123,11 @@ def declaration(content, state, changed, active_review, allowed, reason):
             currency=text(row["currency"]),
             purchaseCount=len(by_customs[row["id"]]),
             purchaseLines=by_customs[row["id"]],
+            margin=f"{margins[row['id']]['margin']}%" if margins[row["id"]]["margin"] is not None else "",
+            marginStatus=margins[row["id"]]["status"],
+            marginNote=margins[row["id"]]["note"],
+            declaredCny=text(margins[row["id"]]["declared"]),
+            purchaseTotal=text(margins[row["id"]]["purchase"]),
         )
         for index, row in enumerate(content["customs_lines"])
     ]

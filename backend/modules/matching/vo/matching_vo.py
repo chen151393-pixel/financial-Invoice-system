@@ -122,6 +122,8 @@ class QueueRow(StrictModel):
     invoiceNumber: str
     seller: str | None
     itemName: str | None
+    # 异常分类（价格、数量、单位等）；空表示正常
+    anomalies: list[str] = Field(default_factory=list)
 
 
 class SupplierOption(StrictModel):
@@ -137,6 +139,8 @@ class Queue(StrictModel):
     pages: int
     counts: dict[str, int]
     suppliers: list[SupplierOption] = Field(default_factory=list)
+    # 按异常筛选时最多核对的建议条数；超过时只在前若干条中筛选，并给出提示
+    notice: str = ""
 
 
 class SummaryRow(StrictModel):

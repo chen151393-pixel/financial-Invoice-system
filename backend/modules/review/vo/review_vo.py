@@ -35,6 +35,12 @@ class CustomsLine(StrictModel):
     currency: str
     purchaseCount: int
     purchaseLines: list[PurchaseLine]
+    # 申报幅度 =（申报价 − 采购价）÷ 申报价；申报价按对应销售单汇率换算为人民币，采购价为含税金额合计
+    margin: str = ""
+    marginStatus: Literal["ok", "negative", "unavailable"] = "unavailable"
+    marginNote: str = ""
+    declaredCny: str = ""
+    purchaseTotal: str = ""
 
 
 class ReviewState(StrictModel):

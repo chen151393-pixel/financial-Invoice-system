@@ -29,6 +29,7 @@ ITEM_FIELDS = (
     "quantity",
     "unit",
     "amount_including_tax",
+    "amount_excluding_tax",
 )
 
 

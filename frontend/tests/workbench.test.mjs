@@ -6,7 +6,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { MemoryRouter } from "react-router";
 import { createServer } from "vite";
 
-let server, Todos, Trend, Page, Metrics, api, paths;
+let server, Todos, Trend, Page, Metrics, api, paths, Queue, Filters;
 before(async () => {
   server = await createServer({
     configFile: fileURLToPath(new URL("../vite.config.ts", import.meta.url)),
@@ -26,6 +26,10 @@ before(async () => {
     "/src/modules/matching/components/WorkbenchMetrics.tsx",
   ));
   paths = await server.ssrLoadModule("/src/app/paths.ts");
+  ({ QueueTable: Queue } = await server.ssrLoadModule("/src/modules/matching/components/QueueTable.tsx"));
+  ({ QueueFilters: Filters } = await server.ssrLoadModule(
+    "/src/modules/matching/components/QueueFilters.tsx",
+  ));
 });
 after(async () => {
   await server?.close();
@@ -190,4 +194,37 @@ test("五个业务状态分区按报关单计数，点击带同样筛选进入�
 test("列表地址只写入已填写的筛选条件", () => {
   assert.equal(paths.taskListPath({ stage: "notify", supplierId: "" }), "/tasks?stage=notify");
   assert.equal(paths.reviewListPath({}), "/review");
+});
+
+test("比对队列显示异常分类，异常建议不能勾选批量通过；筛选含只看异常", () => {
+  const allocation = {
+    id: "9",
+    tier: "high",
+    confidence: "90",
+    quantity: "10",
+    amount: "100.5",
+    noteReasons: ["发票不含税价格高于申报价"],
+    confirm: { allowed: true, reason: "通过时需填写说明" },
+    purchase: { orderNo: "SUB-200", item: "墨水" },
+  };
+  const row = {
+    allocation,
+    invoiceId: "1",
+    invoiceNumber: "2600",
+    seller: "测试",
+    itemName: "墨水",
+    anomalies: ["价格"],
+  };
+  const html = render(Queue, { rows: [row], selected: [], onToggle() {}, onToggleAll() {} });
+  assert.match(html, /aria-label="异常：价格"/);
+  assert.match(html, /需说明：发票不含税价格高于申报价/);
+  assert.match(html, /<input type="checkbox" aria-label="选择建议 9" disabled=""/);
+  const filters = render(Filters, {
+    value: { anomaly: "abnormal", supplierId: "", invoiceFrom: "", invoiceTo: "" },
+    suppliers: [],
+    busy: false,
+    onApply() {},
+  });
+  assert.match(filters, /<option value="abnormal" selected="">只看异常/);
+  assert.match(filters, /只看正常/);
 });

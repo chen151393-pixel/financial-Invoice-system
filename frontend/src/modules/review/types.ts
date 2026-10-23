@@ -29,6 +29,12 @@ export interface CustomsLine {
   currency: string;
   purchaseCount: number;
   purchaseLines: PurchaseLine[];
+  // 申报幅度由后端计算：（申报价 − 采购含税价）÷ 申报价；申报价按对应销售单汇率换算为人民币
+  margin?: string;
+  marginStatus?: "ok" | "negative" | "unavailable";
+  marginNote?: string;
+  declaredCny?: string;
+  purchaseTotal?: string;
 }
 export interface ComparisonGroup {
   currencyEvidenceSummary?: string[];

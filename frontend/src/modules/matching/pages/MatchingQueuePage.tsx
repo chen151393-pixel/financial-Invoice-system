@@ -20,6 +20,7 @@ const TABS: [QueueQuery["tier"], string][] = [
 export function MatchingQueuePage() {
   const [query, setQuery] = useState<QueueQuery>({
     tier: "all",
+    anomaly: "all",
     supplierId: "",
     invoiceFrom: "",
     invoiceTo: "",
@@ -109,6 +110,7 @@ export function MatchingQueuePage() {
         <div className="matching-body">
           <QueueFilters
             value={{
+              anomaly: query.anomaly,
               supplierId: query.supplierId,
               invoiceFrom: query.invoiceFrom,
               invoiceTo: query.invoiceTo,
@@ -117,6 +119,11 @@ export function MatchingQueuePage() {
             busy={busy || state.kind === "loading"}
             onApply={(filters) => change(filters)}
           />
+          {data?.notice && (
+            <p className="matching-help" role="status">
+              {data.notice}
+            </p>
+          )}
           {feedback && (
             <p className="matching-feedback" role={feedback.error ? "alert" : "status"}>
               {feedback.text}

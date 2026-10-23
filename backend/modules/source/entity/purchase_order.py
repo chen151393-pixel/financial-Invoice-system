@@ -96,6 +96,12 @@ purchase_orders = Table(
         comment="币种来源：parent_order 母单继承；unresolved 待核实",
     ),
     Column("currency_issue", String(300), comment="币种待核实原因"),
+    Column(
+        "sales_order_id",
+        ID,
+        ForeignKey("source_sales_orders.id", name="fk_source_purchase_sales"),
+        comment="子采购单对应的销售单本地主键（NS custrecord_swc_subpo_so）",
+    ),
     UniqueConstraint("ns_account", "ns_internal_id", name="uq_source_purchase_ns"),
     Index("ix_source_purchase_no", "ns_account", "order_no"),
     Index("ix_source_purchase_pl", "ns_account", "pl_no"),

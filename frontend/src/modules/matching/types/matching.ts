@@ -109,6 +109,9 @@ export type QueueRow = {
   invoiceNumber: string;
   seller: string | null;
   itemName: string | null;
+
+  // 异常分类（价格、数量、单位等）；空表示正常
+  anomalies?: string[];
 };
 export type Queue = {
   rows: QueueRow[];
@@ -119,9 +122,12 @@ export type Queue = {
   counts: Record<"all" | "high" | "medium" | "low", number>;
   // 待审核建议涉及的供应商（按子采购单），供筛选
   suppliers?: { id: string; name: string }[];
+  notice?: string;
 };
 export type QueueQuery = {
   tier: "all" | "high" | "medium" | "low";
+  // 只看异常 / 只看正常：异常为需要填写说明或当前不能通过的建议
+  anomaly: "all" | "abnormal" | "normal";
   // 供应商与开票日期筛选；空字符串为不限，日期为 YYYY-MM-DD
   supplierId: string;
   invoiceFrom: string;

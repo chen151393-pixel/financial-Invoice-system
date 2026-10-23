@@ -298,6 +298,8 @@ def map_purchases(bundle, config, now):
                 "company": company_ref(record, spec.company, config.company_record_type),
                 "customs_ns_id": reference(record.get(spec.customs)) or None,
                 "parent_ns_id": reference(record.get(PARENT_FIELD)) or None,
+                # 对应销售单（custrecord_swc_subpo_so）：申报价按其汇率换算
+                "sales_order_ns_id": reference(record.get("custrecord_swc_subpo_so")) or None,
                 "lines": lines,
                 "raw": raw_payload(spec, line_spec, record_id, record, raw_lines),
             }

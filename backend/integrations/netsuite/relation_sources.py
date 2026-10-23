@@ -38,6 +38,12 @@ QUERIES = {
         "t.exchangerate FROM transaction t "
         "WHERE t.type = 'PurchOrd' AND t.id IN ({ids}) ORDER BY t.id"
     ),
+    # 销售单头：报关申报价按销售单汇率换算为人民币（申报幅度、发票价格校验）。
+    "sales_headers": (
+        "SELECT t.id,t.tranid,t.currency,BUILTIN.DF(t.currency) AS currencyname,"
+        "t.exchangerate FROM transaction t "
+        "WHERE t.type = 'SalesOrd' AND t.id IN ({ids}) ORDER BY t.id"
+    ),
 }
 
 

@@ -11,7 +11,16 @@ from backend.modules.review.service.review_service import ReviewService
 from backend.modules.source.public import DeclarationService
 from backend.modules.source.service.storage_service import StorageService
 from backend.tests.test_source_optional_trace import success, unavailable
-from backend.tests.test_source_storage import ACCOUNT, PARENT, customs, declaration, evidence, purchase, rows
+from backend.tests.test_source_storage import (
+    ACCOUNT,
+    PARENT,
+    SALES,
+    customs,
+    declaration,
+    evidence,
+    purchase,
+    rows,
+)
 from backend.tests.test_source_storage import engine as engine  # 共用隔离库
 from backend.tests.test_source_storage import ns as ns  # 共用来源映射
 from fastapi.testclient import TestClient
@@ -53,6 +62,7 @@ def source(ns):
         return deepcopy(
             {
                 "parent_headers": [PARENT],
+                "sales_headers": [SALES],
                 "packing_by_customs": value["packingLines"],
                 "purchase_links": value["purchaseLinks"],
                 "parent_lines": value["parentLines"],

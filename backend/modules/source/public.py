@@ -4,9 +4,11 @@ from dataclasses import dataclass
 
 from .dao.unit_dictionary_dao import unit_names
 from .policy.admission_policy import admission_issues, admission_reason
+from .policy.declared_price_policy import declared_cny, pick_sales_order
 from .policy.unit_policy import unit_label
 from .service.contract_service import SubpoContractSource
 from .service.declaration_service import DeclarationService, digest, snapshot
+from .service.declared_price_reader import declared_prices
 from .service.directory_service import SourceDirectory, china_day_range
 from .service.pl_comparison_service import PlScriptService
 from .service.purchase_context import purchase_lines, supplier_line_ids
@@ -32,6 +34,10 @@ __all__ = [
     # 子采购行比对上下文（matching）：purchase_lines(connection, line_ids) → {ID: 上下文含 digest}
     "purchase_lines",
     "supplier_line_ids",
+    # 申报价换算为人民币（按对应销售单汇率）：review 申报幅度、matching 价格校验
+    "declared_cny",
+    "pick_sales_order",
+    "declared_prices",
     # 中国日期区间换算为 UTC 区间（报关单创建日期筛选）
     "china_day_range",
     "SourceChanged",

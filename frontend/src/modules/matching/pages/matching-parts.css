@@ -35,6 +35,20 @@
 .matching-tabs__refresh {
   margin-left: auto;
 }
+/* 异常分类标签：文字标明类型，不只靠颜色 */
+.matching-anomalies {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-bottom: 4px;
+}
+.matching-anomaly {
+  padding: 0 6px;
+  border: 1px solid var(--color-feedback);
+  border-radius: var(--radius-control);
+  color: var(--color-feedback);
+  font-size: 12px;
+}
 /* 比对队列筛选：供应商与开票日期 */
 .matching-filters {
   display: flex;

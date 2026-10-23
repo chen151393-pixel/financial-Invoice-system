@@ -13,6 +13,7 @@ from backend.modules.task.public import open_lines
 from ..dao import allocation_dao
 from ..mapper import allocation_mapper as mapper
 from ..policy import allocation_policy as rules
+from ..policy.anomaly_policy import anomalies
 from ..policy.comparison_policy import HIGH, MEDIUM, compare, text, tier
 from ..policy.confirmation_policy import evaluate
 from ..vo.matching_vo import (
@@ -30,6 +31,8 @@ from .invoice_totals_service import InvoiceTotalsService
 
 READ_ERROR = "发票比对读取失败，请检查业务数据库及迁移状态"
 TIERS = {"all": (None, None), "high": (HIGH, None), "medium": (MEDIUM, HIGH), "low": (None, MEDIUM)}
+# 按异常筛选需逐条计算比对项，单次最多核对的待审核建议条数
+ANOMALY_SCAN = 3000
 
 
 class MatchingQueryService:
@@ -149,37 +152,37 @@ class MatchingQueryService:
                 if query.invoiceFrom
                 else None,
             }
-            total, rows = allocation_dao.queue(
-                connection,
-                tiers=TIERS[query.tier],
-                offset=(query.page - 1) * query.pageSize,
-                limit=query.pageSize,
-                **scope,
-            )
-            invoices = {
-                invoice["id"]: invoice
-                for invoice in read_invoices(connection, [row["invoice_id"] for row in rows])
-            }
-            result = []
-            for invoice_id in dict.fromkeys(row["invoice_id"] for row in rows):
-                invoice = invoices[invoice_id]
-                own = [row for row in rows if row["invoice_id"] == invoice_id]
-                all_rows = allocation_dao.by_invoices(connection, [invoice_id])
-                views = self._views(connection, invoice, all_rows)
-                items = {item["id"]: item for item in invoice["items"]}
-                result.extend(
-                    QueueRow(
-                        allocation=views[row["id"]],
-                        invoiceId=str(invoice_id),
-                        invoiceNumber=invoice["invoice_no"],
-                        seller=invoice["seller_name"],
-                        itemName=items[row["invoice_item_id"]]["item_name"],
-                    )
-                    for row in own
+            notice = ""
+            if query.anomaly == "all":
+                total, rows = allocation_dao.queue(
+                    connection,
+                    tiers=TIERS[query.tier],
+                    offset=(query.page - 1) * query.pageSize,
+                    limit=query.pageSize,
+                    **scope,
                 )
-            order = {row["id"]: index for index, row in enumerate(rows)}
-            result.sort(key=lambda view: order[int(view.allocation.id)])
-            counts = allocation_dao.proposal_counts(connection, HIGH, MEDIUM, **scope)
+                result = self._queue_rows(connection, rows)
+                counts = allocation_dao.proposal_counts(connection, HIGH, MEDIUM, **scope)
+            else:
+                # 异常需逐条计算比对项：在筛选范围内逐条分类后再按分档与分页截取
+                scanned, rows = allocation_dao.queue(
+                    connection, tiers=TIERS["all"], offset=0, limit=ANOMALY_SCAN, **scope
+                )
+                wanted = query.anomaly == "abnormal"
+                matched = [row for row in self._queue_rows(connection, rows) if bool(row.anomalies) == wanted]
+                counts = {
+                    "all": len(matched),
+                    **{
+                        key: sum(row.allocation.tier == key for row in matched)
+                        for key in ("high", "medium", "low")
+                    },
+                }
+                chosen = [row for row in matched if query.tier in ("all", row.allocation.tier)]
+                total = len(chosen)
+                start = (query.page - 1) * query.pageSize
+                result = chosen[start : start + query.pageSize]
+                if scanned > ANOMALY_SCAN:
+                    notice = f"待审核建议超过 {ANOMALY_SCAN} 条，只在置信度最高的前 {ANOMALY_SCAN} 条中筛选；可缩小供应商或日期范围"
             pages = max(1, (total + query.pageSize - 1) // query.pageSize)
             return Queue(
                 rows=result,
@@ -189,9 +192,37 @@ class MatchingQueryService:
                 pages=pages,
                 counts=counts,
                 suppliers=_supplier_options(connection),
+                notice=notice,
             )
 
         return self._read(action)
+
+    def _queue_rows(self, connection, rows):
+        """按原顺序生成队列行（含当前比对项与异常分类）；同一发票的分配一起计算占用。"""
+        invoices = {
+            invoice["id"]: invoice
+            for invoice in read_invoices(connection, [row["invoice_id"] for row in rows])
+        }
+        result = []
+        for invoice_id in dict.fromkeys(row["invoice_id"] for row in rows):
+            invoice = invoices[invoice_id]
+            own = [row for row in rows if row["invoice_id"] == invoice_id]
+            views = self._views(connection, invoice, allocation_dao.by_invoices(connection, [invoice_id]))
+            items = {item["id"]: item for item in invoice["items"]}
+            result.extend(
+                QueueRow(
+                    allocation=views[row["id"]],
+                    invoiceId=str(invoice_id),
+                    invoiceNumber=invoice["invoice_no"],
+                    seller=invoice["seller_name"],
+                    itemName=items[row["invoice_item_id"]]["item_name"],
+                    anomalies=anomalies(views[row["id"]]),
+                )
+                for row in own
+            )
+        order = {row["id"]: index for index, row in enumerate(rows)}
+        result.sort(key=lambda view: order[int(view.allocation.id)])
+        return result
 
     def summaries(self, body):
         invoice_ids = [int(value) for value in body.invoiceIds]
