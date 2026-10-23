@@ -1,5 +1,6 @@
 import { useEffect, useRef, type ReactNode } from "react";
 import { Button } from "../../../shared/components/Button";
+import "./task-notification.css";
 
 export function NotificationDialog({
   title,

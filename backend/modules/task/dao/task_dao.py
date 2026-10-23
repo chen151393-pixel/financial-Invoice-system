@@ -28,6 +28,27 @@ def by_review(connection, review_id, *, lock=False):
     return [dict(row) for row in connection.execute(query).mappings()]
 
 
+def current_ids_by_declaration(connection, declaration_id):
+    """报关单下未被替代的任务 ID（资料到齐后据此重算完结）。"""
+    query = select(tasks.c.id).where(
+        tasks.c.customs_declaration_id == declaration_id, tasks.c.status != "superseded"
+    )
+    return sorted(connection.execute(query).scalars())
+
+
+def current_ids_by_orders(connection, order_ids):
+    """含这些子采购单任务行的未被替代任务 ID。"""
+    if not order_ids:
+        return []
+    query = (
+        select(tasks.c.id)
+        .distinct()
+        .join(task_lines, task_lines.c.task_id == tasks.c.id)
+        .where(task_lines.c.purchase_order_id.in_(order_ids), tasks.c.status != "superseded")
+    )
+    return sorted(connection.execute(query).scalars())
+
+
 def set_status(connection, task_id, status, now, *, completed_at=None):
     connection.execute(
         update(tasks)

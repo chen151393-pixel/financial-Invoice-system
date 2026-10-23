@@ -615,7 +615,7 @@ flowchart LR
 - 唯一约束 `uq_task_review_group`：`(review_id, group_key)`。
 - 查询索引 `ix_task_declaration`：`(customs_declaration_id)`。
 - 查询索引 `ix_task_status_supplier`：`(status, supplier_id)`。
-- 数据库检查：`status IN ('documents_pending','notify_pending','awaiting_invoice','partially_received','completed','superseded')`。
+- 数据库检查：`status IN ('documents_pending','notify_pending','awaiting_invoice','partially_received','documents_incomplete','completed','superseded')`（迁移 0028 新增 documents_incomplete）。
 
 <a id="task_lines"></a>
 
@@ -1055,10 +1055,11 @@ flowchart LR
 | `notify_pending`     | 待通知供应商               |
 | `awaiting_invoice`   | 等待开票                   |
 | `partially_received` | 部分收票                   |
-| `completed`          | 当前有效任务行全部结束     |
+| `documents_incomplete` | 发票已收齐，资料待补齐（2026-10-23 新增） |
+| `completed`          | 发票收齐且资料全部到齐（2026-10-23 前完成的任务按原口径保留） |
 | `superseded`         | 已被后继任务替代，保留历史 |
 
-收票可能早于合同归档或通知，任务完成不代表这些步骤都已执行。发票取消、作废、待复核等可以使任务回退。数量相等且金额差在每行 0.01 元容差内才按收齐处理；超开另作标记，不能代替完成条件。显式差异结束绑定当前依据和台账摘要，后续变化后要重新判断。
+收票可能早于合同归档或通知。2026-10-23 起任务完结还要求子采购合同、报关单、销售合同、发票、回签合同全部到齐，否则停在 `documents_incomplete`。发票取消、作废、待复核等可以使任务回退。数量相等且金额差在每行 0.01 元容差内才按收齐处理；超开另作标记，不能代替完成条件。显式差异结束绑定当前依据和台账摘要，后续变化后要重新判断。
 
 ## 5. 技术版本表与历史表
 
@@ -1229,6 +1230,65 @@ NS 来源按批后台保存记录与结果，不保存令牌。
 | confirmation | LONGTEXT | 是 | — | 确认请求与真实结果 JSON |
 | created_at | DATETIME(6) | 否 | CURRENT_TIMESTAMP(6) | 记录创建时间，UTC |
 | updated_at | DATETIME(6) | 否 | CURRENT_TIMESTAMP(6) | DAO 更新的最近修改时间，UTC |
+
+<a id="task_declaration_documents"></a>
+
+### task_declaration_documents｜报关资料归档记录
+
+一行一张报关单的一类资料（报关单、销售合同、发票），由 NS 下载，同一报关单的各供应商任务共用（迁移 0028，2026-10-23）。文件正文不存数据库。
+
+结构依据：[表定义](../../backend/modules/task/entity/declaration_document.py)；业务说明：[task 模块](../../backend/modules/task/README.md)。
+
+| 字段 | MySQL 类型 | 可空 | 默认 | 中文含义 |
+| --- | --- | --- | --- | --- |
+| `id` | `BIGINT UNSIGNED` | 否 | 自增 | 报关资料记录主键 |
+| `customs_declaration_id` | `BIGINT UNSIGNED` | 否 | — | 报关单本地主键，指向 source_customs_declarations.id |
+| `ns_account` | `VARCHAR(100)` | 否 | — | NS 账套标识 |
+| `record_no` | `VARCHAR(150)` | 是 | — | 报关单 CD 编号，下载时按此在 NS 重新定位 |
+| `doc_type` | `VARCHAR(30)` | 否 | — | customs_declaration 报关单；sales_contract 销售合同；invoice 发票 |
+| `status` | `VARCHAR(20)` | 否 | pending | pending 待下载；archived 已保存到共享盘；failed 失败待人工重试 |
+| `files` | `JSON` | 是 | — | 已归档文件列表 [{filename, sha256, path}] |
+| `ns_id` | `VARCHAR(40)` | 是 | — | 下载环境中的报关单内部 ID |
+| `error_message` | `VARCHAR(500)` | 是 | — | 脱敏失败原因，成功后清空 |
+| `requested_by` | `VARCHAR(200)` | 否 | — | 最近一次登记或人工重试的认证身份 |
+| `attempts` | `INTEGER` | 否 | 0 | 已尝试下载次数 |
+| `archived_at` | `DATETIME(6)` | 是 | — | 最近一次成功归档时间，UTC |
+| `created_at` | `DATETIME(6)` | 否 | CURRENT_TIMESTAMP(6) | 本地记录创建时间，UTC |
+| `updated_at` | `DATETIME(6)` | 否 | CURRENT_TIMESTAMP(6) | 本地记录最后更新时间，UTC；由 DAO 更新 |
+
+**关联与约束**
+
+- 主键：`id`。
+- 唯一约束 `uq_task_declaration_document`：`(customs_declaration_id, doc_type)`。
+- 查询索引 `ix_task_declaration_doc_status`：`(status, id)`。
+- 数据库检查：`doc_type IN ('customs_declaration','sales_contract','invoice')`；`status IN ('pending','archived','failed')`。
+
+<a id="task_signed_contracts"></a>
+
+### task_signed_contracts｜回签合同上传记录
+
+一行一张子采购单的回签合同，人工批量上传（迁移 0028，2026-10-23）。同一子采购单只保留一份，内容不同不覆盖。文件正文不存数据库。
+
+结构依据：[表定义](../../backend/modules/task/entity/signed_contract.py)；业务说明：[task 模块](../../backend/modules/task/README.md)。
+
+| 字段 | MySQL 类型 | 可空 | 默认 | 中文含义 |
+| --- | --- | --- | --- | --- |
+| `id` | `BIGINT UNSIGNED` | 否 | 自增 | 回签合同记录主键 |
+| `purchase_order_id` | `BIGINT UNSIGNED` | 否 | — | 子采购单本地主键，指向 source_purchase_orders.id |
+| `customs_declaration_id` | `BIGINT UNSIGNED` | 否 | — | 所属报关单本地主键，决定归档文件夹 |
+| `order_no` | `VARCHAR(150)` | 否 | — | 子采购单号 |
+| `original_filename` | `VARCHAR(255)` | 否 | — | 上传时的原文件名 |
+| `filename` | `VARCHAR(255)` | 否 | — | 归档文件名：回签合同_子采购单号 |
+| `sha256` | `CHAR(64)` | 否 | — | 文件内容摘要，用于防止静默覆盖 |
+| `archive_path` | `VARCHAR(2048)` | 否 | — | 共享盘路径 |
+| `uploaded_by` | `VARCHAR(200)` | 否 | — | 上传的认证身份 |
+| `created_at` | `DATETIME(6)` | 否 | CURRENT_TIMESTAMP(6) | 本地记录创建时间，UTC |
+| `updated_at` | `DATETIME(6)` | 否 | CURRENT_TIMESTAMP(6) | 本地记录最后更新时间，UTC；由 DAO 更新 |
+
+**关联与约束**
+
+- 主键：`id`。
+- 唯一约束 `uq_task_signed_contract_order`：`(purchase_order_id)`。
 
 <a id="task_contract_jobs"></a>
 

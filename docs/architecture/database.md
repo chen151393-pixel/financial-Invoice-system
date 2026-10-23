@@ -1048,3 +1048,13 @@ API 发票默认版使用 `source=lemon_open2`、`lemon_account=open2:` 加 `SHA
 | `source_customs_declarations.ns_created_at` | NS 报关单创建时间（系统字段 created），UTC，可空。归档文件夹月份按其中国日期；缺失时归档失败并提示，不用其他日期代替。 |
 
 部署时执行 `npm.cmd run db:business:upgrade` 后重启后端；已入库报关单的 `ns_created_at` 在下次同步时补齐。
+
+## 报关资料、回签合同与资料待补齐状态（2026-10-23，迁移 0028）
+
+| 表 / 列 | 说明 |
+| --- | --- |
+| `task_declaration_documents` | id；customs_declaration_id + doc_type 唯一（customs_declaration / sales_contract / invoice）；ns_account、record_no；status（pending / archived / failed）；files JSON（filename、sha256、path，不存正文）；ns_id、error_message、requested_by、attempts、archived_at；created_at/updated_at。按报关单各一份，各供应商任务共用。 |
+| `task_signed_contracts` | id；purchase_order_id 唯一；customs_declaration_id、order_no、original_filename、filename、sha256、archive_path、uploaded_by；created_at/updated_at。回签合同按子采购单一份，不存正文。 |
+| `task_tasks.status` | 新增 `documents_incomplete`：发票已收齐、资料待补齐。检查约束 `ck_task_status` 同步更新。 |
+
+降级拒绝删除资料归档记录。部署时执行 `npm.cmd run db:business:upgrade` 后重启后端。

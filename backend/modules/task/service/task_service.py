@@ -8,15 +8,17 @@ from backend.core.errors import ApiError
 
 from ..dao import (
     contract_job_dao,
+    declaration_document_dao,
     document_dao,
     event_dao,
     notification_dao,
     notification_delivery_dao,
+    signed_contract_dao,
     supplier_group_dao,
     task_dao,
     task_line_dao,
 )
-from ..mapper import notification_mapper, task_mapper
+from ..mapper import document_mapper, notification_mapper, task_mapper
 from ..policy.delivery_policy import ACTIVE, BLOCK_REASON, LABELS, submit_reason
 from ..policy.task_policy import SUPERSEDED_REASON, missing_identity_reasons
 from ..vo.capability import Capability
@@ -118,6 +120,9 @@ class TaskService:
                     "task": task,
                     "lines": task_line_dao.by_tasks(connection, [task_id]),
                     "documents": document_dao.by_task(connection, task_id),
+                    "declaration_documents": declaration_document_dao.by_declarations(
+                        connection, [task["customs_declaration_id"]]
+                    ).get(task["customs_declaration_id"], {}),
                     "contract_jobs": contract_job_dao.by_task(connection, task_id),
                     "notifications": notification_dao.history(connection, task_id),
                     "contact": notification_dao.latest_sent_by_tasks(connection, [task_id]).get(task_id),
@@ -139,6 +144,12 @@ class TaskService:
     def detail(self, task_id):
         data = self._load(task_id)
         task, lines = data["task"], data["lines"]
+        order_ids = self.order_ids(lines)
+        try:
+            with self.engine.connect() as connection:
+                signed = signed_contract_dao.by_orders(connection, order_ids)
+        except SQLAlchemyError:
+            raise ApiError(503, READ_ERROR) from None
         names = self._names([task], lines)
         summary = task_mapper.summary(task, lines, names, data["contact"])
         documents = self._documents(
@@ -184,6 +195,7 @@ class TaskService:
             notification.edit = Capability(allowed=False, reason=block)
             notification.record = Capability(allowed=False, reason=block)
         prepare_reason = next((doc.prepare.reason for doc in documents if not doc.prepare.allowed), "")
+        completion = document_mapper.completion(order_ids, documents, data["declaration_documents"], signed)
         return TaskDetail(
             task=summary,
             lines=task_mapper.lines(lines, names, task["currency"]),
@@ -208,12 +220,25 @@ class TaskService:
                 ready,
                 bool(data["notifications"] and data["notifications"][0]["status"] == "sent"),
                 notification.statusLabel,
+                completion.reason,
             ),
             documents=documents,
+            declarationDocuments=document_mapper.declaration_documents(
+                data["declaration_documents"], task, self._declaration_unavailable()
+            ),
+            signedContracts=document_mapper.signed_contracts(order_ids, signed, names),
+            completion=completion,
             downloadEnvironment=self.contracts.environment if self.contracts else "",
             notification=notification,
             events=task_mapper.events(data["events"]),
         )
+
+    def _declaration_unavailable(self):
+        if self.archive is None or self.archive.root is None:
+            return "合同共享盘路径尚未配置"
+        if self.contracts is None:
+            return "报关资料下载接口尚未配置"
+        return self.contracts.declaration_unavailable_reason()
 
     def _documents(self, task, order_ids, rows, names, jobs):
         saved = {row["purchase_order_id"]: row for row in rows}

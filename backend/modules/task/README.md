@@ -177,3 +177,20 @@ MySQL 命名锁保证多实例单消费者，并对同一任务的同一子采�
 - **归档目录**：`integrations/contract_archive.py` 按 `月份/CD号_真实报关单号/` 建两级文件夹，文件名以单据类型开头。报关单头经 source 门面 `SourceDirectory.declarations` 读取；缺 NS 创建时间、CD 编号或真实报关单号时归档失败并保留原因（409），不改用其他日期或编号，补齐同步后可重试。原有安全措施不变：临时文件、同名同内容复用、同名不同内容不覆盖、路径不越出根目录。已按旧规则归档的文件不移动，记录中的原路径不变。
 - **开票跟进按供应商筛选**：`TaskListQuery.supplierId`（数字 ID）；列表返回 `suppliers` 选项（未被替代的任务涉及的供应商，名称经来源目录读取），计数与分页随筛选变化。
 - 验证：`backend/tests/test_task_supplier_notify.py`、`test_contract_archive.py`。
+
+## 资料归集与完结规则（2026-10-23）
+
+**业务规则**：子采购合同、报关单、销售合同、发票、回签合同全部到齐，且发票收齐（或按差异结束），任务才完结；发票已收齐但资料未齐时停在新状态 `documents_incomplete`（资料待补齐），资料到齐后自动完结。报关资料下载失败或未完成**不影响通知供应商**（通知仍只等子采购合同）。2026-10-23 前已完成的任务不因新规则回退。NS 回写队列本期不做。
+
+| 资料 | 来源 | 记录 | 说明 |
+| --- | --- | --- | --- |
+| 子采购合同 | NS 专用 RESTlet | `task_documents`（按任务×子采购单） | 原有流程不变；归档后进入待通知 |
+| 报关单、销售合同、发票 | NS 报关资料 RESTlet（约定见 [NS 适配器](../../integrations/netsuite/README.md)） | `task_declaration_documents`（按报关单×类型，各供应商任务共用） | 审核通过生成任务时登记待下载，后台队列处理；每类可单独重试或重新下载 |
+| 回签合同 | 人工批量上传 | `task_signed_contracts`（按子采购单） | 按文件名识别子采购单号；不阻塞通知与收票 |
+
+- 全部文件保存到 `月份/CD号_真实报关单号/`，文件名以类型开头（`报关单_CD号.pdf`、`回签合同_子采购单号.pdf` 等）；同名不同内容不覆盖。
+- **单项重试**：`POST /api/tasks/{taskId}/declaration-documents/{type}/prepare`（type：customs_declaration / sales_contract / invoice），返回任务详情。失败、未配置、已归档都可再次执行；已归档的重新下载内容相同时无变化，内容不同返回 409 且保留原文件。后台只处理待下载记录，失败后不自动反复重试。本功能上线前生成的任务没有登记记录，首次人工重试时补登记。
+- **回签合同上传**：`POST /api/tasks/signed-contracts/upload`，请求 `{files: [{filename, content(base64), orderNo?}]}`，每次 1–20 个；支持 PDF、JPG、PNG，单个不超过 10 MB。逐个返回 `saved`（含已上传过相同文件）/ `unmatched`（未识别单号或子采购单未关联报关单）/ `ambiguous`（匹配多个单号）/ `conflict`（已有不同文件，未覆盖）/ `failed`（格式、大小、共享盘问题）。识别规则：文件名包含的有效子采购单号，一个单号包含另一个时取较长者；`orderNo` 填写时按该单号精确匹配。
+- **任务详情**新增 `declarationDocuments`（类型、状态、文件路径、失败原因、尝试次数、`retry` 能力）、`signedContracts`（每张子采购单是否已上传）与 `completion`（是否齐全、尚缺资料）。
+- 资料到齐（报关资料归档、回签合同上传、子采购合同归档）时，在同一事务中重算相关任务状态。
+- 验证：`backend/tests/test_task_documents_completion.py`、`test_task_documents.py`（NS 适配器）；收票类测试使用 `tests/documents_ready.py` 补齐资料。

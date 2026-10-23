@@ -48,6 +48,14 @@ class SourceDirectory:
             lambda connection: customs_declaration_dao.archive_heads(connection, sorted(set(declaration_ids)))
         )
 
+    def orders_by_number(self, order_no):
+        """按子采购单号精确查找有效子采购单：[{id, order_no, customs_declaration_id}]。"""
+        return self._read(lambda connection: purchase_order_dao.with_declarations(connection, exact=order_no))
+
+    def orders_in_text(self, value):
+        """查找单号出现在文本（如文件名）中的有效子采购单：[{id, order_no, customs_declaration_id}]。"""
+        return self._read(lambda connection: purchase_order_dao.with_declarations(connection, within=value))
+
     def search(self, keyword):
         """名称包含关键字的供应商 ID、单号包含关键字的子采购单 ID（各最多 500 个）。"""
 

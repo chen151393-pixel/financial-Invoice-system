@@ -15,6 +15,7 @@ from backend.core.write_lock import transaction
 from ..dao import contract_job_dao, document_dao, task_dao, task_line_dao
 from .basis_guard import require_current
 from .contract_lock import BUSY_REASON, contract_lock
+from .progress_service import refresh_task
 from .task_status_service import change_status
 
 
@@ -160,6 +161,8 @@ class DocumentService:
                     change_status(
                         connection, task, "notify_pending", actor, "子采购合同已全部保存到共享盘", now
                     )
+                elif task["status"] == "documents_incomplete":
+                    refresh_task(connection, task, actor, "子采购合同已保存到共享盘", now)
         except SQLAlchemyError:
             raise ApiError(
                 503, "文件已保存到共享盘，但记录保存失败；请重试，同内容文件不会重复覆盖"

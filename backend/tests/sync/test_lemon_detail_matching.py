@@ -13,6 +13,7 @@ from backend.modules.invoice.entity import headers, items, versions
 from backend.modules.invoice.public import InvoicesImported
 from backend.modules.matching.dto.matching_dto import CancelBody, ConfirmBody
 from backend.modules.sync.dto.lemon_invoice_dto import PullLemonInvoices
+from backend.tests.documents_ready import complete_documents
 from backend.tests.sync.lemon_detail_fixtures import full_invoice
 from backend.tests.sync.test_lemon_account_services import adapter, reply
 from backend.tests.sync.test_lemon_invoices import OWNER, body, count, make_services
@@ -103,6 +104,7 @@ def target(engine):
 
 
 def test_professional_read_confirm_complete_cancel_and_repeat(engine, world, reviewed, flow):
+    complete_documents(engine)  # 完结需资料齐全；本测试关注收票与账本
     request = PullLemonInvoices(**body(asid="21"))
     first = flow[1].pull(OWNER, request)
     assert first["result"]["completeDetails"] == 1 and first["result"]["pendingDetails"] == 0
@@ -148,6 +150,7 @@ def test_invoice_first_then_review_and_regenerate(engine, world, ns, flow):
 
 
 def test_detail_failure_and_subscriber_failure_preserve_previous_ledger(engine, world, reviewed, flow):
+    complete_documents(engine)  # 完结需资料齐全；本测试关注收票与账本
     pull(flow)
     for candidate in proposals(world, target(engine)):
         world["allocations"].confirm(int(candidate.id), ConfirmBody(), OWNER)

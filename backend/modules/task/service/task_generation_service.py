@@ -4,7 +4,14 @@ from datetime import datetime, timezone
 
 from backend.modules.review.public import ApprovedLine
 
-from ..dao import contract_job_dao, event_dao, supplier_setting_dao, task_dao, task_line_dao
+from ..dao import (
+    contract_job_dao,
+    declaration_document_dao,
+    event_dao,
+    supplier_setting_dao,
+    task_dao,
+    task_line_dao,
+)
 from ..policy.task_policy import group_key
 from .task_status_service import change_status
 
@@ -59,6 +66,16 @@ def on_review_approved(connection, event):
         groups.setdefault(key, []).append(line)
     for key, lines in groups.items():
         _create(connection, event, key, lines, now, changed_tasks)
+    if groups:
+        # 报关单、销售合同、发票按报关单各下载一份，由后台队列处理；已有记录（含已归档）不重复登记
+        declaration_document_dao.ensure(
+            connection,
+            event.customs_declaration_id,
+            event.ns_account,
+            event.record_no,
+            event.approved_by,
+            now,
+        )
     for task_id in sorted({old["task_id"] for key, old in active.items() if key not in replacements}):
         task = task_dao.get(connection, task_id)
         event_dao.append(

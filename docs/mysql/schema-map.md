@@ -3,7 +3,7 @@
 > 本文件由 `npm.cmd run db:map` 根据迁移链离线 MySQL DDL、实体定义和字段字典生成，请勿手工修改；迁移或实体变化后重新生成，`backend/tests/test_schema_map.py` 会检查是否过期。
 > “修改”含加列、改列、索引与中文备注；数据回填仅在线执行，不在离线 DDL 中体现。
 
-当前最新迁移：`0027_source_customs_created_at`；共 27 个迁移、35 张实体表。
+当前最新迁移：`0028_task_document_completion`；共 28 个迁移、37 张实体表。
 
 ## 1. 按模块查表
 
@@ -35,6 +35,7 @@
 | 表 | 中文说明 | 新建 | 后续修改 | 字段字典 |
 | --- | --- | --- | --- | --- |
 | `task_contract_jobs` | 财务审核提交后的合同自动归档队列，不保存 PDF | `0021` | — | [查看](current-data-dictionary.md#task_contract_jobs) |
+| `task_declaration_documents` | 报关资料下载与归档记录（报关单、销售合同、发票），不保存 PDF | `0028` | — | [查看](current-data-dictionary.md#task_declaration_documents) |
 | `task_documents` | 子采购合同：只记录共享盘路径 | `0001` | `0012` | [查看](current-data-dictionary.md#task_documents) |
 | `task_events` | 任务状态历史，只追加 | `0001` | `0007`、`0012` | [查看](current-data-dictionary.md#task_events) |
 | `task_external_groups` | Excel 导入外部群目录，待人工维护供应商关联 | `0017` | `0019`、`0020` | [查看](current-data-dictionary.md#task_external_groups) |
@@ -43,9 +44,10 @@
 | `task_notification_deliveries` | 企微通知执行及恢复证据 | `0022` | — | [查看](current-data-dictionary.md#task_notification_deliveries) |
 | `task_notification_group_guards` | 同群跨任务发送互斥守卫 | `0022` | — | [查看](current-data-dictionary.md#task_notification_group_guards) |
 | `task_notifications` | 供应商开票通知：每次保存一个版本 | `0001` | `0003`、`0012`、`0022` | [查看](current-data-dictionary.md#task_notifications) |
+| `task_signed_contracts` | 回签合同上传记录，按子采购单一份，不保存文件正文 | `0028` | — | [查看](current-data-dictionary.md#task_signed_contracts) |
 | `task_supplier_groups` | 供应商默认企微群 | `0001` | `0012` | [查看](current-data-dictionary.md#task_supplier_groups) |
 | `task_supplier_settings` | 供应商档案人工设置：是否开启供应商通知 | `0026` | — | [查看](current-data-dictionary.md#task_supplier_settings) |
-| `task_tasks` | 开票任务：审核通过后按 供应商 × 采购公司 × 币种 分组 | `0001` | `0003`、`0007`、`0012` | [查看](current-data-dictionary.md#task_tasks) |
+| `task_tasks` | 开票任务：审核通过后按 供应商 × 采购公司 × 币种 分组 | `0001` | `0003`、`0007`、`0012`、`0028` | [查看](current-data-dictionary.md#task_tasks) |
 
 ### invoice
 
@@ -105,3 +107,4 @@
 | [`0025_sync_merge_lemon_jobs`](../../backend/migrations/versions/0025_sync_merge_lemon_jobs.py) | — | `sync_lemon_runs`、`sync_runs` | sync：柠檬云后台分片并入 sync_lemon_runs，sync_runs 只保留 phase 一个批次状态。 |
 | [`0026_task_supplier_settings`](../../backend/migrations/versions/0026_task_supplier_settings.py) | `task_supplier_settings` | — | task：供应商档案"是否开启供应商通知"，人工维护，默认开启。 |
 | [`0027_source_customs_created_at`](../../backend/migrations/versions/0027_source_customs_created_at.py) | — | `source_customs_declarations` | source：报关单保存 NS 创建时间，用于归档文件夹的月份（2026-10-23 业务确认按报关单创建日期）。 |
+| [`0028_task_document_completion`](../../backend/migrations/versions/0028_task_document_completion.py) | `task_declaration_documents`、`task_signed_contracts` | `task_tasks` | task：报关资料与回签合同归档记录；任务新增 documents_incomplete（发票已收齐、资料待补齐）。 |

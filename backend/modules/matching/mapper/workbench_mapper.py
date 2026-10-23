@@ -46,7 +46,7 @@ def task_todo(row, declarations):
         reason=row["reason"],
         createdAt=iso(row["created_at"]),
         priority=3,
-        attention=row["status"] in ("documents_pending", "notify_pending"),
+        attention=row["status"] in ("documents_pending", "notify_pending", "documents_incomplete"),
     )
 
 

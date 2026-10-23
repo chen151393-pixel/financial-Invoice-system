@@ -1,6 +1,8 @@
 import { Button } from "../../../shared/components/Button";
-import type { TaskDetail, TaskDocument } from "../types/task";
+import type { DeclarationDocumentType, TaskDetail, TaskDocument } from "../types/task";
+import { DeclarationDocuments } from "./DeclarationDocuments";
 import { formatTime } from "./format";
+import { SignedContracts } from "./SignedContracts";
 import { TaskLines } from "./TaskLines";
 
 function documentStatus(doc: TaskDocument) {
@@ -14,19 +16,24 @@ export function TaskDocuments({
   detail,
   busy,
   onPrepare,
+  onRetryDeclaration,
+  onUploadSigned,
   onNotify,
 }: {
   detail: TaskDetail;
   busy: string | null;
   onPrepare: (orderId: string) => void;
+  onRetryDeclaration: (type: DeclarationDocumentType) => void;
+  onUploadSigned: () => void;
   onNotify: () => void;
 }) {
+  const superseded = detail.sourceStatus === "superseded";
   return (
     <div className="itd-content">
       <div>
         <h3>子采购合同</h3>
         <p className="it-help">
-          合同统一保存到共享盘，按首次获取日期建立文件夹，文件名为“子采购订单号+供应商.pdf”。
+          合同保存到共享盘“月份/CD号_真实报关单号”文件夹，文件名为“子采购合同_子采购单号_供应商.pdf”；全部保存后即可通知供应商。
         </p>
       </div>
       {detail.documents.length === 0 && <p>此任务没有可下载的子采购订单。</p>}
@@ -52,6 +59,16 @@ export function TaskDocuments({
           )}
         </div>
       ))}
+      <DeclarationDocuments
+        documents={detail.declarationDocuments}
+        busy={busy}
+        onRetry={onRetryDeclaration}
+      />
+      <SignedContracts
+        contracts={detail.signedContracts}
+        disabled={superseded || busy !== null}
+        onUpload={onUploadSigned}
+      />
       {detail.reasons.map((reason) => (
         <p className="it-help" key={reason}>
           {reason}

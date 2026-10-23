@@ -1,16 +1,15 @@
 """专用子采购合同只读下载；按业务编号重新定位，绝不复用沙箱内部 ID。"""
 
-import base64
 import binascii
-import json
 import re
 from dataclasses import replace
 
-import httpx
 from dotenv import dotenv_values
 
 from backend.core.config import load_settings
 from backend.core.errors import ApiError
+
+from .restlet_file import decode_pdf, fetch_json
 
 
 def connection_settings(settings):
@@ -47,6 +46,8 @@ def connection_settings(settings):
         target,
         subpo_contract_script=settings.subpo_contract_script,
         subpo_contract_deploy=settings.subpo_contract_deploy,
+        declaration_doc_script=settings.declaration_doc_script,
+        declaration_doc_deploy=settings.declaration_doc_deploy,
     )
 
 
@@ -73,41 +74,18 @@ def read_contract(ns, number, supplier, declaration):
         or customs.get("refName") != declaration
     ):
         raise ApiError(409, "下载环境的单号、供应商或报关单与审核任务不一致，未下载文件")
-    url = f"https://{settings.account}.restlets.api.netsuite.com/app/site/hosting/restlet.nl"
+    data = fetch_json(
+        ns,
+        settings.subpo_contract_script,
+        settings.subpo_contract_deploy,
+        {"zid": zid},
+        "子采购合同",
+        limit=10 * 1024 * 1024,
+    )
     try:
-        with ns.client.stream(
-            "GET",
-            url,
-            params={
-                "script": settings.subpo_contract_script,
-                "deploy": settings.subpo_contract_deploy,
-                "zid": zid,
-            },
-            headers={"Authorization": f"Bearer {ns.token()}", "Accept": "application/json"},
-            timeout=90,
-            follow_redirects=False,
-        ) as response:
-            if not response.is_success:
-                raise ApiError(502, f"子采购合同下载失败（HTTP {response.status_code}），请核对接口权限")
-            chunks, size = [], 0
-            for chunk in response.iter_bytes():
-                size += len(chunk)
-                if size > 10 * 1024 * 1024:
-                    raise ApiError(502, "子采购合同响应超过 10 MB，未保存截断文件")
-                chunks.append(chunk)
-        data = json.loads(b"".join(chunks))
-        if isinstance(data, str):
-            data = json.loads(data)
         if not isinstance(data, dict) or str(data.get("zid")) != zid:
             raise ValueError("unexpected record")
-        encoded = data.get("contentBase64")
-        if not isinstance(encoded, str):
-            raise ValueError("missing PDF")
-        pdf = base64.b64decode(encoded, validate=True)
-        if len(pdf) > 7 * 1024 * 1024 or not pdf.startswith(b"%PDF-") or b"%%EOF" not in pdf[-1024:]:
-            raise ValueError("invalid PDF")
-    except httpx.HTTPError:
-        raise ApiError(502, "子采购合同下载连接失败或超时，请稍后重试") from None
+        pdf = decode_pdf(data.get("contentBase64"))
     except (ValueError, UnicodeError, binascii.Error):
         raise ApiError(502, "子采购合同返回的记录或 PDF 不完整，未保存文件") from None
     return {

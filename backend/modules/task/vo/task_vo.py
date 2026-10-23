@@ -10,7 +10,13 @@ from .capability import Capability
 from .notification_vo import NotificationDetail
 
 TaskStatus = Literal[
-    "documents_pending", "notify_pending", "awaiting_invoice", "partially_received", "completed", "superseded"
+    "documents_pending",
+    "notify_pending",
+    "awaiting_invoice",
+    "partially_received",
+    "documents_incomplete",
+    "completed",
+    "superseded",
 ]
 
 
@@ -106,6 +112,43 @@ class TaskDocument(StrictModel):
     prepare: Capability
 
 
+class ArchivedFile(StrictModel):
+    filename: str
+    path: str
+
+
+class DeclarationDocument(StrictModel):
+    """报关资料（报关单、销售合同、发票）：按报关单各一份，各供应商任务共用。"""
+
+    type: Literal["customs_declaration", "sales_contract", "invoice"]
+    label: str
+    status: Literal["unregistered", "pending", "archived", "failed"]
+    statusLabel: str
+    files: list[ArchivedFile]
+    error: str = ""
+    attempts: int = 0
+    archivedAt: str | None = None
+    retry: Capability
+
+
+class SignedContract(StrictModel):
+    orderId: str
+    orderNumber: str
+    uploaded: bool
+    filename: str = ""
+    archivePath: str | None = None
+    uploadedAt: str | None = None
+    uploadedBy: str = ""
+
+
+class TaskCompletion(StrictModel):
+    """资料齐全情况：子采购合同、报关单、销售合同、发票、回签合同全部到齐才算齐全。"""
+
+    ready: bool
+    missing: list[str]
+    reason: str
+
+
 class TaskStep(StrictModel):
     label: str
     description: str
@@ -130,6 +173,9 @@ class TaskDetail(StrictModel):
     compare: Capability
     steps: list[TaskStep]
     documents: list[TaskDocument]
+    declarationDocuments: list[DeclarationDocument] = Field(default_factory=list)
+    signedContracts: list[SignedContract] = Field(default_factory=list)
+    completion: TaskCompletion | None = None
     downloadEnvironment: str
     notification: NotificationDetail
     events: list[TaskEvent]

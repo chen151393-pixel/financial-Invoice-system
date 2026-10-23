@@ -1,4 +1,4 @@
-"""开票跟进接口：任务列表、详情、保存合同、通知草稿与人工发送登记。"""
+"""开票跟进接口：任务列表、详情、保存合同、报关资料单项重试、通知草稿与人工发送登记。"""
 
 from typing import Annotated
 
@@ -11,9 +11,10 @@ from ..dto.task_dto import ClosureRequest, TaskListQuery
 from ..vo.task_vo import TaskDetail, TaskList
 
 Id = Annotated[int, Path(ge=1, le=2**63 - 1)]
+DocType = Annotated[str, Path(pattern=r"^(customs_declaration|sales_contract|invoice)$")]
 
 
-def create_router(tasks, documents, notifications, closures):
+def create_router(tasks, documents, notifications, closures, declarations):
     router = APIRouter(prefix="/api/tasks", tags=["开票跟进"])
 
     @router.post("/query", response_model=TaskList)
@@ -27,6 +28,10 @@ def create_router(tasks, documents, notifications, closures):
     @router.post("/{task_id}/documents/{order_id}/prepare", response_model=TaskDetail)
     def prepare(task_id: Id, order_id: Id, owner: Owner):
         return documents.prepare(task_id, order_id, owner)
+
+    @router.post("/{task_id}/declaration-documents/{doc_type}/prepare", response_model=TaskDetail)
+    def prepare_declaration(task_id: Id, doc_type: DocType, owner: Owner):
+        return declarations.retry(task_id, doc_type, owner)
 
     @router.post("/{task_id}/notification/draft", response_model=TaskDetail)
     def save_notification(task_id: Id, body: NotificationDraft, owner: Owner):

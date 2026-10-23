@@ -10,6 +10,7 @@ from backend.modules.matching.dto.matching_dto import ConfirmBody
 from backend.modules.matching.dto.workbench_dto import WorkbenchQuery
 from backend.modules.matching.policy.workbench_reports import BUSINESS_ZONE, month_report, supplier_ranking
 from backend.modules.matching.service.workbench_service import WorkbenchService
+from backend.tests.documents_ready import complete_documents
 from backend.tests.invoice_files import invoice
 from backend.tests.test_matching import FLUID, INK, import_invoices, invoice_id, proposals
 from backend.tests.test_matching import engine as engine
@@ -51,6 +52,7 @@ def test_review_to_task_to_receipt_and_version_review(engine, ns, world):
     assert initial.items[0].statusLabel == "待财务核对"
     assert all(row.amount is None for row in initial.items)
     approve(world, "CD870")
+    complete_documents(engine)  # 完结需资料齐全；本测试关注收票与工作台计数
     result = read(engine)
     assert (result.counts.review, result.counts.task) == (0, 1)
     assert Decimal(next(row.amount for row in result.items if row.kind == "task")) == Decimal("120.5")

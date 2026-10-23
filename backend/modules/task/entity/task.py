@@ -42,7 +42,10 @@ tasks = Table(
     Column(
         "status",
         String(24),
-        comment="任务状态：documents_pending 待合同；notify_pending 待通知；awaiting_invoice 等待开票；partially_received 部分收票；completed 完成；superseded 已替代",
+        comment=(
+            "任务状态：documents_pending 待合同；notify_pending 待通知；awaiting_invoice 等待开票；"
+            "partially_received 部分收票；documents_incomplete 发票已收齐、资料待补齐；completed 完成；superseded 已替代"
+        ),
         nullable=False,
         server_default="documents_pending",
     ),
@@ -65,7 +68,7 @@ tasks = Table(
     Index("ix_task_declaration", "customs_declaration_id"),
     CheckConstraint(
         "status IN ('documents_pending','notify_pending','awaiting_invoice',"
-        "'partially_received','completed','superseded')",
+        "'partially_received','documents_incomplete','completed','superseded')",
         name="ck_task_status",
     ),
     comment="开票任务：审核通过后按 供应商 × 采购公司 × 币种 分组",
