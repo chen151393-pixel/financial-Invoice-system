@@ -3,7 +3,7 @@
 > 本文件由 `npm.cmd run db:map` 根据迁移链离线 MySQL DDL、实体定义和字段字典生成，请勿手工修改；迁移或实体变化后重新生成，`backend/tests/test_schema_map.py` 会检查是否过期。
 > “修改”含加列、改列、索引与中文备注；数据回填仅在线执行，不在离线 DDL 中体现。
 
-当前最新迁移：`0025_sync_merge_lemon_jobs`；共 25 个迁移、34 张实体表。
+当前最新迁移：`0027_source_customs_created_at`；共 27 个迁移、35 张实体表。
 
 ## 1. 按模块查表
 
@@ -12,7 +12,7 @@
 | 表 | 中文说明 | 新建 | 后续修改 | 字段字典 |
 | --- | --- | --- | --- | --- |
 | `source_companies` | 采购公司（NS 子公司），与发票购买方比对 | `0001` | `0010` | [查看](current-data-dictionary.md#source_companies) |
-| `source_customs_declarations` | 报关单 | `0001` | `0010` | [查看](current-data-dictionary.md#source_customs_declarations) |
+| `source_customs_declarations` | 报关单 | `0001` | `0010`、`0027` | [查看](current-data-dictionary.md#source_customs_declarations) |
 | `source_customs_lines` | 报关明细 | `0001` | `0010` | [查看](current-data-dictionary.md#source_customs_lines) |
 | `source_customs_purchase_links` | 报关单与子采购单的关联，支持多对多与行级 | `0001` | `0010` | [查看](current-data-dictionary.md#source_customs_purchase_links) |
 | `source_parent_order_lines` | 母采购行 | `0001` | `0010` | [查看](current-data-dictionary.md#source_parent_order_lines) |
@@ -44,6 +44,7 @@
 | `task_notification_group_guards` | 同群跨任务发送互斥守卫 | `0022` | — | [查看](current-data-dictionary.md#task_notification_group_guards) |
 | `task_notifications` | 供应商开票通知：每次保存一个版本 | `0001` | `0003`、`0012`、`0022` | [查看](current-data-dictionary.md#task_notifications) |
 | `task_supplier_groups` | 供应商默认企微群 | `0001` | `0012` | [查看](current-data-dictionary.md#task_supplier_groups) |
+| `task_supplier_settings` | 供应商档案人工设置：是否开启供应商通知 | `0026` | — | [查看](current-data-dictionary.md#task_supplier_settings) |
 | `task_tasks` | 开票任务：审核通过后按 供应商 × 采购公司 × 币种 分组 | `0001` | `0003`、`0007`、`0012` | [查看](current-data-dictionary.md#task_tasks) |
 
 ### invoice
@@ -102,3 +103,5 @@
 | [`0023_sync_background`](../../backend/migrations/versions/0023_sync_background.py) | `sync_lemon_jobs`、`sync_lemon_plans` | `sync_lemon_runs`、`sync_runs` | 同步计划与持久任务队列。降级会丢弃待核实证据，明确禁止破坏性降级。 |
 | [`0024_sync_ns_runs`](../../backend/migrations/versions/0024_sync_ns_runs.py) | `sync_ns_runs` | — | sync：NS 来源按批后台保存的持久请求与结果；保留执行中/待核实记录，不能降级丢弃。 |
 | [`0025_sync_merge_lemon_jobs`](../../backend/migrations/versions/0025_sync_merge_lemon_jobs.py) | — | `sync_lemon_runs`、`sync_runs` | sync：柠檬云后台分片并入 sync_lemon_runs，sync_runs 只保留 phase 一个批次状态。 |
+| [`0026_task_supplier_settings`](../../backend/migrations/versions/0026_task_supplier_settings.py) | `task_supplier_settings` | — | task：供应商档案"是否开启供应商通知"，人工维护，默认开启。 |
+| [`0027_source_customs_created_at`](../../backend/migrations/versions/0027_source_customs_created_at.py) | — | `source_customs_declarations` | source：报关单保存 NS 创建时间，用于归档文件夹的月份（2026-10-23 业务确认按报关单创建日期）。 |

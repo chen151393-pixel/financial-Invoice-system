@@ -111,6 +111,66 @@
 .fr-results > span {
   color: var(--color-muted);
 }
+/* 批量审核：明确范围为"当前页已选"，不暗示包含其他页 */
+.fr-batch-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-small);
+}
+.fr-batch-bar b {
+  color: var(--color-primary);
+  font-variant-numeric: tabular-nums;
+}
+.fr-batch-bar .ui-button {
+  padding: 6px 10px;
+  font-size: 12px;
+}
+.fr-check-cell {
+  text-align: center;
+  vertical-align: middle;
+}
+.fr-declaration-table > thead > tr > .fr-check-cell,
+.fr-declaration-row > .fr-check-cell {
+  padding: 8px 4px;
+  text-align: center;
+}
+.fr-check-cell input {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  cursor: pointer;
+  accent-color: var(--color-primary);
+}
+.fr-declaration-row.is-checked {
+  background: var(--fr-info-bg);
+}
+.fr-batch-list {
+  margin: 0 0 var(--space-control);
+  padding: 0;
+  list-style: none;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-control);
+  max-height: 260px;
+  overflow-y: auto;
+}
+.fr-batch-list li {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 4px 12px;
+  padding: 8px 12px;
+  font-size: 12px;
+}
+.fr-batch-list li + li {
+  border-top: 1px solid var(--color-border);
+}
+.fr-batch-list span {
+  color: var(--color-muted);
+}
+.fr-batch-list .fr-error {
+  color: var(--color-feedback);
+}
 .fr-declaration-list {
   border: 1px solid var(--color-table-border);
   border-radius: var(--radius-panel);
@@ -228,10 +288,6 @@
   font-size: 12px;
   line-height: 1.6;
 }
-.fr-customs-table,
-.fr-purchase-table {
-  min-width: 900px;
-}
 .fr-customs-table th,
 .fr-customs-table td {
   padding: 8px 10px;
@@ -309,12 +365,6 @@
   padding: 0;
   background: var(--color-surface);
 }
-.fr-purchases {
-  background: var(--color-table-purchase);
-  padding: 0;
-  min-width: 0;
-  border: 0;
-}
 .fr-purchase-table thead th {
   background: var(--color-table-heading);
   color: #475467;
@@ -364,7 +414,7 @@
   background: var(--fr-success-bg);
   color: var(--fr-success);
 }
-.fr-status--blocked {
+.fr-status--unshipped {
   background: var(--fr-warning-bg);
   color: var(--fr-warning);
 }

@@ -2,7 +2,15 @@
 
 from sqlalchemy import func, or_, select, update
 
-from ..entity import companies, customs_declarations, customs_lines, customs_purchase_links, raw_records
+from ..entity import (
+    companies,
+    customs_declarations,
+    customs_lines,
+    customs_purchase_links,
+    purchase_orders,
+    raw_records,
+    suppliers,
+)
 from . import document_dao
 
 
@@ -67,11 +75,42 @@ def head(connection, declaration_id, *, lock=False):
     return dict(row) if row else None
 
 
-def _conditions(account, keyword):
-    """有效报关单；关键字匹配 CD 编号、真实报关单号或明细 PL。"""
+def archive_heads(connection, declaration_ids):
+    """归档文件夹所需的单头：CD 编号、真实报关单号、NS 创建时间（含已停用的报关单）。"""
+    if not declaration_ids:
+        return {}
+    query = select(
+        customs_declarations.c.id,
+        customs_declarations.c.record_no,
+        customs_declarations.c.declaration_no,
+        customs_declarations.c.ns_created_at,
+    ).where(customs_declarations.c.id.in_(declaration_ids))
+    return {
+        row["id"]: {
+            "record_no": row["record_no"],
+            "declaration_no": row["declaration_no"],
+            "created_at": row["ns_created_at"],
+        }
+        for row in connection.execute(query).mappings()
+    }
+
+
+def _supplier_declarations(supplier_id):
+    """有效关联中含该供应商子采购单的报关单 ID。"""
+    return (
+        select(customs_purchase_links.c.customs_declaration_id)
+        .join(purchase_orders, purchase_orders.c.id == customs_purchase_links.c.purchase_order_id)
+        .where(customs_purchase_links.c.status == "active", purchase_orders.c.supplier_id == supplier_id)
+    )
+
+
+def _conditions(account, keyword, supplier_id=None):
+    """有效报关单；关键字匹配 CD 编号、真实报关单号或明细 PL；可按供应商筛选。"""
     conditions = [customs_declarations.c.is_active.is_(True)]
     if account:
         conditions.append(customs_declarations.c.ns_account == account)
+    if supplier_id:
+        conditions.append(customs_declarations.c.id.in_(_supplier_declarations(supplier_id)))
     if keyword:
         like = f"%{keyword}%"
         pl_match = select(customs_lines.c.customs_declaration_id).where(
@@ -87,8 +126,8 @@ def _conditions(account, keyword):
     return conditions
 
 
-def index(connection, account, keyword):
-    """符合条件的全部报关单：ID、内容摘要、有效关联的子采购单数，按申报日期倒序。"""
+def index(connection, account, keyword, supplier_id=None):
+    """符合条件的全部报关单：ID、真实报关单号、内容摘要、有效关联的子采购单数，按申报日期倒序。"""
     linked = (
         select(func.count(func.distinct(customs_purchase_links.c.purchase_order_id)))
         .where(
@@ -98,8 +137,13 @@ def index(connection, account, keyword):
         .scalar_subquery()
     )
     query = (
-        select(customs_declarations.c.id, customs_declarations.c.content_sha256, linked.label("order_count"))
-        .where(*_conditions(account, keyword))
+        select(
+            customs_declarations.c.id,
+            customs_declarations.c.declaration_no,
+            customs_declarations.c.content_sha256,
+            linked.label("order_count"),
+        )
+        .where(*_conditions(account, keyword, supplier_id))
         .order_by(customs_declarations.c.declaration_date.desc(), customs_declarations.c.id.desc())
     )
     return [dict(row) for row in connection.execute(query).mappings()]
@@ -113,6 +157,27 @@ def accounts(connection):
         .order_by(customs_declarations.c.ns_account)
     )
     return list(connection.execute(query).scalars())
+
+
+def suppliers_of(connection, account):
+    """有效报关单关联到的供应商（供筛选下拉使用），按名称排序。"""
+    query = (
+        select(suppliers.c.id, suppliers.c.name)
+        .distinct()
+        .select_from(
+            customs_purchase_links.join(
+                purchase_orders, purchase_orders.c.id == customs_purchase_links.c.purchase_order_id
+            )
+            .join(suppliers, suppliers.c.id == purchase_orders.c.supplier_id)
+            .join(
+                customs_declarations,
+                customs_declarations.c.id == customs_purchase_links.c.customs_declaration_id,
+            )
+        )
+        .where(*_conditions(account, ""), customs_purchase_links.c.status == "active")
+        .order_by(suppliers.c.name, suppliers.c.id)
+    )
+    return [dict(row) for row in connection.execute(query).mappings()]
 
 
 def page(connection, account, keyword, offset, limit):

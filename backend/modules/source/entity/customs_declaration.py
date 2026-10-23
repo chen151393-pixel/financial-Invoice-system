@@ -56,6 +56,7 @@ customs_declarations = Table(
     Column("relation_issues", JSON, comment="关联依据缺失或冲突的原因列表"),
     Column("content_sha256", CHAR(64), comment="报关单及关联子采购展示内容摘要，用于检测审核后来源变化"),
     Column("source_modified_at", TIMESTAMP, comment="来源系统修改时间，用于识别旧版本"),
+    Column("ns_created_at", TIMESTAMP, comment="NS 报关单创建时间（created），UTC；归档月份按中国时间取"),
     Column("synced_at", TIMESTAMP, comment="本次成功保存来源数据的时间，UTC", nullable=False),
     Column(
         "is_active",

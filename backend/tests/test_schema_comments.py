@@ -24,6 +24,7 @@ TABLES = ALL_TABLES - {
     "task_contract_jobs",
     "task_notification_deliveries",
     "task_notification_group_guards",
+    "task_supplier_settings",
 }
 COMMENT_HEAD = "0015_sync_comments"
 

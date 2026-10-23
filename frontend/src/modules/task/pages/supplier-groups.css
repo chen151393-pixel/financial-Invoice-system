@@ -100,6 +100,17 @@
   border-radius: var(--radius-panel);
   background: var(--color-surface);
 }
+/* 供应商通知：关闭时用文字写明后果，不只靠颜色区分 */
+.sg-page .sg-notify {
+  display: block;
+  font-weight: 600;
+}
+.sg-page .sg-notify--off {
+  color: var(--color-feedback);
+}
+.sg-page .sg-notify__toggle {
+  margin-top: var(--space-small);
+}
 @media (max-width: 760px) {
   .sg-page .sg-fields {
     grid-template-columns: 1fr;

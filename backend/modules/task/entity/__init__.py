@@ -14,3 +14,4 @@ from .external_group import external_groups as external_groups
 from .group_import import group_imports as group_imports
 from .notification_delivery import deliveries as deliveries
 from .notification_group_guard import notification_group_guards as notification_group_guards
+from .supplier_setting import supplier_settings as supplier_settings

@@ -28,7 +28,6 @@ class WorkbenchCounts(StrictModel):
     review: int = 0
     matching: int = 0
     task: int = 0
-    blocked: int = 0
     reverify: int = 0
     preparation: int = 0
 

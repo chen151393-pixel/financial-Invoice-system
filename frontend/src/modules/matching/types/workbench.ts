@@ -26,7 +26,7 @@ export type Todo = {
   priority: number;
   attention: boolean;
 };
-export type WorkbenchCounts = Record<TodoKind | "blocked" | "reverify" | "preparation", number>;
+export type WorkbenchCounts = Record<TodoKind | "reverify" | "preparation", number>;
 export type Workbench = {
   generatedAt: string;
   accounts: string[];

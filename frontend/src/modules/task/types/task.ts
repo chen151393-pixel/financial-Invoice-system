@@ -52,6 +52,7 @@ export interface TaskGroup {
 export interface TaskListQuery {
   keyword: string;
   account: string;
+  supplierId: string;
   groupBy: "supplier" | "declaration";
   status: "current" | "superseded" | "all";
   page: number;
@@ -62,6 +63,8 @@ export interface TaskList {
   groups: TaskGroup[];
   counts: TaskCounts;
   accounts: string[];
+  // 供应商筛选选项由后端按当前任务返回
+  suppliers: { id: string; name: string }[];
   total: number;
   page: number;
   pageSize: number;

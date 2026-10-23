@@ -3,6 +3,7 @@
 from dataclasses import dataclass
 
 from .dao.unit_dictionary_dao import unit_names
+from .policy.admission_policy import admission_issues, admission_reason
 from .policy.unit_policy import unit_label
 from .service.contract_service import SubpoContractSource
 from .service.declaration_service import DeclarationService, digest, snapshot
@@ -12,6 +13,9 @@ from .service.purchase_context import purchase_lines
 from .service.workbench_reader import workbench_declarations
 
 __all__ = [
+    # 报关单准入（已出库）：有真实报关单号且有关联子采购单
+    "admission_issues",
+    "admission_reason",
     "workbench_declarations",
     "unit_names",
     "unit_label",

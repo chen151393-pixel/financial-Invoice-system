@@ -1039,3 +1039,12 @@ API 发票默认版使用 `source=lemon_open2`、`lemon_account=open2:` 加 `SHA
 - “结果待核实”不再落库：`running` 的分片若不在本进程执行中，展示和汇总时按待核实处理（沿用单 API worker 约束）；拉票记录本身仍是唯一持久事实，不自动改写或重试。
 - 升级前逐行核对：`sync_runs` 待删列须能由保留列完整还原、每条后台拉票都能找到所属分片，否则在第一条 DDL 之前中止，库保持原样。核对通过后 MySQL 的 DDL 与数据合并分步提交，执行前仍须按部署文档备份。
 - SQLite（仅测试）重建被引用的 `sync_runs` 时会触发外键检查，迁移环境在 SQLite 上暂时关闭外键，提交前以 `PRAGMA foreign_key_check` 复核，有孤儿行即回滚；MySQL 不受影响。
+
+## 供应商通知设置与报关单创建时间（2026-10-23，迁移 0026、0027）
+
+| 表 / 列 | 说明 |
+| --- | --- |
+| `task_supplier_settings` | id 主键；supplier_id（唯一，指向 source_suppliers.id，跨模块不建外键）；notify_enabled（默认 1）；version 乐观锁；updated_by；created_at/updated_at。供应商档案人工维护“是否开启供应商通知”，没有记录视为开启；关闭后之后的财务审核不生成该供应商的开票任务。降级拒绝删除人工维护数据。 |
+| `source_customs_declarations.ns_created_at` | NS 报关单创建时间（系统字段 created），UTC，可空。归档文件夹月份按其中国日期；缺失时归档失败并提示，不用其他日期代替。 |
+
+部署时执行 `npm.cmd run db:business:upgrade` 后重启后端；已入库报关单的 `ns_created_at` 在下次同步时补齐。

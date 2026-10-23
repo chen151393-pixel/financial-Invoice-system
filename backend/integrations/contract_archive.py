@@ -1,10 +1,14 @@
-"""采购合同共享盘归档；先完整写临时文件，再无覆盖地发布。"""
+"""采购合同共享盘归档；先完整写临时文件，再无覆盖地发布。
+
+目录（2026-10-23 业务确认）：<根目录>/<YYYY年MM月>/<CD号_真实报关单号>/子采购合同_<子采购单号>_<供应商>.pdf，
+月份取 NS 报关单创建时间（中国时间）。同一报关单的其他单据以后放入同一文件夹，文件名以单据类型开头区分。
+"""
 
 import hashlib
 import os
 import re
 import uuid
-from datetime import datetime, timedelta, timezone
+from datetime import timedelta, timezone
 from pathlib import Path
 
 from backend.core.errors import ApiError
@@ -12,29 +16,53 @@ from backend.core.errors import ApiError
 CHINA_TIME = timezone(timedelta(hours=8))
 
 
-def contract_filename(order_number, supplier):
-    parts = []
-    for value in (order_number, supplier):
-        clean = re.sub(r'[<>:"/\\|?*\x00-\x1f]', "_", value).strip().rstrip(". ")
-        if not clean or clean in {".", ".."}:
-            raise ApiError(409, "子采购单编号或供应商名称缺失，无法生成合同文件名")
-        parts.append(clean)
-    name = "".join(parts) + ".pdf"
+def _clean(value):
+    clean = re.sub(r'[<>:"/\\|?*\x00-\x1f]', "_", value or "").strip().rstrip(". ")
+    return "" if clean in {".", ".."} else clean
+
+
+def _bounded(name, message):
     if len(name.encode("utf-16-le")) // 2 > 240:
-        raise ApiError(409, "合同文件名过长，请核对子采购单编号及供应商名称")
+        raise ApiError(409, message)
     return name
+
+
+def contract_filename(order_number, supplier):
+    parts = [_clean(order_number), _clean(supplier)]
+    if not all(parts):
+        raise ApiError(409, "子采购单编号或供应商名称缺失，无法生成合同文件名")
+    return _bounded(
+        "子采购合同_" + "_".join(parts) + ".pdf", "合同文件名过长，请核对子采购单编号及供应商名称"
+    )
+
+
+def declaration_folder(record_no, declaration_no):
+    parts = [_clean(record_no), _clean(declaration_no)]
+    if not all(parts):
+        raise ApiError(409, "报关单缺少 CD 编号或真实报关单号，无法确定归档文件夹；请在 NS 补齐后重新同步")
+    return _bounded("_".join(parts), "报关单文件夹名过长，请核对 CD 编号及真实报关单号")
+
+
+def month_folder(created_at):
+    """created_at 为 UTC 无时区时间；按中国时间取月份。"""
+    if created_at is None:
+        raise ApiError(409, "报关单缺少 NS 创建时间，无法确定归档月份；请重新同步该报关单后重试")
+    day = created_at.replace(tzinfo=timezone.utc).astimezone(CHINA_TIME)
+    return f"{day.year}年{day.month:02d}月"
 
 
 class ContractArchive:
     def __init__(self, root):
         self.root = Path(root) if root else None
 
-    def save(self, order_number, supplier, downloaded_at, content):
+    def save(self, declaration, order_number, supplier, content):
+        """declaration：{record_no, declaration_no, created_at}；返回 (完整路径, 文件名)。"""
         if self.root is None:
             raise ApiError(503, "合同共享盘路径尚未配置，合同未归档")
         filename = contract_filename(order_number, supplier)
-        day = datetime.fromtimestamp(downloaded_at, CHINA_TIME)
-        folder_name = f"{day.year}年{day.month}月{day.day}日"
+        relative = Path(month_folder(declaration.get("created_at"))) / declaration_folder(
+            declaration.get("record_no"), declaration.get("declaration_no")
+        )
         temporary = None
         digest = hashlib.sha256(content).hexdigest()
 
@@ -49,8 +77,9 @@ class ContractArchive:
             root = self.root.resolve(strict=True)
             if not root.is_dir():
                 raise OSError("not a directory")
-            folder = root / folder_name
-            folder.mkdir(exist_ok=True)
+            folder = root / relative
+            # 只在已存在的共享盘根目录下建月份与报关单两级文件夹，根目录本身不自动创建
+            folder.mkdir(parents=True, exist_ok=True)
             target = (folder / filename).resolve()
             if not target.is_relative_to(root) or target.parent != folder.resolve():
                 raise ApiError(409, "合同保存路径越出指定共享目录，未写入")

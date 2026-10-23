@@ -44,14 +44,15 @@ def test_empty_auth_validation_and_export(engine, env):
 
 def test_review_to_task_to_receipt_and_version_review(engine, ns, world):
     save(ns, engine, bundle([purchase()], [customs("870")]))
-    save(ns, engine, bundle([], [customs("880")]))
+    save(ns, engine, bundle([], [customs("880")]))  # 未出库：无子采购单，拉取时跳过
     initial = read(engine)
-    assert initial.counts.review == 2 and initial.counts.blocked == 1
-    assert initial.items[0].statusLabel == "关联待补齐"
+    assert initial.counts.review == 1
+    assert [row.title for row in initial.items] == ["CD870"]
+    assert initial.items[0].statusLabel == "待财务核对"
     assert all(row.amount is None for row in initial.items)
     approve(world, "CD870")
     result = read(engine)
-    assert (result.counts.review, result.counts.task) == (1, 1)
+    assert (result.counts.review, result.counts.task) == (0, 1)
     assert Decimal(next(row.amount for row in result.items if row.kind == "task")) == Decimal("120.5")
     number = "26000000000000009901"
     import_invoices(world, [invoice(number, [INK, FLUID], remark="SUB-200")])
@@ -71,6 +72,7 @@ def test_review_to_task_to_receipt_and_version_review(engine, ns, world):
 
 
 def test_filters_pagination_and_full_export(engine, ns, world, reviewed):
+    save(ns, engine, bundle([purchase("210", "890")], [customs("890")]))
     save(ns, engine, bundle([], [customs("880")]))
     service = WorkbenchService(engine)
     first = read(engine, pageSize=1)
@@ -83,7 +85,8 @@ def test_filters_pagination_and_full_export(engine, ns, world, reviewed):
     assert filtered.total == 1 and filtered.counts.all == 2 and filtered.filteredCounts.all == 1
     assert read(engine, keyword="%_").total == 0
     exported = service.read(WorkbenchQuery(pageSize=1, page=2), export=True)
-    assert exported["count"] == 2 and "CD870" in exported["content"] and "CD880" in exported["content"]
+    assert exported["count"] == 2 and "CD870" in exported["content"] and "CD890" in exported["content"]
+    assert "CD880" not in exported["content"]
     assert service.read(WorkbenchQuery(keyword="SUB-200"), export=True)["count"] == 1
 
 
@@ -185,7 +188,7 @@ def test_trend_preserves_unknown_and_negative_values():
 def test_export_treats_external_names_as_text(engine, ns):
     from backend.modules.matching.service.workbench_service import export_csv
 
-    save(ns, engine, bundle([], [customs("880")]))
+    save(ns, engine, bundle([purchase()], [customs("870")]))
     item = read(engine).items[0].model_copy(update={"party": ' =HYPERLINK("https://example.invalid")'})
     content = export_csv([item])["content"]
     assert "' =HYPERLINK" in content

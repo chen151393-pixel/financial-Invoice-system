@@ -1,5 +1,7 @@
 """单批逐单结果：计数仅累计确认提交的完整关联单元，不推断失败或未知为成功。"""
 
+from ..mapper.admission_filter import skipped_warning
+
 
 class PartialResult:
     def __init__(self, page):
@@ -40,6 +42,15 @@ class PartialResult:
         for row in group:
             self.items[row["id"]].update(status=status, reason=reason)
 
+    def mark_skipped(self, skipped):
+        """本批入口单据中未出库被跳过的，按实际原因标记；非入口的关联单据不计数。"""
+        for item in skipped:
+            if item["id"] in self.items:
+                self.items[item["id"]].update(status="skipped", reason=item["reason"] + "，未拉取入库")
+        warning = skipped_warning(skipped)
+        if warning:
+            self.storage["warnings"] = list(dict.fromkeys(self.storage["warnings"] + [warning]))
+
     def add(self, saved):
         self.saved_groups += 1
         self.storage["savedAt"] = saved["savedAt"]
@@ -51,10 +62,12 @@ class PartialResult:
     def response(self):
         counts = {
             key: sum(item["status"] == key for item in self.items.values())
-            for key in ("saved", "failed", "unknown", "not_processed")
+            for key in ("saved", "skipped", "failed", "unknown", "not_processed")
         }
         status = "interrupted" if self.interrupted else "partial" if counts["failed"] else "completed"
         message = f"本批入口单据：已保存 {counts['saved']} 张，失败 {counts['failed']} 张"
+        if counts["skipped"]:
+            message += f"，未出库跳过 {counts['skipped']} 张"
         if self.interrupted:
             message += f"，待核实 {counts['unknown']} 张，未处理 {counts['not_processed']} 张；已停止后续拉取"
         message += "。已确认保存的数据保留，同一报关关联组一起提交或失败"

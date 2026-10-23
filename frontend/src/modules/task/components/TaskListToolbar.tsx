@@ -3,21 +3,25 @@ import { Button } from "../../../shared/components/Button";
 import type { TaskListQuery } from "../types/task";
 import "./task-list-toolbar.css";
 
-type Filter = "keyword" | "account" | "status";
+type Filter = "keyword" | "account" | "supplier" | "status";
 type Props = {
   query: TaskListQuery;
+  supplierName?: string;
   busy: boolean;
   onChange: (patch: Partial<TaskListQuery>) => void;
   onClear: (filter: Filter | "all") => void;
 };
 
-export function TaskListToolbar({ query, busy, onChange, onClear }: Props) {
+export function TaskListToolbar({ query, supplierName, busy, onChange, onClear }: Props) {
   const [showHelp, setShowHelp] = useState(false);
   const helpId = useId();
   const actions = useRef<HTMLDivElement>(null);
   const filters: { key: Filter; label: string }[] = [];
   if (query.keyword) filters.push({ key: "keyword", label: `关键词：${query.keyword}` });
   if (query.account) filters.push({ key: "account", label: `NS 环境：${query.account}` });
+  if (query.supplierId) {
+    filters.push({ key: "supplier", label: `供应商：${supplierName ?? query.supplierId}` });
+  }
   if (query.status !== "current") {
     filters.push({ key: "status", label: `任务版本：${query.status === "all" ? "全部版本" : "已被替代"}` });
   }

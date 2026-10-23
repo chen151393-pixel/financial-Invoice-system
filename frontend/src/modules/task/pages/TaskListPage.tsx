@@ -17,6 +17,7 @@ export function TaskListPage() {
   const [query, setQuery] = useState<TaskListQuery>({
     keyword: "",
     account: "",
+    supplierId: "",
     groupBy: "supplier",
     status: "current",
     page: 1,
@@ -24,7 +25,9 @@ export function TaskListPage() {
   });
   const [keyword, setKeyword] = useState("");
   const [account, setAccount] = useState("");
+  const [supplierId, setSupplierId] = useState("");
   const [accounts, setAccounts] = useState<string[]>([]);
+  const [suppliers, setSuppliers] = useState<TaskList["suppliers"]>([]);
   const [state, setState] = useState<Remote<TaskList>>({ kind: "loading" });
   const [refresh, setRefresh] = useState(0);
   useEffect(() => {
@@ -36,6 +39,7 @@ export function TaskListPage() {
         if (active) {
           setState({ kind: "ready", data });
           setAccounts(data.accounts);
+          setSuppliers(data.suppliers ?? []);
         }
       } catch (error) {
         if (active)
@@ -58,7 +62,7 @@ export function TaskListPage() {
         className="it-search"
         onSubmit={(event) => {
           event.preventDefault();
-          change({ keyword, account });
+          change({ keyword, account, supplierId });
         }}
       >
         <label className="it-search__keyword">
@@ -80,6 +84,17 @@ export function TaskListPage() {
             ))}
           </select>
         </label>
+        <label>
+          供应商
+          <select value={supplierId} onChange={(e) => setSupplierId(e.target.value)}>
+            <option value="">全部供应商</option>
+            {suppliers.map((item) => (
+              <option key={item.id} value={item.id}>
+                {item.name}
+              </option>
+            ))}
+          </select>
+        </label>
         <Button variant="primary" type="submit" disabled={busy}>
           查询
         </Button>
@@ -93,26 +108,31 @@ export function TaskListPage() {
           刷新
         </Button>
       </form>
-      {(keyword !== query.keyword || account !== query.account) && (
+      {(keyword !== query.keyword || account !== query.account || supplierId !== query.supplierId) && (
         <p className="it-help" role="status">
           筛选条件已修改，点击「查询」生效；当前结果仍使用上次提交的条件。
         </p>
       )}
       <TaskListToolbar
         query={query}
+        supplierName={suppliers.find((item) => item.id === query.supplierId)?.name}
         busy={busy}
         onChange={change}
         onClear={(filter) => {
           if (filter === "all") {
             setKeyword("");
             setAccount("");
-            change({ keyword: "", account: "", status: "current" });
+            setSupplierId("");
+            change({ keyword: "", account: "", supplierId: "", status: "current" });
           } else if (filter === "keyword") {
             setKeyword("");
             change({ keyword: "" });
           } else if (filter === "account") {
             setAccount("");
             change({ account: "" });
+          } else if (filter === "supplier") {
+            setSupplierId("");
+            change({ supplierId: "" });
           } else {
             change({ status: "current" });
           }
@@ -149,7 +169,7 @@ export function TaskListPage() {
           ) : (
             <div className="it-empty">
               <h2>
-                {query.keyword || query.account || query.status !== "current"
+                {query.keyword || query.account || query.supplierId || query.status !== "current"
                   ? "没有符合条件的任务"
                   : "还没有开票任务"}
               </h2>

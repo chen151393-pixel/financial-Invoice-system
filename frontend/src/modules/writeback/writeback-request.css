@@ -28,6 +28,11 @@
   background: var(--color-warning-surface);
   border-color: transparent;
 }
+/* 状态头与标签同色系，标签改白底并加描边，避免融进底色。 */
+.wb-request-head .wb-tag {
+  background: var(--color-surface);
+  box-shadow: inset 0 0 0 1px currentColor;
+}
 
 .wb-facts {
   display: grid;

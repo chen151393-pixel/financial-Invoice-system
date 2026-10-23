@@ -5,7 +5,7 @@
 """
 
 import hashlib
-from datetime import UTC, datetime, timezone
+from datetime import datetime, timezone
 
 from sqlalchemy.exc import SQLAlchemyError
 
@@ -48,15 +48,18 @@ class DocumentService:
         supplier = (names["suppliers"].get(task["supplier_id"]) or {}).get("name") or ""
         if not order_no:
             raise ApiError(409, "子采购单编号缺失，无法获取合同")
+        # 归档到 月份/CD号_真实报关单号/；单头缺失时由归档规则给出原因，不改用其他日期或编号
+        declaration = self.directory.declarations([task["customs_declaration_id"]]).get(
+            task["customs_declaration_id"], {"record_no": task["record_no"]}
+        )
         # 网络下载在数据库事务之外；成功后在短事务中再次核对任务与首次获取记录。
         contract = self.contracts.download(order_no, supplier, task["record_no"] or "")
         digest = hashlib.sha256(contract["content"]).hexdigest()
         record = self._register(task_id, order_id, order_no, contract, digest)
         if record["status"] == "archived":
             return self.tasks.detail(task_id)
-        fetched_at = record["created_at"].replace(tzinfo=UTC).timestamp()
         try:
-            path, filename = self.archive.save(order_no, supplier, fetched_at, contract["content"])
+            path, filename = self.archive.save(declaration, order_no, supplier, contract["content"])
         except ApiError as error:
             self._fail(record["id"], error.message)
             raise

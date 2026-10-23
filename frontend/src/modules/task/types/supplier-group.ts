@@ -61,8 +61,16 @@ export interface SupplierGroupMatchQuery extends WecomGroupQuery {
   supplierId: string;
 }
 
+// 是否开启供应商通知：关闭后财务审核通过不生成该供应商的开票任务；revision 为 0 表示从未设置（默认开启）。
+export interface SupplierNotify {
+  enabled: boolean;
+  revision: number;
+  updatedBy: string;
+  updatedAt: string | null;
+}
 export interface SupplierProfile extends SupplierOption {
   nsInternalId: string;
+  notify: SupplierNotify;
 }
 export interface SupplierProfileQuery extends Omit<GroupQuery, "status"> {
   status: GroupQuery["status"] | "unbound";

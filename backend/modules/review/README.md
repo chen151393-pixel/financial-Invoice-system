@@ -8,8 +8,9 @@
 
 ## 职责
 
-- 报关单列表：关键字、账套、审核状态筛选与分页，状态计数在后端完成。
+- 报关单列表：关键字、账套、供应商、审核状态筛选与分页，状态计数与供应商选项在后端完成。
 - 整单审核：财务人工确认，不调整金额；来源变化后要求重新审核，历史审核保留。
+- 批量审核（2026-10-22）：一次最多 50 张（一页），逐张走与单张相同的锁内复核和事务，被拒绝的逐张返回原因。
 - 冻结开票口径：子采购行的采购数量、采购单位、含税金额（来源缺失时为空）。
 - 发布 `ReviewApproved`：订阅方 task 模块（第 4c 步接入）在同一事务中生成开票任务；订阅方失败时整个审核回滚。
 
@@ -17,23 +18,26 @@
 
 | 层 | 文件 | 说明 |
 | --- | --- | --- |
-| controller | `review_controller.py` | `POST /api/review/declarations/query`、`POST /api/review/declarations/{id}/approve` |
-| service | `review_service.py` | 列表编排；审核确认（账户锁、摘要核对、写记录与行、发布事件） |
+| controller | `review_controller.py` | `POST /api/review/declarations/query`、`POST /api/review/declarations/approve-batch`、`POST /api/review/declarations/{id}/approve` |
+| service | `review_service.py` | 列表编排；审核确认（账户锁、摘要与出库准入核对、写记录与行、发布事件）；批量审核逐张调用 |
 | dao | `review_record_dao.py` | 有效审核查询（可加锁）、版本号、替代、写入、历史 |
 | | `review_line_dao.py` | 冻结行写入与读取 |
 | entity | `record.py`、`line.py` | 与迁移 `0001_baseline` 一致（`test_schema_entities.py` 比对） |
-| dto | `review_dto.py` | 列表查询（每页最多 50）、审核请求（`contentSha256` 为 64 位十六进制，备注最多 300 字） |
-| vo | `review_vo.py` | 报关单、报关行、子采购行、审核状态、列表 |
+| dto | `review_dto.py` | 列表查询（每页最多 50，`supplierId` 为数字 ID）、审核请求（`contentSha256` 为 64 位十六进制，备注最多 300 字）、批量审核请求（1–50 张，ID 不重复） |
+| vo | `review_vo.py` | 报关单、报关行、子采购行、审核状态、列表（含供应商选项）、批量审核结果 |
 | mapper | `declaration_mapper.py` | source 内容 → 页面 VO；source 内容 → 冻结行与事件行 |
-| policy | `review_policy.py` | 审核状态判定、不可审核原因、状态文案 |
+| policy | `review_policy.py` | 审核状态判定、不能审核原因、状态文案；出库准入规则本身在 source `admission_policy.py` |
 
 ## 审核规则
 
 | 状态 | 条件 | 能否审核 |
 | --- | --- | --- |
-| `blocked` 不可审核 | 报关单没有关联的子采购单 | 否 |
-| `pending` 待审核 | 未审核，或有效审核的内容摘要与当前来源不一致（显示"来源已变化"提示） | 是 |
-| `approved` 审核通过 | 有效审核的内容摘要与当前来源一致 | 否（查看记录） |
+| `unshipped` 未出库 | 未审核通过，且报关单缺少真实报关单号或没有关联的子采购单。2026-10-23 起这类报关单拉取时即跳过，只有库中遗留旧数据会落到此状态 | 否（列表不显示） |
+| `pending` 待审核 | 已出库且未审核，或有效审核的内容摘要与当前来源不一致、依据待复核（显示"来源已变化"提示） | 是 |
+| `approved` 审核通过 | 有效审核的内容摘要与当前来源一致，且依据无需复核 | 否（查看记录） |
+
+- 列表"全部"只含待审核与审核通过；未出库的旧数据不显示、不计数，也不进入工作台待办，审核时返回 409 及原因。列表筛选只有 all / pending / approved。
+- 批量审核：逐张提交页面所见的 `contentSha256`；来源已变化、未出库、报关单不存在的计入 `skipped` 并返回原因，其余照常审核。数据库不可用（503）时停止后续，已完成的照常生效，页面重新读取。需要人工币种证据的报关单仍走单张审核。
 
 - 页面提交打开时看到的 `contentSha256`。确认时在 source 的同步账户锁内、同一事务中重读来源并重算摘要；与页面不一致或与已保存摘要不一致时返回 409，要求刷新后重新核对。
 - 同一内容重复提交返回已有结果，不新增记录、不重复发布事件。
@@ -59,7 +63,7 @@
 
 ## 验证
 
-`backend/tests/test_review.py`（SQLite，source 真实保存合成 NS 数据）：状态与计数、筛选分页、冻结行与事件、幂等、过期页面、来源变化重审、不可审核、服务身份、订阅方失败回滚、HTTP 校验。账户锁与并发须在 MySQL 上验证。
+`backend/tests/test_review.py`（SQLite，source 真实保存合成 NS 数据）：状态与计数、筛选分页、未出库旧数据不显示且拒绝审核、供应商筛选与选项、批量审核部分通过与幂等、冻结行与事件、幂等、过期页面、来源变化重审、服务身份、订阅方失败回滚、HTTP 校验。账户锁与并发须在 MySQL 上验证。
 
 ## 币种核实接口
 

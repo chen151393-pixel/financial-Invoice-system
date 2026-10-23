@@ -21,6 +21,7 @@ from ..dao import (
     supplier_dao,
 )
 from ..entity import SOURCE_TABLES
+from ..mapper.admission_filter import skip_unshipped
 from ..mapper.bundle_mapper import map_bundle
 from ..mapper.storage_mapper import map_parent, validate_storage_config
 from ..policy.currency_policy import resolve as resolve_currency
@@ -124,8 +125,12 @@ class StorageService:
         return self.commit(connection, bundle, config, account, lock, report)
 
     def read_bundle(self, collect, config, read_relations, report):
-        """事务外读取完整来源数据包；只读 NS，不访问数据库。"""
+        """事务外读取完整来源数据包；只读 NS，不访问数据库。
+
+        出库准入在补读关联依据之前执行：未出库报关单不拉取入库，也不再为它读取依据。
+        """
         bundle = collect()
+        skip_unshipped(bundle, config)
         bundle["parent_reference_checks"] = verify_missing_parents(self.ns, bundle, config, report)
         if read_relations:
             report("补齐原始行、Packing 和逐行关联依据")

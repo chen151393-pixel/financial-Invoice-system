@@ -31,7 +31,13 @@ def test_invalid_unit_price_does_not_discard_other_committed_groups(batch, engin
     ns, page, records, _ = batch
     invalid_price(ns, records)
     result = StorageService(ns, engine).sync_partial_page("customs-declarations", lambda: page_result(page))
-    assert result["batch"]["counts"] == {"saved": 19, "failed": 1, "unknown": 0, "not_processed": 0}
+    assert result["batch"]["counts"] == {
+        "saved": 19,
+        "skipped": 0,
+        "failed": 1,
+        "unknown": 0,
+        "not_processed": 0,
+    }
     assert result["batch"]["status"] == "partial" and result["batch"]["canContinue"]
     failure = next(item for item in result["batch"]["items"] if item["status"] == "failed")
     assert failure["id"] == "871" and "unit_price" in failure["reason"]
@@ -111,7 +117,13 @@ def test_unknown_commit_keeps_prior_counts_and_stops_remaining(batch, engine, mo
 
     monkeypatch.setattr(service, "commit", save)
     result = service.sync_partial_page("customs-declarations", lambda: page_result(page[:3]))
-    assert result["batch"]["counts"] == {"saved": 1, "failed": 0, "unknown": 1, "not_processed": 1}
+    assert result["batch"]["counts"] == {
+        "saved": 1,
+        "skipped": 0,
+        "failed": 0,
+        "unknown": 1,
+        "not_processed": 1,
+    }
     assert result["batch"]["status"] == "interrupted" and not result["batch"]["canContinue"]
     assert result["storage"]["customs"]["created"] == 1
     assert len(calls) == 2 and len(rows(engine, "SELECT id FROM source_customs_declarations")) == 2
@@ -201,6 +213,12 @@ def test_lock_conflict_stops_later_groups_without_losing_prior_success(batch, en
 
     monkeypatch.setattr(service, "commit", save)
     result = service.sync_partial_page("customs-declarations", lambda: page_result(page[:3]))
-    assert result["batch"]["counts"] == {"saved": 1, "failed": 1, "unknown": 0, "not_processed": 1}
+    assert result["batch"]["counts"] == {
+        "saved": 1,
+        "skipped": 0,
+        "failed": 1,
+        "unknown": 0,
+        "not_processed": 1,
+    }
     assert not result["batch"]["canContinue"] and len(calls) == 2
     assert len(rows(engine, "SELECT id FROM source_customs_declarations")) == 1

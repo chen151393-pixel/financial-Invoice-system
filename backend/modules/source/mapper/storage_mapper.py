@@ -205,12 +205,30 @@ def checked_text(value, column):
     return column_value(value, column) if value else None
 
 
+def ns_created(value):
+    """NS 系统字段 created（与同步按创建日期筛选使用同一字段）；缺失或无法识别时为空，不用其他日期代替。"""
+    if not value:
+        return None
+    try:
+        parsed = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        return None
+    return parsed.astimezone(timezone.utc).replace(tzinfo=None)
+
+
 def map_customs(bundle, config, now):
     spec, line_spec = config.customs, config.customs_line
     documents = []
     for record_id, record, raw_lines in bundle["customs"]:
         head, references = project(record, "customs", spec)
-        head.update(detail_status="complete", synced_at=now, is_active=True)
+        head.update(
+            detail_status="complete",
+            synced_at=now,
+            is_active=True,
+            ns_created_at=ns_created(record.get("created")),
+        )
         lines = []
         for line_id, raw in raw_lines:
             line, _ = project(raw, "customs_line", line_spec)

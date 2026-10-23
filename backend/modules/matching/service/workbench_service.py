@@ -25,7 +25,6 @@ def counts(rows):
         review=sum(r.kind == "review" for r in rows),
         matching=sum(r.kind == "matching" for r in rows),
         task=sum(r.kind == "task" for r in rows),
-        blocked=sum(r.kind == "review" and r.attention for r in rows),
         reverify=sum(r.kind == "matching" and r.attention for r in rows),
         preparation=sum(r.kind == "task" and r.attention for r in rows),
     )

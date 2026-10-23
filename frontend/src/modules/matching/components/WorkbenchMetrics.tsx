@@ -23,8 +23,8 @@ export function WorkbenchMetrics({
       label: "待财务核对",
       value: counts.review,
       unit: "张报关单",
-      note: `${counts.blocked} 张缺少子采购关联`,
-      warn: counts.blocked > 0,
+      note: "仅含已出库报关单，整单审核",
+      warn: false,
       action: "查看核对待办",
     },
     {

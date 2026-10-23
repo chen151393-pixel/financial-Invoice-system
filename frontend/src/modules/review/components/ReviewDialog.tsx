@@ -1,23 +1,10 @@
 import { CurrencyEvidenceForm } from "./CurrencyEvidenceForm";
 import { Link } from "react-router";
 import { paths } from "../../../app/paths";
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
 import { Button } from "../../../shared/components/Button";
+import { useDialog } from "../hooks/useDialog";
 import type { ComparisonGroup, PurchaseLine, CurrencyEvidence } from "../types";
-
-function useDialog() {
-  const ref = useRef<HTMLDialogElement>(null);
-  useEffect(() => {
-    const trigger = document.activeElement;
-    const dialog = ref.current;
-    dialog?.showModal();
-    return () => {
-      dialog?.close();
-      if (trigger instanceof HTMLElement && trigger.isConnected) trigger.focus();
-    };
-  }, []);
-  return ref;
-}
 
 export function ReviewDialog({
   group,

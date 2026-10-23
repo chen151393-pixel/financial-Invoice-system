@@ -1,4 +1,4 @@
-"""财务核对请求：列表条件与审核确认；审核只接受报关单内容摘要与备注。"""
+"""财务核对请求：列表条件与审核确认（单张、批量）；审核只接受报关单内容摘要与备注。"""
 
 from typing import Literal
 
@@ -10,7 +10,8 @@ from backend.core.dto import StrictModel
 class DeclarationListQuery(StrictModel):
     keyword: str = Field(default="", max_length=120)
     account: str = Field(default="", max_length=80, pattern=r"^[a-zA-Z0-9_-]*$")
-    status: Literal["all", "pending", "approved", "blocked"] = "all"
+    status: Literal["all", "pending", "approved"] = "all"
+    supplierId: str = Field(default="", max_length=20, pattern=r"^([1-9][0-9]*)?$")
     page: int = Field(default=1, ge=1, le=100000)
     pageSize: int = Field(default=20, ge=1, le=50)
 
@@ -34,3 +35,22 @@ class ApproveRequest(StrictModel):
     note: str = Field(default="", max_length=300)
 
     currencyEvidence: list[CurrencyEvidence] = Field(default_factory=list, max_length=300)
+
+
+class BatchApproveItem(StrictModel):
+    id: str = Field(pattern=r"^[1-9][0-9]*$")
+    contentSha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+
+
+class BatchApproveRequest(StrictModel):
+    """批量审核：只提交页面上核对过的报关单 ID 与当时的内容摘要；一次最多一页（50 张）。"""
+
+    items: list[BatchApproveItem] = Field(min_length=1, max_length=50)
+    note: str = Field(default="", max_length=300)
+
+    @field_validator("items")
+    @classmethod
+    def unique(cls, value):
+        if len({item.id for item in value}) != len(value):
+            raise ValueError("同一张报关单不能重复提交")
+        return value

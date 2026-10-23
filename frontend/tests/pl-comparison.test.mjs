@@ -8,6 +8,7 @@ import { createServer } from "vite";
 import { createPlComparisonState } from "./fixtures/pl-comparison.mjs";
 let server,
   PlComparison,
+  BatchApproveDialog,
   CustomsRows,
   ReviewDialog,
   PlSourceComparison,
@@ -29,6 +30,9 @@ before(async () => {
     "/src/modules/review/components/FinanceComparison.tsx",
   ));
   ({ CustomsRows } = await server.ssrLoadModule("/src/modules/review/components/CustomsRows.tsx"));
+  ({ BatchApproveDialog } = await server.ssrLoadModule(
+    "/src/modules/review/components/BatchApproveDialog.tsx",
+  ));
   ({ ReviewDialog } = await server.ssrLoadModule("/src/modules/review/components/ReviewDialog.tsx"));
   ({ PlSourceComparison } = await server.ssrLoadModule(
     "/src/modules/source/components/PlSourceComparison.tsx",
@@ -44,8 +48,10 @@ before(async () => {
 after(async () => {
   await server?.close();
 });
-const render = (state = createPlComparisonState()) =>
-  renderToStaticMarkup(createElement(PlComparison, { state, onRetry() {}, onFilter() {}, onReview() {} }));
+const render = (state = createPlComparisonState(), props = {}) =>
+  renderToStaticMarkup(
+    createElement(PlComparison, { state, onRetry() {}, onFilter() {}, onReview() {}, ...props }),
+  );
 const group = () => createPlComparisonState().result.groups[0];
 const pagination = (props = {}) =>
   createElement(Pagination, {
@@ -142,7 +148,11 @@ test("明细按后端显式树展示，数量和金额保留原十进制字符�
   assert.doesNotMatch(html, /财务审核|待审核/);
   const columns = [...html.matchAll(/<colgroup>(.*?)<\/colgroup>/g)].map((match) => match[1]);
   assert.equal(columns.length, 2);
-  assert.equal(columns[0], columns[1], "报关行与采购行共用相同列宽");
+  assert.notEqual(columns[0], columns[1], "数值列只在同一层内对齐，报关行与采购行各自列宽");
+  // 第二层、第三层各自缩进一级，第三层嵌套在第二层内
+  const customsLevel = html.indexOf("fr-level fr-level--customs");
+  const purchaseLevel = html.indexOf("fr-level fr-level--purchase");
+  assert.ok(customsLevel >= 0 && purchaseLevel > customsLevel);
 });
 test("第二层默认收起，多个报关单的父子行控制ID独立", () => {
   const a = group(),
@@ -156,13 +166,42 @@ test("后端不允许审核时禁用按钮并展示实际原因", () => {
   state.result.groups[0].review = {
     ...state.result.groups[0].review,
     allowed: false,
-    status: "blocked",
-    label: "待核实",
     reason: "NS未提供明确行关联",
   };
-  const html = render(state);
+  const html = render(state, { onBatchApprove() {} });
   assert.match(html, /NS未提供明确行关联/);
   assert.match(html, /<button[^>]*disabled=""[^>]*aria-label="审核通过：CDTEST001"/);
+  assert.doesNotMatch(html, /type="checkbox"/, "不可审核的报关单不提供批量勾选");
+});
+
+test("状态筛选不再含未出库（拉取时已跳过）；批量勾选只对后端允许审核的报关单开放", () => {
+  const html = render(createPlComparisonState(), { onBatchApprove() {} });
+  for (const label of ["全部报关单", "待审核", "审核通过"]) assert.ok(html.includes(label));
+  assert.doesNotMatch(html, /未出库/);
+  assert.match(html, /aria-label="选择报关单：CDTEST001"/);
+  assert.match(html, /aria-label="选择当前页全部可审核的报关单"/);
+  assert.doesNotMatch(render(), /type="checkbox"/, "未提供批量审核时不显示勾选");
+  const approved = createPlComparisonState();
+  approved.result.groups[0].review = { ...approved.result.groups[0].review, status: "approved" };
+  assert.doesNotMatch(render(approved, { onBatchApprove() {} }), /aria-label="选择报关单/);
+});
+
+test("批量审核窗口说明范围仅为当前页已选，并逐张展示跳过原因", () => {
+  const groups = [group(), { ...group(), id: "102", recordNumber: "CDTEST002" }];
+  const props = { groups, busy: false, error: "", onClose() {}, onApprove() {} };
+  const confirm = renderToStaticMarkup(createElement(BatchApproveDialog, { ...props, result: null }));
+  assert.match(confirm, /当前页已选 2 张报关单/);
+  assert.match(confirm, /不包含其他页或未勾选的报关单/);
+  assert.match(confirm, /CDTEST001/);
+  assert.match(confirm, /审核通过 2 张/);
+  const result = {
+    approved: [{ id: "101", recordNumber: "CDTEST001", reason: "" }],
+    skipped: [{ id: "102", recordNumber: "", reason: "报关单来源已变化，请刷新后重新核对再审核" }],
+  };
+  const done = renderToStaticMarkup(createElement(BatchApproveDialog, { ...props, result }));
+  assert.match(done, /1 张已审核通过并生成开票任务，1 张未通过/);
+  assert.match(done, /CDTEST002[\s\S]*来源已变化/);
+  assert.doesNotMatch(done, /审核通过 2 张/);
 });
 test("保存审核后显示记录入口", () => {
   const state = createPlComparisonState();
@@ -273,6 +312,7 @@ test("财务搜索使用单一关键字，支持账套选择与刷新", () => {
   const html = renderToStaticMarkup(
     createElement(FinanceSearchForm, {
       accounts: ["prod", "sandbox"],
+      suppliers: [{ id: "77", name: "合成供应商" }],
       busy: false,
       onSearch() {},
       onRefresh() {},
@@ -281,6 +321,8 @@ test("财务搜索使用单一关键字，支持账套选择与刷新", () => {
   assert.match(html, /CD 编号 \/ 真实报关单号 \/ PL \/ 子采购单号 \/ 品名/);
   assert.match(html, /刷新列表/);
   assert.match(html, /全部账套/);
+  assert.match(html, /全部供应商/);
+  assert.match(html, /<option value="77">合成供应商<\/option>/);
   assert.doesNotMatch(html, /查询方式|重置示例/);
 });
 

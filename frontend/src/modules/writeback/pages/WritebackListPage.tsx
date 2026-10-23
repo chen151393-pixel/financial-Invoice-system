@@ -3,6 +3,7 @@ import { useNavigate } from "react-router";
 import { writebackRequestPath } from "../../../app/paths";
 import { Button } from "../../../shared/components/Button";
 import { Pagination } from "../../../shared/components/Pagination";
+import { DemoBanner } from "../components/DemoBanner";
 import { NotConnected } from "../components/NotConnected";
 import { WriteSwitchStatus } from "../components/WriteSwitchStatus";
 import { WritebackFilters } from "../components/WritebackFilters";
@@ -31,6 +32,7 @@ export function WritebackListPage() {
   if (status === "notConnected") return <NotConnected scope="回写列表暂无可用数据。" />;
   return (
     <div className="wb-stack">
+      <DemoBanner />
       {data && <WriteSwitchStatus write={data.write} />}
       <WritebackFilters
         value={query}

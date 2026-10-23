@@ -68,9 +68,18 @@ test("未绑定供应商也展示维护入口，已绑定展示群与群主身�
   const html = renderToStaticMarkup(
     createElement(Table, {
       disabled: false,
+      saving: null,
       onEdit() {},
+      onNotify() {},
       items: [
-        { supplierId: "1", supplierName: "未绑定公司", account: "prod", nsInternalId: "77", binding: null },
+        {
+          supplierId: "1",
+          supplierName: "未绑定公司",
+          account: "prod",
+          nsInternalId: "77",
+          binding: null,
+          notify: { enabled: true, revision: 0, updatedBy: "", updatedAt: null },
+        },
         {
           supplierId: "2",
           supplierName: "已绑定公司",
@@ -84,10 +93,15 @@ test("未绑定供应商也展示维护入口，已绑定展示群与群主身�
             enabled: true,
             updatedAt: "2026-10-16T01:00:00Z",
           },
+          notify: { enabled: false, revision: 2, updatedBy: "user:admin", updatedAt: "2026-10-23T01:00:00Z" },
         },
       ],
     }),
   );
+  // 未绑定外部群的供应商也能维护通知开关；关闭时用文字写明后果
+  assert.match(html, /aria-label="关闭供应商通知：未绑定公司"/);
+  assert.match(html, /aria-label="开启供应商通知：已绑定公司"/);
+  assert.match(html, /已关闭 · 不生成开票任务/);
   for (const text of ["未绑定公司", "尚未绑定外部群", "外部采购群", "wr_test", "张女士", "owner1"])
     assert.ok(html.includes(text));
   assert.equal((html.match(/维护档案/g) || []).length, 2);
@@ -108,4 +122,19 @@ test("匹配仅提交供应商身份；保存失败不自动重放", async (t) =
     /配置已被修改/,
   );
   assert.equal(calls.length, 2);
+});
+
+test("通知开关只提交供应商、开关与版本；冲突时给出后端原因", async (t) => {
+  const calls = [];
+  t.mock.method(globalThis, "fetch", async (url, options) => {
+    calls.push({ url, body: JSON.parse(options.body) });
+    return Response.json({ error: "供应商通知设置已被他人修改，请刷新后重试" }, { status: 409 });
+  });
+  await assert.rejects(api.saveSupplierNotify("7", false, 3), /已被他人修改/);
+  assert.deepEqual(calls, [
+    {
+      url: "/api/tasks/supplier-groups/profiles/notify",
+      body: { supplierId: "7", enabled: false, revision: 3 },
+    },
+  ]);
 });

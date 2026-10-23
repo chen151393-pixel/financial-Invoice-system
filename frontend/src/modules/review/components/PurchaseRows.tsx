@@ -1,7 +1,9 @@
 import { Button } from "../../../shared/components/Button";
 import type { PurchaseLine } from "../types";
-import { DetailColumns } from "./DetailColumns";
+// 第三层列宽只在子采购行内对齐。
+const COLUMNS = [18, 16, 18, 10, 6, 10, 13, 9];
 
+/** 第三层：报关行对应的子采购订单行。 */
 export function PurchaseRows({
   lines,
   label,
@@ -23,7 +25,11 @@ export function PurchaseRows({
     >
       <table className="fr-purchase-table">
         <caption className="fr-sr-only">{label} 对应的子采购订单行</caption>
-        <DetailColumns />
+        <colgroup>
+          {COLUMNS.map((width, index) => (
+            <col key={index} style={{ width: `${width}%` }} />
+          ))}
+        </colgroup>
         <thead>
           <tr>
             <th scope="col">子采购单 / 母采购单</th>

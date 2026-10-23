@@ -1,4 +1,6 @@
-/** 后端回写接口尚未登记时的占位：说明限制，不显示示例数据，也不呈现为加载中。 */
+import { paths } from "../../../app/paths";
+
+/** 后端回写接口尚未登记时的占位：说明限制，不显示示例数据，也不呈现为加载中；可另行进入演示数据查看效果。 */
 export function NotConnected({ scope }: { scope: string }) {
   return (
     <section className="wb-panel wb-not-connected" aria-labelledby="wb-not-connected-title">
@@ -9,6 +11,12 @@ export function NotConnected({ scope }: { scope: string }) {
         <li>本页不显示示例数据；接入后将展示后端返回的真实记录与校验结果。</li>
         <li>需要登记到 NS 的发票，暂时仍在 NS“供应商发票勾选平台”中手工处理。</li>
       </ul>
+      <p className="wb-not-connected__demo">
+        查看页面效果：
+        <a href={`${paths.writeback}?demo=1`}>演示数据一</a>
+        <a href={`${paths.writeback}?demo=2`}>演示数据二</a>
+        <span className="wb-muted">（模拟数据，不连接后端，不会写入 NS）</span>
+      </p>
     </section>
   );
 }

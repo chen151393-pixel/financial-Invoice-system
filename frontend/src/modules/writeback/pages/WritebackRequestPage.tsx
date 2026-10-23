@@ -3,6 +3,7 @@ import { useNavigate } from "react-router";
 import { writebackRequestPath } from "../../../app/paths";
 import { Button } from "../../../shared/components/Button";
 import { ConfirmDialog } from "../components/ConfirmDialog";
+import { DemoBanner } from "../components/DemoBanner";
 import { EventLog } from "../components/EventLog";
 import { NotConnected } from "../components/NotConnected";
 import { PreviewChecks } from "../components/PreviewChecks";
@@ -40,6 +41,7 @@ export function WritebackRequestPage({ requestId }: { requestId: string }) {
   const createError = repreview.error?.invoiceId === data.invoiceId ? repreview.error.message : "";
   return (
     <div className="wb-stack">
+      <DemoBanner />
       <RequestHeader
         data={data}
         action={action}

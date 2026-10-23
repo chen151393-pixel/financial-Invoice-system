@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Button } from "../../../shared/components/Button";
 import { Pagination } from "../../../shared/components/Pagination";
-import { matchWecomGroups, saveSupplierGroup } from "../api/supplier-group";
+import { matchWecomGroups, saveSupplierGroup, saveSupplierNotify } from "../api/supplier-group";
 import { SupplierGroupEditor } from "../components/SupplierGroupEditor";
 import { SupplierProfilesTable } from "../components/SupplierProfilesTable";
 import { useSupplierProfiles } from "../hooks/useSupplierProfiles";
@@ -13,6 +13,7 @@ export function SupplierGroupsPage() {
   const { query, state, change, reload } = useSupplierProfiles();
   const [editor, setEditor] = useState<SupplierProfile | null>(null);
   const [feedback, setFeedback] = useState("");
+  const [saving, setSaving] = useState<string | null>(null);
   const trigger = useRef<HTMLElement | null>(null);
   const feedbackElement = useRef<HTMLParagraphElement>(null);
   const restoreFocus = useRef(false);
@@ -26,6 +27,23 @@ export function SupplierGroupsPage() {
   function close() {
     restoreFocus.current = true;
     setEditor(null);
+  }
+  async function notify(item: SupplierProfile, enabled: boolean) {
+    setSaving(item.supplierId);
+    setFeedback("");
+    try {
+      await saveSupplierNotify(item.supplierId, enabled, item.notify.revision);
+      setFeedback(
+        enabled
+          ? `已开启 ${item.supplierName} 的供应商通知，之后审核通过将照常生成开票任务。`
+          : `已关闭 ${item.supplierName} 的供应商通知，之后审核通过不再生成该供应商的开票任务；已有任务不变。`,
+      );
+    } catch (error) {
+      setFeedback(error instanceof Error ? error.message : "供应商通知设置保存失败，请刷新后重试");
+    } finally {
+      setSaving(null);
+      reload();
+    }
   }
   return (
     <div className="it-page sg-page">
@@ -122,6 +140,8 @@ export function SupplierGroupsPage() {
             <SupplierProfilesTable
               items={state.data.items}
               disabled={!state.data.manage.allowed || editor !== null}
+              saving={saving}
+              onNotify={(item, enabled) => void notify(item, enabled)}
               onEdit={(item) => {
                 trigger.current =
                   document.activeElement instanceof HTMLElement ? document.activeElement : null;

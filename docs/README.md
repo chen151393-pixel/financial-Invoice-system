@@ -61,6 +61,7 @@ SQL 文件位于 `mysql/`，不是统一自动迁移入口。4e 后仅使用 `ba
 | [架构方案](history/architecture-plan.md) | 分层原则及早期目标；目标目录、worker、接口草案不等于已实现 |
 | [发票与已审核子采购行匹配方案](lemon-invoice-matching-plan.md) | 第 0 节为当前修订规则，其余明确标记为历史；版本与换算补强待实施 |
 | [柠檬云进项发票接入与运维](lemon-invoice-sync-plan.md) | 已实现正式用户 Token、账套选择、手动拉票、版本保存；部署步骤与明细/正式联调边界 |
+| [11 月试用上线执行方案](launch-plan-2026-11.md) | 2026-10 会议需求对照现状、改动关联点、待确认问题与 P0/P1/P2 任务排期（待评审） |
 | [柠檬云后台拉票与每日计划](lemon-background-sync.md) | 全部授权账套队列、持久任务、日期分片、每日回扫、失败重试和迁移部署 |
 | [企业微信供应商开票通知接入方案](wecom-supplier-notification-plan.md) | 第一阶段已接入：合同与通知提交、群主确认、目标群回执、幂等与异常恢复；真实定向验收待完成 |
 | [完整业务数据库设计](mysql/purchase-customs-invoice-schema-design.md) | 既有字段核实与目标设计，区别已存在表和计划表 |
