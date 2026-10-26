@@ -2,8 +2,18 @@ import { Link } from "react-router";
 import { paths } from "../../../app/paths";
 import { useEffect, useState } from "react";
 import { useSearchParams } from "react-router";
-import { Button } from "../../../shared/components/Button";
-import { Pagination } from "../../../shared/components/Pagination";
+import {
+  Button,
+  Card,
+  CardFooter,
+  EmptyState,
+  ErrorState,
+  Field,
+  FilterBar,
+  Pagination,
+  SectionTitle,
+  Skeleton,
+} from "../../../shared/components/ui";
 import { openLocalSession } from "../../identity/api";
 import { listTasks, uploadSignedContracts } from "../api/task";
 import { SignedContractUpload } from "../components/SignedContractUpload";
@@ -24,7 +34,6 @@ export function TaskListPage() {
   const [searchParams] = useSearchParams();
   const [query, setQuery] = useState<TaskListQuery>({
     keyword: "",
-    account: searchParams.get("account") || "",
     supplierId: searchParams.get("supplierId") || "",
     stage: initialStage(searchParams.get("stage")),
     createdFrom: searchParams.get("createdFrom") || "",
@@ -35,12 +44,10 @@ export function TaskListPage() {
     pageSize: 20,
   });
   const [keyword, setKeyword] = useState("");
-  const [account, setAccount] = useState(query.account);
   const [supplierId, setSupplierId] = useState(query.supplierId);
   const [stage, setStage] = useState<TaskStage>(query.stage);
   const [createdFrom, setCreatedFrom] = useState(query.createdFrom);
   const [createdTo, setCreatedTo] = useState(query.createdTo);
-  const [accounts, setAccounts] = useState<string[]>([]);
   const [suppliers, setSuppliers] = useState<TaskList["suppliers"]>([]);
   const [state, setState] = useState<Remote<TaskList>>({ kind: "loading" });
   const [refresh, setRefresh] = useState(0);
@@ -53,7 +60,6 @@ export function TaskListPage() {
         const data = await listTasks(query);
         if (active) {
           setState({ kind: "ready", data });
-          setAccounts(data.accounts);
           setSuppliers(data.suppliers ?? []);
         }
       } catch (error) {
@@ -71,17 +77,36 @@ export function TaskListPage() {
     setQuery((current) => ({ ...current, page: 1, ...patch }));
   }
   const busy = state.kind === "loading";
+  const edited =
+    keyword !== query.keyword ||
+    supplierId !== query.supplierId ||
+    stage !== query.stage ||
+    createdFrom !== query.createdFrom ||
+    createdTo !== query.createdTo;
+  const filtered = Boolean(
+    query.keyword || query.supplierId || query.stage || query.createdFrom || query.status !== "current",
+  );
+  function reload() {
+    setState({ kind: "loading" });
+    setRefresh((n) => n + 1);
+  }
   return (
     <div className="it-page">
-      <form
-        className="it-search"
-        onSubmit={(event) => {
-          event.preventDefault();
-          change({ keyword, account, supplierId, stage, createdFrom, createdTo });
-        }}
+      <FilterBar
+        onSubmit={() => change({ keyword, supplierId, stage, createdFrom, createdTo })}
+        pending={edited ? "条件已修改，点击「查询」生效；当前结果仍使用上次提交的条件" : undefined}
+        actions={
+          <>
+            <Button variant="primary" type="submit" disabled={busy}>
+              {busy ? "查询中…" : "查询"}
+            </Button>
+            <Button disabled={busy} onClick={reload}>
+              刷新
+            </Button>
+          </>
+        }
       >
-        <label className="it-search__keyword">
-          报关单 / 供应商 / 子采购单
+        <Field label="报关单 / 供应商 / 子采购单" grow>
           <input
             type="search"
             maxLength={120}
@@ -89,18 +114,8 @@ export function TaskListPage() {
             value={keyword}
             onChange={(e) => setKeyword(e.target.value)}
           />
-        </label>
-        <label>
-          NS 环境
-          <select value={account} onChange={(e) => setAccount(e.target.value)}>
-            <option value="">全部 NS 环境</option>
-            {accounts.map((item) => (
-              <option key={item}>{item}</option>
-            ))}
-          </select>
-        </label>
-        <label>
-          供应商
+        </Field>
+        <Field label="供应商">
           <select value={supplierId} onChange={(e) => setSupplierId(e.target.value)}>
             <option value="">全部供应商</option>
             {suppliers.map((item) => (
@@ -109,9 +124,8 @@ export function TaskListPage() {
               </option>
             ))}
           </select>
-        </label>
-        <label>
-          业务状态
+        </Field>
+        <Field label="业务状态">
           <select value={stage} onChange={(e) => setStage(initialStage(e.target.value))}>
             <option value="">全部状态</option>
             {Object.entries(stageLabels).map(([key, label]) => (
@@ -120,31 +134,14 @@ export function TaskListPage() {
               </option>
             ))}
           </select>
-        </label>
-        <label>
-          报关单创建日期 从
+        </Field>
+        <Field label="报关单创建日期 从">
           <input type="date" value={createdFrom} onChange={(e) => setCreatedFrom(e.target.value)} />
-        </label>
-        <label>
-          至
+        </Field>
+        <Field label="至">
           <input type="date" value={createdTo} onChange={(e) => setCreatedTo(e.target.value)} />
-        </label>
-        <Button variant="primary" type="submit" disabled={busy}>
-          查询
-        </Button>
-        <Button
-          disabled={busy}
-          onClick={() => {
-            setState({ kind: "loading" });
-            setRefresh((n) => n + 1);
-          }}
-        >
-          刷新
-        </Button>
-        <Button disabled={busy} onClick={() => setUploading(true)}>
-          批量上传回签合同
-        </Button>
-      </form>
+        </Field>
+      </FilterBar>
       {uploading && (
         <SignedContractUpload
           upload={uploadSignedContracts}
@@ -157,16 +154,24 @@ export function TaskListPage() {
           }}
         />
       )}
-      {(keyword !== query.keyword ||
-        account !== query.account ||
-        supplierId !== query.supplierId ||
-        stage !== query.stage ||
-        createdFrom !== query.createdFrom ||
-        createdTo !== query.createdTo) && (
-        <p className="it-help" role="status">
-          筛选条件已修改，点击「查询」生效；当前结果仍使用上次提交的条件。
-        </p>
-      )}
+      <SectionTitle
+        title="开票任务"
+        count={
+          state.kind === "ready"
+            ? `共 ${state.data.counts.tasks} 个任务 · ${state.data.total} 个${
+                query.groupBy === "supplier" ? "供应商分组" : "报关单分组"
+              }`
+            : undefined
+        }
+        actions={
+          <>
+            {state.kind === "ready" && <TaskCountList counts={state.data.counts} />}
+            <Button disabled={busy} onClick={() => setUploading(true)}>
+              批量上传回签合同
+            </Button>
+          </>
+        }
+      />
       <TaskListToolbar
         query={query}
         supplierName={suppliers.find((item) => item.id === query.supplierId)?.name}
@@ -175,14 +180,12 @@ export function TaskListPage() {
         onClear={(filter) => {
           if (filter === "all") {
             setKeyword("");
-            setAccount("");
             setSupplierId("");
             setStage("");
             setCreatedFrom("");
             setCreatedTo("");
             change({
               keyword: "",
-              account: "",
               supplierId: "",
               stage: "",
               createdFrom: "",
@@ -192,9 +195,6 @@ export function TaskListPage() {
           } else if (filter === "keyword") {
             setKeyword("");
             change({ keyword: "" });
-          } else if (filter === "account") {
-            setAccount("");
-            change({ account: "" });
           } else if (filter === "supplier") {
             setSupplierId("");
             change({ supplierId: "" });
@@ -210,61 +210,44 @@ export function TaskListPage() {
           }
         }}
       />
-      {state.kind === "loading" && (
-        <div className="it-empty" role="status">
-          正在读取开票任务…
-        </div>
-      )}
+      {state.kind === "loading" && <Skeleton label="正在读取开票任务" />}
       {state.kind === "error" && (
-        <div className="it-empty" role="alert">
-          <h2>开票任务暂时无法加载</h2>
-          <p>{state.message}</p>
-          <Button
-            onClick={() => {
-              setState({ kind: "loading" });
-              setRefresh((n) => n + 1);
-            }}
-          >
-            重新加载
-          </Button>
-        </div>
+        <Card>
+          <ErrorState
+            title="开票任务暂时无法加载"
+            message={state.message}
+            action={<Button onClick={reload}>重新加载</Button>}
+          />
+        </Card>
       )}
       {state.kind === "ready" && (
-        <>
-          <div className="it-result" role="status">
-            共 {state.data.counts.tasks} 个任务 · {state.data.total} 个
-            {query.groupBy === "supplier" ? "供应商分组" : "报关单分组"}
-            <TaskCountList counts={state.data.counts} />
-          </div>
+        <Card>
           {state.data.groups.length ? (
             <TaskFollowupTable groups={state.data.groups} groupBy={state.data.groupBy} />
           ) : (
-            <div className="it-empty">
-              <h2>
-                {query.keyword ||
-                query.account ||
-                query.supplierId ||
-                query.stage ||
-                query.createdFrom ||
-                query.status !== "current"
-                  ? "没有符合条件的任务"
-                  : "还没有开票任务"}
-              </h2>
-              <p>财务审核通过后按供应商、采购公司和币种自动生成任务；新链路之前的旧任务不迁移。</p>
-              <Link to={paths.review}>前往财务核对</Link>
-            </div>
+            <EmptyState
+              title={filtered ? "没有符合条件的任务" : "还没有开票任务"}
+              description="财务审核通过后按供应商、采购公司和币种自动生成任务；新链路之前的旧任务不迁移。"
+              action={
+                <Link className="ui-button ui-button--secondary" to={paths.review}>
+                  前往财务核对
+                </Link>
+              }
+            />
           )}
-          <Pagination
-            label="开票任务分组分页"
-            total={state.data.total}
-            page={state.data.page}
-            pageCount={state.data.pages}
-            pageSize={state.data.pageSize}
-            pageSizes={[10, 20, 50]}
-            onPageChange={(page) => change({ page })}
-            onPageSizeChange={(pageSize) => change({ pageSize })}
-          />
-        </>
+          <CardFooter>
+            <Pagination
+              label="开票任务分组分页"
+              total={state.data.total}
+              page={state.data.page}
+              pageCount={state.data.pages}
+              pageSize={state.data.pageSize}
+              pageSizes={[10, 20, 50]}
+              onPageChange={(page) => change({ page })}
+              onPageSizeChange={(pageSize) => change({ pageSize })}
+            />
+          </CardFooter>
+        </Card>
       )}
     </div>
   );

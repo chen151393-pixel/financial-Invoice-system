@@ -1,10 +1,10 @@
-import { useState } from "react";
-import { Button } from "../../../shared/components/Button";
+import { Alert, Button, Field, FilterBar } from "../../../shared/components/ui";
 import type { InvoiceAccountOption, InvoiceFilters as Filters } from "../types/invoice";
 import "./invoice-status.css";
 
 export const emptyFilters: Filters = { q: "", account: "", status: "", date_from: "", date_to: "" };
 
+/** 发票查询条件：关键字、账套、票面状态与开票日期一行展示，查询按钮紧跟条件。 */
 export function InvoiceFilters({
   draft,
   applied,
@@ -24,27 +24,36 @@ export function InvoiceFilters({
   onReset: () => void;
   onRefresh: () => void;
 }) {
-  const [expanded, setExpanded] = useState(false);
   const pending =
     applied && (Object.keys(emptyFilters) as (keyof Filters)[]).some((key) => draft[key] !== applied[key]);
   return (
-    <form
-      className="invoice-list__filters"
-      onSubmit={(event) => {
-        event.preventDefault();
-        onSubmit();
-      }}
-    >
-      <div className="invoice-list__toolbar">
-        <input
-          aria-label="搜索发票号码、供应商或税号"
-          value={draft.q}
-          maxLength={100}
-          placeholder="搜索发票 / 供应商 / 税号"
-          onChange={(event) => onChange({ ...draft, q: event.target.value })}
-        />
-        <label className="invoice-list__account-filter">
-          账套
+    <>
+      <FilterBar
+        onSubmit={onSubmit}
+        pending={pending ? "筛选条件已修改，请点击“查询”应用；当前结果仍对应上次查询。" : undefined}
+        actions={
+          <>
+            <Button type="submit" variant="primary" disabled={loading}>
+              查询
+            </Button>
+            <Button disabled={loading} onClick={onReset}>
+              重置
+            </Button>
+            <Button disabled={loading} onClick={onRefresh}>
+              刷新数据
+            </Button>
+          </>
+        }
+      >
+        <Field label="发票 / 供应商 / 税号" grow>
+          <input
+            value={draft.q}
+            maxLength={100}
+            placeholder="搜索发票号码、供应商或税号"
+            onChange={(event) => onChange({ ...draft, q: event.target.value })}
+          />
+        </Field>
+        <Field label="账套">
           <select
             value={draft.account}
             disabled={accounts?.loading || (!accounts?.items.length && !!accounts?.error)}
@@ -57,9 +66,8 @@ export function InvoiceFilters({
               </option>
             ))}
           </select>
-        </label>
-        <label className="invoice-list__status-filter">
-          票面状态
+        </Field>
+        <Field label="票面状态">
           <select
             value={draft.status}
             onChange={(event) => onChange({ ...draft, status: event.target.value })}
@@ -71,55 +79,23 @@ export function InvoiceFilters({
             <option value="void">作废</option>
             <option value="unknown">未知</option>
           </select>
-        </label>
-        <Button type="submit" disabled={loading}>
-          查询
-        </Button>
-        <div className="invoice-list__tools">
-          <Button
-            aria-expanded={expanded}
-            aria-controls="invoice-more-filters"
-            onClick={() => setExpanded(!expanded)}
-          >
-            更多筛选
-          </Button>
-          <Button disabled={loading} onClick={onRefresh}>
-            刷新数据
-          </Button>
-        </div>
-      </div>
-      {accounts?.error && (
-        <p role="alert" className="invoice-list__error">
-          {accounts.error}，可点击“刷新数据”重试。
-        </p>
-      )}
-      {pending && <p role="status">筛选条件已修改，请点击“查询”应用；当前结果仍对应上次查询。</p>}
-      {expanded && (
-        <div className="invoice-list__more-filters" id="invoice-more-filters">
-          <label>
-            开票日期从
-            <input
-              type="date"
-              value={draft.date_from}
-              onChange={(event) => onChange({ ...draft, date_from: event.target.value })}
-            />
-          </label>
-          <label>
-            至
-            <input
-              type="date"
-              value={draft.date_to}
-              onChange={(event) => onChange({ ...draft, date_to: event.target.value })}
-            />
-          </label>
-          <Button type="submit" disabled={loading}>
-            应用筛选
-          </Button>
-          <Button disabled={loading} onClick={onReset}>
-            重置
-          </Button>
-        </div>
-      )}
-    </form>
+        </Field>
+        <Field label="开票日期 从">
+          <input
+            type="date"
+            value={draft.date_from}
+            onChange={(event) => onChange({ ...draft, date_from: event.target.value })}
+          />
+        </Field>
+        <Field label="至">
+          <input
+            type="date"
+            value={draft.date_to}
+            onChange={(event) => onChange({ ...draft, date_to: event.target.value })}
+          />
+        </Field>
+      </FilterBar>
+      {accounts?.error && <Alert tone="danger">{accounts.error}，可点击“刷新数据”重试。</Alert>}
+    </>
   );
 }

@@ -1,48 +1,130 @@
 /* 三级展开：报关单 → 报关行 → 子采购行。
-   每深一级向右缩进一级，左侧竖线标示从属关系；数值列只在同一层内对齐，不跨层共用列宽。 */
-.fr-level {
-  --fr-indent: 28px;
-  position: relative;
-  padding-left: var(--fr-indent);
+   展开的报关单行高亮并以左侧主色条连到下方明细；报关行放在一张白色卡片里；
+   子采购行挂在报关行下方（树形连线），浅蓝底表示采购来源。数值列只在同一层内对齐。 */
+
+/* 第一层：展开中的报关单行 */
+.fr-declaration-row.is-open {
+  background: var(--color-primary-soft);
 }
-.fr-level::before {
-  content: "";
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  left: calc(var(--fr-indent) / 2 - 1px);
-  border-left: 2px solid var(--fr-level-guide);
+.fr-declaration-row.is-open > th {
+  box-shadow: inset 3px 0 0 var(--color-primary);
 }
+.fr-declaration-row.is-open > .fr-declaration-action {
+  background: var(--color-primary-soft);
+}
+.fr-declaration-row.is-open .fr-declaration-toggle strong {
+  color: var(--color-primary-strong);
+}
+
+/* 第二层：报关行卡片，所在区域以浅主色底和左侧主色条延续上一层 */
 .fr-level--customs {
-  --fr-level-guide: var(--color-input-border);
-  padding-block: var(--space-small) var(--space-control);
-  padding-right: var(--space-control);
-  background: var(--color-canvas);
+  position: relative;
+  padding: var(--space-control) 16px 16px 40px;
+  background: color-mix(in srgb, var(--color-primary-soft) 45%, var(--color-surface));
+  box-shadow: inset 3px 0 0 var(--color-primary);
 }
 .fr-level--customs > .fr-table-scroll {
   border: 1px solid var(--color-border);
-  border-radius: var(--radius-control);
+  border-radius: var(--radius-panel);
   background: var(--color-surface);
+  box-shadow: var(--shadow-card);
 }
 .fr-level--customs .fr-customs-table {
   min-width: 860px;
 }
+.fr-customs-row.is-expanded {
+  background: color-mix(in srgb, var(--color-primary-soft) 55%, var(--color-surface));
+}
+.fr-customs-row.is-expanded .fr-row-toggle strong {
+  color: var(--color-primary-strong);
+}
+.fr-customs-table tbody:last-child > tr:last-child > th,
+.fr-customs-table tbody:last-child > tr:last-child > td {
+  border-bottom: 0;
+}
+
+/* 第三层：子采购明细，挂在报关行下方 */
 .fr-level--purchase {
-  --fr-level-guide: var(--color-primary);
-  padding-block: var(--space-small);
-  padding-right: var(--space-small);
-  background: var(--color-surface);
+  padding: 2px 12px 12px 44px;
 }
-.fr-level--purchase::before {
-  opacity: 0.45;
+.fr-purchase-list {
+  position: relative;
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
 }
-.fr-level--purchase > .fr-purchase-scroll {
+.fr-purchase-item {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: var(--space-control);
+  padding: 10px 12px;
+  border: 1px solid color-mix(in srgb, var(--color-primary) 12%, var(--color-surface));
   border-radius: var(--radius-control);
   background: var(--color-table-purchase);
 }
-.fr-level--purchase .fr-purchase-table {
-  min-width: 800px;
+/* 树形连线：竖线从报关行向下，横线连到每条子采购 */
+.fr-purchase-item::before {
+  content: "";
+  position: absolute;
+  top: -8px;
+  left: -22px;
+  width: 16px;
+  height: calc(50% + 8px);
+  border-left: 1.5px solid var(--color-input-border);
+  border-bottom: 1.5px solid var(--color-input-border);
+  border-bottom-left-radius: 6px;
 }
+.fr-purchase-item + .fr-purchase-item::after {
+  content: "";
+  position: absolute;
+  top: calc(-50% - 6px);
+  left: -22px;
+  height: 50%;
+  border-left: 1.5px solid var(--color-input-border);
+}
+.fr-purchase-fields {
+  display: grid;
+  flex: 1;
+  grid-template-columns: 1.2fr 1.5fr 1.4fr 0.9fr 0.8fr 1fr;
+  gap: 4px 16px;
+  min-width: 0;
+  margin: 0;
+}
+.fr-purchase-fields > div {
+  min-width: 0;
+}
+.fr-purchase-fields dt {
+  color: var(--color-muted);
+  font-size: 11px;
+  line-height: 1.5;
+}
+.fr-purchase-fields dd {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+.fr-purchase-fields strong {
+  font-weight: 600;
+}
+.fr-purchase-fields small {
+  display: block;
+  color: var(--color-muted);
+  font-size: 11px;
+}
+.fr-purchase-fields .number {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.fr-purchase-item > .ui-button {
+  flex-shrink: 0;
+  padding: 5px 10px;
+  font-size: 12px;
+}
+
 /* 申报幅度：负数（采购价高于申报价）用文字说明，不只靠颜色 */
 .fr-margin small {
   white-space: normal;
@@ -54,8 +136,10 @@
 .fr-margin--unavailable strong {
   color: var(--color-muted);
 }
+
+/* 子采购明细位于可横向滚动的报关行表格内（最小宽度 860px），窄屏随表格滚动，不改为多列堆叠 */
 @media (max-width: 760px) {
-  .fr-level {
-    --fr-indent: 16px;
+  .fr-level--customs {
+    padding: var(--space-small) var(--space-small) var(--space-control) 14px;
   }
 }

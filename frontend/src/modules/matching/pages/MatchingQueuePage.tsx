@@ -1,6 +1,16 @@
 import { useEffect, useState } from "react";
-import { Button } from "../../../shared/components/Button";
-import { Pagination } from "../../../shared/components/Pagination";
+import {
+  Alert,
+  Button,
+  Card,
+  CardFooter,
+  EmptyState,
+  ErrorState,
+  Pagination,
+  SectionTitle,
+  Skeleton,
+  Tabs,
+} from "../../../shared/components/ui";
 import { openLocalSession } from "../../identity/api";
 import { confirmBatch, getMatchingQueue } from "../api";
 import { QueueFilters } from "../components/QueueFilters";
@@ -85,50 +95,39 @@ export function MatchingQueuePage() {
   const data = state.kind === "ready" ? state.data : null;
   return (
     <div className="matching-page">
-      <section className="matching-panel matching-panel--flush" aria-label="待审核比对建议">
-        <div className="matching-tabs" role="group" aria-label="按置信度筛选">
-          {TABS.map(([tier, label]) => (
-            <button
-              type="button"
-              key={tier}
-              className="matching-tab"
-              aria-pressed={query.tier === tier}
-              onClick={() => change({ tier })}
-            >
-              {label}
-              {data && <span className="matching-count">{data.counts[tier]}</span>}
-            </button>
-          ))}
-          <Button
-            className="matching-tabs__refresh"
-            disabled={busy}
-            onClick={() => setRefresh((value) => value + 1)}
-          >
+      <QueueFilters
+        value={{
+          anomaly: query.anomaly,
+          supplierId: query.supplierId,
+          invoiceFrom: query.invoiceFrom,
+          invoiceTo: query.invoiceTo,
+        }}
+        suppliers={suppliers}
+        busy={busy || state.kind === "loading"}
+        onApply={(filters) => change(filters)}
+      />
+      <SectionTitle
+        id="matching-queue-title"
+        title="待审核比对建议"
+        count={data ? `共 ${data.total} 条` : undefined}
+        actions={
+          <Button disabled={busy} onClick={() => setRefresh((value) => value + 1)}>
             刷新
           </Button>
+        }
+      />
+      <Card className="matching-queue" aria-labelledby="matching-queue-title">
+        <div className="matching-queue__tabs">
+          <Tabs
+            label="按置信度筛选"
+            value={query.tier}
+            onChange={(tier) => change({ tier })}
+            items={TABS.map(([tier, label]) => ({ key: tier, label, count: data?.counts[tier] }))}
+          />
         </div>
         <div className="matching-body">
-          <QueueFilters
-            value={{
-              anomaly: query.anomaly,
-              supplierId: query.supplierId,
-              invoiceFrom: query.invoiceFrom,
-              invoiceTo: query.invoiceTo,
-            }}
-            suppliers={suppliers}
-            busy={busy || state.kind === "loading"}
-            onApply={(filters) => change(filters)}
-          />
-          {data?.notice && (
-            <p className="matching-help" role="status">
-              {data.notice}
-            </p>
-          )}
-          {feedback && (
-            <p className="matching-feedback" role={feedback.error ? "alert" : "status"}>
-              {feedback.text}
-            </p>
-          )}
+          {data?.notice && <Alert tone="info">{data.notice}</Alert>}
+          {feedback && <Alert tone={feedback.error ? "warning" : "success"}>{feedback.text}</Alert>}
           {selected.length > 0 && (
             <div className="matching-selection" role="status">
               <span>
@@ -144,16 +143,20 @@ export function MatchingQueuePage() {
               </span>
             </div>
           )}
-          {state.kind === "loading" && <p role="status">正在读取待审核建议…</p>}
+          {state.kind === "loading" && <Skeleton label="正在读取待审核建议" rows={2} />}
           {state.kind === "error" && (
-            <p role="alert" className="matching-feedback">
-              {state.message}
-            </p>
+            <ErrorState
+              title="审核队列暂时无法加载"
+              message={state.message}
+              action={<Button onClick={() => setRefresh((value) => value + 1)}>重新加载</Button>}
+            />
           )}
           {data && data.rows.length === 0 && (
-            <p className="matching-empty">
-              没有待审核的比对建议。导入发票后，系统会为已审核的子采购行自动生成建议。
-            </p>
+            <EmptyState
+              icon="check"
+              title="没有待审核的比对建议"
+              description="导入发票后，系统会为已审核的子采购行自动生成建议。"
+            />
           )}
           {data && data.rows.length > 0 && (
             <QueueTable
@@ -169,7 +172,9 @@ export function MatchingQueuePage() {
               }
             />
           )}
-          {data && (
+        </div>
+        {data && (
+          <CardFooter>
             <Pagination
               label="审核队列分页"
               total={data.total}
@@ -184,9 +189,9 @@ export function MatchingQueuePage() {
               }}
               onPageSizeChange={(pageSize) => change({ pageSize })}
             />
-          )}
-        </div>
-      </section>
+          </CardFooter>
+        )}
+      </Card>
     </div>
   );
 }

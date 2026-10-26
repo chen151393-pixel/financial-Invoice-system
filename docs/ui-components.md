@@ -1,0 +1,54 @@
+# 统一组件库（shared/components/ui）
+
+状态：2026-10-25 建立。新页面和改版页面的界面**只从本组件库组合**；旧页面在被修改时逐步迁移，不为迁移单独重写。视觉基准见 [design.md](../design.md)，工程规范见 [前端统一规范](frontend-conventions.md)。
+
+- 代码位置：`frontend/src/shared/components/ui/`，唯一入口 `index.ts`。
+- 展示页：系统内 `/ui-kit`（侧栏“基础资料 → 界面组件库”），演示全部组件与组合方式；数据为虚构演示数据，不调用接口。
+- 风格参考：ProBoost 后台（白底卡片、浅灰画布、主色图标块、左侧竖条分区标题、堆叠柱 + 折线趋势图、环形占比图）。颜色、圆角、字体仍使用本项目 `tokens.css`，保持与其他页面一致；未引入 Tailwind、shadcn CLI 或图表依赖，图表为 SVG 实现。
+
+## 使用方式
+
+```tsx
+import { Card, CardHeader, CardContent, MetricCard, MetricGrid, Badge } from "../../../shared/components/ui";
+```
+
+1. 先在本库中找组件；确实缺少时**在本库新增**（带中文注释、加入 `index.ts` 和展示页），不在业务页面里自造同类样式。
+2. 业务页面 CSS 只做排布（grid、间距、列宽），不覆盖 `.ui-*` 的颜色、字号、圆角。
+3. 业务状态到颜色的映射写在业务模块（如任务台 `NODE_TONES`），组件只接收 `tone`。
+4. 组件不计算金额、占比、差额，不判断业务是否允许；数值与文案来自后端。图表的 `values` 只用于绘图位置，提示与图例显示后端给出的文本。
+
+## 组件清单
+
+| 组件                                                 | 用途                         | 要点                                                                                                                                         |
+| ---------------------------------------------------- | ---------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| `SectionTitle`                                       | 页面分区标题（左侧主色竖条） | 可带数量 `count` 与右侧 `actions`                                                                                                            |
+| `Card` / `CardHeader` / `CardContent` / `CardFooter` | 内容面板                     | 按头、内容、底部组合；`CardContent flush` 用于表格贴边                                                                                       |
+| `MetricCard` / `MetricGrid`                          | 指标卡与栅格                 | `featured` 主色主指标（一屏最多一个）；`delta.tone` 由调用方按业务含义指定；`onSelect`+`selected` 时作为筛选按钮；可带 `sparkline`、`footer` |
+| `Badge`                                              | 状态徽标                     | `tone`：warning 待处理、info 等外部、progress 部分完成、success 已完成、danger 失败/阻塞、neutral 已替代                                     |
+| `StageTabs`                                          | 流程分区条                   | 按流程顺序横排各阶段（数量 + 说明），阶段间箭头连接，左侧可放合计；`terminal` 终态不画箭头；窄屏换行为多列                                   |
+| `Tabs`                                               | 下划线标签                   | 同一区域的状态筛选或视图切换（全部 / 待审核 / 审核通过），可带计数；放在卡片顶部时由页面去掉自身底线                                         |
+| `Segmented`                                          | 2–7 个互斥选项               | 如近 7 天 / 近 30 天、节点切换，可带计数                                                                                                     |
+| `Progress`                                           | 进度条                       | `width` 为后端 0–100 展示宽度，`text` 为后端实际值文本                                                                                       |
+| `Stepper`                                            | 流程节点                     | 状态由后端判定；`compact` 用于列表行内；传 `onSelect`+`selectedKey` 时节点可点击（详情页切换分区）；读屏附带“已完成/当前节点/未开始”         |
+| `FilterBar` / `Field`                                | 查询条件栏                   | 标签在上；`pending` 提示条件已改未提交；`Field grow` 用于关键字                                                                              |
+| `DataTable`                                          | 数据表                       | 列定义 `align: "right"` 用于金额数量；宽表容器内横向滚动；不在前端排序汇总                                                                   |
+| `EmptyState` / `ErrorState` / `Skeleton` / `Alert`   | 请求状态与提示               | 空结果、失败、加载、就近提示各用其一，不混用                                                                                                 |
+| `TrendChart`                                         | 趋势图                       | 堆叠柱 `bars` + 折线 `line`；悬停提示；附读屏数据表；不用于含负数序列                                                                        |
+| `DonutChart`                                         | 环形占比                     | 中心合计 + 图例，图例文本由调用方给出                                                                                                        |
+| `Sparkline` / `Gauge`                                | 迷你走势、半圆仪表           | 只表达形状或单一比率                                                                                                                         |
+| `Icon`                                               | 线性图标                     | 新图标在 `Icon.tsx` 登记，不在页面手画                                                                                                       |
+| `Button` / `Pagination`                              | 既有公共组件                 | `Button` 支持 `primary` / `secondary` / `ghost` 与 `size="sm"`；同样从本入口导出                                                             |
+
+设计变量新增：`--color-primary-soft`、`--color-primary-strong`、`--shadow-card`、`--color-chart-1`…`5`、`--color-chart-line`、`--color-chart-grid`（`tokens.css`）。配色收在主蓝与侧栏海军蓝一个色系内（2026-10-26 调整）：图表系列用主蓝、浅蓝、淡蓝、蓝灰的深浅区分，折线用海军蓝；主指标卡为浅主色底；流程当前节点用主色描边。大面积不使用橙、绿、紫等跳色，语义色只用于状态徽标、提示框等小面积。
+
+## 页面使用情况（2026-10-26）
+
+已从组件库组合：采购开票任务台、开票跟进列表、任务详情概览、财务核对（查询栏、状态标签、三级展开徽标）、比对审核队列、进项发票、供应商档案、发票工作台（筛选与待办标签）、NS 回写列表（筛选与状态标签）。外部群导入、数据同步、采购报关联查、发票比对详情仍为原页面样式，修改时迁移。
+
+## 首个使用者
+
+采购开票任务台 `/tasks/board`（`frontend/src/modules/task/pages/TaskBoardPage.tsx`）：`FilterBar`、`SectionTitle`、`StageTabs`（节点分区，2026-10-26 由指标卡改为流程带）、`Card`+`Badge`+`Stepper`+`Progress`+`Alert`（任务卡片）、`Skeleton`/`EmptyState`/`ErrorState`、`Pagination`。
+
+## 验证
+
+2026-10-25 在本地隔离 SQLite（合成数据）预览：`/ui-kit` 与 `/tasks/board` 在 1440px 与 375px 下检查，无页面横向溢出；任务台节点筛选与地址同步、来源变化提示、已完成分区可用。未做浏览器以外的视觉回归基线；暗色模式未适配（项目当前无暗色主题）。

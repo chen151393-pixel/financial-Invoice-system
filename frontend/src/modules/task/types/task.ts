@@ -39,6 +39,14 @@ export interface TaskSummary {
   lastContactAt?: string | null;
   waitingLabel?: string;
 }
+// 六个流程节点；key 与详情页分区、采购任务台的节点一致
+export type TaskStepKey = "review" | "documents" | "notification" | "invoices" | "comparison" | "completion";
+export interface TaskStep {
+  key: TaskStepKey;
+  label: string;
+  description: string;
+  state: "done" | "current" | "waiting";
+}
 export interface TaskCounts {
   tasks: number;
   awaitingInvoice: number;
@@ -60,9 +68,9 @@ export const stageLabels: Record<Exclude<TaskStage, "">, string> = {
   documents: "资料已回",
   completed: "开票完成",
 };
+// 上线只同步 NS 正式环境，列表不再按 NS 环境筛选（后端参数保留为可选）
 export interface TaskListQuery {
   keyword: string;
-  account: string;
   supplierId: string;
   stage: TaskStage;
   // 报关单创建日期（YYYY-MM-DD），须同时填写
@@ -179,7 +187,7 @@ export interface TaskDetail {
   prepare: Capability;
   notify: Capability;
   compare: Capability;
-  steps: { label: string; description: string; state: "done" | "current" | "waiting" }[];
+  steps: TaskStep[];
   documents: TaskDocument[];
   declarationDocuments: DeclarationDocument[];
   signedContracts: SignedContract[];

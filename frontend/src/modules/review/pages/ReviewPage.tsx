@@ -21,7 +21,6 @@ export function ReviewPage() {
   const [state, setState] = useState<ComparisonState>({ kind: "loading" });
   const [query, setQuery] = useState<DeclarationListQuery>({
     keyword: searchParams.get("keyword") || "",
-    account: searchParams.get("account") || "",
     supplierId: "",
     // 工作台"待审批"分区跳转时带 status=pending
     status: searchParams.get("status") === "pending" ? "pending" : "all",
@@ -31,10 +30,7 @@ export function ReviewPage() {
   const [refresh, setRefresh] = useState(0);
   // 每次加载成功递增，用于重置列表的展开状态。
   const [loads, setLoads] = useState(0);
-  const [options, setOptions] = useState<Pick<ComparisonResult, "accounts" | "suppliers">>({
-    accounts: [],
-    suppliers: [],
-  });
+  const [suppliers, setSuppliers] = useState<ComparisonResult["suppliers"]>([]);
   const [review, setReview] = useState<ComparisonGroup | null>(null);
   const [batch, setBatch] = useState<ComparisonGroup[] | null>(null);
   const [batchResult, setBatchResult] = useState<BatchApproveResult | null>(null);
@@ -52,7 +48,7 @@ export function ReviewPage() {
         if (active) {
           setState({ kind: "ready", result });
           setLoads((value) => value + 1);
-          setOptions({ accounts: result.accounts || [], suppliers: result.suppliers || [] });
+          setSuppliers(result.suppliers || []);
         }
       } catch (error) {
         if (active)
@@ -110,10 +106,9 @@ export function ReviewPage() {
   return (
     <>
       <FinanceSearchForm
-        initial={{ keyword: query.keyword, account: query.account, supplierId: query.supplierId }}
+        initial={{ keyword: query.keyword, supplierId: query.supplierId }}
         busy={state.kind === "loading" || submitting}
-        accounts={options.accounts}
-        suppliers={options.suppliers}
+        suppliers={suppliers}
         onSearch={(criteria) => {
           setNotice("");
           setQuery((current) => ({ ...current, ...criteria, page: 1 }));

@@ -1,9 +1,10 @@
-import { Button } from "../../../shared/components/Button";
+import { Badge, Button, type Tone } from "../../../shared/components/ui";
 import type { ComparisonGroup, PurchaseLine } from "../types";
 import { CustomsRows } from "./CustomsRows";
 import { FinanceIcon } from "./FinanceIcon";
 
-const STATUS_ICON = { approved: "check", unshipped: "alert", pending: "clock" } as const;
+// 审核状态 → 组件库徽标语义：待审核需财务处理（橙），通过为绿，未出库为中性
+const STATUS_TONE: Record<string, Tone> = { approved: "success", pending: "warning", unshipped: "neutral" };
 
 /** 第一层：一张报关单的单头行；展开后显示第二层报关行。勾选只对后端允许审核的报关单开放。 */
 export function DeclarationRow({
@@ -35,7 +36,7 @@ export function DeclarationRow({
   const selectable = checkable && review.status === "pending" && review.allowed;
   return (
     <tbody>
-      <tr className={`fr-declaration-row ${checked ? "is-checked" : ""}`}>
+      <tr className={`fr-declaration-row${checked ? " is-checked" : ""}${open ? " is-open" : ""}`}>
         <td className="fr-check-cell">
           {selectable && (
             <input
@@ -70,9 +71,8 @@ export function DeclarationRow({
           {group.customsCount} 条报关行<small>{group.purchaseCount} 条子采购行</small>
         </td>
         <td>
-          <span className={`fr-status fr-status--${review.status}`} title={review.reason}>
-            <FinanceIcon kind={STATUS_ICON[review.status]} />
-            {review.label}
+          <span title={review.reason}>
+            <Badge tone={STATUS_TONE[review.status] ?? "neutral"}>{review.label}</Badge>
           </span>
         </td>
         <td className="fr-declaration-action">

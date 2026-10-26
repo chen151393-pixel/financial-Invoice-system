@@ -20,94 +20,14 @@
   color: var(--color-feedback);
 }
 
-.wb-filters {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: flex-end;
-  gap: var(--space-control);
-}
-
-.wb-filters label,
-.wb-filters fieldset {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  flex: 1 1 220px;
-  font-size: 12px;
-  color: var(--color-muted);
-  margin: 0;
-  padding: 0;
-  border: 0;
-  min-width: 0;
-}
-
-.wb-filters fieldset {
-  flex-direction: row;
-  flex-wrap: wrap;
-  align-items: center;
-  flex-basis: 280px;
-}
-
-.wb-filters legend {
-  padding: 0;
-  margin-bottom: 6px;
-  width: 100%;
-}
-
-.wb-filters input {
-  height: 36px;
-  box-sizing: border-box;
-  border: 1px solid var(--color-input-border);
-  border-radius: var(--radius-control);
-  padding: 0 10px;
-  font: inherit;
-  font-size: 13px;
-  color: var(--color-text);
-  background: var(--color-surface);
-  min-width: 0;
-}
-
-.wb-filters fieldset input {
-  flex: 1 1 120px;
-}
-
-.wb-filters__actions {
-  display: flex;
-  gap: var(--space-small);
-}
-
-.wb-tabs {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
-  padding: 12px 16px;
+/* 回写状态标签（组件库 Tabs）置于记录面板顶部 */
+.wb-phase-tabs {
+  padding: 0 20px;
   border-bottom: 1px solid var(--color-border);
 }
-
-.wb-tab {
-  font: inherit;
-  font-size: 13px;
-  height: 32px;
-  padding: 0 12px;
-  cursor: pointer;
-  border: 1px solid transparent;
-  border-radius: var(--radius-control);
-  background: transparent;
-  color: var(--color-text);
+.wb-phase-tabs .ui-tabs {
+  border-bottom: 0;
 }
-
-.wb-tab[aria-pressed="true"] {
-  border-color: var(--color-primary);
-  color: var(--color-primary);
-  font-weight: 600;
-  background: color-mix(in srgb, var(--color-primary) 8%, var(--color-surface));
-}
-
-.wb-tab:focus-visible {
-  outline: 2px solid var(--color-primary);
-  outline-offset: 2px;
-}
-
 .wb-table-scroll {
   overflow-x: auto;
 }

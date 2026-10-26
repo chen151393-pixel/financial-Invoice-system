@@ -4,7 +4,7 @@ import { FinanceIcon as Icon } from "./FinanceIcon";
 import "./review-levels.css";
 
 // 第二层列宽只在报关行内对齐，与第三层子采购行互不共用。
-const COLUMNS = [22, 14, 10, 6, 10, 13, 11, 14];
+const COLUMNS = [22, 13, 9, 6, 9, 12, 11, 18];
 
 /** 第二层：报关行，相对报关单缩进一级；展开后显示第三层子采购行。 */
 export function CustomsRows({

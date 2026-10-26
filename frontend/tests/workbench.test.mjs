@@ -100,7 +100,7 @@ const render = (component, props) =>
 
 test("待办真实下钻到核对、发票比对和任务详情，金额保留精度", () => {
   const html = render(Todos, { data, query, change() {}, onExport() {}, exporting: false });
-  assert.match(html, /href="\/review\?keyword=CD\+A%261&amp;account=A"/);
+  assert.match(html, /href="\/review\?keyword=CD\+A%261"/);
   assert.match(html, /href="\/matching\/2"/);
   assert.match(html, /href="\/tasks\/3"/);
   assert.match(html, /9,007,199,254,740,993.123456/);
@@ -182,10 +182,11 @@ test("五个业务状态分区按报关单计数，点击带同样筛选进入�
   const html = render(Metrics, { stages, noTaskCount: 2, month, query: scoped });
   for (const label of ["待审批", "待通知开票", "待核票", "资料已回", "开票完成"])
     assert.ok(html.includes(label));
-  assert.match(html, /href="\/review\?status=pending&amp;account=A"/);
+  // 上线只有 NS 正式环境，跳转不携带 NS 账套
+  assert.match(html, /href="\/review\?status=pending"/);
   assert.match(
     html,
-    /href="\/tasks\?account=A&amp;supplierId=7&amp;createdFrom=2026-10-01&amp;createdTo=2026-10-31&amp;stage=invoicing"/,
+    /href="\/tasks\?supplierId=7&amp;createdFrom=2026-10-01&amp;createdTo=2026-10-31&amp;stage=invoicing"/,
   );
   assert.match(html, /另有 2 张无需开票/);
   assert.match(html, /<strong>3<\/strong><span>张报关单/);

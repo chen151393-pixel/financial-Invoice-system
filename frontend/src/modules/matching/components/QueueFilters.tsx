@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Button } from "../../../shared/components/Button";
+import { Button, Field, FilterBar } from "../../../shared/components/ui";
 import type { QueueQuery } from "../types/matching";
 
 type Filters = Pick<QueueQuery, "anomaly" | "supplierId" | "invoiceFrom" | "invoiceTo">;
@@ -20,15 +20,26 @@ export function QueueFilters({
   const [draft, setDraft] = useState<Filters>(value);
   const set = (patch: Partial<Filters>) => setDraft((current) => ({ ...current, ...patch }));
   return (
-    <form
-      className="matching-filters"
-      onSubmit={(event) => {
-        event.preventDefault();
-        onApply(draft);
-      }}
+    <FilterBar
+      onSubmit={() => onApply(draft)}
+      actions={
+        <>
+          <Button type="submit" variant="primary" disabled={busy}>
+            查询
+          </Button>
+          <Button
+            disabled={busy}
+            onClick={() => {
+              setDraft(EMPTY);
+              onApply(EMPTY);
+            }}
+          >
+            清除
+          </Button>
+        </>
+      }
     >
-      <label>
-        建议类型
+      <Field label="建议类型">
         <select
           value={draft.anomaly}
           onChange={(event) => set({ anomaly: event.target.value as QueueQuery["anomaly"] })}
@@ -37,9 +48,8 @@ export function QueueFilters({
           <option value="abnormal">只看异常</option>
           <option value="normal">只看正常</option>
         </select>
-      </label>
-      <label>
-        供应商
+      </Field>
+      <Field label="供应商">
         <select value={draft.supplierId} onChange={(event) => set({ supplierId: event.target.value })}>
           <option value="">全部供应商</option>
           {suppliers.map((item) => (
@@ -48,35 +58,21 @@ export function QueueFilters({
             </option>
           ))}
         </select>
-      </label>
-      <label>
-        开票日期 从
+      </Field>
+      <Field label="开票日期 从">
         <input
           type="date"
           value={draft.invoiceFrom}
           onChange={(event) => set({ invoiceFrom: event.target.value })}
         />
-      </label>
-      <label>
-        至
+      </Field>
+      <Field label="至">
         <input
           type="date"
           value={draft.invoiceTo}
           onChange={(event) => set({ invoiceTo: event.target.value })}
         />
-      </label>
-      <Button type="submit" variant="primary" disabled={busy}>
-        查询
-      </Button>
-      <Button
-        disabled={busy}
-        onClick={() => {
-          setDraft(EMPTY);
-          onApply(EMPTY);
-        }}
-      >
-        清除
-      </Button>
-    </form>
+      </Field>
+    </FilterBar>
   );
 }

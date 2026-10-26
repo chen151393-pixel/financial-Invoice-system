@@ -17,7 +17,6 @@ export function useSupplierProfiles() {
   };
   const query: SupplierProfileQuery = {
     keyword: params.get("keyword") || "",
-    account: params.get("account") || "",
     status: (params.get("status") || "all") as SupplierProfileQuery["status"],
     page: positive("page", 1),
     pageSize: positive("pageSize", 20),

@@ -2,8 +2,7 @@ import { useState } from "react";
 import "./workbench-todos.css";
 import { Link } from "react-router";
 import { matchingInvoicePath, paths, taskPath } from "../../../app/paths";
-import { Button } from "../../../shared/components/Button";
-import { Pagination } from "../../../shared/components/Pagination";
+import { Button, Pagination, Tabs } from "../../../shared/components/ui";
 import { money } from "../../../shared/format/money";
 import {
   todoLabels,
@@ -16,7 +15,7 @@ import {
 function destination(row: Todo) {
   if (row.kind === "task") return taskPath(row.targetId);
   if (row.kind === "matching") return matchingInvoicePath(row.targetId);
-  return `${paths.review}?${new URLSearchParams({ keyword: row.title, account: row.account })}`;
+  return `${paths.review}?${new URLSearchParams({ keyword: row.title })}`;
 }
 
 export function WorkbenchTodos({
@@ -39,12 +38,17 @@ export function WorkbenchTodos({
         <h2 id="wb-todos-title">待办处理</h2>
         <span className="wb-count">共 {data.counts.all} 项</span>
       </div>
-      <div className="wb-tabs" aria-label="待办分类">
-        {(Object.keys(todoLabels) as TodoKind[]).map((kind) => (
-          <Button key={kind} aria-pressed={query.kind === kind} onClick={() => change({ kind })}>
-            {todoLabels[kind]} <span>{data.filteredCounts[kind]}</span>
-          </Button>
-        ))}
+      <div className="wb-todos__tabs">
+        <Tabs
+          label="待办分类"
+          value={query.kind}
+          onChange={(kind) => change({ kind })}
+          items={(Object.keys(todoLabels) as TodoKind[]).map((kind) => ({
+            key: kind,
+            label: todoLabels[kind],
+            count: data.filteredCounts[kind],
+          }))}
+        />
       </div>
       <form
         className="wb-search"

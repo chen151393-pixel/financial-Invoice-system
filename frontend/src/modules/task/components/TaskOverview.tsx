@@ -1,5 +1,5 @@
-import { Button } from "../../../shared/components/Button";
-import type { TaskDetail } from "../types/task";
+import { Alert, Badge, Button, Card, Stepper, type Tone } from "../../../shared/components/ui";
+import type { TaskDetail, TaskStatus } from "../types/task";
 import { formatTime } from "./format";
 
 export const sectionLabels = {
@@ -12,15 +12,17 @@ export const sectionLabels = {
   history: "流转记录",
 };
 export type Section = keyof typeof sectionLabels;
-// 六个流程节点依次对应的内容分区。
-const stepSections: Section[] = [
-  "review",
-  "documents",
-  "notification",
-  "invoices",
-  "comparison",
-  "completion",
-];
+
+// 任务状态 → 徽标语义（与开票跟进列表一致）：橙=待处理，蓝=等供应商，紫=部分收票，绿=完成，灰=已替代
+const STATUS_TONE: Record<TaskStatus, Tone> = {
+  documents_pending: "warning",
+  notify_pending: "warning",
+  awaiting_invoice: "info",
+  partially_received: "progress",
+  documents_incomplete: "warning",
+  completed: "success",
+  superseded: "neutral",
+};
 
 export function TaskOverview({
   detail,
@@ -33,48 +35,47 @@ export function TaskOverview({
 }) {
   const task = detail.task;
   return (
-    <section className="itd-panel" aria-label="任务概览">
+    <Card className="itd-overview" aria-label="任务概览">
       <header className="itd-heading">
         <div>
-          <p className="it-help">
+          <p className="itd-eyebrow">
             {task.recordNumber || "报关单号缺失"} · 审核版本 {task.reviewRevision}
           </p>
-          <h2>{task.supplier}</h2>
-          <p>
+          <div className="itd-title">
+            <h2>{task.supplier}</h2>
+            <Badge tone={STATUS_TONE[task.status]}>{task.statusLabel}</Badge>
+          </div>
+          <p className="itd-subtitle">
             {task.company} · {task.orderNumbers.join("、")}
           </p>
         </div>
-        <span className="it-status">{task.statusLabel}</span>
+        <dl className="itd-amount">
+          <dt>应开金额</dt>
+          <dd>
+            <strong>{task.expectedAmount ?? "金额待确认"}</strong> {task.currency}
+          </dd>
+        </dl>
       </header>
-      <ol className="it-steps">
-        {detail.steps.map((step, index) => (
-          <li
-            key={step.label}
-            data-state={step.state}
-            aria-current={step.state === "current" ? "step" : undefined}
-          >
-            <button
-              type="button"
-              className="itd-step-link"
-              aria-pressed={section === stepSections[index]}
-              onClick={() => onNavigate(stepSections[index])}
-            >
-              <span className="itd-step-number" aria-hidden="true">
-                {step.state === "done" ? "✓" : index + 1}
-              </span>
-              <strong>{step.label}</strong>
-              <span>{step.description}</span>
-            </button>
-          </li>
-        ))}
-      </ol>
-      <div className="itd-current">
-        <div>
-          <strong>{task.reason}</strong>
-          <p>{detail.prepare.reason}</p>
+
+      {/* 节点 key 与内容分区一致，点击节点切换到对应分区 */}
+      <Stepper
+        label="任务节点，点击查看对应内容"
+        steps={detail.steps}
+        selectedKey={section}
+        onSelect={(key) => onNavigate(key as Section)}
+      />
+
+      <Alert tone={task.status === "superseded" ? "warning" : "info"} title={task.reason}>
+        <div className="itd-current">
+          <span>{detail.prepare.reason}</span>
+          {section !== "documents" && (
+            <Button size="sm" onClick={() => onNavigate("documents")}>
+              查看开票资料
+            </Button>
+          )}
         </div>
-        <Button onClick={() => onNavigate("documents")}>查看开票资料</Button>
-      </div>
+      </Alert>
+
       <dl className="itd-facts">
         <div>
           <dt>审核来源环境</dt>
@@ -89,15 +90,10 @@ export function TaskOverview({
           <dd>{formatTime(task.createdAt)}</dd>
         </div>
         <div>
-          <dt>应开金额</dt>
-          <dd>
-            {task.expectedAmount ?? "金额待确认"} {task.currency}
-          </dd>
+          <dt>依据说明</dt>
+          <dd>{detail.sourceMessage}</dd>
         </div>
       </dl>
-      <p className="it-help" role="status">
-        {detail.sourceMessage}
-      </p>
-    </section>
+    </Card>
   );
 }

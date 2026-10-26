@@ -1,0 +1,134 @@
+/* 采购开票任务台：只做页面排布，外观全部来自统一组件库（shared/components/ui）。 */
+.tb {
+  display: grid;
+  gap: 16px;
+  min-width: 0;
+  font-size: 13px;
+}
+.tb-order {
+  color: var(--color-muted);
+  font-size: 12px;
+}
+.tb-list {
+  display: grid;
+  gap: var(--space-control);
+}
+.tb-pagination {
+  padding: 4px 0 0;
+  border-top: 0;
+}
+
+/* 任务卡片内部排布 */
+.tb-item {
+  display: grid;
+  gap: 16px;
+  padding: 16px 20px;
+}
+.tb-item__head {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 4px var(--space-control);
+}
+.tb-item__title {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-small);
+  min-width: 0;
+}
+.tb-item__title h3 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 650;
+  overflow-wrap: anywhere;
+}
+.tb-item__meta {
+  grid-column: 1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 14px;
+  margin: 0;
+  color: var(--color-muted);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+.tb-item__aside {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--space-control);
+}
+.tb-item__aside .ui-button {
+  padding: 6px 12px;
+  font-size: 12px;
+}
+.tb-item__waiting {
+  color: var(--color-muted);
+  font-size: 12px;
+  white-space: nowrap;
+}
+.tb-item__foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-small) var(--space-layout);
+  padding-top: 12px;
+  border-top: 1px solid var(--color-border);
+  font-size: 12px;
+}
+.tb-item__next {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-small);
+  flex: 1;
+  min-width: 240px;
+  margin: 0;
+  line-height: 1.6;
+}
+.tb-item__next > span {
+  flex-shrink: 0;
+  padding: 1px 7px;
+  border-radius: 4px;
+  background: var(--color-primary-soft);
+  color: var(--color-primary);
+  font-size: 11px;
+  font-weight: 500;
+}
+.tb-item__money {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-control);
+  color: var(--color-muted);
+  font-variant-numeric: tabular-nums;
+}
+.tb-item__money strong {
+  color: var(--color-text);
+  font-weight: 650;
+}
+.tb-definitions {
+  color: var(--color-muted);
+  font-size: 12px;
+  line-height: 1.9;
+}
+.tb-definitions summary {
+  cursor: pointer;
+}
+
+@media (max-width: 760px) {
+  .tb-item {
+    padding: 14px;
+  }
+  .tb-item__head {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .tb-item__aside {
+    grid-column: 1;
+    grid-row: auto;
+    justify-content: space-between;
+  }
+}

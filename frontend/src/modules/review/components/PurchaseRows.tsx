@@ -1,9 +1,10 @@
-import { Button } from "../../../shared/components/Button";
+import { Button } from "../../../shared/components/ui";
 import type { PurchaseLine } from "../types";
-// 第三层列宽只在子采购行内对齐。
-const COLUMNS = [18, 16, 18, 10, 6, 10, 13, 9];
 
-/** 第三层：报关行对应的子采购订单行。 */
+/**
+ * 第三层：报关行对应的子采购订单行。挂在报关行下方的明细行（树形连线标示从属），
+ * 每个字段的小标签写在数值上方，不再为每条报关行重复一套表头；浅蓝底表示采购来源。
+ */
 export function PurchaseRows({
   lines,
   label,
@@ -16,72 +17,50 @@ export function PurchaseRows({
   selectLine: (line: PurchaseLine) => void;
 }) {
   return (
-    <div
-      className="fr-purchase-scroll"
-      role="region"
-      aria-label={`${label}关联子采购订单行，可横向滚动`}
-      // eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex -- 子采购宽表独立滚动，键盘用户需能聚焦此容器，不能伪装为交互式网格。
-      tabIndex={0}
-    >
-      <table className="fr-purchase-table">
-        <caption className="fr-sr-only">{label} 对应的子采购订单行</caption>
-        <colgroup>
-          {COLUMNS.map((width, index) => (
-            <col key={index} style={{ width: `${width}%` }} />
-          ))}
-        </colgroup>
-        <thead>
-          <tr>
-            <th scope="col">子采购单 / 母采购单</th>
-            <th scope="col">供应商</th>
-            <th scope="col">采购品名 / 型号</th>
-            <th scope="col" className="number">
-              {scope === "order" ? "子单数量" : "本次数量"}
-            </th>
-            <th scope="col" className="fr-unit">
-              单位
-            </th>
-            <th scope="col" className="number">
-              采购单价
-            </th>
-            <th scope="col" className="number">
-              {scope === "order" ? "订单金额" : "本次采购金额"}
-            </th>
-            <th scope="col" className="fr-action-head">
-              操作
-            </th>
-          </tr>
-        </thead>
-        <tbody>
-          {lines.map((line) => (
-            <tr key={line.id}>
-              <td>
+    <ul className="fr-purchase-list" aria-label={`${label}关联子采购订单行`}>
+      {lines.map((line) => (
+        <li key={line.id} className="fr-purchase-item">
+          <dl className="fr-purchase-fields">
+            <div>
+              <dt>子采购单</dt>
+              <dd>
                 <strong>{line.child}</strong>
-                <small>母单：{line.parent}</small>
-              </td>
-              <td>{line.supplier}</td>
-              <td>
+                <small>母单 {line.parent}</small>
+              </dd>
+            </div>
+            <div>
+              <dt>供应商</dt>
+              <dd>{line.supplier}</dd>
+            </div>
+            <div>
+              <dt>采购品名 / 型号</dt>
+              <dd>
                 <strong>{line.name}</strong>
                 {Boolean(line.model) && <small>{line.model}</small>}
-              </td>
-              <td className="number">
-                <strong>{line.quantity}</strong>
-              </td>
-              <td className="fr-unit">{line.unit || "未提供"}</td>
-              <td className="number">{line.price}</td>
-              <td className="number">
-                <strong>{line.amount || "未提供"}</strong>
-                <small>{line.currency || "未提供币种"}</small>
-              </td>
-              <td className="fr-action">
-                <Button aria-label={`查看明细：${line.name} ${line.child}`} onClick={() => selectLine(line)}>
-                  查看
-                </Button>
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
+              </dd>
+            </div>
+            <div className="number">
+              <dt>{scope === "order" ? "子单数量" : "本次数量"}</dt>
+              <dd>
+                <strong>{line.quantity}</strong> {line.unit || "单位未提供"}
+              </dd>
+            </div>
+            <div className="number">
+              <dt>采购单价</dt>
+              <dd>{line.price}</dd>
+            </div>
+            <div className="number">
+              <dt>{scope === "order" ? "订单金额" : "本次采购金额"}</dt>
+              <dd>
+                <strong>{line.amount || "未提供"}</strong> {line.currency || "未提供币种"}
+              </dd>
+            </div>
+          </dl>
+          <Button aria-label={`查看明细：${line.name} ${line.child}`} onClick={() => selectLine(line)}>
+            查看
+          </Button>
+        </li>
+      ))}
+    </ul>
   );
 }

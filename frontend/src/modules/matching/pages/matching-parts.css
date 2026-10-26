@@ -1,39 +1,11 @@
 /* 发票比对页共用的页签、选择条、标签与数字列样式。 */
-.matching-tabs {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 6px;
+/* 比对队列卡片：置信度标签（组件库 Tabs）置于卡片顶部 */
+.matching-queue__tabs {
   padding: 0 20px;
   border-bottom: 1px solid var(--color-border);
 }
-.matching-tab {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  margin-bottom: -1px;
-  padding: 14px 8px 12px;
-  border: 0;
-  border-bottom: 2px solid transparent;
-  background: none;
-  color: var(--color-muted);
-  font: inherit;
-  font-size: 13px;
-  cursor: pointer;
-}
-.matching-tab[aria-pressed="true"] {
-  border-bottom-color: var(--color-primary);
-  color: var(--color-primary);
-  font-weight: 600;
-}
-.matching-count {
-  padding: 1px 7px;
-  border-radius: 999px;
-  background: var(--color-canvas);
-  font-size: 11px;
-}
-.matching-tabs__refresh {
-  margin-left: auto;
+.matching-queue__tabs .ui-tabs {
+  border-bottom: 0;
 }
 /* 异常分类标签：文字标明类型，不只靠颜色 */
 .matching-anomalies {
@@ -50,31 +22,6 @@
   font-size: 12px;
 }
 /* 比对队列筛选：供应商与开票日期 */
-.matching-filters {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: flex-end;
-  gap: var(--space-small) var(--space-control);
-  font-size: 12px;
-}
-.matching-filters label {
-  display: grid;
-  gap: 4px;
-  color: var(--color-muted);
-}
-.matching-filters :is(select, input) {
-  min-height: 34px;
-  min-width: 0;
-  padding: 4px 8px;
-  border: 1px solid var(--color-input-border);
-  border-radius: var(--radius-control);
-  font: inherit;
-  color: var(--color-text);
-  background: var(--color-surface);
-}
-.matching-filters select {
-  max-width: 220px;
-}
 .matching-selection {
   display: flex;
   flex-wrap: wrap;

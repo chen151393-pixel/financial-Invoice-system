@@ -62,6 +62,11 @@ export const navigation: readonly SidebarGroup<View>[] = [
         icon: <MenuIcon path="M5 3h14v18H5z M8 8h8 M8 12h8 M8 16h5" />,
       },
       {
+        id: "task-board",
+        label: "采购任务台",
+        icon: <MenuIcon path="M4 4h4v16H4z M10 4h4v10h-4z M16 4h4v6h-4z" />,
+      },
+      {
         id: "pl",
         label: "采购报关联查",
         icon: <MenuIcon path="M3 4h18v16H3z M3 9h18 M3 14h18 M9 4v16" />,
@@ -80,6 +85,11 @@ export const navigation: readonly SidebarGroup<View>[] = [
         id: "supplier-profiles",
         label: "供应商档案",
         icon: <MenuIcon path="M4 21V3h12v18 M16 9h4v12 M8 7h4 M8 11h4 M8 15h4 M2 21h20" />,
+      },
+      {
+        id: "ui-kit",
+        label: "界面组件库",
+        icon: <MenuIcon path="M4 4h7v7H4z M13 4h7v7h-7z M4 13h7v7H4z M16.5 13v7 M13 16.5h7" />,
       },
     ],
   },

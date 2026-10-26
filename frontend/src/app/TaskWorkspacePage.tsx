@@ -1,6 +1,7 @@
 import { Link, useMatch, useParams } from "react-router";
 import { ExternalGroupsPage } from "../modules/task/pages/ExternalGroupsPage";
 import { SupplierGroupsPage } from "../modules/task/pages/SupplierGroupsPage";
+import { TaskBoardPage } from "../modules/task/pages/TaskBoardPage";
 import { TaskDetailPage } from "../modules/task/pages/TaskDetailPage";
 import { TaskListPage } from "../modules/task/pages/TaskListPage";
 import { AppFrame } from "./WorkspaceFrame";
@@ -10,22 +11,25 @@ import { useViewNavigate } from "./useViewNavigate";
 
 export default function TaskWorkspacePage() {
   const externalPage = useMatch(paths.externalGroups) !== null;
+  const boardPage = useMatch(paths.taskBoard) !== null;
   const groupsPage = useMatch(paths.supplierGroups) !== null || externalPage;
   const { taskId } = useParams();
   const navigateView = useViewNavigate();
   return (
     <AppFrame
       groups={navigation}
-      activeId={groupsPage ? "supplier-profiles" : "invoice-followup"}
+      activeId={groupsPage ? "supplier-profiles" : boardPage ? "task-board" : "invoice-followup"}
       onNavigate={navigateView}
       title={
         externalPage
           ? "外部群导入与供应商关联"
           : groupsPage
             ? "供应商档案"
-            : taskId
-              ? "开票任务详情"
-              : "开票跟进"
+            : boardPage
+              ? "采购开票任务台"
+              : taskId
+                ? "开票任务详情"
+                : "开票跟进"
       }
       breadcrumb={
         externalPage ? (
@@ -35,22 +39,17 @@ export default function TaskWorkspacePage() {
         ) : undefined
       }
       actions={
-        <div className="it-workspace-actions">
-          <Link
-            className="ui-button ui-button--secondary"
-            to={
-              externalPage ? paths.supplierGroups : groupsPage ? paths.externalGroups : paths.supplierGroups
-            }
-          >
-            {externalPage ? "返回供应商档案" : groupsPage ? "外部群导入与关联" : "供应商档案"}
+        // 外部群导入是供应商档案的下级功能，作为本页操作保留；其余跨模块跳转交给侧栏
+        groupsPage && !externalPage ? (
+          <Link className="ui-button ui-button--secondary" to={paths.externalGroups}>
+            外部群导入与关联
           </Link>
-          <Link className="ui-button ui-button--secondary" to={paths.review}>
-            返回财务核对
-          </Link>
-        </div>
+        ) : undefined
       }
     >
-      {externalPage ? (
+      {boardPage ? (
+        <TaskBoardPage />
+      ) : externalPage ? (
         <ExternalGroupsPage />
       ) : groupsPage ? (
         <SupplierGroupsPage />

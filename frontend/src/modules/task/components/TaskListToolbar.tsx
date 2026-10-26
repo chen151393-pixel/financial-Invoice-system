@@ -1,9 +1,9 @@
 import { useId, useRef, useState } from "react";
-import { Button } from "../../../shared/components/Button";
+import { Button, Segmented } from "../../../shared/components/ui";
 import { stageLabels, type TaskListQuery } from "../types/task";
 import "./task-list-toolbar.css";
 
-type Filter = "keyword" | "account" | "supplier" | "stage" | "created" | "status";
+type Filter = "keyword" | "supplier" | "stage" | "created" | "status";
 type Props = {
   query: TaskListQuery;
   supplierName?: string;
@@ -18,7 +18,6 @@ export function TaskListToolbar({ query, supplierName, busy, onChange, onClear }
   const actions = useRef<HTMLDivElement>(null);
   const filters: { key: Filter; label: string }[] = [];
   if (query.keyword) filters.push({ key: "keyword", label: `关键词：${query.keyword}` });
-  if (query.account) filters.push({ key: "account", label: `NS 环境：${query.account}` });
   if (query.supplierId) {
     filters.push({ key: "supplier", label: `供应商：${supplierName ?? query.supplierId}` });
   }
@@ -37,22 +36,16 @@ export function TaskListToolbar({ query, supplierName, busy, onChange, onClear }
   return (
     <div className="task-list-toolbar">
       <div className="task-list-toolbar__row">
-        <div className="task-list-toolbar__switch" role="group" aria-label="任务分组方式">
-          <Button
-            aria-pressed={query.groupBy === "supplier"}
-            disabled={busy}
-            onClick={() => onChange({ groupBy: "supplier" })}
-          >
-            按供应商
-          </Button>
-          <Button
-            aria-pressed={query.groupBy === "declaration"}
-            disabled={busy}
-            onClick={() => onChange({ groupBy: "declaration" })}
-          >
-            按报关单
-          </Button>
-        </div>
+        <Segmented
+          label="任务分组方式"
+          value={query.groupBy}
+          disabled={busy}
+          onChange={(groupBy) => onChange({ groupBy })}
+          options={[
+            { value: "supplier", label: "按供应商" },
+            { value: "declaration", label: "按报关单" },
+          ]}
+        />
         <div className="task-list-toolbar__actions" ref={actions}>
           <label>
             任务版本

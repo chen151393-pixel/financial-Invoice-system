@@ -101,14 +101,8 @@
   background: var(--color-surface);
 }
 /* 供应商通知：关闭时用文字写明后果，不只靠颜色区分 */
-.sg-page .sg-notify {
-  display: block;
-  font-weight: 600;
-}
-.sg-page .sg-notify--off {
-  color: var(--color-feedback);
-}
 .sg-page .sg-notify__toggle {
+  display: flex;
   margin-top: var(--space-small);
 }
 @media (max-width: 760px) {
@@ -118,4 +112,18 @@
   .sg-page .sg-editor {
     padding: var(--space-control);
   }
+}
+
+/* 列表右侧的管理权限说明与底部使用说明 */
+.sg-manage {
+  color: var(--color-muted);
+  font-size: 12px;
+}
+.sg-definitions {
+  color: var(--color-muted);
+  font-size: 12px;
+  line-height: 1.9;
+}
+.sg-definitions summary {
+  cursor: pointer;
 }
