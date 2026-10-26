@@ -71,21 +71,21 @@ class TaskService:
                 supplier_ids = task_dao.supplier_ids(connection, query.account)
         except SQLAlchemyError:
             raise ApiError(503, READ_ERROR) from None
-        names = self._names(rows, lines)
+        names = self.names(rows, lines)
         groups = [self._group(query.groupBy, key, rows, lines, names, contacts) for key in keys]
         return TaskList(
             groupBy=query.groupBy,
             groups=groups,
             counts=task_mapper.counts(status_counts),
             accounts=accounts,
-            suppliers=self._supplier_options(supplier_ids),
+            suppliers=self.supplier_options(supplier_ids),
             total=total,
             page=query.page,
             pageSize=query.pageSize,
             pages=max(1, (total + query.pageSize - 1) // query.pageSize),
         )
 
-    def _supplier_options(self, supplier_ids):
+    def supplier_options(self, supplier_ids):
         found = self.directory.describe(supplier_ids=supplier_ids)["suppliers"] if supplier_ids else {}
         options = [
             SupplierOption(id=str(key), name=(found.get(key) or {}).get("name") or f"供应商 {key}")
@@ -93,7 +93,7 @@ class TaskService:
         ]
         return sorted(options, key=lambda option: (option.name, int(option.id)))
 
-    def _names(self, tasks, lines):
+    def names(self, tasks, lines):
         return self.directory.describe(
             supplier_ids=[task["supplier_id"] for task in tasks if task["supplier_id"]],
             company_ids=[task["company_id"] for task in tasks if task["company_id"]],
@@ -163,7 +163,7 @@ class TaskService:
                 signed = signed_contract_dao.by_orders(connection, order_ids)
         except SQLAlchemyError:
             raise ApiError(503, READ_ERROR) from None
-        names = self._names([task], lines)
+        names = self.names([task], lines)
         summary = task_mapper.summary(task, lines, names, data["contact"])
         documents = self._documents(
             task, self.order_ids(lines), data["documents"], names, data["contract_jobs"]

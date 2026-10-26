@@ -63,6 +63,11 @@ def signed_contracts(order_ids, rows, names):
 
 def completion(order_ids, documents, declaration_rows, signed_rows):
     archived = {int(doc.orderId) for doc in documents if doc.status == "ready"}
+    return completion_of(order_ids, archived, declaration_rows, signed_rows)
+
+
+def completion_of(order_ids, archived, declaration_rows, signed_rows):
+    """archived：已归档子采购合同的子采购单 ID 集合；详情页与采购任务台共用同一口径。"""
     missing = missing_documents(order_ids, archived, declaration_rows, signed_rows)
     return TaskCompletion(
         ready=not missing,

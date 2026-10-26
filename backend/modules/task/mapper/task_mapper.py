@@ -146,21 +146,28 @@ def steps(status, documents_ready, notification_sent, notification_label, comple
     received = status in ("partially_received", "documents_incomplete", "completed")
     invoiced = status in ("documents_incomplete", "completed")
     completed = status == "completed"
+    # 节点标识与详情页分区、采购任务台的节点筛选一致
     nodes = [
-        ("财务审核", "审核已通过", True),
-        ("资料准备", "原件已备齐" if documents_ready else "保存子采购合同到共享盘", documents_ready),
-        ("通知供应商", notification_label, notification_sent),
-        ("等待收票", "已收到发票" if received else "等待供应商开票", received),
-        ("发票比对", "全部任务行已结束" if invoiced else "收票后在发票比对页审核", invoiced),
-        ("完成", "已完成" if completed else completion_reason or "尚未完成", completed),
+        ("review", "财务审核", "审核已通过", True),
+        (
+            "documents",
+            "资料准备",
+            "原件已备齐" if documents_ready else "保存子采购合同到共享盘",
+            documents_ready,
+        ),
+        ("notification", "通知供应商", notification_label, notification_sent),
+        ("invoices", "等待收票", "已收到发票" if received else "等待供应商开票", received),
+        ("comparison", "发票比对", "全部任务行已结束" if invoiced else "收票后在发票比对页审核", invoiced),
+        ("completion", "完成", "已完成" if completed else completion_reason or "尚未完成", completed),
     ]
     live = status not in ("superseded", "completed")
-    current = next((index for index, node in enumerate(nodes) if not node[2]), None) if live else None
+    current = next((index for index, node in enumerate(nodes) if not node[3]), None) if live else None
     return [
         TaskStep(
+            key=key,
             label=label,
             description=description,
             state="done" if done else "current" if index == current else "waiting",
         )
-        for index, (label, description, done) in enumerate(nodes)
+        for index, (key, label, description, done) in enumerate(nodes)
     ]

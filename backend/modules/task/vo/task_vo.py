@@ -153,6 +153,8 @@ class TaskCompletion(StrictModel):
 
 
 class TaskStep(StrictModel):
+    # review / documents / notification / invoices / comparison / completion
+    key: str
     label: str
     description: str
     state: Literal["done", "current", "waiting"]
@@ -182,3 +184,35 @@ class TaskDetail(StrictModel):
     downloadEnvironment: str
     notification: NotificationDetail
     events: list[TaskEvent]
+
+
+class BoardNode(StrictModel):
+    """采购任务台分区：当前节点为该节点的任务数（全部筛选结果，不只本页）。"""
+
+    key: Literal["documents", "notification", "invoices", "comparison", "completion", "done"]
+    label: str
+    hint: str
+    count: int
+
+
+class BoardItem(StrictModel):
+    task: TaskSummary
+    steps: list[TaskStep]
+    currentNode: str
+    currentLabel: str
+    nextAction: str
+    # 来源或开票依据变化时不能继续推进，需财务重新审核
+    blockedReason: str = ""
+    missing: list[str]
+
+
+class TaskBoard(StrictModel):
+    nodes: list[BoardNode]
+    # 进行中（未完成、未被替代）的任务总数
+    openTotal: int
+    items: list[BoardItem]
+    suppliers: list[SupplierOption]
+    total: int
+    page: int
+    pageSize: int
+    pages: int

@@ -19,6 +19,26 @@ def latest(connection, task_id):
     return rows[0] if rows else None
 
 
+def latest_by_tasks(connection, task_ids):
+    """批量读取每个任务的最新通知版本（与详情页"最新版本是否已发送"的口径一致）。"""
+    if not task_ids:
+        return {}
+    ranked = (
+        select(
+            notifications.c.task_id,
+            notifications.c.status,
+            notifications.c.channel,
+            func.row_number()
+            .over(partition_by=notifications.c.task_id, order_by=notifications.c.version.desc())
+            .label("rank"),
+        )
+        .where(notifications.c.task_id.in_(task_ids))
+        .subquery()
+    )
+    rows = connection.execute(select(ranked).where(ranked.c.rank == 1)).mappings()
+    return {row["task_id"]: dict(row) for row in rows}
+
+
 def latest_sent_by_tasks(connection, task_ids):
     """批量读取最近实际发送；新草稿、失败与待群主确认不覆盖已发送记录。"""
     if not task_ids:

@@ -195,6 +195,16 @@ MySQL 命名锁保证多实例单消费者，并对同一任务的同一子采�
 - 资料到齐（报关资料归档、回签合同上传、子采购合同归档）时，在同一事务中重算相关任务状态。
 - 验证：`backend/tests/test_task_documents_completion.py`、`test_task_documents.py`（NS 适配器）；收票类测试使用 `tests/documents_ready.py` 补齐资料。
 
+## 采购开票任务台（2026-10-25）
+
+`POST /api/tasks/board/query`（`controller/board_controller.py` → `service/task_board_service.py`，只读）：请求 `{keyword, supplierId, node, page, pageSize}`，`node` 为空表示全部进行中，或 `documents / notification / invoices / comparison / completion / done`。上线只同步 NS 正式环境，不提供 NS 环境筛选（多传 `account` 返回 422）。
+
+- 六个节点与详情页共用 `task_mapper.steps`（新增稳定 `key`），资料齐全用 `document_mapper.completion_of`，通知文案用 `notification_mapper.status_label`；任务按第一个未完成节点归入分区（`policy/board_policy.py` 负责分区文案与下一步提示）。
+- 响应：`nodes`（各分区计数，覆盖全部筛选结果）、`openTotal`、`items[]`（`task` 摘要、`steps`、`currentNode/currentLabel`、`nextAction`、`blockedReason`、`missing`）、`suppliers` 与分页。进行中按等待最久在前；已完成分区按最新在前并在数据库分页。
+- 来源或依据变化用 `basis_guard.changed_task_ids` 批量判断，只提示“暂不能推进”，不改变状态。批量读取新增 `document_dao.archived_orders`、`notification_dao.latest_by_tasks`、`task_dao.by_statuses`。
+- 进行中任务全部参与节点判定（逐个按事实计算），数据量大时为 O(进行中任务数)；已完成任务只按状态计数。
+- 验证：`backend/tests/test_task_board.py`。
+
 ## 业务状态与筛选（2026-10-23）
 
 规则只在 `policy/stage_policy.py` 一处，经 `public.py` 暴露 `STAGES`、`STAGE_LABELS`、`task_stage`、`declaration_stage` 供工作台汇总：
