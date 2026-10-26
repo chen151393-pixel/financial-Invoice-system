@@ -60,6 +60,12 @@ def approve(service, connection, allocation, body, actor, now, *, reverify=False
         **item,
         "quantity": converted["purchase_quantity"],
         "amount_including_tax": allocation["amount"],
+        # 部分分配时按含税比例折算不含税金额，供申报价校验
+        "amount_excluding_tax": item["amount_excluding_tax"]
+        * allocation["amount"]
+        / item["amount_including_tax"]
+        if item.get("amount_excluding_tax") is not None and item["amount_including_tax"]
+        else item.get("amount_excluding_tax"),
     }
     checks, _ = compare(invoice, compared_item, line, *rules.remaining(task_line))
     exceeds = rules.exceeds_expected(task_line, converted["purchase_quantity"], allocation["amount"])

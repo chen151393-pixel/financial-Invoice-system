@@ -84,6 +84,15 @@ export function QueueTable({
                   </span>
                 </td>
                 <td className={allocation.confirm.allowed ? "matching-ok" : "matching-warning"}>
+                  {row.anomalies && row.anomalies.length > 0 && (
+                    <span className="matching-anomalies" aria-label={`异常：${row.anomalies.join("、")}`}>
+                      {row.anomalies.map((name) => (
+                        <span key={name} className="matching-anomaly">
+                          {name}
+                        </span>
+                      ))}
+                    </span>
+                  )}
                   {allocation.noteReasons.length
                     ? `需说明：${allocation.noteReasons.join("、")}`
                     : allocation.confirm.reason}

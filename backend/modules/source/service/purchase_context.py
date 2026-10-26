@@ -8,6 +8,7 @@ import json
 
 from ..dao import purchase_order_dao
 from ..policy.content_digest import canonical
+from .declared_price_reader import declared_prices
 
 FIELDS = (
     "ns_account",
@@ -55,9 +56,13 @@ def purchase_lines(connection, line_ids, *, lock=False):
         context = {key: row[key] for key in FIELDS}
         context["active"] = bool(row["is_active"] and row["order_active"])
         context["digest"] = line_digest(context)
+        # 对应报关行的人民币申报价（价格校验用）；只读参考，不参与摘要
+        context["declared"] = None
         context["source_refs"] = {
             "purchase_raw_record_id": row["raw_record_id"],
             "currency_raw_record_id": row["currency_raw_record_id"],
         }
         result[row["id"]] = context
+    for line_id, declared in declared_prices(connection, list(result)).items():
+        result[line_id]["declared"] = declared
     return result

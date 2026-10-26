@@ -86,6 +86,8 @@ class SummaryBody(StrictModel):
 
 class QueueQuery(StrictModel):
     tier: Literal["all", "high", "medium", "low"] = "all"
+    # 只看异常 / 只看正常：异常为需要填写说明或当前不能通过的建议
+    anomaly: Literal["all", "abnormal", "normal"] = "all"
     # 按子采购单的供应商筛选；按开票日期筛选（须成对填写）
     supplierId: str = Field(default="", max_length=20, pattern=r"^([1-9][0-9]*)?$")
     invoiceFrom: date | None = Field(default=None, strict=False)

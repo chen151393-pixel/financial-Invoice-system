@@ -4,7 +4,7 @@ import { FinanceIcon as Icon } from "./FinanceIcon";
 import "./review-levels.css";
 
 // 第二层列宽只在报关行内对齐，与第三层子采购行互不共用。
-const COLUMNS = [26, 16, 11, 6, 12, 16, 13];
+const COLUMNS = [22, 14, 10, 6, 10, 13, 11, 14];
 
 /** 第二层：报关行，相对报关单缩进一级；展开后显示第三层子采购行。 */
 export function CustomsRows({
@@ -55,6 +55,9 @@ export function CustomsRows({
                 报关金额
               </th>
               <th scope="col">关联采购</th>
+              <th scope="col" className="number">
+                申报幅度
+              </th>
             </tr>
           </thead>
           {group.customsLines.map((row) => {
@@ -97,6 +100,17 @@ export function CustomsRows({
                   </td>
                   <td>
                     <span className="fr-related-count">{row.purchaseCount} 条子采购行</span>
+                  </td>
+                  <td className={`number fr-margin fr-margin--${row.marginStatus ?? "unavailable"}`}>
+                    <strong>{row.margin || "—"}</strong>
+                    {row.marginStatus === "unavailable" ? (
+                      <small>{row.marginNote || "无法计算"}</small>
+                    ) : (
+                      <small>
+                        {row.marginNote ? `${row.marginNote} · ` : ""}申报 {row.declaredCny} / 采购{" "}
+                        {row.purchaseTotal} 元
+                      </small>
+                    )}
                   </td>
                 </tr>
                 {row.purchaseCount > 0 && (

@@ -2,6 +2,7 @@
 
 from sqlalchemy import func, insert, select, update
 
+from ..entity import customs_lines
 from ..entity import customs_purchase_links as links
 
 
@@ -10,6 +11,33 @@ def active(connection, declaration_id):
         select(links)
         .where(links.c.customs_declaration_id == declaration_id, links.c.status == "active")
         .order_by(links.c.id)
+    )
+    return [dict(row) for row in connection.execute(query).mappings()]
+
+
+def declared_lines(connection, purchase_line_ids):
+    """子采购行的有效行级报关关联及报关行申报信息（单位、数量、单价、金额、币种、销售订单号）。"""
+    if not purchase_line_ids:
+        return []
+    query = (
+        select(
+            links.c.purchase_line_id,
+            links.c.purchase_order_id,
+            links.c.customs_line_id,
+            customs_lines.c.sales_order_no,
+            customs_lines.c.unit,
+            customs_lines.c.quantity,
+            customs_lines.c.unit_price,
+            customs_lines.c.amount,
+            customs_lines.c.currency,
+        )
+        .join(customs_lines, customs_lines.c.id == links.c.customs_line_id)
+        .where(
+            links.c.purchase_line_id.in_(purchase_line_ids),
+            links.c.status == "active",
+            customs_lines.c.is_active.is_(True),
+        )
+        .order_by(links.c.purchase_line_id)
     )
     return [dict(row) for row in connection.execute(query).mappings()]
 

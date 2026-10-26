@@ -9,6 +9,7 @@ from .parent_order_line import parent_order_lines
 from .purchase_order import purchase_orders
 from .purchase_order_line import purchase_order_lines
 from .raw_record import raw_records
+from .sales_order import sales_orders
 from .supplier import suppliers
 
 # 同步保存所需的全部表，供业务库连接检查使用
@@ -24,6 +25,7 @@ SOURCE_TABLES = tuple(
         purchase_orders,
         purchase_order_lines,
         raw_records,
+        sales_orders,
         suppliers,
     )
 )
@@ -39,5 +41,6 @@ __all__ = [
     "purchase_order_lines",
     "purchase_orders",
     "raw_records",
+    "sales_orders",
     "suppliers",
 ]

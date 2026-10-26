@@ -179,3 +179,11 @@
 - 不处理历史：之前已入库的未出库报关单保留在库中，不删除、不改写；review 列表不再显示它们，审核时仍会拒绝。
 - 报关单新增 `ns_created_at`（迁移 `0027_source_customs_created_at`），取 NS 系统字段 `created`（与同步页“按创建日期”筛选同一字段），按 UTC 保存，供归档月份使用。字段缺失或无法识别时保存为空，不用申报日期等其他日期代替；已入库的报关单在下次同步时补齐。**真实 NS 的 REST 单头是否返回 `created` 尚待一次只读核实。**
 - 验证：`backend/tests/source/test_admission_sync.py`。
+
+## 销售单汇率与人民币申报价（2026-10-23）
+
+- 同步时按子采购单的销售单引用（`custrecord_swc_subpo_so`）以固定只读 SuiteQL `sales_headers` 读取销售单头（单号、币种、汇率），保存到 `source_sales_orders`（迁移 `0029_source_sales_orders`），子采购单 `sales_order_id` 指向它。读取失败时提示“销售单汇率读取失败”，不影响单据保存，原关联保持不变。**真实 NS 的销售单汇率字段尚待一次只读核实。**
+- 报关行对应的销售单：其关联子采购单的销售单中单号与报关行销售订单号一致的；没有一致的且只有一个时取该销售单（`policy/declared_price_policy.py`）。
+- 申报幅度 =（申报价 − 采购价）÷ 申报价：申报价 = 报关行金额 × 对应销售单汇率（人民币报关行不换算）；采购价 = 该报关行行级关联子采购行的**含税**金额合计。报关行与子采购行单位不一致、采购币种不是人民币、金额或汇率缺失时不计算并写明原因；只标出负数（采购价高于申报价）。汇率**不参与**报关单内容摘要，变化不触发重审。
+- 门面：`declared_cny`、`pick_sales_order`（review 申报幅度）；`declared_prices(connection, purchase_line_ids)`（matching 价格校验）；`purchase_lines` 上下文新增 `declared`（不参与摘要）；报关单 `snapshot` 新增 `sales_orders`（不参与摘要）。
+- 验证：`backend/tests/test_declared_price.py`。

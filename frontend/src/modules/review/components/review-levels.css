@@ -43,6 +43,17 @@
 .fr-level--purchase .fr-purchase-table {
   min-width: 800px;
 }
+/* 申报幅度：负数（采购价高于申报价）用文字说明，不只靠颜色 */
+.fr-margin small {
+  white-space: normal;
+}
+.fr-margin--negative strong,
+.fr-margin--negative small {
+  color: var(--color-feedback);
+}
+.fr-margin--unavailable strong {
+  color: var(--color-muted);
+}
 @media (max-width: 760px) {
   .fr-level {
     --fr-indent: 16px;

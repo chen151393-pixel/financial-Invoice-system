@@ -27,6 +27,7 @@ TABLES = ALL_TABLES - {
     "task_supplier_settings",
     "task_declaration_documents",
     "task_signed_contracts",
+    "source_sales_orders",
 }
 COMMENT_HEAD = "0015_sync_comments"
 

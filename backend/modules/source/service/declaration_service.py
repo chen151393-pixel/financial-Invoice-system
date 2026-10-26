@@ -16,6 +16,7 @@ from ..dao import (
     customs_purchase_link_dao,
     purchase_order_dao,
     raw_record_dao,
+    sales_order_dao,
 )
 from ..policy.content_digest import content_digest
 
@@ -35,11 +36,16 @@ def snapshot(connection, declaration_id):
     links = customs_purchase_link_dao.active(connection, declaration_id)
     order_ids = sorted({link["purchase_order_id"] for link in links})
     evidence = raw_record_dao.latest(connection, head["ns_account"], EVIDENCE_TYPE, head["ns_internal_id"])
+    orders = purchase_order_dao.orders(connection, order_ids)
     return {
         "declaration": head,
         "customs_lines": customs_declaration_dao.lines(connection, declaration_id),
         "links": links,
-        "orders": purchase_order_dao.orders(connection, order_ids),
+        "orders": orders,
+        # 销售单头（币种、汇率）只用于申报幅度，不参与内容摘要
+        "sales_orders": sales_order_dao.by_ids(
+            connection, [o["sales_order_id"] for o in orders if o["sales_order_id"]]
+        ),
         "purchase_lines": purchase_order_dao.lines(connection, order_ids),
         "evidence": evidence,
     }

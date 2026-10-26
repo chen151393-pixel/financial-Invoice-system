@@ -3,7 +3,7 @@
 > 本文件由 `npm.cmd run db:map` 根据迁移链离线 MySQL DDL、实体定义和字段字典生成，请勿手工修改；迁移或实体变化后重新生成，`backend/tests/test_schema_map.py` 会检查是否过期。
 > “修改”含加列、改列、索引与中文备注；数据回填仅在线执行，不在离线 DDL 中体现。
 
-当前最新迁移：`0028_task_document_completion`；共 28 个迁移、37 张实体表。
+当前最新迁移：`0029_source_sales_orders`；共 29 个迁移、38 张实体表。
 
 ## 1. 按模块查表
 
@@ -18,8 +18,9 @@
 | `source_parent_order_lines` | 母采购行 | `0001` | `0010` | [查看](current-data-dictionary.md#source_parent_order_lines) |
 | `source_parent_orders` | 母采购单 | `0001` | `0004`、`0005`、`0010` | [查看](current-data-dictionary.md#source_parent_orders) |
 | `source_purchase_order_lines` | 子采购行：开票单元 | `0001` | `0010` | [查看](current-data-dictionary.md#source_purchase_order_lines) |
-| `source_purchase_orders` | 子采购单 | `0001` | `0002`、`0004`、`0005`、`0010` | [查看](current-data-dictionary.md#source_purchase_orders) |
+| `source_purchase_orders` | 子采购单 | `0001` | `0002`、`0004`、`0005`、`0010`、`0029` | [查看](current-data-dictionary.md#source_purchase_orders) |
 | `source_raw_records` | NS 原始数据；内容变化时追加一行，主表指向最新一行 | `0001` | `0010` | [查看](current-data-dictionary.md#source_raw_records) |
+| `source_sales_orders` | 销售单单头（币种、汇率），用于申报幅度与发票价格校验；不参与报关单内容摘要 | `0029` | — | [查看](current-data-dictionary.md#source_sales_orders) |
 | `source_suppliers` | 供应商（NS vendor） | `0001` | `0010` | [查看](current-data-dictionary.md#source_suppliers) |
 
 ### review
@@ -108,3 +109,4 @@
 | [`0026_task_supplier_settings`](../../backend/migrations/versions/0026_task_supplier_settings.py) | `task_supplier_settings` | — | task：供应商档案"是否开启供应商通知"，人工维护，默认开启。 |
 | [`0027_source_customs_created_at`](../../backend/migrations/versions/0027_source_customs_created_at.py) | — | `source_customs_declarations` | source：报关单保存 NS 创建时间，用于归档文件夹的月份（2026-10-23 业务确认按报关单创建日期）。 |
 | [`0028_task_document_completion`](../../backend/migrations/versions/0028_task_document_completion.py) | `task_declaration_documents`、`task_signed_contracts` | `task_tasks` | task：报关资料与回签合同归档记录；任务新增 documents_incomplete（发票已收齐、资料待补齐）。 |
+| [`0029_source_sales_orders`](../../backend/migrations/versions/0029_source_sales_orders.py) | `source_sales_orders` | `source_purchase_orders` | source：销售单单头（币种、汇率）与子采购单的销售单关联，供申报幅度与发票价格校验（2026-10-23）。 |

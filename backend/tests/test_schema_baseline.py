@@ -21,6 +21,7 @@ TABLES = {
     "source_raw_records",
     "source_parent_orders",
     "source_parent_order_lines",
+    "source_sales_orders",
     "source_purchase_orders",
     "source_purchase_order_lines",
     "source_customs_declarations",

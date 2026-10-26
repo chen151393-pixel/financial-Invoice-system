@@ -18,12 +18,14 @@ from ..dao import (
     parent_order_dao,
     purchase_order_dao,
     raw_record_dao,
+    sales_order_dao,
     supplier_dao,
 )
-from ..entity import SOURCE_TABLES
+from ..entity import SOURCE_TABLES, sales_orders
 from ..mapper.admission_filter import skip_unshipped
 from ..mapper.bundle_mapper import map_bundle
-from ..mapper.storage_mapper import map_parent, validate_storage_config
+from ..mapper.storage_mapper import column_value, map_parent, validate_storage_config
+from ..policy.currency_policy import currency_code
 from ..policy.currency_policy import resolve as resolve_currency
 from ..policy.ns_config import parse_config
 from ..policy.optional_field_policy import warnings as missing_field_warnings
@@ -36,6 +38,7 @@ from .ns_reader import PlReader
 from .parent_order_reader import read_parent_orders
 from .parent_reference_service import verify_missing_parents
 from .relation_reader import RelationReader
+from .sales_order_reader import read_sales_orders
 
 SYNC_KINDS = ("sub-purchase-orders", "customs-declarations")
 
@@ -137,6 +140,8 @@ class StorageService:
             bundle["relation_evidence"] = RelationReader(self.ns, report).collect(bundle, match=True)
             report("读取母采购单并核验币种")
             bundle["parent_orders"] = read_parent_orders(self.ns, bundle)
+            report("读取销售单汇率")
+            bundle["sales_orders"] = read_sales_orders(self.ns, bundle)
         return bundle
 
     def commit(self, connection, bundle, config, account, lock, report):
@@ -170,7 +175,14 @@ class StorageService:
             )
         saved_orders = [
             self._save_purchase(
-                connection, account, document, bundle.get("parent_orders", {}), counts, now, affected_orders
+                connection,
+                account,
+                document,
+                bundle.get("parent_orders", {}),
+                counts,
+                now,
+                affected_orders,
+                bundle.get("sales_orders"),
             )
             for document in documents["purchase"]
         ]
@@ -260,11 +272,37 @@ class StorageService:
             )
         return values
 
-    def _save_purchase(self, connection, account, document, parents, counts, now, affected_orders):
+    def _sales_order(self, connection, account, document, sales, now):
+        """返回销售单本地 ID；没有引用为 None；本次未读取到（读取失败或未补读）返回 False，保留原关联。"""
+        ns_id = document.get("sales_order_ns_id")
+        if not ns_id:
+            return None
+        header = (sales or {}).get(ns_id)
+        if header is None:
+            return False
+        return sales_order_dao.upsert(
+            connection,
+            account,
+            ns_id,
+            {
+                "order_no": str(header.get("tranid") or "")[:150] or None,
+                "currency": currency_code(header) or None,
+                "currency_name": str(header.get("currencyname") or "")[:100] or None,
+                "exchange_rate": column_value(header.get("exchangerate"), sales_orders.c.exchange_rate),
+            },
+            now,
+        )
+
+    def _save_purchase(
+        self, connection, account, document, parents, counts, now, affected_orders, sales=None
+    ):
         head = dict(document["head"])
         head.update(
             self._currency(connection, account, document["parent_ns_id"], parents, now, affected_orders)
         )
+        sales_order_id = self._sales_order(connection, account, document, sales, now)
+        if sales_order_id is not False:
+            head["sales_order_id"] = sales_order_id
         head["supplier_id"] = (
             supplier_dao.upsert(connection, account, document["supplier"], now)
             if document["supplier"]

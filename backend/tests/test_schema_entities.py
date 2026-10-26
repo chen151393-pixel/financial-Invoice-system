@@ -47,6 +47,7 @@ def test_entities_registered():
         "source_customs_declarations",
         "source_customs_lines",
         "source_customs_purchase_links",
+        "source_sales_orders",
     }
 
 

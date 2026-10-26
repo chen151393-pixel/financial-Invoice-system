@@ -189,6 +189,32 @@ flowchart LR
 - 数据库外键：`supplier_id` → `source_suppliers.id`。
 - 查询索引 `ix_source_parent_no`：`(ns_account, order_no)`。
 
+<a id="source_sales_orders"></a>
+
+### source_sales_orders｜销售单单头
+
+同步时按子采购单的销售单引用读取（迁移 0029，2026-10-23）。报关申报价按其汇率换算为人民币，用于财务核对申报幅度与发票价格校验；不参与报关单内容摘要，汇率变化不触发重审。读取失败时保留原值并提示，不影响单据保存。
+
+结构依据：[表定义](../../backend/modules/source/entity/sales_order.py)；业务说明：[source 模块](../../backend/modules/source/README.md)。
+
+| 字段 | MySQL 类型 | 可空 | 默认 | 中文含义 |
+| --- | --- | --- | --- | --- |
+| `id` | `BIGINT UNSIGNED` | 否 | 自增 | 本地自增主键 |
+| `ns_account` | `VARCHAR(100)` | 否 | — | NS 账套标识 |
+| `ns_internal_id` | `VARCHAR(190)` | 否 | — | NS 销售单内部 ID |
+| `order_no` | `VARCHAR(150)` | 是 | — | 销售单号（NS tranid），与报关行销售订单号对照 |
+| `currency` | `VARCHAR(20)` | 是 | — | 币种代码；无法识别时为空 |
+| `currency_name` | `VARCHAR(100)` | 是 | — | NS 返回的币种名称原文 |
+| `exchange_rate` | `DECIMAL(28,12)` | 是 | — | NS exchangerate；缺失为空，不以 1 代替 |
+| `synced_at` | `DATETIME(6)` | 否 | — | 本次成功保存来源数据的时间，UTC |
+| `created_at` | `DATETIME(6)` | 否 | CURRENT_TIMESTAMP(6) | 本地记录创建时间，UTC |
+| `updated_at` | `DATETIME(6)` | 否 | CURRENT_TIMESTAMP(6) | 本地记录最后更新时间，UTC；由 DAO 更新 |
+
+**关联与约束**
+
+- 主键：`id`。
+- 唯一约束 `uq_source_sales_ns`：`(ns_account, ns_internal_id)`。
+
 <a id="source_parent_order_lines"></a>
 
 ### source_parent_order_lines｜母采购明细
@@ -254,6 +280,7 @@ flowchart LR
 | `parent_order_no`        | `VARCHAR(150)`    | 是   | —                    | 来源提供的母采购单号文本；与母单本地主键分开                                              |
 | `currency_source`        | `VARCHAR(24)`     | 否   | unresolved           | 币种来源，具体可用值见本表说明                                                            |
 | `currency_issue`         | `VARCHAR(300)`    | 是   | —                    | 币种待核实原因                                                                            |
+| `sales_order_id`         | `BIGINT UNSIGNED` | 是   | —                    | 子采购单对应的销售单本地主键（NS custrecord_swc_subpo_so），指向 source_sales_orders.id（迁移 0029） |
 
 **关联与约束**
 

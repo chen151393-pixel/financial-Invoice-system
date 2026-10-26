@@ -70,9 +70,12 @@ def note_reasons(checks, exceeds, closes_line):
     发票未提供购买方（柠檬云 Excel 不含该列）属于数据缺失：只降低置信度，不要求说明。
     """
     reasons = [
-        f"{check['label']}不一致"
+        "发票不含税价格高于申报价" if check["key"] == "price" else f"{check['label']}不一致"
         for check in checks
-        if check["result"] != "match" and not (check["key"] == "buyer" and check["invoiceValue"] is None)
+        if check["result"] != "match"
+        and not (check["key"] == "buyer" and check["invoiceValue"] is None)
+        # 申报价无法换算时只提示"未校验"，不要求说明
+        and not (check["key"] == "price" and check["result"] == "missing")
     ]
     if exceeds:
         reasons.append("超过子采购剩余应开（超开）")

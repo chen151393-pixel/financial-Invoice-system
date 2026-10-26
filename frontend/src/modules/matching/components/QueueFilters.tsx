@@ -2,10 +2,10 @@ import { useState } from "react";
 import { Button } from "../../../shared/components/Button";
 import type { QueueQuery } from "../types/matching";
 
-type Filters = Pick<QueueQuery, "supplierId" | "invoiceFrom" | "invoiceTo">;
-const EMPTY: Filters = { supplierId: "", invoiceFrom: "", invoiceTo: "" };
+type Filters = Pick<QueueQuery, "anomaly" | "supplierId" | "invoiceFrom" | "invoiceTo">;
+const EMPTY: Filters = { anomaly: "all", supplierId: "", invoiceFrom: "", invoiceTo: "" };
 
-/** 比对队列筛选：子采购单供应商、开票日期（起止须同时填写，由后端校验）。 */
+/** 比对队列筛选：异常 / 正常、子采购单供应商、开票日期（起止须同时填写，由后端校验）。 */
 export function QueueFilters({
   value,
   suppliers,
@@ -27,6 +27,17 @@ export function QueueFilters({
         onApply(draft);
       }}
     >
+      <label>
+        建议类型
+        <select
+          value={draft.anomaly}
+          onChange={(event) => set({ anomaly: event.target.value as QueueQuery["anomaly"] })}
+        >
+          <option value="all">全部建议</option>
+          <option value="abnormal">只看异常</option>
+          <option value="normal">只看正常</option>
+        </select>
+      </label>
       <label>
         供应商
         <select value={draft.supplierId} onChange={(event) => set({ supplierId: event.target.value })}>

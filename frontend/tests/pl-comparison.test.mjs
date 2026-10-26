@@ -409,3 +409,29 @@ test("任务差异结束遵循后端待复核限制并展示原因", async () =>
   assert.match(html, /先处理待复核占用/);
   assert.match(html, /按差异结束/);
 });
+
+test("报关行最后一列显示后端计算的申报幅度；负数与无法计算都用文字说明", () => {
+  const item = group();
+  item.customsLines = [
+    {
+      ...item.customsLines[0],
+      margin: "-12.68%",
+      marginStatus: "negative",
+      marginNote: "采购价高于申报价",
+      declaredCny: "106.5",
+      purchaseTotal: "120",
+    },
+    {
+      ...item.customsLines[0],
+      id: "customs:1",
+      lineNo: 2,
+      margin: "",
+      marginStatus: "unavailable",
+      marginNote: "报关行与子采购行单位不一致，不计算申报幅度",
+    },
+  ];
+  const html = customs(item);
+  assert.match(html, /申报幅度/);
+  assert.match(html, /fr-margin--negative[\s\S]*-12.68%[\s\S]*采购价高于申报价 · 申报 106.5 \/ 采购 120/);
+  assert.match(html, /fr-margin--unavailable[\s\S]*—[\s\S]*单位不一致，不计算申报幅度/);
+});
