@@ -3,119 +3,21 @@
   gap: 16px;
   min-width: 0;
 }
-.invoice-list__summary {
+/* 汇总指标与列表面板的外观来自组件库（MetricCard、Card），这里只做排布 */
+.invoice-list__amounts {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  background: var(--color-surface);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-panel);
-  overflow: hidden;
-}
-.invoice-list__metric {
-  padding: 18px;
-  border-right: 1px solid var(--color-border);
-  font-size: 12px;
-  color: var(--color-muted);
-}
-.invoice-list__metric:last-child {
-  border-right: 0;
-}
-.invoice-list__metric strong {
-  display: block;
-  font-size: 21px;
-  color: var(--color-text);
-  margin: 8px 0;
-  font-variant-numeric: tabular-nums;
-  overflow-wrap: anywhere;
+  gap: 2px;
 }
 .invoice-list__panel {
-  background: var(--color-surface);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-panel);
-  min-width: 0;
   overflow: hidden;
 }
-.invoice-list__tabs {
-  display: flex;
-  align-items: center;
-  gap: 24px;
-  padding: 0 18px;
-  border-bottom: 1px solid var(--color-border);
-  overflow-x: auto;
-  white-space: nowrap;
+.invoice-list__panel > .ui-alert {
+  margin: 12px 16px 0;
 }
-.invoice-list__tabs button,
-.invoice-list__active-tab {
-  padding: 18px 0;
+/* 表格行内按钮保持紧凑 */
+.invoice-list table :where(.ui-button) {
   font-size: 12px;
-  border: 0;
-  background: none;
-  font-family: inherit;
-}
-.invoice-list__tabs button {
-  color: var(--color-muted);
-}
-.invoice-list__active-tab {
-  border-bottom: 2px solid var(--color-primary);
-  color: var(--color-primary);
-}
-.invoice-list__tabs small {
-  color: var(--color-muted);
-  margin-left: auto;
-}
-.invoice-list__filters {
-  padding: 14px 18px;
-}
-.invoice-list__toolbar,
-.invoice-list__tools,
-.invoice-list__more-filters {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  align-items: center;
-}
-.invoice-list__tools {
-  margin-left: auto;
-}
-.invoice-list__more-filters {
-  padding-top: 14px;
-  align-items: end;
-}
-.invoice-list__filters label {
-  display: grid;
-  gap: 8px;
-  font-size: 12px;
-}
-.invoice-list__filters input,
-.invoice-list__filters select {
-  min-height: 36px;
-  max-width: 100%;
-  box-sizing: border-box;
-  padding: 8px 10px;
-  border: 1px solid var(--color-input-border);
-  border-radius: var(--radius-control);
-  background: var(--color-surface);
-  color: var(--color-text);
-  font: inherit;
-  font-size: 12px;
-}
-.invoice-list__toolbar > input {
-  width: 280px;
-}
-.invoice-list__filters .invoice-list__account-filter {
-  display: flex;
-  align-items: center;
-  min-width: 0;
-  max-width: 100%;
-}
-.invoice-list__account-filter select {
-  width: 260px;
-  min-width: 0;
-}
-.invoice-list :where(.ui-button) {
-  font-size: 12px;
-  min-height: 34px;
-  padding: 6px 10px;
+  padding: 4px 10px;
 }
 .invoice-list__table {
   overflow: auto;
@@ -220,21 +122,4 @@
 .invoice-list :focus-visible {
   outline: 2px solid var(--color-primary);
   outline-offset: 3px;
-}
-@media (max-width: 760px) {
-  .invoice-list__summary {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-  .invoice-list__metric {
-    border-bottom: 1px solid var(--color-border);
-  }
-  .invoice-list__metric strong {
-    font-size: 18px;
-  }
-  .invoice-list__tools {
-    margin-left: 0;
-  }
-  .invoice-list__toolbar > input {
-    width: 100%;
-  }
 }

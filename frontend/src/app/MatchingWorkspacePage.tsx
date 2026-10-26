@@ -20,18 +20,6 @@ export default function MatchingWorkspacePage() {
       onNavigate={navigateView}
       title={invoiceId ? "发票比对" : "比对审核队列"}
       breadcrumb={invoiceId ? <Link to={paths.matching}>比对审核队列</Link> : undefined}
-      actions={
-        invoiceId ? undefined : (
-          <div className="matching-row">
-            <Link className="ui-button ui-button--secondary" to={paths.invoices}>
-              进项发票
-            </Link>
-            <Link className="ui-button ui-button--secondary" to={paths.tasks}>
-              开票跟进
-            </Link>
-          </div>
-        )
-      }
     >
       {invoiceId ? <MatchingInvoicePage key={invoiceId} invoiceId={invoiceId} /> : <MatchingQueuePage />}
     </AppFrame>

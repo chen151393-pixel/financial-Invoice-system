@@ -120,7 +120,7 @@ test("票面状态筛选常驻查询栏，折叠日期筛选时仍可选择", ()
       onRefresh() {},
     }),
   );
-  assert.match(html, /<label[^>]*>票面状态<select/);
+  assert.match(html, /<label[^>]*><span>票面状态<\/span><select/);
   assert.match(html, /value="void" selected=""/);
   assert.match(html, /value="red_offset">已被红冲/);
   assert.match(html, /value="red_letter">红字发票/);

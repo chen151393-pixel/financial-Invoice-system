@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from "react";
-import { Button } from "../../../shared/components/Button";
+import { Button, Tabs } from "../../../shared/components/ui";
 import type { ComparisonGroup, ComparisonState, PurchaseLine, ReviewFilter } from "../types";
 import { DeclarationRow } from "./DeclarationRow";
 import { PurchaseDialog } from "./ReviewDialog";
@@ -70,13 +70,16 @@ export function FinanceComparison({
         </p>
       ))}
       <div className="fr-toolbar">
-        <div className="fr-filters" role="group" aria-label="按审核状态筛选">
-          {(Object.keys(FILTER_LABELS) as ReviewFilter[]).map((key) => (
-            <button key={key} aria-pressed={filter === key} onClick={() => onFilter(key)}>
-              {FILTER_LABELS[key]} <span>{result.counts[key] ?? 0}</span>
-            </button>
-          ))}
-        </div>
+        <Tabs
+          label="按审核状态筛选"
+          value={filter}
+          onChange={onFilter}
+          items={(Object.keys(FILTER_LABELS) as ReviewFilter[]).map((key) => ({
+            key,
+            label: FILTER_LABELS[key],
+            count: result.counts[key] ?? 0,
+          }))}
+        />
         <div className="fr-tree-actions">
           <button
             onClick={() => {

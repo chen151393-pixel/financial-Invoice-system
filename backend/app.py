@@ -59,6 +59,7 @@ from .modules.sync.service.lemon_job_service import LemonJobService
 from .modules.sync.service.lemon_plan_service import LemonPlanService
 from .modules.sync.service.lemon_worker import LemonWorker
 from .modules.sync.service.ns_run_service import NsRunService
+from .modules.task.controller.board_controller import create_router as task_board_router
 from .modules.task.controller.delivery_controller import create_router as delivery_router
 from .modules.task.controller.external_group_controller import create_router as external_group_router
 from .modules.task.controller.signed_contract_controller import create_router as signed_contract_router
@@ -79,6 +80,7 @@ from .modules.task.service.progress_service import on_allocation_changed
 from .modules.task.service.signed_contract_service import SignedContractService
 from .modules.task.service.supplier_group_service import SupplierGroupService as TaskGroupService
 from .modules.task.service.supplier_profile_service import SupplierProfileService
+from .modules.task.service.task_board_service import TaskBoardService
 from .modules.task.service.task_generation_service import on_review_approved
 from .modules.task.service.task_service import TaskService
 
@@ -217,6 +219,7 @@ def _register_business(app, settings, ns, contract_ns, wecom, engine, lemon_invo
             declaration_documents,
         )
     )
+    app.include_router(task_board_router(TaskBoardService(engine, directory, task_queries)))
     app.include_router(signed_contract_router(SignedContractService(engine, directory, archive)))
     # 发票导入 → matching 生成比对建议；比对通过 / 取消 → task 重算收票进度（均在发布方事务中）。
     app.include_router(invoice_router(ImportService(engine, events), InvoiceService(engine)))

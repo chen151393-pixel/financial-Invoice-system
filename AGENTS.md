@@ -67,7 +67,8 @@
 
 - 新增功能对应的独立页面必须有语义明确的路由，路径集中维护在 `app/paths.ts` 并登记路由；登录页使用纯 `/login`，不附加 next 等参数；原页面信息通过路由状态传递。路由守卫只能跳转，不能在任务等业务地址下替换成登录表单。
 - 先查看相关页面、调用方和现有布局、样式变量、表格、表单、按钮及状态组件，再确定最小修改范围。
-- 页面外壳与导航优先复用 `frontend/src/shared/components/AppFrame.tsx`、`Sidebar.tsx` 和 `frontend/src/app/navigation.tsx`；按钮复用已有 `Button`，设计变量统一维护在 `frontend/src/shared/styles/tokens.css`。
+- 页面外壳与导航优先复用 `frontend/src/shared/components/AppFrame.tsx`、`Sidebar.tsx` 和 `frontend/src/app/navigation.tsx`；设计变量统一维护在 `frontend/src/shared/styles/tokens.css`。
+- **新页面与改版页面的界面固定从统一组件库 `frontend/src/shared/components/ui`（入口 `index.ts`，规范见 [docs/ui-components.md](docs/ui-components.md)，展示页 `/ui-kit`）组合**：卡片、指标卡、分区标题、徽标、流程节点、进度、查询栏、数据表、状态与图表都用库内组件；缺少时在库内新增并补展示页，不在业务页面自造同类样式。旧页面在被修改时逐步迁移。
 - 遵循 `design.md`；尚未提取的公共组件按实际需求建立，不把文档中的目标组件当成已有实现，也不提前生成整套空组件。
 - 同类功能复用一套组件与交互；新增基础组件应集中建立，不能在多个业务页面复制修改。
 - 业务特有组件留在业务模块；共享组件不包含发票匹配、审批条件等领域逻辑。

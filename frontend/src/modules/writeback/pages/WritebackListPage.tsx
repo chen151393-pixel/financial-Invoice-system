@@ -1,8 +1,7 @@
 import { useState } from "react";
 import { useNavigate } from "react-router";
 import { writebackRequestPath } from "../../../app/paths";
-import { Button } from "../../../shared/components/Button";
-import { Pagination } from "../../../shared/components/Pagination";
+import { Button, Pagination, Tabs } from "../../../shared/components/ui";
 import { DemoBanner } from "../components/DemoBanner";
 import { NotConnected } from "../components/NotConnected";
 import { WriteSwitchStatus } from "../components/WriteSwitchStatus";
@@ -40,21 +39,17 @@ export function WritebackListPage() {
         onSubmit={(filters) => setQuery({ ...query, ...filters, page: 1 })}
       />
       <section className="wb-panel wb-panel--flush" aria-label="回写记录">
-        <div className="wb-tabs" role="group" aria-label="按回写状态筛选">
-          {PHASE_TABS.map((tab) => (
-            <button
-              key={tab.key}
-              type="button"
-              className="wb-tab"
-              aria-pressed={query.phase === tab.value}
-              onClick={() => setQuery({ ...query, phase: tab.value, page: 1 })}
-            >
-              {tab.label}
-              {data?.counts[tab.key] !== undefined && (
-                <span className="wb-muted"> {data.counts[tab.key]}</span>
-              )}
-            </button>
-          ))}
+        <div className="wb-phase-tabs">
+          <Tabs
+            label="按回写状态筛选"
+            value={query.phase}
+            onChange={(phase) => setQuery({ ...query, phase, page: 1 })}
+            items={PHASE_TABS.map((tab) => ({
+              key: tab.value,
+              label: tab.label,
+              count: data?.counts[tab.key],
+            }))}
+          />
         </div>
         {status === "loading" && (
           <p role="status" className="wb-state">

@@ -15,6 +15,7 @@ const InvoiceWorkspacePage = lazy(() => import("./InvoiceWorkspacePage"));
 const MatchingWorkspacePage = lazy(() => import("./MatchingWorkspacePage"));
 const TaskWorkspacePage = lazy(() => import("./TaskWorkspacePage"));
 const WritebackWorkspacePage = lazy(() => import("./WritebackWorkspacePage"));
+const UiKitWorkspacePage = lazy(() => import("./UiKitWorkspacePage"));
 
 function page(label: string, element: ReactNode) {
   return <Suspense fallback={<p role="status">正在加载{label}…</p>}>{element}</Suspense>;
@@ -37,6 +38,7 @@ export const router = createBrowserRouter([
           { path: paths.review, element: page("财务核对", <ReviewWorkspacePage />) },
           { path: legacyPaths.finance, element: <Navigate to={paths.review} replace /> },
           { path: paths.tasks, element: page("开票跟进", <TaskWorkspacePage />) },
+          { path: paths.taskBoard, element: page("采购开票任务台", <TaskWorkspacePage />) },
           { path: paths.externalGroups, element: page("外部群导入与关联", <TaskWorkspacePage />) },
           { path: paths.supplierGroups, element: page("供应商档案", <TaskWorkspacePage />) },
           { path: `${paths.tasks}/:taskId`, element: page("开票任务详情", <TaskWorkspacePage />) },
@@ -57,6 +59,7 @@ export const router = createBrowserRouter([
           },
           { path: paths.writeback, element: page("NS 回写", <WritebackWorkspacePage />) },
           { path: `${paths.writeback}/:requestId`, element: page("NS 回写", <WritebackWorkspacePage />) },
+          { path: paths.uiKit, element: page("界面组件库", <UiKitWorkspacePage />) },
           // 首页及未知地址进入工作台；已有业务地址保持独立访问。
           { path: "*", element: <Navigate to={paths.workbench} replace /> },
         ],

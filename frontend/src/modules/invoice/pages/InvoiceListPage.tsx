@@ -1,7 +1,15 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router";
 import { matchingInvoicePath } from "../../../app/paths";
-import { Pagination } from "../../../shared/components/Pagination";
+import {
+  Alert,
+  Card,
+  CardFooter,
+  EmptyState,
+  Pagination,
+  SectionTitle,
+  Skeleton,
+} from "../../../shared/components/ui";
 import { openLocalSession } from "../../identity/api";
 import {
   getInvoiceTotals,
@@ -144,49 +152,41 @@ export function InvoiceListPage() {
   return (
     <div className="invoice-list">
       <InvoiceSummary data={totals} loading={totalsLoading} error={totalsError} />
-      <section className="invoice-list__panel" aria-label="进项发票查询">
-        <InvoiceFilters
-          draft={draft}
-          applied={query}
-          accounts={accounts}
-          loading={loading}
-          onChange={setDraft}
-          onSubmit={() =>
-            changeQuery({ ...draft, page: 1, pageSize: query.pageSize, version: query.version + 1 })
-          }
-          onReset={() => {
-            setDraft(emptyFilters);
-            changeQuery({ ...emptyFilters, page: 1, pageSize: query.pageSize, version: query.version + 1 });
-          }}
-          onRefresh={() => changeQuery({ ...query, version: query.version + 1 })}
-        />
+      <InvoiceFilters
+        draft={draft}
+        applied={query}
+        accounts={accounts}
+        loading={loading}
+        onChange={setDraft}
+        onSubmit={() =>
+          changeQuery({ ...draft, page: 1, pageSize: query.pageSize, version: query.version + 1 })
+        }
+        onReset={() => {
+          setDraft(emptyFilters);
+          changeQuery({ ...emptyFilters, page: 1, pageSize: query.pageSize, version: query.version + 1 });
+        }}
+        onRefresh={() => changeQuery({ ...query, version: query.version + 1 })}
+      />
+      <SectionTitle
+        id="invoice-list-title"
+        title="发票列表"
+        count={data ? `共 ${data.total} 张` : undefined}
+      />
+      <Card className="invoice-list__panel" aria-labelledby="invoice-list-title">
         <InvoiceDetailRefresh state={detailRefresh} />
-        {loading && (
-          <p className="invoice-list__message" role="status">
-            正在读取数据库发票…
-          </p>
-        )}
-        {error && (
-          <p role="alert" className="invoice-list__message invoice-list__error">
-            {error}，可点击“刷新数据”重试。
-          </p>
-        )}
-        {matchingError && (
-          <p role="alert" className="invoice-list__message invoice-list__error">
-            {matchingError}，请点击“刷新数据”重试。
-          </p>
-        )}
+        {error && <Alert tone="danger">{error}，可点击“刷新数据”重试。</Alert>}
+        {matchingError && <Alert tone="danger">{matchingError}，请点击“刷新数据”重试。</Alert>}
         {totalsError && totalsError !== error && (
-          <p role="alert" className="invoice-list__message invoice-list__error">
-            {totalsError}，请点击“刷新数据”重试。
-          </p>
+          <Alert tone="danger">{totalsError}，请点击“刷新数据”重试。</Alert>
         )}
-        {data && (
+        {loading && <Skeleton label="正在读取数据库发票" rows={2} />}
+        {data && !loading && (
           <>
             {data.rows.length === 0 ? (
-              <p className="invoice-list__message" role="status">
-                当前条件下没有发票。可调整筛选，或在“数据同步 → 柠檬云”导入发票。
-              </p>
+              <EmptyState
+                title="当前条件下没有发票"
+                description="可调整筛选，或在“数据同步 → 柠檬云”导入发票。"
+              />
             ) : (
               <InvoiceTable
                 rows={data.rows}
@@ -201,20 +201,22 @@ export function InvoiceListPage() {
                 }}
               />
             )}
-            <Pagination
-              label="发票分页"
-              total={data.total}
-              page={data.page}
-              pageCount={Math.max(1, Math.ceil(data.total / data.pageSize))}
-              pageSize={data.pageSize}
-              pageSizes={[10, 20, 50, 100]}
-              disabled={loading}
-              onPageChange={(page) => changeQuery({ ...query, page })}
-              onPageSizeChange={(pageSize) => changeQuery({ ...query, page: 1, pageSize })}
-            />
+            <CardFooter>
+              <Pagination
+                label="发票分页"
+                total={data.total}
+                page={data.page}
+                pageCount={Math.max(1, Math.ceil(data.total / data.pageSize))}
+                pageSize={data.pageSize}
+                pageSizes={[10, 20, 50, 100]}
+                disabled={loading}
+                onPageChange={(page) => changeQuery({ ...query, page })}
+                onPageSizeChange={(pageSize) => changeQuery({ ...query, page: 1, pageSize })}
+              />
+            </CardFooter>
           </>
         )}
-      </section>
+      </Card>
       {selected && (
         <InvoiceDetailDrawer
           detail={detail}

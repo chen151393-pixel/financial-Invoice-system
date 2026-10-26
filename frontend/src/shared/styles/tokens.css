@@ -29,5 +29,17 @@
   --space-small: 8px;
   --space-control: 12px;
   --space-layout: 24px;
+  /* 统一组件库（shared/components/ui）：浅主色底、卡片阴影与图表配色 */
+  --color-primary-soft: #eef3ff;
+  --color-primary-strong: #2445b8;
+  --shadow-card: 0 1px 2px rgba(16, 24, 40, 0.04), 0 1px 3px rgba(16, 24, 40, 0.04);
+  /* 图表配色收在主蓝与侧栏海军蓝一个色系内，深浅区分系列；折线用海军蓝 */
+  --color-chart-1: #3156d9;
+  --color-chart-2: #7d98ec;
+  --color-chart-3: #b9c8f6;
+  --color-chart-4: #5b6b8c;
+  --color-chart-5: #d5dbe6;
+  --color-chart-line: #1b2a52;
+  --color-chart-grid: #eef1f6;
   --font-body: Inter, "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
 }

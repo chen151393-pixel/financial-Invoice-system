@@ -9,12 +9,25 @@ body {
   color: var(--color-text);
   font-family: var(--font-body);
 }
+/* 按钮：主按钮（每个操作区最多一个）、次要按钮（白底深色字，不像禁用）、文字按钮；sm 用于表格行内 */
 .ui-button {
-  font: inherit;
-  padding: 9px 14px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 7px 14px;
   border: 1px solid var(--color-input-border);
   border-radius: var(--radius-control);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.4;
+  white-space: nowrap;
   cursor: pointer;
+  transition:
+    background-color 0.15s,
+    border-color 0.15s,
+    color 0.15s;
 }
 /* 以链接实现的按钮（跳转）与按钮外观一致，不显示下划线。 */
 a.ui-button {
@@ -27,13 +40,38 @@ a.ui-button {
   color: var(--color-surface);
   border-color: var(--color-primary);
 }
+.ui-button--primary:hover:not(:disabled) {
+  background: var(--color-primary-strong);
+  border-color: var(--color-primary-strong);
+}
 .ui-button--secondary {
   background: var(--color-surface);
-  color: var(--color-muted);
+  color: var(--color-text);
+}
+.ui-button--secondary:hover:not(:disabled) {
+  background: var(--color-canvas);
+  border-color: #aeb8c8;
+}
+.ui-button--ghost {
+  border-color: transparent;
+  background: transparent;
+  color: var(--color-primary);
+}
+.ui-button--ghost:hover:not(:disabled) {
+  background: var(--color-primary-soft);
+}
+.ui-button--sm {
+  padding: 4px 10px;
+  font-size: 12px;
 }
 .ui-button:disabled {
-  opacity: 0.5;
+  opacity: 0.45;
   cursor: not-allowed;
+}
+@media (prefers-reduced-motion: reduce) {
+  .ui-button {
+    transition: none;
+  }
 }
 .ui-button:focus-visible {
   outline: 2px solid var(--color-primary);

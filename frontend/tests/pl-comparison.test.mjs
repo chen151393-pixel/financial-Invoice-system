@@ -146,9 +146,10 @@ test("明细按后端显式树展示，数量和金额保留原十进制字符�
   for (const text of ["SUB-TEST", "12.5000", "9007199254740993.01", "16.2500", "USD", "CNY"])
     assert.ok(html.includes(text));
   assert.doesNotMatch(html, /财务审核|待审核/);
+  // 数值列只在同一层内对齐：只有报关行使用表格列宽，子采购为自带字段布局的明细行，不共用报关行列宽
   const columns = [...html.matchAll(/<colgroup>(.*?)<\/colgroup>/g)].map((match) => match[1]);
-  assert.equal(columns.length, 2);
-  assert.notEqual(columns[0], columns[1], "数值列只在同一层内对齐，报关行与采购行各自列宽");
+  assert.equal(columns.length, 1);
+  assert.match(html, /<ul class="fr-purchase-list"[^>]*>.*<dl class="fr-purchase-fields">/s);
   // 第二层、第三层各自缩进一级，第三层嵌套在第二层内
   const customsLevel = html.indexOf("fr-level fr-level--customs");
   const purchaseLevel = html.indexOf("fr-level fr-level--purchase");
@@ -308,10 +309,9 @@ test("未分摊的订单行明确标为子单数量和订单金额，不冒充�
   assert.match(html, /9007199254740993.01/);
 });
 
-test("财务搜索使用单一关键字，支持账套选择与刷新", () => {
+test("财务搜索使用单一关键字与供应商筛选，支持刷新；上线只有正式环境，不提供 NS 账套筛选", () => {
   const html = renderToStaticMarkup(
     createElement(FinanceSearchForm, {
-      accounts: ["prod", "sandbox"],
       suppliers: [{ id: "77", name: "合成供应商" }],
       busy: false,
       onSearch() {},
@@ -320,7 +320,7 @@ test("财务搜索使用单一关键字，支持账套选择与刷新", () => {
   );
   assert.match(html, /CD 编号 \/ 真实报关单号 \/ PL \/ 子采购单号 \/ 品名/);
   assert.match(html, /刷新列表/);
-  assert.match(html, /全部账套/);
+  assert.doesNotMatch(html, /全部账套|来源账套|NS 环境/);
   assert.match(html, /全部供应商/);
   assert.match(html, /<option value="77">合成供应商<\/option>/);
   assert.doesNotMatch(html, /查询方式|重置示例/);

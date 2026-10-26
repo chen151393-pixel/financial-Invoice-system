@@ -10,7 +10,7 @@
 | `components/FinanceSearchForm.tsx`                                    | 关键字、账套与供应商查询（供应商选项由后端返回）                                                        |
 | `components/FinanceComparison.tsx`                                    | 报关单列表：状态筛选、全部展开/收起、当前页勾选与批量审核入口                                           |
 | `components/DeclarationRow.tsx`                                       | 第一层报关单行：勾选（仅后端允许审核的）、状态、单张审核入口                                            |
-| `components/CustomsRows.tsx`、`PurchaseRows.tsx`、`review-levels.css` | 第二层报关行、第三层子采购行：逐级缩进并以竖线标示从属，列宽只在同一层内对齐                            |
+| `components/CustomsRows.tsx`、`PurchaseRows.tsx`、`review-levels.css` | 第二层报关行表格、第三层子采购明细行（树形连线挂在报关行下方），列宽只在同一层内对齐                    |
 | `components/BatchApproveDialog.tsx`                                   | 批量审核确认（范围为当前页已选）与逐张结果                                                              |
 | `components/ReviewDialog.tsx`                                         | 整单审核确认、审核备注、审核记录与子采购只读详情                                                        |
 | `api.ts`                                                              | `POST /api/review/declarations/query`；`/{id}/approve`（提交 `contentSha256` 与备注）；`/approve-batch` |
@@ -33,6 +33,14 @@
 
 2026-10-22 在本地隔离 SQLite（合成数据）上复查：供应商筛选、未出库筛选及说明、三级缩进展开、当前页勾选与批量审核（结果窗口、列表自动刷新）、工作台未出库提示、375px 窄屏无页面横向滚动。未连接真实 NS 与 MySQL。
 
+## 三级展开样式（2026-10-26）
+
+展开中的报关单行浅主色高亮并以左侧主色条连到明细；报关行放在白色卡片内，表头只保留细线；子采购行不再为每条报关行重复一套表头，改为挂在报关行下方的明细行（`PurchaseRows` 使用 `ul` + `dl`，字段小标签在数值上方，树形连线标示从属，浅蓝底表示采购来源）。审核状态改用统一组件库 `Badge`。明细位于可横向滚动的报关行表格内，窄屏随表格滚动。只改展示，接口与审核规则不变。
+
 ## 申报幅度（2026-10-23）
 
 报关行最后一列“申报幅度”显示后端计算值及“申报 / 采购”人民币金额；负数标注“采购价高于申报价”，无法计算时显示“—”及原因，不显示 0。
+
+## 去掉 NS 环境筛选（2026-10-26）
+
+上线只同步 NS 正式环境，财务核对查询栏不再提供 NS 环境 / 账套筛选，地址里的 `account` 参数也不再读取（旧链接带 `?account=` 时按不限处理）。后端查询参数保留为可选，不传即不限；列表行内的 NS 环境文字仍照常显示。

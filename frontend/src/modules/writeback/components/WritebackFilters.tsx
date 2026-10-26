@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Button } from "../../../shared/components/Button";
+import { Button, Field, FilterBar } from "../../../shared/components/ui";
 import type { WritebackQuery } from "../types";
 
 type Filters = Pick<WritebackQuery, "vendor" | "invoiceNo" | "dateFrom" | "dateTo">;
@@ -21,42 +21,37 @@ export function WritebackFilters({
     onChange: (event: { target: { value: string } }) => setDraft({ ...draft, [key]: event.target.value }),
   });
   return (
-    <form
-      className="wb-panel wb-filters"
-      aria-label="回写查询条件"
-      onSubmit={(event) => {
-        event.preventDefault();
-        onSubmit(draft);
-      }}
+    <FilterBar
+      onSubmit={() => onSubmit(draft)}
+      actions={
+        <>
+          <Button type="submit" variant="primary" disabled={disabled}>
+            查询
+          </Button>
+          <Button
+            disabled={disabled}
+            onClick={() => {
+              setDraft(empty);
+              onSubmit(empty);
+            }}
+          >
+            重置
+          </Button>
+        </>
+      }
     >
-      <label>
-        供应商
+      <Field label="供应商" grow>
         <input type="search" placeholder="供应商名称关键字" {...field("vendor")} />
-      </label>
-      <label>
-        发票号码
+      </Field>
+      <Field label="发票号码">
         <input type="search" placeholder="例如 26332000000412805519" {...field("invoiceNo")} />
-      </label>
-      <fieldset>
-        <legend>开票日期</legend>
-        <input type="date" aria-label="开票日期起" {...field("dateFrom")} />
-        <span aria-hidden="true">至</span>
-        <input type="date" aria-label="开票日期止" {...field("dateTo")} />
-      </fieldset>
-      <div className="wb-filters__actions">
-        <Button type="submit" variant="primary" disabled={disabled}>
-          查询
-        </Button>
-        <Button
-          disabled={disabled}
-          onClick={() => {
-            setDraft(empty);
-            onSubmit(empty);
-          }}
-        >
-          重置
-        </Button>
-      </div>
-    </form>
+      </Field>
+      <Field label="开票日期 从">
+        <input type="date" {...field("dateFrom")} />
+      </Field>
+      <Field label="至">
+        <input type="date" {...field("dateTo")} />
+      </Field>
+    </FilterBar>
   );
 }

@@ -22,26 +22,58 @@
   align-items: flex-end;
   flex-wrap: wrap;
   gap: var(--space-control) 20px;
-  margin-bottom: 18px;
+  min-height: 40px;
+  margin-bottom: 20px;
 }
 .platform-frame__heading h1 {
   margin: 0;
-  font-size: 24px;
+  font-size: 22px;
   font-weight: 700;
-  line-height: 1.4;
+  line-height: 1.35;
+  letter-spacing: -0.01em;
 }
+/* 页头右侧只放本页操作；跨模块跳转交给侧栏 */
+.platform-frame__heading > :last-child:not(:first-child) {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-small);
+}
+/* 二级页面的返回面包屑：链接前带"‹"，悬停变主色 */
 .platform-frame__crumb {
-  margin-bottom: 4px;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 6px;
   color: var(--color-muted);
   font-size: 12px;
 }
 .platform-frame__crumb a {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 8px 2px 6px;
+  margin-left: -6px;
+  border-radius: 6px;
   color: var(--color-muted);
   text-decoration: none;
 }
+.platform-frame__crumb a::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-left: 1.5px solid currentColor;
+  border-bottom: 1.5px solid currentColor;
+  transform: rotate(45deg);
+}
 .platform-frame__crumb a:hover {
+  background: var(--color-primary-soft);
   color: var(--color-primary);
-  text-decoration: underline;
+}
+.platform-frame__crumb a:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 1px;
 }
 @media (max-width: 760px) {
   .platform-frame__main {

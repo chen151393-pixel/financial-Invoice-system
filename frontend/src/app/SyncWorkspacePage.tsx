@@ -30,10 +30,6 @@ export default function SyncWorkspacePage() {
               配置发票同步
             </Link>
           </div>
-        ) : source === "lemon" ? (
-          <Link className="ui-button ui-button--secondary" to={paths.sync}>
-            查看执行记录
-          </Link>
         ) : undefined
       }
     >

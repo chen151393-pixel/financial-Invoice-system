@@ -1,29 +1,10 @@
-.wb-tabs {
-  display: flex;
-  gap: 14px;
+/* 待办分类（组件库 Tabs） */
+.wb-todos__tabs {
   padding: 0 20px;
   border-bottom: 1px solid var(--color-border);
-  overflow-x: auto;
 }
-.wb .wb-tabs .ui-button {
-  border: 0;
-  border-radius: 0;
-  padding: 14px 0;
-  border-bottom: 2px solid transparent;
-  background: transparent;
-  font-size: 12px;
-  color: var(--color-muted);
-  flex-shrink: 0;
-}
-.wb .wb-tabs .ui-button[aria-pressed="true"] {
-  border-bottom-color: var(--color-primary);
-  color: var(--color-primary);
-}
-.wb-tabs span {
-  background: var(--color-canvas);
-  border-radius: 3px;
-  padding: 1px 5px;
-  font-size: 10px;
+.wb-todos__tabs .ui-tabs {
+  border-bottom: 0;
 }
 .wb-search {
   display: flex;

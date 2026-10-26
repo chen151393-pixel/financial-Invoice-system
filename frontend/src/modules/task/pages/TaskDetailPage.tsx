@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router";
 import { paths } from "../../../app/paths";
-import { Button } from "../../../shared/components/Button";
+import { Button, Tabs } from "../../../shared/components/ui";
 import { openLocalSession } from "../../identity/api";
 import {
   closeTaskLine,
@@ -153,9 +153,6 @@ export function TaskDetailPage({ id }: { id: string }) {
   if (state.kind === "error")
     return (
       <div className="it-page itd-page">
-        <Link className="itd-back" to={paths.tasks}>
-          ← 返回全部任务
-        </Link>
         <div className="itd-panel" role="alert">
           <p>{state.message}</p>
           <Button
@@ -172,9 +169,6 @@ export function TaskDetailPage({ id }: { id: string }) {
   const detail = state.data;
   return (
     <div className="it-page itd-page">
-      <Link className="itd-back" to={paths.tasks}>
-        ← 返回全部任务
-      </Link>
       {detail.task.predecessorTaskIds?.length > 0 && (
         <p>
           前序任务：
@@ -188,13 +182,15 @@ export function TaskDetailPage({ id }: { id: string }) {
       )}
       <TaskOverview detail={detail} section={section} onNavigate={navigate} />
       <section className="itd-panel" id={`task-${section}`} aria-label="任务资料与记录">
-        <div className="itd-tabs" role="group" aria-label="任务内容切换">
-          {(Object.entries(sectionLabels) as [Section, string][]).map(([key, label]) => (
-            <Button key={key} aria-pressed={section === key} onClick={() => navigate(key)}>
-              {label}
-            </Button>
-          ))}
-        </div>
+        <Tabs
+          label="任务内容切换"
+          value={section}
+          onChange={navigate}
+          items={(Object.entries(sectionLabels) as [Section, string][]).map(([key, label]) => ({
+            key,
+            label,
+          }))}
+        />
         {feedback && (
           <p className="itd-feedback" role={feedback.error ? "alert" : "status"}>
             {feedback.text}

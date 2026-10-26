@@ -15,14 +15,6 @@
 .task-list-toolbar__row {
   justify-content: space-between;
 }
-.task-list-toolbar__switch {
-  display: flex;
-  gap: calc(var(--space-small) / 2);
-}
-.task-list-toolbar__switch [aria-pressed="true"] {
-  color: var(--color-primary);
-  border-color: var(--color-primary);
-}
 .task-list-toolbar__actions label {
   white-space: nowrap;
 }

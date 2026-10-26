@@ -1,4 +1,4 @@
-import { Button } from "../../../shared/components/Button";
+import { Badge, Button } from "../../../shared/components/ui";
 import type { SupplierProfile } from "../types/supplier-group";
 import { formatTime } from "./format";
 
@@ -53,13 +53,15 @@ export function SupplierProfilesTable({
                 <span className="it-secondary">{item.binding?.userid}</span>
               </td>
               <td>
-                {item.binding ? (item.binding.enabled ? "已绑定 · 启用" : "已绑定 · 停用") : "未绑定"}
+                <Badge tone={item.binding ? (item.binding.enabled ? "success" : "neutral") : "warning"}>
+                  {item.binding ? (item.binding.enabled ? "已绑定 · 启用" : "已绑定 · 停用") : "未绑定"}
+                </Badge>
                 {item.binding && <span className="it-secondary">{formatTime(item.binding.updatedAt)}</span>}
               </td>
               <td>
-                <span className={item.notify.enabled ? "sg-notify" : "sg-notify sg-notify--off"}>
+                <Badge tone={item.notify.enabled ? "success" : "neutral"}>
                   {item.notify.enabled ? "已开启" : "已关闭 · 不生成开票任务"}
-                </span>
+                </Badge>
                 {item.notify.updatedAt && (
                   <span className="it-secondary">
                     {item.notify.updatedBy} · {formatTime(item.notify.updatedAt)}
@@ -67,6 +69,7 @@ export function SupplierProfilesTable({
                 )}
                 <Button
                   className="sg-notify__toggle"
+                  size="sm"
                   disabled={disabled || saving !== null}
                   aria-label={`${item.notify.enabled ? "关闭" : "开启"}供应商通知：${item.supplierName}`}
                   onClick={() => onNotify(item, !item.notify.enabled)}
@@ -75,7 +78,7 @@ export function SupplierProfilesTable({
                 </Button>
               </td>
               <td>
-                <Button disabled={disabled} onClick={() => onEdit(item)}>
+                <Button size="sm" disabled={disabled} onClick={() => onEdit(item)}>
                   维护档案
                 </Button>
               </td>

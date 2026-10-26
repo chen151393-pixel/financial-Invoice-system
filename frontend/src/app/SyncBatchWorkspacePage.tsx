@@ -13,11 +13,7 @@ export default function SyncBatchWorkspacePage() {
       activeId="sync"
       onNavigate={navigate}
       title="同步批次详情"
-      breadcrumb={
-        <>
-          <Link to={paths.sync}>数据同步</Link> / <Link to={paths.sync}>执行记录</Link>
-        </>
-      }
+      breadcrumb={<Link to={paths.sync}>数据同步</Link>}
     >
       <SyncBatchDetailPage />
     </AppFrame>

@@ -32,6 +32,19 @@ class TaskListQuery(StrictModel):
         return self
 
 
+class TaskBoardQuery(StrictModel):
+    """采购开票任务台：只看未被替代的任务；node 为空表示全部进行中的任务。
+
+    上线后只同步 NS 正式环境，任务台不提供 NS 环境筛选。
+    """
+
+    keyword: str = Field(default="", max_length=120)
+    supplierId: str = Field(default="", max_length=20, pattern=r"^([1-9][0-9]*)?$")
+    node: Literal["", "documents", "notification", "invoices", "comparison", "completion", "done"] = ""
+    page: int = Field(default=1, ge=1, le=100000)
+    pageSize: int = Field(default=20, ge=1, le=50)
+
+
 class ClosureRequest(StrictModel):
     requestId: UUID = Field(strict=False)
     purchaseBasisId: str = Field(pattern=r"^[1-9][0-9]*$")

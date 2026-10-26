@@ -79,9 +79,9 @@ export interface ComparisonResult {
   total: number;
   pages: number;
 }
+// 上线只同步 NS 正式环境，不再按 NS 账套筛选（后端参数保留为可选，不传即不限）
 export interface DeclarationListQuery {
   keyword: string;
-  account: string;
   supplierId: string;
   status: ReviewFilter;
   page: number;

@@ -5,6 +5,7 @@ export const paths = {
   pl: "/pl-reconciliation",
   review: "/review",
   tasks: "/tasks",
+  taskBoard: "/tasks/board",
   supplierGroups: "/suppliers",
   externalGroups: "/suppliers/external-groups",
   invoices: "/invoices",
@@ -14,6 +15,7 @@ export const paths = {
   syncLemon: "/sync/lemon",
   syncBatches: "/sync/batches",
   writeback: "/writeback",
+  uiKit: "/ui-kit",
 } as const;
 
 // 旧地址，路由中重定向到新地址；保留一个版本后删除。
@@ -31,11 +33,9 @@ function withQuery(path: string, filters: Record<string, string>) {
   const query = new URLSearchParams(Object.entries(filters).filter(([, value]) => value));
   return query.size ? `${path}?${query}` : path;
 }
-export const reviewListPath = (filters: { status?: string; account?: string }) =>
-  withQuery(paths.review, filters);
+export const reviewListPath = (filters: { status?: string }) => withQuery(paths.review, filters);
 export const taskListPath = (filters: {
   stage?: string;
-  account?: string;
   supplierId?: string;
   createdFrom?: string;
   createdTo?: string;
@@ -54,8 +54,10 @@ export type View =
   | "pl"
   | "finance"
   | "invoice-followup"
+  | "task-board"
   | "writeback"
-  | "supplier-profiles";
+  | "supplier-profiles"
+  | "ui-kit";
 
 const viewPaths: Record<View, string> = {
   workbench: paths.workbench,
@@ -65,8 +67,10 @@ const viewPaths: Record<View, string> = {
   pl: paths.pl,
   finance: paths.review,
   "invoice-followup": paths.tasks,
+  "task-board": paths.taskBoard,
   writeback: paths.writeback,
   "supplier-profiles": paths.supplierGroups,
+  "ui-kit": paths.uiKit,
 };
 
 export function viewPath(view: View): string {

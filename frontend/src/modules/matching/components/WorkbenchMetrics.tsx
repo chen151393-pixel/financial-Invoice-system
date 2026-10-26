@@ -25,7 +25,6 @@ export function WorkbenchMetrics({
   query: WorkbenchQuery;
 }) {
   const scope = {
-    account: query.account,
     supplierId: query.supplierId,
     createdFrom: query.createdFrom,
     createdTo: query.createdTo,
@@ -38,7 +37,7 @@ export function WorkbenchMetrics({
           className="wb-flow__card"
           to={
             stage.key === "pending_review"
-              ? reviewListPath({ status: "pending", account: query.account })
+              ? reviewListPath({ status: "pending" })
               : taskListPath({ ...scope, stage: stage.key })
           }
         >
