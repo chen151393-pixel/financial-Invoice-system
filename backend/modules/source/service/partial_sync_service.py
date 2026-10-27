@@ -5,13 +5,11 @@
 """
 
 import logging
-from contextlib import ExitStack
 
 from sqlalchemy.exc import SQLAlchemyError
 
 from backend.core import write_lock
 from backend.core.errors import ApiError
-from backend.integrations.netsuite import request_stats
 from backend.integrations.netsuite.read_batch import quiet_progress
 
 from ..mapper.group_bundle import split_groups
@@ -41,11 +39,9 @@ class PartialSyncService:
         lock = sync_lock_name(storage.engine, account)
         report = progress or quiet_progress
         report("等待当前账户保存锁")
-        # 保留同一账户整个读取期间的互斥，组间只结束数据库事务，不释放账本锁。
+        # 整页读取期间只持账户锁，保持同一账户互斥；每组提交时由 commit() 短暂取得账本锁。
         try:
-            with ExitStack() as stack:
-                with request_stats.phase("lock_wait"):
-                    connection = stack.enter_context(write_lock.locked(storage.engine, lock))
+            with write_lock.locked(storage.engine, lock, ledger=False) as connection:
                 page = read_page()
                 result = PartialResult(page)
                 context = (connection, kind, config, account, lock, report, result)

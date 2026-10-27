@@ -502,3 +502,39 @@ def test_currency_unresolved_without_parent_order(ns, engine):
     save(ns, engine, bundle([(order_id, head, lines)], [customs()]))
     order = rows(engine, "SELECT * FROM source_purchase_orders")[0]
     assert order["parent_relation_status"] == "no_parent" and "合同" in order["currency_issue"]
+
+
+def test_ns_read_holds_only_account_lock_and_ledger_only_while_writing(ns, engine, monkeypatch):
+    """读取 NS 期间不得持有全局账本锁；账本锁只在提交写库时短暂持有。"""
+    from backend.core import named_lock, write_lock
+
+    ledger = write_lock.ledger_name(engine)
+    held, events = set(), []
+    acquire, release = named_lock.acquire, named_lock.release
+
+    def tracked_acquire(connection, name, timeout=0):
+        held.add(name)
+        events.append(("acquire", name == ledger, timeout))
+        return acquire(connection, name, timeout)
+
+    def tracked_release(connection, name):
+        held.discard(name)
+        events.append(("release", name == ledger, None))
+        release(connection, name)
+
+    monkeypatch.setattr(named_lock, "acquire", tracked_acquire)
+    monkeypatch.setattr(named_lock, "release", tracked_release)
+    data = bundle([purchase()], [customs()])
+
+    def collect():
+        assert ledger not in held and len(held) == 1, "读取 NS 时只能持账户锁"
+        return deepcopy(data)
+
+    StorageService(ns, engine, create_events()).save(collect, read_relations=False)
+    assert events == [
+        ("acquire", False, 0),
+        ("acquire", True, 60),
+        ("release", True, None),
+        ("release", False, None),
+    ]
+    assert not held and declaration(engine)["relation_status"] == "complete"

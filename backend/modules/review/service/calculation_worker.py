@@ -6,7 +6,8 @@ from threading import Event, Thread
 
 from sqlalchemy.exc import SQLAlchemyError
 
-from backend.core import named_lock
+from backend.core import named_lock, write_lock
+from backend.core.errors import ApiError
 
 logger = logging.getLogger(__name__)
 
@@ -54,9 +55,14 @@ class CalculationWorker:
                         break
                     try:
                         self.calculations.calculate(job)
-                    except Exception:
-                        logger.exception("财务计算失败，将自动重试，账套 %s", job["ns_account"])
-                        self.calculations.fail(job)
+                    except Exception as error:
+                        if isinstance(error, ApiError) and error.code == write_lock.BUSY_CODE:
+                            # 账本被其他写入短暂占用不是计算错误：不记失败，几秒后重算。
+                            logger.warning("账本正忙，财务计算稍后自动重试，账套 %s", job["ns_account"])
+                            self.calculations.defer(job)
+                        else:
+                            logger.exception("财务计算失败，将自动重试，账套 %s", job["ns_account"])
+                            self.calculations.fail(job)
             finally:
                 try:
                     with connection.begin():

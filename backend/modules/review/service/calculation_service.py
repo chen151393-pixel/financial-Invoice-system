@@ -9,6 +9,8 @@ from ..dao import declaration_snapshot_dao as snapshots
 from ..mapper.snapshot_mapper import snapshot_rows
 from ..policy.calculation_policy import calculation_key
 
+BUSY_RETRY_SECONDS = 5
+
 
 def now_utc():
     return datetime.now(UTC).replace(tzinfo=None)
@@ -90,10 +92,18 @@ class CalculationService:
                 suppliers.extend(options)
         return rows, suppliers
 
+    def defer(self, job):
+        """账本锁暂被其他写入占用：短暂推迟后重算，不标记失败。"""
+        now = now_utc()
+        # 只更新本模块单行队列记录，不与其他模块写入交叉加锁，因此不取账本锁，保证推迟一定能记下。
+        with self.engine.begin() as connection:
+            jobs.defer(connection, job, now + timedelta(seconds=BUSY_RETRY_SECONDS), now)
+
     def fail(self, job):
         now = now_utc()
         delay = min(300, 2 ** min(job["attempts"] + 1, 8))
-        with transaction(self.engine) as connection:
+        # 同 defer：不取账本锁，账本被长期占用时也能记下退避，避免后台线程每两秒重算一次。
+        with self.engine.begin() as connection:
             # 刚发现的新账套可能在 calculate 中设置了版本，失败状态也须使用该版本。
             job = {**job, "calculation_key": job["calculation_key"] or self.key}
             jobs.fail(

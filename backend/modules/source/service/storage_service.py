@@ -1,4 +1,7 @@
-"""NS 来源保存：账户锁覆盖"读取 NS → 保存"全过程，数据库写入在一个短事务内完成，不写 NS。"""
+"""NS 来源保存：账户锁覆盖"读取 NS → 保存"全过程，数据库写入在一个短事务内完成，不写 NS。
+
+读取 NS 期间只持账户锁；提交前才短暂取得全局账本锁，避免长时间读取阻塞财务计算、发票入库等写入。
+"""
 
 from contextlib import ExitStack
 from datetime import datetime, timezone
@@ -41,6 +44,8 @@ from .relation_reader import RelationReader
 from .sales_order_reader import read_sales_orders
 
 SYNC_KINDS = ("sub-purchase-orders", "customs-declarations")
+# 提交时等待账本锁的秒数：此前读取 NS 可能已耗时数分钟，其他持锁写入都是短事务，等待放宽以免白读。
+COMMIT_LEDGER_TIMEOUT = 60
 
 
 class StorageService:
@@ -93,12 +98,10 @@ class StorageService:
         account = self.account()
         lock = sync_lock_name(self.engine, account)
         try:
-            with ExitStack() as stack:
-                # 账本锁最多等待 10 秒；计入批次耗时，便于区分锁等待与 NS 读取。
-                with request_stats.phase("lock_wait"):
-                    connection = stack.enter_context(write_lock.locked(self.engine))
-                    with connection.begin():
-                        acquired = named_lock.acquire(connection, lock)
+            with self.engine.connect() as connection:
+                # 账户锁不等待；账本锁在 commit() 写库前才取得。
+                with connection.begin():
+                    acquired = named_lock.acquire(connection, lock)
                 if not acquired:
                     raise ApiError(409, "当前账户已有采购报关保存操作，请完成后再试")
                 try:
@@ -145,17 +148,22 @@ class StorageService:
         return bundle
 
     def commit(self, connection, bundle, config, account, lock, report):
-        """校验并在一个短事务内写入已读取的数据包；调用方须持有账户锁。"""
+        """校验并在一个短事务内写入已读取的数据包；调用方须持有账户锁，账本锁仅在写库期间持有。"""
         now = datetime.now(timezone.utc).replace(tzinfo=None)
         report("校验完整来源数据")
         documents = map_bundle(bundle, config, now)
         bundle["warnings"].extend(missing_field_warnings(bundle, config))
         bundle["warnings"].extend(unit_price_warnings(documents, config))
-        report("保存到本地数据库，等待整批提交")
-        with request_stats.phase("db_write"), connection.begin():
-            if not named_lock.owns(connection, lock):
-                raise ApiError(409, "同步连接已失去占用，未保存，请重新读取")
-            counts = self._write(connection, account, bundle, documents, now)
+        report("等待账本锁")
+        with ExitStack() as stack:
+            # 计入批次耗时，便于区分锁等待、NS 读取与写库。
+            with request_stats.phase("lock_wait"):
+                stack.enter_context(write_lock.hold_ledger(connection, COMMIT_LEDGER_TIMEOUT))
+            report("保存到本地数据库，等待整批提交")
+            with request_stats.phase("db_write"), connection.begin():
+                if not named_lock.owns(connection, lock):
+                    raise ApiError(409, "同步连接已失去占用，未保存，请重新读取")
+                counts = self._write(connection, account, bundle, documents, now)
         return storage_result(bundle, counts)
 
     def _write(self, connection, account, bundle, documents, now):

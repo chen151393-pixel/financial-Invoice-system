@@ -82,6 +82,19 @@ def complete(connection, job, now):
     )
 
 
+def defer(connection, job, retry_at, now):
+    """账本暂忙：只推迟重试时间，不计失败次数、不写失败原因。"""
+    connection.execute(
+        update(jobs)
+        .where(
+            jobs.c.ns_account == job["ns_account"],
+            jobs.c.requested_revision == job["requested_revision"],
+            jobs.c.completed_revision < job["requested_revision"],
+        )
+        .values(retry_at=retry_at, updated_at=now)
+    )
+
+
 def fail(connection, job, message, retry_at, now):
     connection.execute(
         update(jobs)

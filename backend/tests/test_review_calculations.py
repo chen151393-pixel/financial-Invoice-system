@@ -231,3 +231,31 @@ def test_failed_publication_rolls_back_snapshot_and_generation(review, ns, engin
         calculations.calculate(calculations.pending()[0])
     assert rows(engine, "SELECT payload FROM review_declaration_snapshots") == original
     assert calculations.pending()
+
+
+def test_busy_ledger_defers_without_failure_or_rebuild(review, ns, engine, monkeypatch):
+    """账本被同步等写入占用时只推迟重算：不记失败、不显示失败、不在两秒循环里反复整账套重算。"""
+    from backend.core import named_lock, write_lock
+
+    seed(ns, engine)
+    calculations = CalculationService(review)
+    built = []
+    ledger = write_lock.ledger_name(engine)
+    acquire = named_lock.acquire
+
+    def busy(connection, name, timeout=0):
+        return False if name == ledger else acquire(connection, name, timeout)
+
+    with monkeypatch.context() as patch:
+        patch.setattr(named_lock, "acquire", busy)
+        patch.setattr(calculations, "build", lambda account: built.append(account))
+        CalculationWorker(calculations).run_once()
+    job = rows(engine, "SELECT attempts, last_error, retry_at FROM review_calculation_jobs")[0]
+    assert built == [] and job["attempts"] == 0 and job["last_error"] == ""
+    assert job["retry_at"] is not None and calculations.pending() == []
+    notices = " ".join(review.browse(query()).notices)
+    assert "后台计算中" in notices and "计算失败" not in notices
+    with engine.begin() as connection:
+        connection.execute(text("UPDATE review_calculation_jobs SET retry_at=NULL"))
+    CalculationWorker(calculations).run_once()
+    assert review.browse(query()).groups[0].calculationStatus == "ready"
