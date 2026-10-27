@@ -198,6 +198,24 @@ docker compose exec app sh -c 'cd /mnt/invoice-contracts && echo t > .probe && l
 | 写入报 `不允许的操作` | 共享盘未挂载，挂载点仍处于锁定状态 |
 | 页面提示“共享盘保存失败” | 依次检查隧道、`findmnt`、容器内写入；任务不会推进，修复后可重试 |
 
+## 构建时 Python 依赖下载超时
+
+若日志在 `pip install` 阶段出现 `HTTPSConnectionPool(host='files.pythonhosted.org', port=443): Read timed out`，表示从 Python 包文件服务器读取数据超时；日志中的 pip 新版本提示不是此次失败原因。Dockerfile 默认使用官方 PyPI，并将网络读取超时设为 120 秒、连接尝试次数设为 10；这是构建参数，不依赖容器运行时 `.env`。
+
+先重试 `docker compose build app`。若服务器访问官方源仍不稳定，可单次指定[清华 PyPI 镜像](https://mirrors.tuna.tsinghua.edu.cn/help/pypi/)重新构建：
+
+```bash
+docker compose build \
+  --build-arg PIP_INDEX_URL=https://pypi.tuna.tsinghua.edu.cn/simple \
+  --build-arg PIP_DEFAULT_TIMEOUT=120 \
+  --build-arg PIP_RETRIES=10 \
+  app
+```
+
+无需添加 `--no-cache`；保留成功构建的前序层即可。下载源切换不改变 `backend/requirements.txt` 中锁定的版本，不关闭 HTTPS 校验。连接重试不保证恢复所有下载中断；若仍失败，应保留失败前的包名、URL 与完整错误，继续检查服务器网络。若镜像提示指定版本不存在，应核对镜像同步情况或恢复官方源，不直接修改依赖版本。
+
+构建成功后再执行下文的数据库迁移与重启步骤；本次参数调整本身不升级数据库。参数含义见 [pip 官方文档](https://pip.pypa.io/en/stable/cli/pip/#general-options)。
+
 ## 首次启动
 
 先检查 Compose 配置并构建镜像。下列 `upgrade` 在业务 MySQL 中先升级两条旧迁移链，再升级新表结构迁移链（版本表 `schema_version`），不能代替空库初始化。已有库先备份并核对目标连接；旧 SQLite 历史记录为测试数据，不迁移。

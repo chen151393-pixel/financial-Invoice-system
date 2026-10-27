@@ -14,7 +14,13 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1
 
 COPY backend/requirements.txt /tmp/requirements.txt
-RUN pip install --no-cache-dir -r /tmp/requirements.txt
+# 构建服务器可按网络情况指定下载源；保持锁定版本与 HTTPS 校验。
+ARG PIP_INDEX_URL=https://pypi.org/simple
+ARG PIP_DEFAULT_TIMEOUT=120
+ARG PIP_RETRIES=10
+RUN python -m pip install --no-cache-dir --disable-pip-version-check \
+    --index-url "$PIP_INDEX_URL" --timeout "$PIP_DEFAULT_TIMEOUT" --retries "$PIP_RETRIES" \
+    -r /tmp/requirements.txt
 COPY backend ./backend
 COPY --from=frontend /src/frontend/dist ./frontend/dist
 
