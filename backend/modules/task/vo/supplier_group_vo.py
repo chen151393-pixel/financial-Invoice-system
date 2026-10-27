@@ -69,6 +69,8 @@ class SupplierProfileList(StrictModel):
     pageSize: int
     pages: int
     manage: Capability
+    # 档案概况（不受关键字与状态筛选影响）：all 全部、bound 已绑定开票群、unbound 未绑定、notifyOff 已关闭通知
+    counts: dict[str, int]
 
 
 class WecomGroupItem(GroupItem):

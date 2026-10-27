@@ -1,8 +1,6 @@
-import { Link } from "react-router";
 import { InvoiceListPage } from "../modules/invoice/pages/InvoiceListPage";
 import { AppFrame } from "./WorkspaceFrame";
 import { navigation } from "./navigation";
-import { paths } from "./paths";
 import { useViewNavigate } from "./useViewNavigate";
 
 export default function InvoiceWorkspacePage() {
@@ -13,11 +11,8 @@ export default function InvoiceWorkspacePage() {
       activeId="invoices"
       onNavigate={navigateView}
       title="进项发票"
-      actions={
-        <Link className="ui-button ui-button--primary" to={paths.syncLemon}>
-          导入发票
-        </Link>
-      }
+      description="柠檬云拉取与 Excel 导入的发票，按票面状态与匹配进度管理"
+      meta={[{ label: "数据来源", value: "柠檬云账套 · Excel 导入" }]}
     >
       <InvoiceListPage />
     </AppFrame>

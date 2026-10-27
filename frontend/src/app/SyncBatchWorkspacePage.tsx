@@ -13,6 +13,7 @@ export default function SyncBatchWorkspacePage() {
       activeId="sync"
       onNavigate={navigate}
       title="同步批次详情"
+      description="单次同步批次的范围、各账套结果与失败原因"
       breadcrumb={<Link to={paths.sync}>数据同步</Link>}
     >
       <SyncBatchDetailPage />

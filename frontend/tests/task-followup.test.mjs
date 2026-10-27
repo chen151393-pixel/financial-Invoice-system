@@ -72,7 +72,7 @@ const task = {
   waitingLabel: "已等待 18 天",
 };
 
-test("采购任务行默认展开流程，展示下一步、阻塞原因、零金额进度及操作入口", () => {
+test("任务卡片默认展开流程，展示阻塞原因、零金额进度；只有跟进详情入口，不放节点按钮和下一步说明", () => {
   const html = renderToStaticMarkup(
     createElement(
       Router,
@@ -93,9 +93,11 @@ test("采购任务行默认展开流程，展示下一步、阻塞原因、零�
     assert.ok(html.includes(value), value);
   assert.match(html, /aria-expanded="true"/);
   assert.match(html, /aria-controls="[^"]+"/);
-  assert.match(html, /href="\/tasks\/1#task-documents"/);
+  // 「跟进详情」直接进入任务当前节点，不再带分区锚点，也不放「查看合同」等节点按钮
   assert.match(html, /href="\/tasks\/1"/);
+  assert.doesNotMatch(html, /#task-|查看合同|去通知供应商/);
+  assert.ok(html.indexOf("收起流程") < html.lastIndexOf("跟进详情"), "跟进详情在最右");
   assert.match(html, /ui-stepper/);
-  assert.match(html, /重新审核后继续/);
+  assert.doesNotMatch(html, /重新审核后继续|下一步/);
   assert.doesNotMatch(html, /class="ui-card /);
 });

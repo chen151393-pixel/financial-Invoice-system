@@ -24,13 +24,14 @@ import { Card, CardHeader, CardContent, MetricCard, MetricGrid, Badge } from "..
 | `SectionTitle`                                       | 页面分区标题（左侧主色竖条） | 可带数量 `count` 与右侧 `actions`                                                                                                            |
 | `Card` / `CardHeader` / `CardContent` / `CardFooter` | 内容面板                     | 按头、内容、底部组合；`CardContent flush` 用于表格贴边                                                                                       |
 | `MetricCard` / `MetricGrid`                          | 指标卡与栅格                 | `featured` 主色主指标（一屏最多一个）；`delta.tone` 由调用方按业务含义指定；`onSelect`+`selected` 时作为筛选按钮；可带 `sparkline`、`footer` |
+| `StatCard` / `StatGrid`                              | 概况卡与栅格                 | 一个字的图块 + 标签 + 数值 + 说明；`tone`：neutral / warning（积压提醒）/ primary（合计）；`compact` 一行排开多张；`onSelect`+`selected` 作筛选；`StatGrid min` 设最小列宽 |
 | `Badge`                                              | 状态徽标                     | `tone`：warning 待处理、info 等外部、progress 部分完成、success 已完成、danger 失败/阻塞、neutral 已替代                                     |
 | `StageTabs`                                          | 流程分区条                   | 按流程顺序横排各阶段（数量 + 说明），阶段间箭头连接，左侧可放合计；`terminal` 终态不画箭头；窄屏换行为多列                                   |
 | `Tabs`                                               | 下划线标签                   | 同一区域的状态筛选或视图切换（全部 / 待审核 / 审核通过），可带计数；放在卡片顶部时由页面去掉自身底线                                         |
 | `Segmented`                                          | 2–7 个互斥选项               | 如近 7 天 / 近 30 天、节点切换，可带计数                                                                                                     |
 | `Progress`                                           | 进度条                       | `width` 为后端 0–100 展示宽度，`text` 为后端实际值文本                                                                                       |
 | `Stepper`                                            | 流程节点                     | 状态由后端判定；`compact` 用于列表行内；传 `onSelect`+`selectedKey` 时节点可点击（详情页切换分区）；读屏附带“已完成/当前节点/未开始”         |
-| `FilterBar` / `Field`                                | 查询条件栏                   | 标签在上；`pending` 提示条件已改未提交；`Field grow` 用于关键字                                                                              |
+| `FilterBar` / `Field`                                | 查询条件栏                   | 标签在上；`pending` 提示条件已改未提交；`Field grow` 用于关键字；`embedded` 放在列表卡片标题下方，去掉自身边框                              |
 | `DataTable`                                          | 数据表                       | 列定义 `align: "right"` 用于金额数量；宽表容器内横向滚动；不在前端排序汇总                                                                   |
 | `EmptyState` / `ErrorState` / `Skeleton` / `Alert`   | 请求状态与提示               | 空结果、失败、加载、就近提示各用其一，不混用                                                                                                 |
 | `TrendChart`                                         | 趋势图                       | 堆叠柱 `bars` + 折线 `line`；悬停提示；附读屏数据表；不用于含负数序列                                                                        |
@@ -43,9 +44,11 @@ import { Card, CardHeader, CardContent, MetricCard, MetricGrid, Badge } from "..
 
 设计变量新增：`--color-primary-soft`、`--color-primary-strong`、`--shadow-card`、`--color-chart-1`…`5`、`--color-chart-line`、`--color-chart-grid`（`tokens.css`）。配色收在主蓝与侧栏海军蓝一个色系内（2026-10-26 调整）：图表系列用主蓝、浅蓝、淡蓝、蓝灰的深浅区分，折线用海军蓝；主指标卡为浅主色底；流程当前节点用主色描边。大面积不使用橙、绿、紫等跳色，语义色只用于状态徽标、提示框等小面积。
 
-## 页面使用情况（2026-10-26）
+## 页面使用情况（2026-10-27）
 
-已从组件库组合：采购开票任务台、开票跟进列表、任务详情概览、财务核对（查询栏、状态标签、紧凑来源对照表）、比对审核队列、进项发票、供应商档案、发票工作台（待办标签）、NS 回写列表（筛选与状态标签）。外部群导入、数据同步、采购报关联查、发票比对详情仍为原页面样式，修改时迁移。
+页面外壳（`AppFrame`）为固定格式白色页头：面包屑、标题、一句说明 `description`，右侧只放只读信息 `meta`（如数据来源）；业务按钮一律放在页面内容里。
+
+已从组件库组合：开票跟进（`StatCard compact` 节点卡、列表卡片内嵌 `FilterBar embedded`、任务卡片）、任务详情（概览 + 当前节点卡片 + 应开明细 + 右侧资料与记录）、财务核对（`StatCard` 概况、列表卡片 + `Segmented` 状态切换 + 内嵌查询栏、紧凑来源对照表）、进项发票（指标卡、`TrendChart`/`DonutChart`/`Progress` 分布图、列表卡片）、比对审核队列、供应商档案、总体工作台（待办标签）、NS 回写列表。外部群导入、数据同步、采购报关联查、发票比对详情仍为原页面样式，修改时迁移。
 
 ## 紧凑表格与行底色
 
@@ -53,7 +56,7 @@ import { Card, CardHeader, CardContent, MetricCard, MetricGrid, Badge } from "..
 
 ## 首个使用者
 
-开票跟进 `/tasks`（原采购开票任务台，`frontend/src/modules/task/pages/TaskBoardPage.tsx`）：`FilterBar`、`SectionTitle`、`StageTabs`（节点分区）、`Card`+`CardContent`（合并任务面板）、`Badge`+`Stepper`+`Progress`+`Alert`（每个任务的状态与默认展开流程）、`Skeleton`/`EmptyState`/`ErrorState`、`Pagination`。旧 `/tasks/board` 重定向到 `/tasks`。
+开票跟进 `/tasks`（原采购开票任务台，`frontend/src/modules/task/pages/TaskBoardPage.tsx`）：`StatCard`（节点卡，2026-10-27 起替代 `StageTabs`）、`Card`+`CardHeader`+`FilterBar embedded`（列表卡片）、`Badge`+`Stepper`+`Progress`+`Alert`（每个任务的状态与默认展开流程）、`Skeleton`/`EmptyState`/`ErrorState`、`Pagination`。旧 `/tasks/board` 重定向到 `/tasks`。
 
 ## 验证
 

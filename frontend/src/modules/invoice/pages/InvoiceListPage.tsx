@@ -5,9 +5,9 @@ import {
   Alert,
   Card,
   CardFooter,
+  CardHeader,
   EmptyState,
   Pagination,
-  SectionTitle,
   Skeleton,
 } from "../../../shared/components/ui";
 import { openLocalSession } from "../../identity/api";
@@ -17,15 +17,16 @@ import {
   type InvoiceTotals,
   type MatchingSummary,
 } from "../../matching/api";
-import { getInvoice, listInvoices } from "../api/invoice";
+import { getInvoice, getInvoiceStats, listInvoices } from "../api/invoice";
 import { emptyFilters, InvoiceFilters } from "../components/InvoiceFilters";
+import { InvoiceCharts } from "../components/InvoiceCharts";
 import { InvoiceDetailDrawer } from "../components/InvoiceDetailDrawer";
 import { InvoiceSummary } from "../components/InvoiceSummary";
 import { InvoiceTable } from "../components/InvoiceTable";
 import { InvoiceDetailRefresh } from "../components/InvoiceDetailRefresh";
 import { useDetailRefresh } from "../hooks/useDetailRefresh";
 import { useInvoiceAccounts } from "../hooks/useInvoiceAccounts";
-import type { InvoiceDetail, InvoiceListResult } from "../types/invoice";
+import type { InvoiceDetail, InvoiceListResult, InvoiceStats } from "../types/invoice";
 import "./invoice-list.css";
 
 type Query = typeof emptyFilters & { page: number; pageSize: number; version: number };
@@ -42,6 +43,8 @@ export function InvoiceListPage() {
   const [totals, setTotals] = useState<InvoiceTotals | null>(null);
   const [totalsLoading, setTotalsLoading] = useState(true);
   const [totalsError, setTotalsError] = useState("");
+  const [stats, setStats] = useState<InvoiceStats | null>(null);
+  const [statsError, setStatsError] = useState("");
   const [selected, setSelected] = useState<string | null>(null);
   const [detail, setDetail] = useState<InvoiceDetail | null>(null);
   const [detailError, setDetailError] = useState("");
@@ -57,6 +60,8 @@ export function InvoiceListPage() {
     setTotals(null);
     setTotalsLoading(true);
     setTotalsError("");
+    setStats(null);
+    setStatsError("");
     setQuery(next);
   }
   const refresh = () => updateQuery({ ...query, version: query.version + 1 });
@@ -94,6 +99,15 @@ export function InvoiceListPage() {
         if (active) setTotalsLoading(false);
       }
     }
+    // 分布图与列表同一筛选条件（不含分页）
+    async function loadStats(filters: URLSearchParams) {
+      try {
+        const response = await getInvoiceStats(filters);
+        if (active) setStats(response);
+      } catch (reason) {
+        if (active) setStatsError(reason instanceof Error ? reason.message : "发票分布读取失败");
+      }
+    }
     async function load() {
       let totalsStarted = false;
       try {
@@ -101,9 +115,13 @@ export function InvoiceListPage() {
         if (!active) return;
         totalsStarted = true;
         void loadTotals();
-        const params = new URLSearchParams({ page: String(query.page), page_size: String(query.pageSize) });
+        const filters = new URLSearchParams();
         for (const key of ["q", "account", "status", "date_from", "date_to"] as const)
-          if (query[key]) params.set(key, query[key]);
+          if (query[key]) filters.set(key, query[key]);
+        void loadStats(filters);
+        const params = new URLSearchParams(filters);
+        params.set("page", String(query.page));
+        params.set("page_size", String(query.pageSize));
         const response = await listInvoices(params);
         if (!active) return;
         setData(response);
@@ -152,27 +170,32 @@ export function InvoiceListPage() {
   return (
     <div className="invoice-list">
       <InvoiceSummary data={totals} loading={totalsLoading} error={totalsError} />
-      <InvoiceFilters
-        draft={draft}
-        applied={query}
-        accounts={accounts}
-        loading={loading}
-        onChange={setDraft}
-        onSubmit={() =>
-          changeQuery({ ...draft, page: 1, pageSize: query.pageSize, version: query.version + 1 })
-        }
-        onReset={() => {
-          setDraft(emptyFilters);
-          changeQuery({ ...emptyFilters, page: 1, pageSize: query.pageSize, version: query.version + 1 });
-        }}
-        onRefresh={() => changeQuery({ ...query, version: query.version + 1 })}
-      />
-      <SectionTitle
-        id="invoice-list-title"
-        title="发票列表"
-        count={data ? `共 ${data.total} 张` : undefined}
+      <InvoiceCharts
+        data={stats}
+        loading={!stats && !statsError}
+        error={statsError}
+        accounts={accounts.items}
       />
       <Card className="invoice-list__panel" aria-labelledby="invoice-list-title">
+        <CardHeader
+          title={<span id="invoice-list-title">发票列表</span>}
+          description={data ? `共 ${data.total} 张` : undefined}
+        />
+        <InvoiceFilters
+          draft={draft}
+          applied={query}
+          accounts={accounts}
+          loading={loading}
+          onChange={setDraft}
+          onSubmit={() =>
+            changeQuery({ ...draft, page: 1, pageSize: query.pageSize, version: query.version + 1 })
+          }
+          onReset={() => {
+            setDraft(emptyFilters);
+            changeQuery({ ...emptyFilters, page: 1, pageSize: query.pageSize, version: query.version + 1 });
+          }}
+          onRefresh={() => changeQuery({ ...query, version: query.version + 1 })}
+        />
         <InvoiceDetailRefresh state={detailRefresh} />
         {error && <Alert tone="danger">{error}，可点击“刷新数据”重试。</Alert>}
         {matchingError && <Alert tone="danger">{matchingError}，请点击“刷新数据”重试。</Alert>}

@@ -1,6 +1,6 @@
 .invoice-list {
   display: grid;
-  gap: 16px;
+  gap: 20px;
   min-width: 0;
 }
 /* 汇总指标与列表面板的外观来自组件库（MetricCard、Card），这里只做排布 */
@@ -10,6 +10,35 @@
 }
 .invoice-list__panel {
   overflow: hidden;
+}
+.invoice-list__panel > .ui-card__header {
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--color-border);
+}
+/* 分布图：按月、票面状态、账套三张卡片一行，窄屏换行 */
+.invoice-charts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(300px, 100%), 1fr));
+  gap: 16px;
+}
+.invoice-charts__accounts {
+  display: grid;
+  gap: 14px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.invoice-charts__accounts li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 6px 12px;
+  font-size: 13px;
+}
+.invoice-charts__accounts li > span {
+  overflow-wrap: anywhere;
+}
+.invoice-charts__accounts .ui-progress {
+  grid-column: 1 / -1;
 }
 .invoice-list__panel > .ui-alert {
   margin: 12px 16px 0;

@@ -16,70 +16,72 @@ function MenuIcon({ path }: { path: string }) {
   );
 }
 
-// 所有页面共用的导航，不携带模拟业务计数。
+// 所有页面共用的导航，按岗位分组（财务 / 采购 / 系统），不携带模拟业务计数。
 export const navigation: readonly SidebarGroup<View>[] = [
   {
     label: "工作空间",
     items: [
       {
         id: "workbench",
-        label: "发票工作台",
-        icon: <MenuIcon path="M3 3h7v7H3z M14 3h7v7h-7z M3 14h7v7H3z M14 14h7v7h-7z" />,
+        label: "总体工作台",
+        icon: <MenuIcon path="M4 4h7v7H4z M13 4h7v7h-7z M4 13h7v7H4z M13 13h7v7h-7z" />,
       },
     ],
   },
   {
-    label: "发票管理",
+    label: "财务",
     items: [
       {
-        id: "invoices",
-        label: "进项发票",
-        icon: <MenuIcon path="M5 3h14v18l-3-2-4 2-4-2-3 2z M8 8h8 M8 12h8" />,
+        id: "finance",
+        label: "财务核对",
+        icon: <MenuIcon path="M9 11l3 3 8-8 M20 12v7a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1h11" />,
       },
       {
         id: "match",
         label: "发票比对",
-        icon: <MenuIcon path="M3 6h5l8 12h5 M17 14l4 4-4 4 M3 18h5l3-4 M14 10l2-4h5 M17 2l4 4-4 4" />,
+        icon: <MenuIcon path="M4 7h13l-3-3 M20 17H7l3 3" />,
+      },
+      {
+        id: "invoices",
+        label: "进项发票",
+        icon: <MenuIcon path="M6 3h12v18l-3-2-3 2-3-2-3 2z M9 8h6 M9 12h6" />,
       },
     ],
   },
   {
-    label: "集成与控制",
+    label: "采购",
     items: [
-      {
-        id: "sync",
-        label: "数据同步",
-        icon: <MenuIcon path="M20 10a8 8 0 0 0-14-4L3 9 M3 3v6h6 M4 14a8 8 0 0 0 14 4l3-3 M15 15h6v6" />,
-      },
-      {
-        id: "finance",
-        label: "财务核对",
-        icon: <MenuIcon path="M5 12l4 4L19 6" />,
-      },
       {
         id: "invoice-followup",
         label: "开票跟进",
-        icon: <MenuIcon path="M5 3h14v18H5z M8 8h8 M8 12h8 M8 16h5" />,
+        icon: <MenuIcon path="M4 4h4v16H4z M10 4h4v10h-4z M16 4h4v7h-4z" />,
+      },
+      {
+        id: "supplier-profiles",
+        label: "供应商档案",
+        icon: <MenuIcon path="M4 21V4h11v17 M15 9h5v12 M7 8h4 M7 12h4 M7 16h4 M2 21h20" />,
       },
       {
         id: "pl",
         label: "采购报关联查",
         icon: <MenuIcon path="M3 4h18v16H3z M3 9h18 M3 14h18 M9 4v16" />,
       },
+    ],
+  },
+  {
+    label: "系统",
+    items: [
+      {
+        id: "sync",
+        label: "数据同步",
+        icon: (
+          <MenuIcon path="M20 11a8 8 0 0 0-14.6-4.5L3 9 M3 3v6h6 M4 13a8 8 0 0 0 14.6 4.5L21 15 M21 21v-6h-6" />
+        ),
+      },
       {
         id: "writeback",
         label: "NS 回写",
         icon: <MenuIcon path="M4 12h12 M12 6l6 6-6 6 M20 4v16" />,
-      },
-    ],
-  },
-  {
-    label: "基础资料",
-    items: [
-      {
-        id: "supplier-profiles",
-        label: "供应商档案",
-        icon: <MenuIcon path="M4 21V3h12v18 M16 9h4v12 M8 7h4 M8 11h4 M8 15h4 M2 21h20" />,
       },
       {
         id: "ui-kit",

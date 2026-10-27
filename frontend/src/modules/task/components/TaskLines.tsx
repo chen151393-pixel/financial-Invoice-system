@@ -4,14 +4,17 @@ import type { ClosureRequest, TaskLine } from "../types/task";
 export function TaskLines({
   lines,
   busy = false,
+  open = false,
   onClose,
 }: {
   lines: TaskLine[];
   busy?: boolean;
+  // 详情页的「应开明细与收票进度」卡片默认展开
+  open?: boolean;
   onClose?: (lineId: string, body: ClosureRequest) => Promise<boolean>;
 }) {
   return (
-    <details className="it-source-lines">
+    <details className="it-source-lines" open={open}>
       <summary>审核冻结的应开明细（{lines.length} 行）</summary>
       <p className="it-help">
         按子采购行开票：数量、单位和含税金额为财务审核通过时冻结的采购口径；已收值由发票比对结果汇总。

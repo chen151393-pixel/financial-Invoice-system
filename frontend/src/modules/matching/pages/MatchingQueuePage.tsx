@@ -7,7 +7,7 @@ import {
   EmptyState,
   ErrorState,
   Pagination,
-  SectionTitle,
+  CardHeader,
   Skeleton,
   Tabs,
 } from "../../../shared/components/ui";
@@ -98,36 +98,35 @@ export function MatchingQueuePage() {
   const data = state.kind === "ready" ? state.data : null;
   return (
     <div className="matching-page">
-      <QueueFilters
-        value={{
-          anomaly: query.anomaly,
-          supplierId: query.supplierId,
-          invoiceFrom: query.invoiceFrom,
-          invoiceTo: query.invoiceTo,
-        }}
-        suppliers={suppliers}
-        busy={busy || state.kind === "loading"}
-        onApply={(filters) => change(filters)}
-      />
-      <SectionTitle
-        id="matching-queue-title"
-        title="待审核比对建议"
-        count={data ? `共 ${data.total} 条` : undefined}
-        actions={
-          <span className="matching-row">
-            <Button disabled={busy} onClick={() => setUploading(true)}>
-              批量上传发票文件
-            </Button>
-            <Button disabled={busy} onClick={() => setRefresh((value) => value + 1)}>
-              刷新
-            </Button>
-          </span>
-        }
-      />
       {uploading && (
         <InvoiceFileUploadDialog upload={uploadInvoiceFiles} onClose={() => setUploading(false)} />
       )}
       <Card className="matching-queue" aria-labelledby="matching-queue-title">
+        <CardHeader
+          title={<span id="matching-queue-title">待审核比对建议</span>}
+          description={data ? `共 ${data.total} 条` : undefined}
+          actions={
+            <span className="matching-row">
+              <Button disabled={busy} onClick={() => setUploading(true)}>
+                批量上传发票文件
+              </Button>
+              <Button disabled={busy} onClick={() => setRefresh((value) => value + 1)}>
+                刷新
+              </Button>
+            </span>
+          }
+        />
+        <QueueFilters
+          value={{
+            anomaly: query.anomaly,
+            supplierId: query.supplierId,
+            invoiceFrom: query.invoiceFrom,
+            invoiceTo: query.invoiceTo,
+          }}
+          suppliers={suppliers}
+          busy={busy || state.kind === "loading"}
+          onApply={(filters) => change(filters)}
+        />
         <div className="matching-queue__tabs">
           <Tabs
             label="按置信度筛选"

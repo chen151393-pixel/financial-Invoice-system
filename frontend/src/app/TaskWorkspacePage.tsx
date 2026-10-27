@@ -34,13 +34,14 @@ export default function TaskWorkspacePage() {
           <Link to={paths.tasks}>开票跟进</Link>
         ) : undefined
       }
-      actions={
-        // 外部群导入是供应商档案的下级功能，作为本页操作保留；其余跨模块跳转交给侧栏
-        groupsPage && !externalPage ? (
-          <Link className="ui-button ui-button--secondary" to={paths.externalGroups}>
-            外部群导入与关联
-          </Link>
-        ) : undefined
+      description={
+        externalPage
+          ? "导入企业微信外部群名单，并把群关联到供应商"
+          : groupsPage
+            ? "维护供应商的企微开票群与通知开关；关闭通知的供应商审核后不生成开票任务"
+            : taskId
+              ? "按任务当前节点处理合同归档、通知供应商、收票与补资料"
+              : "按任务当前节点跟进合同归档、通知供应商、收票与补资料，等待最久的任务排在最前"
       }
     >
       {externalPage ? (

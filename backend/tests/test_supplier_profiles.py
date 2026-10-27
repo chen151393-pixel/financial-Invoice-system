@@ -98,6 +98,9 @@ def test_bind_filter_account_owner_and_disable(setup):
     enabled = profiles.browse(SupplierProfileQuery(status="enabled", keyword="实时群主", pageSize=1), USER)
     assert enabled.total == 1 and enabled.items[0].binding.chatId == "exact2"
     assert profiles.browse(SupplierProfileQuery(status="unbound"), USER).total == 1
+    # 概况计数不随关键字和状态筛选变化
+    counts = profiles.browse(SupplierProfileQuery(status="unbound", keyword="不存在"), USER).counts
+    assert counts == {"all": 2, "bound": 1, "unbound": 1, "notifyOff": 0}
     assert profiles.browse(SupplierProfileQuery(account="another-account"), USER).total == 0
     assert profiles.browse(SupplierProfileQuery(keyword="%"), USER).total == 0
     assert profiles.browse(SupplierProfileQuery(keyword="77"), USER).items[0].nsInternalId == "77"

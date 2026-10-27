@@ -70,14 +70,6 @@
     padding: 16px;
   }
 }
-.sync-overview__actions {
-  display: flex;
-  gap: 10px;
-  flex-wrap: wrap;
-}
-.sync-overview__actions a {
-  text-decoration: none;
-}
 /* NS 拉取工作区：左侧选择类型，右侧查看本次结果。 */
 .sync-page__workspace {
   display: grid;

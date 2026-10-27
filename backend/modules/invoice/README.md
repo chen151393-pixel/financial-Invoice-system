@@ -23,9 +23,10 @@
 
 | 层 | 文件 | 说明 |
 | --- | --- | --- |
-| controller | `invoice_controller.py` | `GET /api/invoices/import/configuration`、`POST /import/preview`、`POST /import/confirm`、`GET /api/invoices`、`GET /api/invoices/{id}` |
+| controller | `invoice_controller.py` | `GET /api/invoices/import/configuration`、`POST /import/preview`、`POST /import/confirm`、`GET /api/invoices`、`GET /api/invoices/stats`、`GET /api/invoices/{id}` |
 | service | `import_service.py` | 预览凭证（绑定操作者、文件名、文件摘要、预览时票据版本，30 分钟）、命名锁、去重分类、整批保存、发布事件 |
 | | `invoice_service.py` | 列表与详情 |
+| | `invoice_stats_service.py` | 分布统计：最近 6 个月按开票日期计数、票面展示状态（红字按负金额识别，同列表）、柠檬云账套；筛选条件同列表，分页参数不起作用 |
 | | `invoice_reader.py` | 门面读取：`read_invoices`、`lock_invoice`（传入调用方连接） |
 | | `excel_parser.py`、`xlsx_reader.py` | 柠檬云 XLS / XLSX 解析与源数据校验（沿用原实现） |
 | dao | `header_dao.py`、`item_dao.py`、`raw_record_dao.py` | 各表读写 |

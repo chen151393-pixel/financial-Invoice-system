@@ -13,6 +13,7 @@ export { MetricCard, MetricGrid, type MetricDelta } from "./MetricCard";
 export { Progress } from "./Progress";
 export { Segmented } from "./Segmented";
 export { StageTabs, type StageItem } from "./StageTabs";
+export { StatCard, StatGrid, type StatTone } from "./StatCard";
 export { Alert, EmptyState, ErrorState, Skeleton } from "./States";
 export { Stepper, type StepItem } from "./Stepper";
 export { Tabs } from "./Tabs";

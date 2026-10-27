@@ -1,6 +1,6 @@
 """发票票头：去重查询、新增、列表、详情与加锁。"""
 
-from sqlalchemy import func, insert, or_, select
+from sqlalchemy import case, func, insert, or_, select
 
 from ..entity import headers, items, raw_records
 
@@ -86,6 +86,37 @@ def amounts(connection, query):
         .where(*_conditions(query))
         .group_by(headers.c.currency)
         .order_by(headers.c.currency)
+    ).mappings()
+    return [dict(row) for row in result]
+
+
+def status_counts(connection, query):
+    """当前筛选下按 (来源状态, 是否负金额) 计数；红字票按负金额识别，由策略归类。"""
+    negative = case((headers.c.amount_including_tax < 0, True), else_=False).label("negative")
+    result = connection.execute(
+        select(headers.c.status, negative, func.count().label("count"))
+        .where(*_conditions(query))
+        .group_by(headers.c.status, negative)
+    ).mappings()
+    return [dict(row) for row in result]
+
+
+def account_counts(connection, query):
+    result = connection.execute(
+        select(headers.c.lemon_account.label("account"), func.count().label("count"))
+        .where(*_conditions(query))
+        .group_by(headers.c.lemon_account)
+        .order_by(func.count().desc(), headers.c.lemon_account)
+    ).mappings()
+    return [dict(row) for row in result]
+
+
+def date_counts(connection, query):
+    """当前筛选下按开票日期计数（月份在服务层汇总，避免依赖数据库日期函数）。"""
+    result = connection.execute(
+        select(headers.c.invoice_date.label("date"), func.count().label("count"))
+        .where(*_conditions(query), headers.c.invoice_date.is_not(None))
+        .group_by(headers.c.invoice_date)
     ).mappings()
     return [dict(row) for row in result]
 

@@ -29,6 +29,7 @@ export function InvoiceFilters({
   return (
     <>
       <FilterBar
+        embedded
         onSubmit={onSubmit}
         pending={pending ? "筛选条件已修改，请点击“查询”应用；当前结果仍对应上次查询。" : undefined}
         actions={

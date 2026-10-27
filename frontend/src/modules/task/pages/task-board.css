@@ -1,39 +1,67 @@
-/* 采购开票任务台：只做页面排布，外观全部来自统一组件库（shared/components/ui）。 */
+/* 开票跟进：只做页面排布，外观来自统一组件库（shared/components/ui）。 */
 .tb {
   display: grid;
-  gap: 16px;
+  gap: 20px;
   min-width: 0;
   font-size: 13px;
 }
-.tb-order {
-  color: var(--color-muted);
-  font-size: 12px;
+.tb-panel {
+  overflow: hidden;
+}
+.tb-panel > .ui-card__header {
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--color-border);
+}
+.tb-scope {
+  padding: 12px 20px 0;
 }
 .tb-list {
   display: grid;
-}
-.tb-list > .tb-item + .tb-item {
-  border-top: 1px solid var(--color-border);
-}
-.tb-pagination {
-  padding: 4px 0 0;
-  border-top: 0;
+  gap: var(--space-control);
+  padding: 16px 20px;
 }
 
-/* 合并列表内的任务行：摘要常驻，流程按需展开。 */
+/* 任务卡片：摘要常驻，流程按需展开。 */
 .tb-item {
   display: grid;
-  gap: var(--space-control);
+  gap: 14px;
+  padding: 16px 18px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-panel);
+  background: var(--color-surface);
 }
 .tb-item__head {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 200px 320px;
+  grid-template-columns: 40px minmax(0, 1fr) 210px auto;
   align-items: center;
-  gap: var(--space-layout);
+  gap: 12px 20px;
+}
+.tb-item__glyph {
+  display: inline-grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  background: var(--color-primary-soft);
+  color: var(--color-primary-strong);
+  font-size: 15px;
+  font-weight: 700;
+}
+.tb-item__glyph[data-tone="warning"] {
+  background: var(--color-warning-surface);
+  color: var(--color-feedback);
+}
+.tb-item__glyph[data-tone="progress"] {
+  background: var(--color-progress-surface);
+  color: var(--color-progress-text);
+}
+.tb-item__glyph[data-tone="success"] {
+  background: var(--color-success-surface);
+  color: var(--color-success-text);
 }
 .tb-item__summary {
   display: grid;
-  gap: var(--space-small);
+  gap: 4px;
   min-width: 0;
 }
 .tb-item__title {
@@ -46,8 +74,15 @@
 .tb-item__title h3 {
   margin: 0;
   font-size: 15px;
-  font-weight: 650;
+  font-weight: 700;
   overflow-wrap: anywhere;
+}
+.tb-item__title h3 a {
+  color: inherit;
+  text-decoration: none;
+}
+.tb-item__title h3 a:hover {
+  color: var(--color-primary);
 }
 .tb-item__meta {
   display: flex;
@@ -58,60 +93,50 @@
   font-size: 12px;
   overflow-wrap: anywhere;
 }
-.tb-item__aside {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  justify-content: flex-end;
-  gap: var(--space-control);
-}
-.tb-item__aside .ui-button {
-  padding: 6px 12px;
-  font-size: 12px;
-}
-.tb-item__waiting {
-  flex-basis: 100%;
-  text-align: right;
-  color: var(--color-muted);
-  font-size: 12px;
-  white-space: nowrap;
-}
-.tb-item__flow {
-  display: grid;
-  gap: var(--space-layout);
-  padding-top: var(--space-layout);
-  border-top: 1px solid var(--color-border);
-  font-size: 12px;
-}
-.tb-item__next {
-  display: flex;
-  align-items: baseline;
-  gap: var(--space-small);
-  min-width: 0;
-  margin: 0;
-  line-height: 1.6;
-}
-.tb-item__next > span {
-  flex-shrink: 0;
-  padding: 1px 7px;
-  border-radius: 4px;
-  background: var(--color-primary-soft);
-  color: var(--color-primary);
-  font-size: 11px;
-  font-weight: 500;
-}
 .tb-item__money {
   display: grid;
-  gap: var(--space-small);
+  gap: 6px;
   justify-items: end;
   min-width: 0;
   overflow-wrap: anywhere;
   color: var(--color-muted);
+  font-size: 12px;
   font-variant-numeric: tabular-nums;
 }
 .tb-item__money strong {
   color: var(--color-text);
-  font-weight: 650;
+  font-size: 18px;
+  font-weight: 700;
+}
+.tb-item__money .ui-progress {
+  width: 100%;
+}
+/* 右侧：等待天数在上，按钮在下，「跟进详情」固定在最右 */
+.tb-item__aside {
+  display: grid;
+  justify-items: end;
+  gap: var(--space-small);
+}
+.tb-item__waiting {
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: var(--color-inactive-surface);
+  color: var(--color-inactive-text);
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.tb-item__actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-small);
+}
+.tb-item__flow {
+  padding: 14px 16px;
+  border-radius: var(--radius-control);
+  background: #f7f9fc;
+  font-size: 12px;
+  overflow-x: auto;
 }
 .tb-definitions {
   color: var(--color-muted);
@@ -124,27 +149,29 @@
 
 @media (max-width: 1100px) {
   .tb-item__head {
-    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-columns: 40px minmax(0, 1fr) auto;
   }
   .tb-item__aside {
-    grid-column: 1 / -1;
-    justify-content: flex-start;
-  }
-  .tb-item__waiting {
-    flex-basis: auto;
-    margin-right: auto;
+    grid-column: 2 / -1;
+    justify-items: start;
+    grid-auto-flow: column;
+    align-items: center;
+    justify-content: space-between;
   }
 }
 @media (max-width: 760px) {
+  .tb-list {
+    padding: 12px;
+  }
   .tb-item__head {
-    grid-template-columns: minmax(0, 1fr);
-    gap: var(--space-control);
+    grid-template-columns: 40px minmax(0, 1fr);
   }
   .tb-item__money {
+    grid-column: 2;
     justify-items: start;
   }
-  .tb-item__waiting {
-    flex-basis: 100%;
-    text-align: left;
+  .tb-item__aside {
+    grid-column: 1 / -1;
+    grid-auto-flow: row;
   }
 }

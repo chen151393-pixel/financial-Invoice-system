@@ -6,17 +6,17 @@ import {
   Button,
   Card,
   CardFooter,
+  CardHeader,
   EmptyState,
   ErrorState,
   Field,
   FilterBar,
   Pagination,
-  SectionTitle,
   Skeleton,
 } from "../../../shared/components/ui";
 import { openLocalSession } from "../../identity/api";
 import { queryTaskBoard } from "../api/board";
-import { BoardNodeTabs } from "../components/BoardNodeTabs";
+import { BoardNodeCards } from "../components/BoardNodeCards";
 import { BoardTaskItem } from "../components/BoardTaskItem";
 import { SignedContractUpload } from "../components/SignedContractUpload";
 import type { BoardNodeKey, TaskBoard, TaskBoardQuery } from "../types/board";
@@ -37,7 +37,7 @@ function readNode(value: string | null): TaskBoardQuery["node"] {
   return NODE_KEYS.find((key) => key === value) ?? "";
 }
 
-/** 开票跟进：按当前节点分区，展示流程与下一步；单项处理进入详情，回签合同支持批量上传。 */
+/** 开票跟进：节点卡片筛选，列表卡片内含查询栏与任务卡片；单项处理进入详情，回签合同支持批量上传。 */
 export function TaskBoardPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const [query, setQuery] = useState<TaskBoardQuery>({
@@ -117,9 +117,8 @@ export function TaskBoardPage() {
 
   return (
     <div className="tb">
-      <SectionTitle title="任务节点" />
       {board ? (
-        <BoardNodeTabs
+        <BoardNodeCards
           nodes={board.nodes}
           openTotal={board.openTotal}
           value={query.node}
@@ -130,113 +129,114 @@ export function TaskBoardPage() {
         state.kind === "loading" && <Skeleton rows={1} label="正在汇总任务节点" />
       )}
 
-      <FilterBar
-        onSubmit={() => change({ keyword, supplierId })}
-        pending={edited ? "条件已修改，点击「查询」生效" : undefined}
-        actions={
-          <>
-            <Button variant="primary" type="submit" disabled={busy}>
-              {busy ? "查询中…" : "查询"}
-            </Button>
-            <Button
-              disabled={busy || (!filtered && !keyword && !supplierId)}
-              onClick={() => {
-                setKeyword("");
-                setSupplierId("");
-                change({ keyword: "", supplierId: "", stage: "", createdFrom: "", createdTo: "" });
-              }}
-            >
-              清除
-            </Button>
-            <Button disabled={busy} onClick={reload}>
-              刷新
-            </Button>
-          </>
-        }
-      >
-        <Field label="报关单 / 供应商 / 子采购单" grow>
-          <input
-            type="search"
-            maxLength={120}
-            placeholder="CD10086、SUB-200 或供应商名称"
-            value={keyword}
-            onChange={(event) => setKeyword(event.target.value)}
-          />
-        </Field>
-        <Field label="供应商">
-          <select value={supplierId} onChange={(event) => setSupplierId(event.target.value)}>
-            <option value="">全部供应商</option>
-            {(board?.suppliers ?? []).map((item) => (
-              <option key={item.id} value={item.id}>
-                {item.name}
-              </option>
-            ))}
-          </select>
-        </Field>
-      </FilterBar>
-
-      {scoped && (
-        <Alert tone="info" title="已应用报关单范围">
-          {query.stage && (
-            <span>
-              业务状态：{Object.entries(stageLabels).find(([key]) => key === query.stage)?.[1] ?? query.stage}
-              。{" "}
-            </span>
-          )}
-          {(query.createdFrom || query.createdTo) && (
-            <span>
-              创建日期：{query.createdFrom || "未填写"} 至 {query.createdTo || "未填写"}。{" "}
-            </span>
-          )}
-          <Button size="sm" onClick={() => change({ stage: "", createdFrom: "", createdTo: "", node: "" })}>
-            清除范围
-          </Button>
-        </Alert>
-      )}
-
-      <SectionTitle
-        id="tb-list-title"
-        title={nodeLabel}
-        count={state.kind === "ready" ? `共 ${state.data.total} 个任务` : undefined}
-        actions={
-          <>
-            <span className="tb-order">{query.node === "done" ? "最新完成的在前" : "等待最久的在前"}</span>
+      <Card className="tb-panel">
+        <CardHeader
+          title={<span id="tb-list-title">{nodeLabel}</span>}
+          description={
+            state.kind === "ready"
+              ? `共 ${state.data.total} 个任务 · ${query.node === "done" ? "最新完成的在前" : "等待最久的在前"}`
+              : undefined
+          }
+          actions={
             <Button disabled={busy} onClick={() => setUploading(true)}>
               批量上传回签合同
             </Button>
-          </>
-        }
-      />
-      {uploading && (
-        <SignedContractUpload
-          onClose={(changed) => {
-            setUploading(false);
-            if (changed) reload();
-          }}
+          }
         />
-      )}
-      <section aria-labelledby="tb-list-title">
-        {state.kind === "loading" && <Skeleton label="正在读取开票任务" />}
+        <FilterBar
+          embedded
+          onSubmit={() => change({ keyword, supplierId })}
+          pending={edited ? "条件已修改，点击「查询」生效" : undefined}
+          actions={
+            <>
+              <Button variant="primary" type="submit" disabled={busy}>
+                {busy ? "查询中…" : "查询"}
+              </Button>
+              <Button
+                disabled={busy || (!filtered && !keyword && !supplierId)}
+                onClick={() => {
+                  setKeyword("");
+                  setSupplierId("");
+                  change({ keyword: "", supplierId: "", stage: "", createdFrom: "", createdTo: "" });
+                }}
+              >
+                清除
+              </Button>
+              <Button disabled={busy} onClick={reload}>
+                刷新
+              </Button>
+            </>
+          }
+        >
+          <Field label="报关单 / 供应商 / 子采购单" grow>
+            <input
+              type="search"
+              maxLength={120}
+              placeholder="CD 编号、供应商名称或子采购单号"
+              value={keyword}
+              onChange={(event) => setKeyword(event.target.value)}
+            />
+          </Field>
+          <Field label="供应商">
+            <select value={supplierId} onChange={(event) => setSupplierId(event.target.value)}>
+              <option value="">全部供应商</option>
+              {(board?.suppliers ?? []).map((item) => (
+                <option key={item.id} value={item.id}>
+                  {item.name}
+                </option>
+              ))}
+            </select>
+          </Field>
+        </FilterBar>
 
-        {state.kind === "error" && (
-          <Card>
+        {scoped && (
+          <div className="tb-scope">
+            <Alert tone="info" title="已应用报关单范围">
+              {query.stage && (
+                <span>
+                  业务状态：
+                  {Object.entries(stageLabels).find(([key]) => key === query.stage)?.[1] ?? query.stage}
+                  。{" "}
+                </span>
+              )}
+              {(query.createdFrom || query.createdTo) && (
+                <span>
+                  创建日期：{query.createdFrom || "未填写"} 至 {query.createdTo || "未填写"}。{" "}
+                </span>
+              )}
+              <Button
+                size="sm"
+                onClick={() => change({ stage: "", createdFrom: "", createdTo: "", node: "" })}
+              >
+                清除范围
+              </Button>
+            </Alert>
+          </div>
+        )}
+
+        {uploading && (
+          <SignedContractUpload
+            onClose={(changed) => {
+              setUploading(false);
+              if (changed) reload();
+            }}
+          />
+        )}
+        <section className="tb-list" aria-labelledby="tb-list-title">
+          {state.kind === "loading" && <Skeleton label="正在读取开票任务" />}
+
+          {state.kind === "error" && (
             <ErrorState
               title="开票任务暂时无法加载"
               message={state.message}
               action={<Button onClick={reload}>重新加载</Button>}
             />
-          </Card>
-        )}
+          )}
 
-        {state.kind === "ready" &&
-          (state.data.items.length ? (
-            <Card className="tb-list">
-              {state.data.items.map((item) => (
-                <BoardTaskItem key={item.task.id} item={item} />
-              ))}
-            </Card>
-          ) : (
-            <Card>
+          {state.kind === "ready" &&
+            (state.data.items.length ? (
+              state.data.items.map((item) => <BoardTaskItem key={item.task.id} item={item} />)
+            ) : (
               <EmptyState
                 title={
                   filtered
@@ -260,11 +260,11 @@ export function TaskBoardPage() {
                   )
                 }
               />
-            </Card>
-          ))}
+            ))}
+        </section>
 
         {state.kind === "ready" && state.data.total > 0 && (
-          <CardFooter className="tb-pagination">
+          <CardFooter>
             <Pagination
               label="开票任务分页"
               total={state.data.total}
@@ -277,7 +277,7 @@ export function TaskBoardPage() {
             />
           </CardFooter>
         )}
-      </section>
+      </Card>
 
       <details className="tb-definitions">
         <summary>节点口径</summary>

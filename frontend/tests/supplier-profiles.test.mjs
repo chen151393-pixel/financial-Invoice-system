@@ -45,8 +45,8 @@ test("外部群初始展示待查询，输入与查找可用，说明留空自�
   assert.match(html, /输入框留空时，自动按“浙江洪皓工贸有限公司”匹配/);
   assert.doesNotMatch(html, /disabled|正在|没有匹配的外部群|重新拉取/);
 });
-test("供应商档案有独立基础资料导航和旧入口兼容路径", () => {
-  const section = navigation.find((item) => item.label === "基础资料");
+test("供应商档案在采购分组导航中，并保留旧入口兼容路径", () => {
+  const section = navigation.find((item) => item.label === "采购");
   assert.equal(section.items.find((item) => item.id === "supplier-profiles").label, "供应商档案");
   assert.equal(paths.viewPath("supplier-profiles"), "/suppliers");
   assert.equal(paths.legacyPaths.taskSupplierGroups, "/tasks/supplier-groups");

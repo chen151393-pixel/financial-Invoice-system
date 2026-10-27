@@ -1,4 +1,4 @@
-"""进项发票接口：Excel 导入（配置、预览、确认）与列表、详情。"""
+"""进项发票接口：Excel 导入（配置、预览、确认）与列表、分布统计、详情。"""
 
 from typing import Annotated
 
@@ -9,10 +9,11 @@ from backend.core.dependencies import Owner
 from ..dto.import_dto import ImportBody
 from ..dto.invoice_dto import InvoiceQuery
 from ..vo.import_vo import ImportConfiguration, ImportResult
+from ..vo.invoice_stats_vo import InvoiceStats
 from ..vo.invoice_vo import InvoiceDetail, InvoiceList
 
 
-def create_router(imports, invoices):
+def create_router(imports, invoices, stats):
     router = APIRouter(prefix="/api/invoices", tags=["发票"])
 
     @router.get("/import/configuration", response_model=ImportConfiguration)
@@ -30,6 +31,11 @@ def create_router(imports, invoices):
     @router.get("", response_model=InvoiceList)
     def browse(query: Annotated[InvoiceQuery, Query()], owner: Owner):
         return invoices.browse(query)
+
+    @router.get("/stats", response_model=InvoiceStats)
+    def distribution(query: Annotated[InvoiceQuery, Query()], owner: Owner):
+        """按月张数、票面状态、柠檬云账套分布；筛选条件同列表，分页参数不起作用。"""
+        return stats.stats(query)
 
     @router.get("/{invoice_id}", response_model=InvoiceDetail)
     def detail(invoice_id: Annotated[int, Path(ge=1, le=2**63 - 1)], owner: Owner):

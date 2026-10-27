@@ -20,17 +20,12 @@ export default function SyncWorkspacePage() {
       onNavigate={navigateView}
       title={source === "ns" ? "NS 数据同步" : source === "lemon" ? "柠檬云数据同步" : "数据同步中心"}
       breadcrumb={source === "overview" ? undefined : <Link to={paths.sync}>数据同步</Link>}
-      actions={
-        source === "overview" ? (
-          <div className="sync-overview__actions">
-            <Link className="ui-button ui-button--secondary" to={paths.syncNs}>
-              NS 手动同步
-            </Link>
-            <Link className="ui-button ui-button--primary" to={paths.syncLemon}>
-              配置发票同步
-            </Link>
-          </div>
-        ) : undefined
+      description={
+        source === "ns"
+          ? "按单据类型和日期范围从 NS 正式环境拉取报关单与子采购"
+          : source === "lemon"
+            ? "柠檬云各公司账套的进项发票：后台定时同步、即时拉取与 Excel 导入"
+            : "NS 正式环境的报关与子采购、柠檬云各公司账套的进项发票"
       }
     >
       <SyncPage source={source}>

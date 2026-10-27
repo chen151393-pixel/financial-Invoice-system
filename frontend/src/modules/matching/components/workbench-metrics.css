@@ -1,68 +1,88 @@
-/* 工作台业务状态分区：五个状态卡片加本月完成情况，点击进入对应列表。 */
+/* 业务流程：五个业务状态逐行排开，条长按最大计数绘制，点击进入对应列表。 */
 .wb-flow {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 14px;
+  gap: 4px;
+  margin: 0;
+  padding: 0 12px 14px;
+  list-style: none;
 }
-.wb .wb-flow__card {
-  display: flex;
-  flex-direction: column;
-  align-items: stretch;
-  justify-content: flex-start;
-  gap: 6px;
-  min-height: 150px;
-  padding: 18px 20px;
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-panel);
-  background: var(--color-surface);
+.wb .wb-flow__row {
+  display: grid;
+  grid-template-columns: 150px minmax(0, 1fr) 120px;
+  grid-template-areas:
+    "step bar value"
+    "step note note";
+  align-items: center;
+  gap: 4px 14px;
+  padding: 10px 8px;
+  border-radius: var(--radius-control);
   color: var(--color-text);
-  font-weight: 400;
-  text-align: left;
   text-decoration: none;
-  white-space: normal;
 }
-.wb .wb-flow__card:hover {
-  border-color: var(--color-primary);
-  background: var(--color-surface);
+.wb .wb-flow__row:hover {
+  background: var(--color-canvas);
+  text-decoration: none;
 }
-.wb .wb-flow__card[aria-pressed="true"] {
-  border-color: var(--color-primary);
-  box-shadow: inset 0 0 0 1px var(--color-primary);
-}
-.wb-flow__card:focus-visible {
+.wb-flow__row:focus-visible {
   outline: 2px solid var(--color-primary);
   outline-offset: 2px;
 }
 .wb-flow__step {
+  grid-area: step;
   display: flex;
   align-items: center;
   gap: var(--space-small);
-  color: var(--color-muted);
-  font-size: 12px;
+  font-size: 13px;
+  font-weight: 600;
 }
 .wb-flow__step b {
   display: grid;
   place-items: center;
-  width: 20px;
-  height: 20px;
+  flex-shrink: 0;
+  width: 22px;
+  height: 22px;
   border-radius: 999px;
-  background: var(--color-canvas);
+  background: var(--color-primary-soft);
+  color: var(--color-primary-strong);
   font-size: 11px;
 }
-.wb-flow__card[aria-pressed="true"] .wb-flow__step b {
-  background: var(--color-primary);
-  color: var(--color-surface);
+.wb-flow__bar {
+  grid-area: bar;
+  height: 22px;
+  border-radius: 6px;
+  background: var(--color-canvas);
+  overflow: hidden;
+}
+.wb-flow__bar > span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--color-chart-1);
+}
+/* 从审核到完结由深到浅，同一色系 */
+.wb-flow__bar > [data-stage="notify"] {
+  background: var(--color-chart-2);
+}
+.wb-flow__bar > [data-stage="invoicing"] {
+  background: var(--color-chart-3);
+}
+.wb-flow__bar > [data-stage="documents"] {
+  background: var(--color-chart-4);
+}
+.wb-flow__bar > [data-stage="completed"] {
+  background: var(--color-chart-line);
 }
 .wb-flow__value {
+  grid-area: value;
   display: flex;
   align-items: baseline;
-  flex-wrap: wrap;
+  justify-content: flex-end;
   gap: 6px;
 }
 .wb-flow__value strong {
-  font-size: 30px;
+  font-size: 20px;
   line-height: 1.2;
-  font-weight: 600;
+  font-weight: 700;
   font-variant-numeric: tabular-nums;
 }
 .wb-flow__value > span,
@@ -70,24 +90,15 @@
   color: var(--color-muted);
   font-size: 12px;
 }
-.wb-flow__note--warn {
-  color: var(--color-feedback);
-}
-.wb-flow__go {
-  margin-top: auto;
-  color: var(--color-primary);
-  font-size: 12px;
-}
-.wb-flow .wb-track > span {
-  background: var(--color-success-text);
-}
-@media (max-width: 1100px) {
-  .wb-flow {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
+.wb-flow__note {
+  grid-area: note;
 }
 @media (max-width: 760px) {
-  .wb-flow {
-    grid-template-columns: minmax(0, 1fr);
+  .wb .wb-flow__row {
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas:
+      "step value"
+      "bar bar"
+      "note note";
   }
 }

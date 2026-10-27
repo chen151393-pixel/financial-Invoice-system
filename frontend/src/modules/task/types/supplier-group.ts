@@ -78,4 +78,6 @@ export interface SupplierProfileQuery extends Omit<GroupQuery, "status" | "accou
 }
 export interface SupplierProfileList extends GroupPage<SupplierProfile> {
   manage: GroupList["manage"];
+  // 档案概况，不受关键字与状态筛选影响
+  counts: { all: number; bound: number; unbound: number; notifyOff: number };
 }

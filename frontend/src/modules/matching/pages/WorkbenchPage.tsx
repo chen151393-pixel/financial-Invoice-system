@@ -1,7 +1,9 @@
 import { Button } from "../../../shared/components/Button";
+import { WorkbenchKpis } from "../components/WorkbenchKpis";
 import { WorkbenchMetrics } from "../components/WorkbenchMetrics";
 import { WorkbenchSuppliers } from "../components/WorkbenchSuppliers";
 import { WorkbenchTodos } from "../components/WorkbenchTodos";
+import { WorkbenchToolbar } from "../components/WorkbenchToolbar";
 import { WorkbenchTrend } from "../components/WorkbenchTrend";
 import type { useWorkbench } from "../hooks/useWorkbench";
 import "../components/workbench.css";
@@ -9,6 +11,7 @@ import "../components/workbench.css";
 export function WorkbenchPage({ state }: { state: ReturnType<typeof useWorkbench> }) {
   return (
     <div className="wb">
+      <WorkbenchToolbar state={state} />
       {state.loading && (
         <div className="wb-panel wb-loading" role="status">
           正在读取工作台数据…<p>正在汇总财务核对、发票比对和开票跟进。</p>
@@ -28,30 +31,31 @@ export function WorkbenchPage({ state }: { state: ReturnType<typeof useWorkbench
       )}
       {state.data && (
         <>
-          <WorkbenchMetrics
-            stages={state.data.stages ?? []}
-            noTaskCount={state.data.noTaskCount ?? 0}
-            month={state.data.month}
-            query={state.query}
-          />
-          {state.exportNotice && (
-            <p className="wb-feedback" role="status">
-              {state.exportNotice}
-            </p>
-          )}
+          <WorkbenchKpis data={state.data} />
+          {/* 业务流程与供应商待收票并排，窄屏上下排列 */}
           <div className="wb-columns">
-            <WorkbenchTodos
-              data={state.data}
+            <WorkbenchMetrics
+              stages={state.data.stages ?? []}
+              noTaskCount={state.data.noTaskCount ?? 0}
               query={state.query}
-              change={state.change}
-              exporting={state.exporting}
-              onExport={() => void state.download()}
             />
             <aside className="wb-aside" aria-label="收票情况">
               <WorkbenchSuppliers data={state.data} />
             </aside>
           </div>
           <WorkbenchTrend data={state.data} change={state.change} />
+          {state.exportNotice && (
+            <p className="wb-feedback" role="status">
+              {state.exportNotice}
+            </p>
+          )}
+          <WorkbenchTodos
+            data={state.data}
+            query={state.query}
+            change={state.change}
+            exporting={state.exporting}
+            onExport={() => void state.download()}
+          />
           <details className="wb-definitions">
             <summary>统计口径</summary>
             <p>

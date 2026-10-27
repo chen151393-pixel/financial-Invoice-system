@@ -15,13 +15,15 @@
   color: var(--color-muted);
   font-size: inherit;
 }
-/* 层级缩进：报关行顶格加粗，子采购行缩进一级并以连线挂在报关行下 */
+/*
+ * 层级：报关行与子采购行的单号从同一缩进开始、逐列对齐；
+ * 子采购行的连线画在这段左侧留白里挂到报关行下，报关行加粗。单号不换行。
+ */
 .fr-tree {
   position: relative;
   display: block;
-}
-.fr-tree--purchase {
   padding-left: 22px;
+  white-space: nowrap;
 }
 .fr-tree--purchase::before {
   content: "";
@@ -33,6 +35,20 @@
   border-left: 1.5px solid var(--color-input-border);
   border-bottom: 1.5px solid var(--color-input-border);
   border-bottom-left-radius: 4px;
+}
+.fr-order-no {
+  white-space: nowrap;
+}
+/* 「订单口径」「合并 N 行」作为单号后的小标签，不另占一行 */
+.fr-comparison-lines .fr-order-tag {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--color-inactive-surface);
+  color: var(--color-inactive-text);
+  font-size: 11px;
+  line-height: 18px;
 }
 .fr-margin--negative strong,
 .fr-margin--negative small {

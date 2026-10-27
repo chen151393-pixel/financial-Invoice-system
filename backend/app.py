@@ -26,6 +26,7 @@ from .modules.invoice.controller.invoice_controller import create_router as invo
 from .modules.invoice.public import InvoiceChanged, InvoiceChanging, InvoicesImported, LemonInvoicesStored
 from .modules.invoice.service.import_service import ImportService
 from .modules.invoice.service.invoice_service import InvoiceService
+from .modules.invoice.service.invoice_stats_service import InvoiceStatsService
 from .modules.invoice.service.lemon_invoice_service import on_lemon_invoices_fetched
 from .modules.matching.controller.invoice_file_controller import create_router as invoice_file_router
 from .modules.matching.controller.matching_controller import create_router as matching_router
@@ -239,7 +240,9 @@ def _register_business(app, settings, ns, contract_ns, wecom, engine, lemon_invo
     app.state.signed_upload_worker = SignedUploadWorker(engine, upload_store, signed_contracts)
     app.include_router(signed_upload_router(app.state.signed_uploads))
     # 发票导入 → matching 生成比对建议；比对通过 / 取消 → task 重算收票进度（均在发布方事务中）。
-    app.include_router(invoice_router(ImportService(engine, events), InvoiceService(engine)))
+    app.include_router(
+        invoice_router(ImportService(engine, events), InvoiceService(engine), InvoiceStatsService(engine))
+    )
     matching_queries = MatchingQueryService(engine)
     app.include_router(workbench_router(WorkbenchService(engine)))
     app.include_router(

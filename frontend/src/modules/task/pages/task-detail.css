@@ -1,13 +1,6 @@
 .itd-page {
   gap: var(--space-layout);
 }
-.itd-panel {
-  min-width: 0;
-  padding: 24px;
-  background: var(--color-surface);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-panel);
-}
 /* 任务概览卡片（组件库 Card + Badge + Stepper + Alert） */
 .itd-overview {
   display: grid;
@@ -17,8 +10,12 @@
 .itd-heading {
   display: flex;
   justify-content: space-between;
-  align-items: flex-start;
+  align-items: center;
+  flex-wrap: wrap;
   gap: 20px;
+}
+.itd-heading__main {
+  min-width: 0;
 }
 .itd-eyebrow,
 .itd-subtitle {
@@ -26,6 +23,7 @@
   color: var(--color-muted);
   font-size: 12px;
   line-height: 1.7;
+  overflow-wrap: anywhere;
 }
 .itd-title {
   display: flex;
@@ -36,39 +34,131 @@
 }
 .itd-title h2 {
   margin: 0;
-  font-size: 20px;
-  font-weight: 650;
+  font-size: 22px;
+  font-weight: 700;
   line-height: 1.4;
 }
-.itd-amount {
-  flex-shrink: 0;
+.itd-waiting {
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: var(--color-inactive-surface);
+  color: var(--color-inactive-text);
+  font-size: 12px;
+  font-weight: 600;
+}
+/* 收票情况：应开、待收与进度条，数值全部来自后端 */
+.itd-receipt {
+  display: grid;
+  gap: 10px;
+  min-width: 260px;
+  padding: 14px 18px;
+  border-radius: var(--radius-panel);
+  background: #f7f9fc;
+}
+.itd-receipt dl {
+  display: grid;
+  grid-template-columns: auto auto;
+  gap: 4px 18px;
   margin: 0;
-  padding: 10px 16px;
-  border-radius: var(--radius-control);
-  background: var(--color-canvas);
+  font-size: 13px;
+}
+.itd-receipt dl > div {
+  display: contents;
+}
+.itd-receipt dt {
+  color: var(--color-muted);
+}
+.itd-receipt dd {
+  margin: 0;
   text-align: right;
-}
-.itd-amount dt {
-  color: var(--color-muted);
-  font-size: 12px;
-}
-.itd-amount dd {
-  margin: 2px 0 0;
-  color: var(--color-muted);
-  font-size: 12px;
   font-variant-numeric: tabular-nums;
 }
-.itd-amount strong {
-  color: var(--color-text);
-  font-size: 18px;
-  font-weight: 650;
+.itd-receipt strong {
+  font-size: 16px;
+  font-weight: 700;
 }
-.itd-current {
+/* 主体：左侧当前节点与应开明细，右侧资料与记录 */
+.itd-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 360px;
+  gap: 18px;
+  align-items: start;
+}
+.itd-main,
+.itd-aside {
+  display: grid;
+  gap: 18px;
+  min-width: 0;
+}
+.itd-node {
+  border-color: #c9d7f6;
+  box-shadow: 0 0 0 3px rgba(49, 86, 217, 0.08);
+}
+.itd-node__tag {
+  display: inline-block;
+  margin-right: 10px;
+  padding: 1px 9px;
+  border-radius: 999px;
+  background: var(--color-primary-soft);
+  color: var(--color-primary-strong);
+  font-size: 11px;
+  font-weight: 600;
+  vertical-align: middle;
+}
+.itd-node-text {
+  display: grid;
+  gap: 10px;
+  justify-items: start;
+}
+.itd-node-text h3 {
+  margin: 0;
+  font-size: 14px;
+}
+.itd-node-text p {
+  margin: 0;
+  color: var(--color-muted);
+  font-size: 13px;
+  line-height: 1.7;
+}
+.itd-missing {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 13px;
+}
+.itd-missing li {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  gap: 8px;
+  color: var(--color-feedback);
+}
+.itd-missing li > span {
+  display: inline-grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--color-warning-surface);
+  font-size: 12px;
+  font-weight: 700;
+}
+.itd-ready {
+  margin: 0;
+  color: var(--color-success-text);
+  font-size: 13px;
+  font-weight: 600;
+}
+.itd-aside__actions {
+  display: flex;
   flex-wrap: wrap;
-  gap: var(--space-small) var(--space-control);
+  gap: var(--space-small);
+  margin-top: 14px;
+}
+.itd-predecessors {
+  margin: 0;
+  font-size: 13px;
 }
 .itd-document p,
 .itd-next p,
@@ -80,11 +170,11 @@
 }
 .itd-facts {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 20px;
+  gap: 12px;
   margin: 0;
-  padding-top: 18px;
-  border-top: 1px solid var(--color-border);
+}
+.itd-facts--inline {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 .itd-facts dt {
   color: var(--color-muted);
@@ -96,12 +186,11 @@
   overflow-wrap: anywhere;
 }
 .itd-content {
-  padding-top: 20px;
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   gap: 18px;
 }
-.itd-panel h3 {
+.itd-node h3 {
   font-size: 14px;
   margin: 0 0 8px;
 }
@@ -167,21 +256,20 @@
 .itd-history li {
   padding: 0 0 20px 8px;
 }
-@media (max-width: 1000px) {
-  .itd-facts {
-    grid-template-columns: repeat(2, 1fr);
+@media (max-width: 1100px) {
+  .itd-layout {
+    grid-template-columns: minmax(0, 1fr);
   }
 }
 @media (max-width: 600px) {
-  .itd-panel,
   .itd-overview {
     padding: 16px;
   }
-  .itd-amount {
-    text-align: left;
+  .itd-receipt {
+    min-width: 0;
+    width: 100%;
   }
   .itd-heading,
-  .itd-current,
   .itd-next {
     flex-direction: column;
     align-items: stretch;

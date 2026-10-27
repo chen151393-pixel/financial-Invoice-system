@@ -127,3 +127,12 @@
 .sg-definitions summary {
   cursor: pointer;
 }
+
+/* 列表卡片：标题、内嵌查询栏、表格与分页 */
+.sg-panel {
+  overflow: hidden;
+}
+.sg-panel > .ui-card__header {
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--color-border);
+}

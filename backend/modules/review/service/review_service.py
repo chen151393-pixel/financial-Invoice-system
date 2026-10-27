@@ -5,7 +5,7 @@
 批量审核逐张走同一流程、各自一个事务：一张被拒绝不影响其他张，结果逐张返回。
 """
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from sqlalchemy.exc import SQLAlchemyError
 
@@ -22,6 +22,14 @@ from ..public import ReviewApproved
 from ..vo.review_vo import BatchApproveResult, BatchItemResult, ReviewList, SupplierOption
 from .basis_reader import current_bases
 from .purchase_basis_service import freeze, same_evidence
+
+# 「本月审核通过」按北京时间自然月统计；审核时间以 UTC 存储
+BUSINESS_ZONE = timezone(timedelta(hours=8))
+
+
+def _month_start_utc(now):
+    local = now.astimezone(BUSINESS_ZONE).replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    return local.astimezone(timezone.utc).replace(tzinfo=None)
 
 
 class ReviewService:
@@ -63,6 +71,14 @@ class ReviewService:
             if state in counts:
                 counts[state] += 1
         counts["all"] = counts["pending"] + counts["approved"]
+        # 概况卡：待审核中来源已变化、需重新核对的张数；本月（北京时间）审核通过的张数
+        month_start = _month_start_utc(datetime.now(timezone.utc))
+        counts["changed"] = sum(1 for state, changed, _ in states.values() if state == "pending" and changed)
+        counts["approvedThisMonth"] = sum(
+            1
+            for declaration_id, (state, _, _) in states.items()
+            if state == "approved" and actives[declaration_id]["approved_at"] >= month_start
+        )
         wanted = {"all": ("pending", "approved")}.get(query.status, (query.status,))
         selected = [row["id"] for row in index if states[row["id"]][0] in wanted]
         start = (query.page - 1) * query.pageSize

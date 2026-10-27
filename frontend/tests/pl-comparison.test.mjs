@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { after, before, test } from "node:test";
 import { fileURLToPath } from "node:url";
 import { createElement } from "react";
@@ -8,6 +9,7 @@ import { createServer } from "vite";
 import { createPlComparisonState } from "./fixtures/pl-comparison.mjs";
 let server,
   PlComparison,
+  DeclarationRow,
   BatchApproveDialog,
   CustomsRows,
   ReviewDialog,
@@ -30,6 +32,7 @@ before(async () => {
     "/src/modules/review/components/FinanceComparison.tsx",
   ));
   ({ CustomsRows } = await server.ssrLoadModule("/src/modules/review/components/CustomsRows.tsx"));
+  ({ DeclarationRow } = await server.ssrLoadModule("/src/modules/review/components/DeclarationRow.tsx"));
   ({ BatchApproveDialog } = await server.ssrLoadModule(
     "/src/modules/review/components/BatchApproveDialog.tsx",
   ));
@@ -193,18 +196,39 @@ test("后端不允许审核时禁用按钮并展示实际原因", () => {
   assert.match(html, /NS未提供明确行关联/);
   assert.match(html, /<button[^>]*disabled=""[^>]*aria-label="审核通过：CDTEST001"/);
   assert.doesNotMatch(html, /type="checkbox"/, "不可审核的报关单不提供批量勾选");
+  assert.match(html, /disabled=""[^>]*>批量审核通过/, "本页没有可审核的报关单时不能进入批量模式");
 });
 
-test("状态筛选不再含未出库（拉取时已跳过）；批量勾选只对后端允许审核的报关单开放", () => {
+test("状态筛选不再含未出库（拉取时已跳过）；勾选框只在批量模式出现且只对后端允许审核的报关单开放", () => {
+  const page = readFileSync(new URL("../src/modules/review/pages/ReviewPage.tsx", import.meta.url), "utf8");
+  for (const label of ["全部报关单", "待审核", "审核通过"]) assert.ok(page.includes(label));
+  assert.doesNotMatch(page, /未出库/);
   const html = render(createPlComparisonState(), { onBatchApprove() {} });
-  for (const label of ["全部报关单", "待审核", "审核通过"]) assert.ok(html.includes(label));
-  assert.doesNotMatch(html, /未出库/);
-  assert.match(html, /aria-label="选择报关单：CDTEST001"/);
-  assert.match(html, /aria-label="选择当前页全部可审核的报关单"/);
-  assert.doesNotMatch(render(), /type="checkbox"/, "未提供批量审核时不显示勾选");
-  const approved = createPlComparisonState();
-  approved.result.groups[0].review = { ...approved.result.groups[0].review, status: "approved" };
-  assert.doesNotMatch(render(approved, { onBatchApprove() {} }), /aria-label="选择报关单/);
+  assert.doesNotMatch(html, /type="checkbox"/, "点击「批量审核通过」前不显示勾选框");
+  assert.match(html, />批量审核通过</);
+  assert.doesNotMatch(render(), /批量审核通过/, "未提供批量审核时不显示批量入口");
+  const row = (value, checkable) =>
+    renderToStaticMarkup(
+      createElement(
+        "table",
+        null,
+        createElement(DeclarationRow, {
+          group: value,
+          open: false,
+          checked: false,
+          checkable,
+          onToggle() {},
+          onCheck() {},
+          onReview() {},
+          onSelectLine() {},
+        }),
+      ),
+    );
+  assert.match(row(group(), true), /aria-label="选择报关单：CDTEST001"/);
+  assert.doesNotMatch(row(group(), false), /fr-check-cell/, "非批量模式不占勾选列");
+  const approved = group();
+  approved.review = { ...approved.review, status: "approved" };
+  assert.doesNotMatch(row(approved, true), /aria-label="选择报关单/);
 });
 
 test("批量审核窗口说明范围仅为当前页已选，并逐张展示跳过原因", () => {
@@ -273,7 +297,7 @@ test("报关单暂无明细时显示明确空状态", () => {
   assert.doesNotMatch(customs(item), /<table|aria-expanded/);
 });
 test("查询加载、空结果、失败可恢复，后端提示可见", () => {
-  assert.match(render({ kind: "idle" }), /填写CD编号/);
+  assert.match(render({ kind: "idle" }), /填写 CD 编号/);
   assert.match(render({ kind: "loading" }), /正在读取报关单与关联采购/);
   assert.match(render({ kind: "error", message: "连接不可用" }), /连接不可用/);
   assert.match(render({ kind: "error", message: "连接不可用" }), /重新查询/);
@@ -289,7 +313,7 @@ test("本地自动列表标明来源账套并保持单头收起，不显示演�
   state.result.source = "database";
   state.result.groups[0].account = "production-test";
   const html = render(state);
-  assert.match(html, /已入库单据/);
+  // 数据来源改在页头只读信息中展示
   assert.match(html, /NS production-test/);
   assert.match(html, /aria-expanded="false"/);
   assert.doesNotMatch(html, /重置示例|演示数据|NS读取/);
@@ -310,17 +334,16 @@ test("订单口径、缺失金额和缺失单位不冒充报关口径或零值",
   assert.doesNotMatch(html, /本次数量|本次采购金额/);
 });
 
-test("财务搜索使用单一关键字与供应商筛选，支持刷新；上线只有正式环境，不提供 NS 账套筛选", () => {
+test("财务搜索使用单一关键字与供应商筛选，刷新在列表工具条；上线只有正式环境，不提供 NS 账套筛选", () => {
   const html = renderToStaticMarkup(
     createElement(FinanceSearchForm, {
       suppliers: [{ id: "77", name: "合成供应商" }],
       busy: false,
       onSearch() {},
-      onRefresh() {},
     }),
   );
   assert.match(html, /CD 编号 \/ 真实报关单号 \/ PL \/ 子采购单号 \/ 品名/);
-  assert.match(html, /刷新列表/);
+  assert.match(render(), /刷新列表/);
   assert.doesNotMatch(html, /全部账套|来源账套|NS 环境/);
   assert.match(html, /全部供应商/);
   assert.match(html, /<option value="77">合成供应商<\/option>/);

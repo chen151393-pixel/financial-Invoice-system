@@ -14,13 +14,14 @@ NODE_LABELS = {
     "completion": "待补资料",
     "done": "已完成",
 }
+# 节点卡片一行排开七张，说明保持一句短话
 NODE_HINTS = {
-    "documents": "子采购合同尚未全部保存到共享盘",
-    "notification": "合同已就绪，尚未通知供应商开票",
-    "invoices": "已通知，尚未收到发票",
-    "comparison": "已收到部分发票，仍有任务行未结束",
-    "completion": "发票已收齐，资料尚未到齐",
-    "done": "发票收齐且资料全部归档",
+    "documents": "子采购合同未全部归档",
+    "notification": "合同已归档，待通知开票",
+    "invoices": "已通知，等待发票到达",
+    "comparison": "已收部分发票，剩余待开",
+    "completion": "发票已收齐，资料未齐",
+    "done": "发票与资料已全部到齐",
 }
 NEXT_ACTIONS = {
     "documents": "系统自动从 NS 下载子采购合同；下载失败时进入跟进详情重试。",

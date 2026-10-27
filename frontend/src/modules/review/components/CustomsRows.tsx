@@ -28,20 +28,25 @@ export function CustomsRows({
     ...group.unlinkedLines.map((line) => ({ kind: "purchase" as const, line, key: `unlinked-${line.id}` })),
   );
 
-  // 不单设"来源"列：子采购行在首列向右缩进一级并以连线挂在所属报关行下，报关行加粗。
+  // 不单设"来源"列：报关行与子采购行的单号同一缩进对齐，子采购行以连线挂在所属报关行下，报关行加粗。
   const columns: Column<ComparisonRow>[] = [
     {
       key: "parent",
       header: "母采购单号",
-      width: "15%",
+      width: "17%",
       render: (row) =>
         row.kind === "customs" ? (
-          <span className="fr-tree fr-tree--customs" aria-label={`报关第 ${row.line.lineNo} 行`}>
+          <span
+            className="fr-tree fr-tree--customs"
+            title={row.line.parent || undefined}
+            aria-label={`报关第 ${row.line.lineNo} 行`}
+          >
             <strong>{row.line.parent || "—"}</strong>
           </span>
         ) : (
           <span
             className="fr-tree fr-tree--purchase"
+            title={row.line.parent || undefined}
             aria-label={
               row.customsLineNo ? `报关第 ${row.customsLineNo} 行关联子采购` : "未关联报关行的子采购"
             }
@@ -53,15 +58,17 @@ export function CustomsRows({
     {
       key: "child",
       header: "子采购单号",
-      width: "14%",
+      width: "17%",
       render: (row) =>
         row.kind === "purchase" ? (
-          <>
+          <span className="fr-order-no">
             {row.line.child || "—"}
             {/* 订单口径的数量金额是整张子单，不是本次报关范围，须保留标注 */}
-            {row.line.scope === "order" && <small>订单口径</small>}
-            {Boolean(row.line.members?.length) && <small>合并 {row.line.members?.length} 行</small>}
-          </>
+            {row.line.scope === "order" && <small className="fr-order-tag">订单口径</small>}
+            {Boolean(row.line.members?.length) && (
+              <small className="fr-order-tag">合并 {row.line.members?.length} 行</small>
+            )}
+          </span>
         ) : (
           "—"
         ),
@@ -69,17 +76,17 @@ export function CustomsRows({
     {
       key: "origin",
       header: "货源地",
-      width: "6%",
+      width: "5%",
       render: (row) => (row.kind === "customs" ? row.line.originPlace || "—" : "—"),
     },
     {
       key: "supplier",
       header: "供应商",
-      width: "12%",
+      width: "11%",
       render: (row) => (row.kind === "purchase" ? row.line.supplier || "未提供" : "—"),
     },
-    { key: "name", header: "开票品名", width: "8%", render: ({ line }) => line.name || "未提供" },
-    { key: "model", header: "规格型号", width: "10%", render: ({ line }) => line.model || "—" },
+    { key: "name", header: "开票品名", width: "7%", render: ({ line }) => line.name || "未提供" },
+    { key: "model", header: "规格型号", width: "6%", render: ({ line }) => line.model || "—" },
     {
       key: "quantity",
       header: "数量",
@@ -116,7 +123,7 @@ export function CustomsRows({
     {
       key: "amount",
       header: "金额",
-      width: "8%",
+      width: "9%",
       align: "right",
       render: (row) => (
         <span
@@ -132,7 +139,7 @@ export function CustomsRows({
     {
       key: "action",
       header: "申报幅度（单价）/ 操作",
-      width: "10%",
+      width: "11%",
       align: "right",
       render: (row) => (
         <>
@@ -166,7 +173,7 @@ export function CustomsRows({
           rowKey={(row) => row.key}
           rowTone={(row) => (row.kind === "purchase" ? "accent" : undefined)}
           density="compact"
-          minWidth={1320}
+          minWidth={1400}
         />
       ) : (
         <EmptyState title="暂无报关与采购明细" description="当前报关单尚未返回明细数据。" />

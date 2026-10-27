@@ -6,7 +6,7 @@ import { FinanceIcon } from "./FinanceIcon";
 // 审核状态 → 组件库徽标语义：待审核需财务处理（橙），通过为绿，未出库为中性
 const STATUS_TONE: Record<string, Tone> = { approved: "success", pending: "warning", unshipped: "neutral" };
 
-/** 第一层：一张报关单的单头行；展开后显示第二层报关行。勾选只对后端允许审核的报关单开放。 */
+/** 第一层：一张报关单的单头行；展开后显示第二层报关行。批量模式才有勾选列，且只对后端允许审核的报关单开放。 */
 export function DeclarationRow({
   group,
   open,
@@ -20,7 +20,7 @@ export function DeclarationRow({
   group: ComparisonGroup;
   open: boolean;
   checked: boolean;
-  // 页面提供批量审核时才显示勾选框
+  // 批量模式：显示勾选列
   checkable: boolean;
   onToggle: () => void;
   onCheck: (checked: boolean) => void;
@@ -33,16 +33,18 @@ export function DeclarationRow({
   return (
     <tbody>
       <tr className={`fr-declaration-row${checked ? " is-checked" : ""}${open ? " is-open" : ""}`}>
-        <td className="fr-check-cell">
-          {selectable && (
-            <input
-              type="checkbox"
-              checked={checked}
-              aria-label={`选择报关单：${group.recordNumber}`}
-              onChange={(event) => onCheck(event.target.checked)}
-            />
-          )}
-        </td>
+        {checkable && (
+          <td className="fr-check-cell">
+            {selectable && (
+              <input
+                type="checkbox"
+                checked={checked}
+                aria-label={`选择报关单：${group.recordNumber}`}
+                onChange={(event) => onCheck(event.target.checked)}
+              />
+            )}
+          </td>
+        )}
         <th scope="row">
           <button
             className="fr-declaration-toggle"
@@ -85,7 +87,7 @@ export function DeclarationRow({
         </td>
       </tr>
       <tr id={`declaration-${group.id}`} className="fr-declaration-detail" hidden={!open}>
-        <td colSpan={9}>
+        <td colSpan={checkable ? 9 : 8}>
           {open && (
             <>
               {review.reason && <p className="fr-review-reason">{review.reason}</p>}

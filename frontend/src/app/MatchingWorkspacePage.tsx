@@ -19,6 +19,7 @@ export default function MatchingWorkspacePage() {
       activeId="match"
       onNavigate={navigateView}
       title={invoiceId ? "发票比对" : "比对审核队列"}
+      description="把进项发票行与已审核的子采购行逐项对照，通过后自动更新开票任务的收票进度"
       breadcrumb={invoiceId ? <Link to={paths.matching}>比对审核队列</Link> : undefined}
     >
       {invoiceId ? <MatchingInvoicePage key={invoiceId} invoiceId={invoiceId} /> : <MatchingQueuePage />}

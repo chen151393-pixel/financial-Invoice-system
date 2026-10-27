@@ -9,16 +9,19 @@ export function FilterBar({
   children,
   actions,
   pending,
+  embedded,
 }: {
   // 提交时传入表单元素，需要用 FormData 取值（非受控输入）的页面可直接读取
   onSubmit: (form: HTMLFormElement) => void;
   children: ReactNode;
   actions: ReactNode;
   pending?: string;
+  // 放在卡片内部（列表卡片的标题下方）时去掉自身边框，只保留分隔线
+  embedded?: boolean;
 }) {
   return (
     <form
-      className="ui-filter-bar"
+      className={embedded ? "ui-filter-bar ui-filter-bar--embedded" : "ui-filter-bar"}
       onSubmit={(event: FormEvent<HTMLFormElement>) => {
         event.preventDefault();
         onSubmit(event.currentTarget);

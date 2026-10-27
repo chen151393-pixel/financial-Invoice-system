@@ -15,6 +15,7 @@ from backend.modules.invoice.dto.invoice_dto import InvoiceQuery
 from backend.modules.invoice.public import InvoicesImported
 from backend.modules.invoice.service.import_service import ImportService
 from backend.modules.invoice.service.invoice_service import InvoiceService
+from backend.modules.invoice.service.invoice_stats_service import InvoiceStatsService
 from backend.tests.invoice_files import invoice, workbook
 from backend.tests.test_source_storage import engine as engine  # 共用夹具
 from backend.tests.test_source_storage import rows
@@ -131,6 +132,21 @@ def test_list_filters_amounts_and_detail(engine, imports):
     assert error.value.status == 404
 
 
+def test_stats_follow_list_filters(engine, imports):
+    run(imports)
+    stats = InvoiceStatsService(engine).stats(InvoiceQuery())
+    counts = {item.key: item.count for item in stats.statuses}
+    assert list(counts) == ["normal", "red_letter", "red_offset", "void", "unknown"]
+    assert counts["red_letter"] == 1 and sum(counts.values()) == stats.total == 3  # 与列表的展示状态一致
+    assert len(stats.months) == 6 and sum(item.count for item in stats.months) == 3
+    assert stats.months == sorted(stats.months, key=lambda item: item.month)
+    assert [(item.count) for item in stats.accounts] == [3]
+    red = InvoiceStatsService(engine).stats(InvoiceQuery(status="red_letter"))
+    assert sum(item.count for item in red.statuses) == 1 and red.accounts[0].count == 1
+    empty = InvoiceStatsService(engine).stats(InvoiceQuery(q="不存在"))
+    assert empty.accounts == [] and sum(item.count for item in empty.months) == 0
+
+
 @pytest.mark.parametrize(
     ("source_status", "query_status", "label"),
     [("已红冲", "red_offset", "已被红冲"), ("已被红冲", "red_offset", "已被红冲"), ("作废", "void", "作废")],
@@ -184,6 +200,8 @@ def test_http_import_and_list(context, engine):
         assert red["total"] == 1 and red["rows"][0]["displayStatus"] == "red_letter"
         totals = client.get("/api/matching/invoice-totals?status=red_letter", headers=headers).json()
         assert totals["amounts"][0]["count"] == 1
+        stats = client.get("/api/invoices/stats?status=red_letter", headers=headers).json()
+        assert sum(item["count"] for item in stats["statuses"]) == 1
         assert client.get("/api/invoices/0", headers=headers).status_code == 400
 
 

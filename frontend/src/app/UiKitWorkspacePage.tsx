@@ -7,7 +7,13 @@ import { useViewNavigate } from "./useViewNavigate";
 export default function UiKitWorkspacePage() {
   const navigate = useViewNavigate();
   return (
-    <AppFrame groups={navigation} activeId="ui-kit" onNavigate={navigate} title="界面组件库">
+    <AppFrame
+      groups={navigation}
+      activeId="ui-kit"
+      onNavigate={navigate}
+      title="界面组件库"
+      description="页面统一从这里组合；示例数据为虚构演示数据"
+    >
       <UiKitShowcase />
     </AppFrame>
   );

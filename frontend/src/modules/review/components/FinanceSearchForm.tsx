@@ -12,14 +12,12 @@ export function FinanceSearchForm({
   busy,
   suppliers,
   onSearch,
-  onRefresh,
   initial = EMPTY,
 }: {
   busy: boolean;
   // 供应商选项由后端按有效报关单关联的子采购单返回
   suppliers: { id: string; name: string }[];
   onSearch: (criteria: SearchCriteria) => void;
-  onRefresh: () => void;
   initial?: SearchCriteria;
 }) {
   const [criteria, setCriteria] = useState(initial);
@@ -27,6 +25,7 @@ export function FinanceSearchForm({
     setCriteria((current) => ({ ...current, [field]: value }));
   return (
     <FilterBar
+      embedded
       onSubmit={() => onSearch(criteria)}
       actions={
         <>
@@ -41,9 +40,6 @@ export function FinanceSearchForm({
             }}
           >
             清空
-          </Button>
-          <Button disabled={busy} onClick={onRefresh}>
-            刷新列表
           </Button>
         </>
       }

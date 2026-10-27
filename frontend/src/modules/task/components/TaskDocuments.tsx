@@ -3,7 +3,6 @@ import type { DeclarationDocumentType, TaskDetail, TaskDocument } from "../types
 import { DeclarationDocuments } from "./DeclarationDocuments";
 import { formatTime } from "./format";
 import { SignedContracts } from "./SignedContracts";
-import { TaskLines } from "./TaskLines";
 
 function documentStatus(doc: TaskDocument) {
   if (doc.status === "ready")
@@ -74,7 +73,6 @@ export function TaskDocuments({
           {reason}
         </p>
       ))}
-      <TaskLines lines={detail.lines} />
       <div className="itd-next">
         <div>
           <h3>下一步：通知供应商开票</h3>

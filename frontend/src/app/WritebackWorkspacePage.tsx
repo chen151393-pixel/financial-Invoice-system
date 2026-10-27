@@ -15,6 +15,7 @@ export default function WritebackWorkspacePage() {
       activeId="writeback"
       onNavigate={navigateView}
       title={requestId ? "回写详情" : "NS 回写"}
+      description="核对不可变预览后再写入 NS；结果未知的请求须先核实，不能直接重试"
       breadcrumb={requestId ? <Link to={paths.writeback}>NS 回写</Link> : undefined}
     >
       {requestId ? <WritebackRequestPage key={requestId} requestId={requestId} /> : <WritebackListPage />}

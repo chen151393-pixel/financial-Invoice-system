@@ -1,4 +1,3 @@
-import { WorkbenchToolbar } from "../modules/matching/components/WorkbenchToolbar";
 import { useWorkbench } from "../modules/matching/hooks/useWorkbench";
 import { WorkbenchPage } from "../modules/matching/pages/WorkbenchPage";
 import { AppFrame } from "./WorkspaceFrame";
@@ -13,8 +12,8 @@ export default function WorkbenchWorkspacePage() {
       groups={navigation}
       activeId="workbench"
       onNavigate={navigate}
-      title="发票工作台"
-      actions={<WorkbenchToolbar state={state} />}
+      title="总体工作台"
+      description="报关审核、开票任务、收票与发票比对一屏总览"
     >
       <WorkbenchPage state={state} />
     </AppFrame>

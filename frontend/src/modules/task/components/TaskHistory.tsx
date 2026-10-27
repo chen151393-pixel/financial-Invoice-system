@@ -3,8 +3,7 @@ import { formatTime } from "./format";
 
 export function TaskHistory({ detail }: { detail: TaskDetail }) {
   return (
-    <div className="itd-content">
-      <h3>已发生的流程记录</h3>
+    <div className="itd-history-wrap">
       <ol className="itd-history">
         {detail.events.map((event, index) => (
           <li key={`${event.at}:${index}`}>

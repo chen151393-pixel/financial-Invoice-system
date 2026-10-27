@@ -76,7 +76,8 @@ export interface ComparisonGroup {
 }
 export interface ComparisonResult {
   groups: ComparisonGroup[];
-  counts: Record<ReviewFilter | "customs" | "purchase" | "shown", number>;
+  // changed：待审核中来源已变化的张数；approvedThisMonth：北京时间本月审核通过张数
+  counts: Record<ReviewFilter | "customs" | "purchase" | "shown" | "changed" | "approvedThisMonth", number>;
   notices: string[];
   accounts: string[];
   suppliers: { id: string; name: string }[];

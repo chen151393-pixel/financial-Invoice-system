@@ -64,6 +64,14 @@ export type InvoiceFilters = {
 };
 export type InvoiceAccountOption = { value: string; label: string };
 
+// 分布统计：口径与列表筛选一致，全部由后端计数
+export type InvoiceStats = {
+  total: number;
+  months: { month: string; count: number }[];
+  statuses: { key: string; label: string; count: number }[];
+  accounts: { account: string; count: number }[];
+};
+
 export type ImportFile = { filename: string; content: string };
 export type ImportConfiguration = { allowed: boolean; reason: string; maxBytes: number };
 export type ImportResult = {

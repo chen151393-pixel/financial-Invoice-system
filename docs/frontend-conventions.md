@@ -54,7 +54,7 @@ frontend/src/modules/matching/
 
 新路由接入后才移除旧入口；同一个功能不能同时维护两套页面和两套状态逻辑。
 
-采购报关联查保留 `/pl-reconciliation`，由 `frontend/src/app/PlWorkspacePage.tsx` 装配公共侧栏及 source 模块；默认首页和未知路径（含旧 `/demo` 地址）进入发票工作台 `/workbench`。页面按 NS 共用查询结果展示15/17列有序明细。独立“财务核对”使用 `/review` 和 `ReviewWorkspacePage.tsx`，展示报关主行、报关与采购同列对照及整单审核；两页使用不同接口与状态，不加载模拟数据。旧记录校对与写回、PL 单联查页面已删除；首页进入[发票工作台](invoice-workbench.md)。Excel 导出保留在 NS 原 Suitelet 页面。
+采购报关联查保留 `/pl-reconciliation`，由 `frontend/src/app/PlWorkspacePage.tsx` 装配公共侧栏及 source 模块；默认首页和未知路径（含旧 `/demo` 地址）进入总体工作台 `/workbench`。页面按 NS 共用查询结果展示15/17列有序明细。独立“财务核对”使用 `/review` 和 `ReviewWorkspacePage.tsx`，展示报关主行、报关与采购同列对照及整单审核；两页使用不同接口与状态，不加载模拟数据。旧记录校对与写回、PL 单联查页面已删除；首页进入[总体工作台](invoice-workbench.md)。Excel 导出保留在 NS 原 Suitelet 页面。
 
 ## 5. 统一交互
 

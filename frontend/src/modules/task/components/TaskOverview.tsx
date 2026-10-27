@@ -1,17 +1,9 @@
-import { Alert, Badge, Button, Card, Stepper, type Tone } from "../../../shared/components/ui";
-import type { TaskDetail, TaskStatus } from "../types/task";
-import { formatTime } from "./format";
+import { Alert, Badge, Card, Progress, Stepper, type Tone } from "../../../shared/components/ui";
+import { money } from "../../../shared/format/money";
+import type { TaskDetail, TaskStatus, TaskStepKey } from "../types/task";
 
-export const sectionLabels = {
-  review: "财务审核",
-  documents: "开票资料",
-  notification: "通知供应商",
-  invoices: "等待收票",
-  comparison: "比对结果",
-  completion: "完成情况",
-  history: "流转记录",
-};
-export type Section = keyof typeof sectionLabels;
+// 任务详情按流程节点分区，key 与流程节点、开票跟进的节点一致
+export type Section = TaskStepKey;
 
 // 任务状态 → 徽标语义（与开票跟进列表一致）：橙=待处理，蓝=等供应商，紫=部分收票，绿=完成，灰=已替代
 const STATUS_TONE: Record<TaskStatus, Tone> = {
@@ -24,6 +16,7 @@ const STATUS_TONE: Record<TaskStatus, Tone> = {
   superseded: "neutral",
 };
 
+/** 任务概览：供应商与状态、收票进度（后端金额与百分比），以及可点击切换的六个节点。 */
 export function TaskOverview({
   detail,
   section,
@@ -37,27 +30,47 @@ export function TaskOverview({
   return (
     <Card className="itd-overview" aria-label="任务概览">
       <header className="itd-heading">
-        <div>
+        <div className="itd-heading__main">
           <p className="itd-eyebrow">
             {task.recordNumber || "报关单号缺失"} · 审核版本 {task.reviewRevision}
           </p>
           <div className="itd-title">
             <h2>{task.supplier}</h2>
             <Badge tone={STATUS_TONE[task.status]}>{task.statusLabel}</Badge>
+            {task.waitingLabel && <span className="itd-waiting">{task.waitingLabel}</span>}
           </div>
           <p className="itd-subtitle">
-            {task.company} · {task.orderNumbers.join("、")}
+            {task.company} · {task.currency} · 子采购单 {task.orderNumbers.join("、")}
           </p>
         </div>
-        <dl className="itd-amount">
-          <dt>应开金额</dt>
-          <dd>
-            <strong>{task.expectedAmount ?? "金额待确认"}</strong> {task.currency}
-          </dd>
-        </dl>
+        <div className="itd-receipt">
+          <dl>
+            <div>
+              <dt>应开金额</dt>
+              <dd>{task.expectedAmount ? money(task.expectedAmount) : "金额待确认"}</dd>
+            </div>
+            <div>
+              <dt>待收</dt>
+              <dd>
+                <strong>{task.outstandingAmount ? money(task.outstandingAmount) : "金额待确认"}</strong>{" "}
+                {task.currency}
+              </dd>
+            </div>
+          </dl>
+          {task.receiptPercent && task.receiptBarPercent ? (
+            <Progress
+              width={task.receiptBarPercent}
+              text={`已收 ${task.receiptPercent}%`}
+              label="收票金额进度"
+              tone={task.status === "completed" ? "success" : "info"}
+            />
+          ) : (
+            <span className="itd-subtitle">收票进度待确认</span>
+          )}
+        </div>
       </header>
 
-      {/* 节点 key 与内容分区一致，点击节点切换到对应分区 */}
+      {/* 节点 key 与内容分区一致，点击节点查看对应节点的处理内容 */}
       <Stepper
         label="任务节点，点击查看对应内容"
         steps={detail.steps}
@@ -65,35 +78,11 @@ export function TaskOverview({
         onSelect={(key) => onNavigate(key as Section)}
       />
 
-      <Alert tone={task.status === "superseded" ? "warning" : "info"} title={task.reason}>
-        <div className="itd-current">
-          <span>{detail.prepare.reason}</span>
-          {section !== "documents" && (
-            <Button size="sm" onClick={() => onNavigate("documents")}>
-              查看开票资料
-            </Button>
-          )}
-        </div>
-      </Alert>
-
-      <dl className="itd-facts">
-        <div>
-          <dt>审核来源环境</dt>
-          <dd>{task.account}</dd>
-        </div>
-        <div>
-          <dt>原件下载环境</dt>
-          <dd>{detail.downloadEnvironment || "未配置"}</dd>
-        </div>
-        <div>
-          <dt>任务生成时间（北京时间）</dt>
-          <dd>{formatTime(task.createdAt)}</dd>
-        </div>
-        <div>
-          <dt>依据说明</dt>
-          <dd>{detail.sourceMessage}</dd>
-        </div>
-      </dl>
+      {task.status === "superseded" && (
+        <Alert tone="warning" title="任务已被替代">
+          {task.reason}
+        </Alert>
+      )}
     </Card>
   );
 }

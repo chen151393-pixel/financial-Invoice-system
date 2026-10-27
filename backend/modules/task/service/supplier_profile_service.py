@@ -46,6 +46,7 @@ class SupplierProfileService:
                 ids = [row["id"] for row in found["items"]]
                 bindings = supplier_group_dao.by_suppliers(connection, ids)
                 settings = supplier_setting_dao.by_suppliers(connection, ids)
+            counts = self._counts(query.account)
         except SQLAlchemyError:
             raise ApiError(503, "供应商档案读取失败，请检查业务数据库") from None
         return SupplierProfileList(
@@ -65,7 +66,24 @@ class SupplierProfileService:
             pageSize=query.pageSize,
             pages=max(1, (found["total"] + query.pageSize - 1) // query.pageSize),
             manage=SupplierGroupService.capability(actor),
+            counts=counts,
         )
+
+    def _counts(self, account):
+        """概况计数：只数来源中有效的供应商（ID 集合交给来源门面过滤后计数）。"""
+        with self.engine.connect() as connection:
+            bound = supplier_group_dao.supplier_ids(connection)
+            notify_off = supplier_setting_dao.disabled_ids(connection)
+
+        def total(**scope):
+            return self.directory.suppliers(account, "", 1, 1, **scope)["total"]
+
+        return {
+            "all": total(),
+            "bound": total(include_ids=bound),
+            "unbound": total(exclude_ids=bound),
+            "notifyOff": total(include_ids=notify_off),
+        }
 
     def set_notify(self, body, actor):
         """人工开启或关闭供应商通知；带版本保存，只影响之后的财务审核。"""

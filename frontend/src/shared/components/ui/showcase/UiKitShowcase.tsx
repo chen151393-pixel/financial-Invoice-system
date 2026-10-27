@@ -25,6 +25,8 @@ import {
   Segmented,
   Skeleton,
   StageTabs,
+  StatCard,
+  StatGrid,
   Stepper,
   TrendChart,
 } from "..";
@@ -126,6 +128,40 @@ export function UiKitShowcase() {
         本页展示统一组件库（shared/components/ui）的全部组件与组合方式，数据均为虚构，不来自接口。新页面请从组件库组合，规范见
         docs/ui-components.md。
       </Alert>
+
+      <SectionTitle title="概况卡 StatCard" />
+      <StatGrid label="核对概况">
+        <StatCard glyph="全" label="全部报关单" value="20 张" note="当前查询条件下" />
+        <StatCard
+          glyph="审"
+          tone="warning"
+          label="待审核报关单"
+          value="14 张"
+          note="其中 3 张来源变化需重审"
+        />
+        <StatCard glyph="通" label="审核通过" value="6 张" note="可查看审核记录" />
+        <StatCard glyph="月" label="本月审核通过" value="112 张" note="按北京时间自然月统计" />
+      </StatGrid>
+      <StatGrid label="按节点筛选（compact，可点击）" min={140}>
+        {[
+          ["进", "进行中任务", "20 个", "primary"],
+          ["合", "待存合同", "19 个", "warning"],
+          ["通", "待通知供应商", "1 个", "neutral"],
+          ["票", "待供应商开票", "0 个", "neutral"],
+        ].map(([glyph, label, value, tone]) => (
+          <StatCard
+            key={label}
+            compact
+            glyph={glyph}
+            label={label}
+            value={value}
+            tone={tone as "primary" | "warning" | "neutral"}
+            note="后端给出的一句说明"
+            selected={node === label}
+            onSelect={() => setNode(label)}
+          />
+        ))}
+      </StatGrid>
 
       <SectionTitle
         title="指标卡 MetricCard"

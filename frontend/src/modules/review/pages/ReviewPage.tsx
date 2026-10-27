@@ -1,20 +1,28 @@
 import type { CurrencyEvidence } from "../types";
 import { useEffect, useRef, useState } from "react";
 import { useSearchParams } from "react-router";
-import { Pagination } from "../../../shared/components/Pagination";
+import { Card, CardFooter, CardHeader, Pagination, Segmented } from "../../../shared/components/ui";
 import { openLocalSession } from "../../identity/api";
 import { approveDeclaration, approveDeclarations, queryDeclarations } from "../api";
 import { BatchApproveDialog } from "../components/BatchApproveDialog";
 import { FinanceSearchForm } from "../components/FinanceSearchForm";
 import { FinanceComparison } from "../components/FinanceComparison";
 import { ReviewDialog } from "../components/ReviewDialog";
+import { ReviewStats } from "../components/ReviewStats";
 import type {
   BatchApproveResult,
   ComparisonGroup,
   ComparisonResult,
   ComparisonState,
   DeclarationListQuery,
+  ReviewFilter,
 } from "../types";
+
+const FILTER_LABELS: Record<ReviewFilter, string> = {
+  all: "全部报关单",
+  pending: "待审核",
+  approved: "审核通过",
+};
 
 export function ReviewPage() {
   const [searchParams] = useSearchParams();
@@ -31,6 +39,8 @@ export function ReviewPage() {
   // 每次加载成功递增，用于重置列表的展开状态。
   const [loads, setLoads] = useState(0);
   const [suppliers, setSuppliers] = useState<ComparisonResult["suppliers"]>([]);
+  // 最近一次成功结果的计数；重新查询时保留，概况卡与状态切换不闪烁
+  const [counts, setCounts] = useState<ComparisonResult["counts"] | null>(null);
   const [review, setReview] = useState<ComparisonGroup | null>(null);
   const [batch, setBatch] = useState<ComparisonGroup[] | null>(null);
   const [batchResult, setBatchResult] = useState<BatchApproveResult | null>(null);
@@ -49,6 +59,7 @@ export function ReviewPage() {
           setState({ kind: "ready", result });
           setLoads((value) => value + 1);
           setSuppliers(result.suppliers || []);
+          setCounts(result.counts);
         }
       } catch (error) {
         if (active)
@@ -103,54 +114,74 @@ export function ReviewPage() {
       setSubmitting(false);
     }
   }
+  const busy = state.kind === "loading" || submitting;
   return (
-    <>
-      <FinanceSearchForm
-        initial={{ keyword: query.keyword, supplierId: query.supplierId }}
-        busy={state.kind === "loading" || submitting}
-        suppliers={suppliers}
-        onSearch={(criteria) => {
-          setNotice("");
-          setQuery((current) => ({ ...current, ...criteria, page: 1 }));
-        }}
-        onRefresh={() => setRefresh((value) => value + 1)}
-      />
-      {notice && (
-        <p className="fr-status-note" role="status">
-          {notice}
-        </p>
-      )}
-      <FinanceComparison
-        key={state.kind === "ready" ? `ready-${loads}` : state.kind}
-        state={state}
-        filter={query.status}
-        onFilter={(status) => setQuery((current) => ({ ...current, status, page: 1 }))}
-        onReview={(group) => {
-          setApprovalError("");
-          setReview(group);
-        }}
-        onBatchApprove={(groups) => {
-          setApprovalError("");
-          setBatchResult(null);
-          setBatch(groups);
-        }}
-        onRetry={() => setRefresh((value) => value + 1)}
-        pagination={
-          state.kind === "ready" && (
-            <Pagination
-              label="报关单分页"
-              total={state.result.total ?? 0}
-              page={state.result.page ?? query.page}
-              pageCount={state.result.pages ?? 1}
-              pageSize={state.result.pageSize ?? query.pageSize}
-              pageSizes={[10, 20, 50]}
-              disabled={submitting}
-              onPageChange={(page) => setQuery((current) => ({ ...current, page }))}
-              onPageSizeChange={(pageSize) => setQuery((current) => ({ ...current, page: 1, pageSize }))}
+    <div className="fr-page">
+      {counts && <ReviewStats counts={counts} />}
+      <Card className="fr-panel">
+        <CardHeader
+          title="报关单"
+          actions={
+            <Segmented
+              label="按审核状态筛选"
+              value={query.status}
+              disabled={busy}
+              options={(Object.keys(FILTER_LABELS) as ReviewFilter[]).map((key) => ({
+                value: key,
+                label: FILTER_LABELS[key],
+                count: counts?.[key],
+              }))}
+              onChange={(status) => setQuery((current) => ({ ...current, status, page: 1 }))}
             />
-          )
-        }
-      />
+          }
+        />
+        <FinanceSearchForm
+          initial={{ keyword: query.keyword, supplierId: query.supplierId }}
+          busy={busy}
+          suppliers={suppliers}
+          onSearch={(criteria) => {
+            setNotice("");
+            setQuery((current) => ({ ...current, ...criteria, page: 1 }));
+          }}
+        />
+        {notice && (
+          <p className="fr-status-note" role="status">
+            {notice}
+          </p>
+        )}
+        <FinanceComparison
+          key={state.kind === "ready" ? `ready-${loads}` : state.kind}
+          state={state}
+          busy={busy}
+          onReview={(group) => {
+            setApprovalError("");
+            setReview(group);
+          }}
+          onBatchApprove={(groups) => {
+            setApprovalError("");
+            setBatchResult(null);
+            setBatch(groups);
+          }}
+          onRetry={() => setRefresh((value) => value + 1)}
+          pagination={
+            state.kind === "ready" && (
+              <CardFooter>
+                <Pagination
+                  label="报关单分页"
+                  total={state.result.total ?? 0}
+                  page={state.result.page ?? query.page}
+                  pageCount={state.result.pages ?? 1}
+                  pageSize={state.result.pageSize ?? query.pageSize}
+                  pageSizes={[10, 20, 50]}
+                  disabled={submitting}
+                  onPageChange={(page) => setQuery((current) => ({ ...current, page }))}
+                  onPageSizeChange={(pageSize) => setQuery((current) => ({ ...current, page: 1, pageSize }))}
+                />
+              </CardFooter>
+            )
+          }
+        />
+      </Card>
       {review && (
         <ReviewDialog
           key={`${review.id}-${review.contentSha256}`}
@@ -175,6 +206,6 @@ export function ReviewPage() {
           onApprove={(note) => void approveBatch(note)}
         />
       )}
-    </>
+    </div>
   );
 }

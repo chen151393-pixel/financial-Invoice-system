@@ -38,7 +38,7 @@ export const router = createBrowserRouter([
       {
         element: <RequireSession />,
         children: [
-          { path: paths.workbench, element: page("发票工作台", <WorkbenchWorkspacePage />) },
+          { path: paths.workbench, element: page("总体工作台", <WorkbenchWorkspacePage />) },
           { path: paths.pl, element: page("采购报关联查", <PlWorkspacePage />) },
           { path: paths.review, element: page("财务核对", <ReviewWorkspacePage />) },
           { path: legacyPaths.finance, element: <Navigate to={paths.review} replace /> },

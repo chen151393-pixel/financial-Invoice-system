@@ -21,6 +21,7 @@ export function QueueFilters({
   const set = (patch: Partial<Filters>) => setDraft((current) => ({ ...current, ...patch }));
   return (
     <FilterBar
+      embedded
       onSubmit={() => onApply(draft)}
       actions={
         <>

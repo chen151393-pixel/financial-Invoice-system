@@ -13,31 +13,60 @@
 }
 .platform-frame__content {
   max-width: 1700px;
-  padding: 28px 30px 40px;
+  padding: 24px 30px 48px;
   margin: auto;
+}
+/* 固定格式页头：白底通栏，左侧标题与说明，右侧只读信息；不放业务按钮 */
+.platform-frame__header {
+  background: var(--color-surface);
+  border-bottom: 1px solid var(--color-border);
+}
+.platform-frame__header-inner {
+  max-width: 1700px;
+  min-height: 88px;
+  box-sizing: border-box;
+  margin: auto;
+  padding: 16px 30px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px 24px;
 }
 .platform-frame__heading {
   display: flex;
-  justify-content: space-between;
-  align-items: flex-end;
-  flex-wrap: wrap;
-  gap: var(--space-control) 20px;
-  min-height: 40px;
-  margin-bottom: 20px;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
 }
 .platform-frame__heading h1 {
   margin: 0;
   font-size: 22px;
   font-weight: 700;
-  line-height: 1.35;
+  line-height: 1.3;
   letter-spacing: -0.01em;
 }
-/* 页头右侧只放本页操作；跨模块跳转交给侧栏 */
-.platform-frame__heading > :last-child:not(:first-child) {
+.platform-frame__heading p {
+  margin: 0;
+  color: var(--color-muted);
+  font-size: 13px;
+}
+.platform-frame__meta {
   display: flex;
   flex-wrap: wrap;
-  align-items: center;
-  gap: var(--space-small);
+  gap: 6px 20px;
+  margin: 0;
+  font-size: 12px;
+  color: var(--color-muted);
+}
+.platform-frame__meta > div {
+  display: flex;
+  gap: 6px;
+}
+.platform-frame__meta dd {
+  margin: 0;
+  color: var(--color-text);
+  font-weight: 500;
 }
 /* 二级页面的返回面包屑：链接前带"‹"，悬停变主色 */
 .platform-frame__crumb {
@@ -45,7 +74,7 @@
   align-items: center;
   flex-wrap: wrap;
   gap: 6px;
-  margin-bottom: 6px;
+  margin-bottom: 2px;
   color: var(--color-muted);
   font-size: 12px;
 }
@@ -81,10 +110,9 @@
     width: calc(100% - 64px);
   }
   .platform-frame__content {
-    padding: 24px 16px;
+    padding: 20px 16px 40px;
   }
-  .platform-frame__heading {
-    flex-direction: column;
-    align-items: flex-start;
+  .platform-frame__header-inner {
+    padding: 14px 16px;
   }
 }

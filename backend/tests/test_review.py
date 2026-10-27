@@ -94,7 +94,16 @@ def approve(service, item, note="核对无误", actor=USER):
 def test_list_states_counts_and_purchase_basis(service, seeded, engine):
     result = service.browse(query())
     # CD880 没有关联子采购单，拉取时已跳过，不出现在核对列表
-    assert result.counts == {"all": 1, "pending": 1, "approved": 0, "customs": 2, "purchase": 2, "shown": 1}
+    assert result.counts == {
+        "all": 1,
+        "pending": 1,
+        "approved": 0,
+        "changed": 0,
+        "approvedThisMonth": 0,
+        "customs": 2,
+        "purchase": 2,
+        "shown": 1,
+    }
     assert [item.recordNumber for item in result.groups] == ["CD870"]
     assert rows(engine, "SELECT id FROM source_customs_declarations WHERE record_no = 'CD880'") == []
     assert result.accounts == [ACCOUNT]
@@ -190,7 +199,8 @@ def test_approve_freezes_lines_and_publishes_event(service, seeded, received, en
     event = received[0]
     assert event.review_id == record[0]["id"] and event.superseded_review_id is None and event.revision == 1
     assert [line.review_line_id for line in event.lines] == [r["id"] for r in lines]
-    assert service.browse(query()).counts["approved"] == 1
+    counts = service.browse(query()).counts
+    assert counts["approved"] == 1 and counts["approvedThisMonth"] == 1  # 刚审核的计入本月
 
 
 def test_resubmit_same_content_is_idempotent(service, seeded, received, engine):
@@ -216,6 +226,7 @@ def test_source_change_after_approval_requires_new_review(service, seeded, ns, e
     save(ns, engine, bundle([purchase(amounts=("99.00", "20.00"))], [customs("870")]))
     changed = group(service, "CD870")
     assert changed.review.status == "pending" and changed.review.allowed and changed.warnings
+    assert service.browse(query()).counts["changed"] == 1  # 概况卡「来源变化需重审」
     result = approve(service, changed, note="重新审核")
     assert result.review.revision == 2 and result.review.status == "approved"
     statuses = [

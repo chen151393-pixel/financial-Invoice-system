@@ -17,6 +17,12 @@ def disabled(connection, supplier_ids):
     return {key for key, row in by_suppliers(connection, supplier_ids).items() if not row["notify_enabled"]}
 
 
+def disabled_ids(connection):
+    """全部关闭通知的供应商 ID（档案概况计数用）。"""
+    query = select(supplier_settings.c.supplier_id).where(supplier_settings.c.notify_enabled.is_(False))
+    return list(connection.execute(query).scalars())
+
+
 def get(connection, supplier_id, *, lock=False):
     query = select(supplier_settings).where(supplier_settings.c.supplier_id == supplier_id)
     if lock:
