@@ -26,6 +26,9 @@ class Todo(StrictModel):
     createdAt: str
     priority: int
     attention: bool = False
+    # 处理方：财务（核对、比对）或采购（开票跟进）；waitingDays 为自入库或生成起的天数
+    role: Literal["finance", "purchase"] = "finance"
+    waitingDays: int | None = None
 
 
 class WorkbenchCounts(StrictModel):
@@ -37,30 +40,9 @@ class WorkbenchCounts(StrictModel):
     preparation: int = 0
 
 
-class StageCount(StrictModel):
-    """业务状态分区：按报关单计数（报关单下当前任务中最慢的阶段）。"""
-
-    key: Literal["pending_review", "notify", "invoicing", "documents", "completed"]
-    label: str
-    count: int
-
-
 class SupplierOption(StrictModel):
     id: str
     name: str
-
-
-class CurrencyAmount(StrictModel):
-    currency: str
-    amount: str | None
-
-
-class MonthProgress(StrictModel):
-    month: str
-    total: int
-    completed: int
-    percent: str | None
-    received: list[CurrencyAmount]
 
 
 class SupplierRank(StrictModel):
@@ -70,19 +52,17 @@ class SupplierRank(StrictModel):
     currency: str
     amount: str
     percent: str
+    # 该供应商未完成任务中最早生成的已等待天数；超过 15 天为 overdue
+    longestDays: int = 0
+    overdue: bool = False
 
 
-class TrendPoint(StrictModel):
-    date: str
-    amount: str | None
-    percent: str
-    negative: bool
+class FlowPosition(StrictModel):
+    """停在某一位置（待财务审核或开票跟进节点）的报关单数。"""
 
-
-class InvoiceTrend(StrictModel):
-    currency: str
-    hasNegative: bool
-    points: list[TrendPoint]
+    key: str
+    label: str
+    count: int
 
 
 class FunnelStep(StrictModel):
@@ -91,6 +71,42 @@ class FunnelStep(StrictModel):
     count: int
     # 相对上一步的通过率（百分比字符串）；第一步或上一步为 0 时为空
     rate: str | None
+    # 卡在上一步与这一步之间的报关单，按位置分项
+    stuck: list[FlowPosition] = Field(default_factory=list)
+
+
+class Funnel(StrictModel):
+    steps: list[FunnelStep]
+    # 整体完结率：完结 / 第一步；第一步为 0 时为空
+    completionRate: str | None
+
+
+class NodeShare(StrictModel):
+    key: str
+    label: str
+    count: int
+    percent: str
+
+
+class NodeDistribution(StrictModel):
+    total: int
+    nodes: list[NodeShare]
+
+
+class Kpi(StrictModel):
+    """关键指标：value 为十进制字符串（金额）或整数文本；series 为近 6 个月序列，只用于画走势线。"""
+
+    key: str
+    label: str
+    role: Literal["finance", "purchase"]
+    value: str
+    unit: str
+    currency: str
+    delta: str
+    direction: Literal["up", "down", "flat"]
+    tone: Literal["positive", "warning", "neutral"]
+    hint: str
+    series: list[str]
 
 
 class MonthlyReceipt(StrictModel):
@@ -103,11 +119,20 @@ class MonthlyReceipt(StrictModel):
     unknownTasks: int
 
 
+class AnomalyCount(StrictModel):
+    label: str
+    count: int
+    # 相对最多一类的条长（0–100）
+    percent: str
+
+
 class QueueTiers(StrictModel):
     all: int
     high: int
     medium: int
     low: int
+    # 待审核建议中比对项不一致的分类计数（一条建议可属多类），按数量倒序
+    anomalies: list[AnomalyCount] = Field(default_factory=list)
 
 
 class Workbench(StrictModel):
@@ -115,8 +140,7 @@ class Workbench(StrictModel):
     accounts: list[str]
     counts: WorkbenchCounts
     filteredCounts: WorkbenchCounts
-    stages: list[StageCount] = Field(default_factory=list)
-    # 审核通过但没有开票任务（供应商均关闭通知）的报关单，不进分区与待办
+    # 审核通过但没有开票任务（供应商均关闭通知）的报关单，不进漏斗与待办
     noTaskCount: int = 0
     # 供应商筛选选项（有效报关单关联的供应商）；suppliers 为待收票排名
     supplierOptions: list[SupplierOption] = Field(default_factory=list)
@@ -125,15 +149,12 @@ class Workbench(StrictModel):
     page: int
     pageSize: int
     pages: int
-    month: MonthProgress
+    kpis: list[Kpi] = Field(default_factory=list)
     suppliers: list[SupplierRank]
     unknownSupplierAmounts: int
-    trendStart: str
-    trendEnd: str
-    latestInvoiceDate: str | None
-    trend: list[InvoiceTrend]
-    # 业务流程漏斗（由五个业务状态累加）、按任务生成月份的人民币应开与已收、待审核比对建议的置信度分档
-    funnel: list[FunnelStep] = Field(default_factory=list)
+    # 业务流程漏斗（按报关单）、开票任务节点分布、按任务生成月份的人民币应开与已收、待审核比对建议
+    funnel: Funnel | None = None
+    nodes: NodeDistribution | None = None
     monthly: list[MonthlyReceipt] = Field(default_factory=list)
     queue: QueueTiers | None = None
 

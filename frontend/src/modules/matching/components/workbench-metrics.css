@@ -1,100 +1,87 @@
-/* 业务流程漏斗：五步累计计数与上一环节通过率，条长按第一步计数绘制；卡点链接进入对应列表。 */
+/* 业务流程漏斗：六步居中条形，条长按第一步计数绘制；右侧为通过率与卡点链接。 */
 .wb-flow {
   display: grid;
-  gap: 4px;
+  gap: 10px;
   margin: 0;
-  padding: 0 12px 14px;
+  padding: 4px 20px 20px;
   list-style: none;
 }
 .wb-flow__row {
   display: grid;
-  grid-template-columns: 150px minmax(0, 1fr) 120px;
-  grid-template-areas:
-    "step bar value"
-    "step note note";
+  grid-template-columns: minmax(96px, 150px) minmax(0, 1fr) minmax(120px, 190px);
   align-items: center;
-  gap: 4px 14px;
-  padding: 10px 8px;
-  border-radius: var(--radius-control);
-  color: var(--color-text);
-  text-decoration: none;
+  gap: 16px;
 }
 .wb-flow__step {
-  grid-area: step;
-  display: flex;
-  align-items: center;
-  gap: var(--space-small);
   font-size: 13px;
-  font-weight: 600;
-}
-.wb-flow__step b {
-  display: grid;
-  place-items: center;
-  flex-shrink: 0;
-  width: 22px;
-  height: 22px;
-  border-radius: 999px;
-  background: var(--color-primary-soft);
-  color: var(--color-primary-strong);
-  font-size: 11px;
+  font-weight: 500;
 }
 .wb-flow__bar {
-  grid-area: bar;
-  height: 22px;
-  border-radius: 6px;
-  background: var(--color-canvas);
-  overflow: hidden;
+  display: flex;
+  justify-content: center;
+  height: 34px;
 }
 .wb-flow__bar > span {
-  display: block;
-  height: 100%;
-  border-radius: inherit;
-  background: var(--color-chart-1);
-}
-/* 从入库到完结由深到浅，同一色系 */
-.wb-flow__bar > [data-step="1"] {
-  background: var(--color-chart-2);
-}
-.wb-flow__bar > [data-step="2"] {
-  background: var(--color-chart-3);
-}
-.wb-flow__bar > [data-step="3"] {
-  background: var(--color-chart-4);
-}
-.wb-flow__bar > [data-step="4"] {
-  background: var(--color-chart-line);
-}
-.wb-flow__foot {
-  margin: 0;
-  padding: 0 20px 16px;
-}
-.wb-flow__value {
-  grid-area: value;
   display: flex;
-  align-items: baseline;
-  justify-content: flex-end;
-  gap: 6px;
-}
-.wb-flow__value strong {
-  font-size: 20px;
-  line-height: 1.2;
-  font-weight: 700;
+  align-items: center;
+  justify-content: center;
+  min-width: 44px;
+  height: 100%;
+  border-radius: 8px;
+  background: var(--color-primary-strong);
+  color: var(--color-surface);
+  font-size: 13px;
+  font-weight: 600;
   font-variant-numeric: tabular-nums;
 }
-.wb-flow__value > span,
+/* 从入库到完结由深到浅，同一色系；浅色条用深色文字 */
+.wb-flow__bar > [data-step="1"] {
+  background: var(--color-primary);
+}
+.wb-flow__bar > [data-step="2"] {
+  background: color-mix(in srgb, var(--color-primary) 85%, var(--color-surface));
+}
+.wb-flow__bar > [data-step="3"] {
+  background: var(--color-chart-2);
+}
+.wb-flow__bar > [data-step="4"] {
+  background: color-mix(in srgb, var(--color-chart-2) 70%, var(--color-surface));
+  color: var(--color-text);
+}
+.wb-flow__bar > [data-step="5"] {
+  background: var(--color-chart-3);
+  color: var(--color-text);
+}
 .wb-flow__note {
+  display: grid;
+  gap: 2px;
   color: var(--color-muted);
   font-size: 12px;
 }
-.wb-flow__note {
-  grid-area: note;
+.wb .wb-flow__stuck {
+  color: var(--color-feedback);
+  font-weight: 500;
+}
+.wb-flow__rate {
+  color: var(--color-muted);
+  font-size: 12px;
+  white-space: nowrap;
+}
+.wb-flow__rate strong {
+  margin-left: 4px;
+  color: var(--color-text);
+  font-size: 18px;
+  font-variant-numeric: tabular-nums;
 }
 @media (max-width: 760px) {
+  .wb-flow {
+    padding: 4px 14px 16px;
+  }
   .wb-flow__row {
-    grid-template-columns: minmax(0, 1fr) auto;
-    grid-template-areas:
-      "step value"
-      "bar bar"
-      "note note";
+    grid-template-columns: minmax(0, 1fr);
+    gap: 6px;
+  }
+  .wb-flow__bar {
+    justify-content: flex-start;
   }
 }

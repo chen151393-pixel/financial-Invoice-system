@@ -208,6 +208,32 @@ export function UiKitShowcase() {
           />
           <MetricCard label="资料待补齐" value="5" icon="contract" hint="多为回签合同未上传" />
           <MetricCard
+            featured="solid"
+            label="本月应开金额（实底主指标）"
+            value="¥ 3,286,400.00"
+            badge={
+              <Badge dot={false} tone="info">
+                财务
+              </Badge>
+            }
+            delta={{ text: "较上月 +12.4%", direction: "up", tone: "neutral" }}
+            hint="本月生成 86 个开票任务"
+            sparkline={TOTAL}
+          />
+          <MetricCard
+            label="待通知供应商"
+            value="11"
+            unit="个"
+            badge={
+              <Badge dot={false} tone="warning">
+                采购
+              </Badge>
+            }
+            delta={{ text: "另有 6 个待存合同", direction: "flat", tone: "warning" }}
+            hint="合同已归档，可通知供应商开票"
+            sparkline={EXCEL}
+          />
+          <MetricCard
             label="平均等待天数"
             value="6.4"
             unit="天"
@@ -257,6 +283,40 @@ export function UiKitShowcase() {
                 { key: "manual", label: "人工比对", values: MANUAL, texts: wan(MANUAL) },
                 { key: "excel", label: "Excel 导入", values: EXCEL, texts: wan(EXCEL) },
               ]}
+            />
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader
+            title="应开与已收票金额趋势"
+            description="grouped 并排柱 + 右轴收票率（lineAxis=percent）"
+          />
+          <CardContent>
+            <TrendChart
+              label="应开与已收票金额趋势（演示）"
+              grouped
+              lineAxis="percent"
+              categories={["5月", "6月", "7月", "8月", "9月", "10月"]}
+              bars={[
+                {
+                  key: "expected",
+                  label: "应开金额",
+                  color: "var(--color-chart-3)",
+                  values: [241, 259, 248, 272, 295, 301],
+                },
+                {
+                  key: "received",
+                  label: "已收票金额",
+                  color: "var(--color-chart-1)",
+                  values: [219, 228, 214, 236, 247, 240],
+                },
+              ]}
+              line={{
+                key: "rate",
+                label: "收票率",
+                values: [91, 88, 86, 87, 84, 80],
+                texts: ["91%", "88%", "86%", "87%", "84%", "80%"],
+              }}
             />
           </CardContent>
         </Card>

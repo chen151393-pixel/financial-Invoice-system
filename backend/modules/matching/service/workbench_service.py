@@ -2,13 +2,14 @@
 
 import csv
 import io
-from collections import defaultdict
+from collections import Counter, defaultdict
 from datetime import UTC, datetime
+from decimal import Decimal
 
 from sqlalchemy.exc import SQLAlchemyError
 
 from backend.core.errors import ApiError
-from backend.modules.invoice.public import invoice_daily_amounts, latest_invoice_date, read_invoices
+from backend.modules.invoice.public import read_invoices
 from backend.modules.review.public import workbench_reviews
 from backend.modules.source.public import (
     admission_issues,
@@ -20,16 +21,12 @@ from backend.modules.task.public import workbench_tasks
 
 from ..dao import allocation_dao, workbench_allocation_dao
 from ..mapper.workbench_mapper import matching_todo, review_todo, task_todo
+from ..policy.anomaly_policy import check_categories
 from ..policy.comparison_policy import HIGH, MEDIUM
-from ..policy.workbench_reports import (
-    BUSINESS_ZONE,
-    funnel,
-    invoice_trend,
-    month_report,
-    monthly_receipts,
-    supplier_ranking,
-)
-from ..policy.workbench_scope import Scope, stage_counts, supplier_options
+from ..policy.workbench_flow import declaration_positions, funnel, node_distribution
+from ..policy.workbench_kpis import kpis
+from ..policy.workbench_reports import BUSINESS_ZONE, monthly_receipts, percent, supplier_ranking
+from ..policy.workbench_scope import Scope, supplier_options
 from ..vo.workbench_vo import Workbench, WorkbenchCounts
 
 
@@ -60,8 +57,7 @@ def select_rows(rows, query):
     return selected, filtered_counts
 
 
-def matching_rows(connection, supplier_id=None):
-    rows = workbench_allocation_dao.read(connection)
+def matching_rows(connection, rows, now, supplier_id=None):
     contexts = purchase_lines(connection, [row["purchase_line_id"] for row in rows])
     if supplier_id:
         rows = [
@@ -72,7 +68,25 @@ def matching_rows(connection, supplier_id=None):
     for row in rows:
         account = contexts.get(row["purchase_line_id"], {}).get("ns_account") or ""
         grouped[(row["invoice_id"], account)].append(row)
-    return [matching_todo(key, own, invoices.get(key[0], {}), contexts) for key, own in grouped.items()]
+    return [matching_todo(key, own, invoices.get(key[0], {}), contexts, now) for key, own in grouped.items()]
+
+
+def anomaly_counts(rows):
+    """待审核建议按不一致的比对项分类计数（一条建议可属多类），按数量倒序。"""
+    found = Counter()
+    for row in rows:
+        if row["status"] == "proposed":
+            found.update(
+                check_categories(
+                    (c.get("key"), c.get("label"), c.get("result"), c.get("invoiceValue"))
+                    for c in (row["checks"] or {}).get("items", [])
+                )
+            )
+    ranked = found.most_common()
+    top = Decimal(ranked[0][1]) if ranked else Decimal(0)
+    return [
+        {"label": label, "count": count, "percent": percent(Decimal(count), top)} for label, count in ranked
+    ]
 
 
 class WorkbenchService:
@@ -99,15 +113,17 @@ class WorkbenchService:
             query, china_day_range(query.createdFrom, query.createdTo) if query.createdFrom else None
         )
         reviews = workbench_reviews(connection, declarations)
-        stages, no_task = stage_counts(
+        positions, no_task = declaration_positions(
             declarations,
             {row["id"] for row in reviews},
             tasks,
             scope,
             lambda row: not admission_issues(row["declaration_no"], row["order_count"]),
         )
-        rows = [review_todo(row) for row in reviews if scope.declaration(row)]
-        rows += matching_rows(connection, scope.supplier_id)
+        allocations = workbench_allocation_dao.read(connection)
+        scoped_reviews = [row for row in reviews if scope.declaration(row)]
+        rows = [review_todo(row, now) for row in scoped_reviews]
+        rows += matching_rows(connection, allocations, now, scope.supplier_id)
         rows += [
             task_todo(row, heads)
             for row in tasks
@@ -122,9 +138,7 @@ class WorkbenchService:
             return export_csv(selected)
         scoped_tasks = [r for r in tasks if not query.account or r["ns_account"] == query.account]
         today = now.astimezone(BUSINESS_ZONE).date()
-        latest = latest_invoice_date(connection)
-        trend_end = query.trendEnd or today
-        trend_start = query.trendStart or today.replace(day=1)
+        monthly = monthly_receipts(scoped_tasks, today)
         rank, unknown = supplier_ranking(scoped_tasks)
         total = len(selected)
         pages = max(1, (total + query.pageSize - 1) // query.pageSize)
@@ -135,7 +149,6 @@ class WorkbenchService:
             accounts=accounts,
             counts=counts(scoped),
             filteredCounts=filtered_counts,
-            stages=stages,
             noTaskCount=no_task,
             supplierOptions=supplier_options(declarations, query.account),
             items=selected[start : start + query.pageSize],
@@ -143,18 +156,16 @@ class WorkbenchService:
             page=page,
             pages=pages,
             pageSize=query.pageSize,
-            month=month_report(scoped_tasks, today),
+            kpis=kpis(monthly=monthly, tasks=scoped_tasks, reviews=scoped_reviews, today=today),
             suppliers=rank,
             unknownSupplierAmounts=unknown,
-            trendStart=trend_start.isoformat(),
-            trendEnd=trend_end.isoformat(),
-            latestInvoiceDate=latest.isoformat() if latest else None,
-            trend=invoice_trend(
-                invoice_daily_amounts(connection, trend_start, trend_end), trend_end, trend_start
-            ),
-            funnel=funnel(stages),
-            monthly=monthly_receipts(scoped_tasks, today),
-            queue=allocation_dao.proposal_counts(connection, HIGH, MEDIUM),
+            funnel=funnel(positions),
+            nodes=node_distribution(scoped_tasks),
+            monthly=monthly,
+            queue={
+                **allocation_dao.proposal_counts(connection, HIGH, MEDIUM),
+                "anomalies": anomaly_counts(allocations),
+            },
         )
 
 
@@ -174,6 +185,7 @@ def export_csv(rows):
             "状态",
             "业务状态",
             "关注原因",
+            "等待天数",
         ]
     )
     labels = {"review": "财务核对", "matching": "发票比对", "task": "开票跟进"}
@@ -190,6 +202,7 @@ def export_csv(rows):
             row.statusLabel,
             row.stageLabel,
             row.reason,
+            "" if row.waitingDays is None else str(row.waitingDays),
         ]
         # CSV 单元格按文本打开，避免外部单号、供应商名被表格程序当公式执行。
         writer.writerow(

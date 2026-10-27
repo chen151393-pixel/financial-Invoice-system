@@ -13,6 +13,8 @@
   --color-danger-text: #a12622;
   --color-danger-surface: #fff2f0;
   --color-warning-surface: #fff4e5;
+  /* 提醒色：超期、需关注等小面积标记（条形、走势线），不用于大面积底色 */
+  --color-warning: #d9761f;
   --color-progress-text: #6941c6;
   --color-progress-surface: #f4f0ff;
   --color-success-text: #067647;

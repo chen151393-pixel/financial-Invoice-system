@@ -6,6 +6,9 @@ open_lines(connection, purchase_line_ids=None, lock=False)
     lock=True 时在调用方事务中按"任务 → 任务行"顺序加锁，供 matching 确认分配时使用。
 """
 
+# 开票跟进节点（与任务台一致）
+from .policy.board_policy import NODE_LABELS, NODES
+
 # 业务状态（只读汇总）：任务状态 → 业务状态；报关单取当前任务中最慢的阶段
 from .policy.stage_policy import STAGE_LABELS, STAGES, declaration_stage, task_stage
 from .service.task_line_reader import active_line_ids as active_line_ids
@@ -19,6 +22,8 @@ __all__ = [
     "STAGE_LABELS",
     "declaration_stage",
     "task_stage",
+    "NODES",
+    "NODE_LABELS",
 ]
 
 from .service.task_line_reader import related_line_ids as related_line_ids

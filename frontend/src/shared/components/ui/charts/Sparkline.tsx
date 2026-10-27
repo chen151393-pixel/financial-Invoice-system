@@ -6,7 +6,7 @@ export function Sparkline({
   height = 32,
 }: {
   values: readonly number[];
-  tone?: "primary" | "success" | "danger";
+  tone?: "primary" | "success" | "danger" | "warning" | "inverse";
   width?: number;
   height?: number;
 }) {

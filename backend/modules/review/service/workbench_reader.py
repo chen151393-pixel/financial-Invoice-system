@@ -23,6 +23,8 @@ def workbench_reviews(connection, declarations):
             {
                 **row,
                 "review_state": state,
+                # 已审核后来源变化、需重新审核
+                "changed": changed,
                 "reason": CHANGED_WARNING if changed else "核对报关与关联子采购后，整单审核",
             }
         )

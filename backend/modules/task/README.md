@@ -250,3 +250,8 @@ MySQL 命名锁保证多实例单消费者，并对同一任务的同一子采�
 ## 供应商开票时效（2026-10-27）
 
 `GET /api/tasks/supplier-groups/profiles/invoicing-speed`：近 90 天发票收齐的任务，统计通知供应商到发票收齐的天数，按供应商取平均（一位小数），从慢到快返回前 8 家，超过 15 天标为偏慢。通知时间取任务首次进入 `awaiting_invoice` 的事件时间，收齐时间取首次进入 `documents_incomplete` 或 `completed` 的事件时间（`event_dao.first_reached`，不含被替代任务）；规则在 `policy/invoicing_speed_policy.py`。供应商档案接口另返回 `counts`（全部、已绑定开票群、未绑定、已关闭通知），不受关键字与状态筛选影响。测试：`backend/tests/test_invoicing_speed.py`、`test_supplier_profiles.py`。
+
+## 工作台节点事实（2026-10-27）
+
+- 判定当前节点所需的事实读取从 `TaskBoardService` 抽出为 `service/board_facts.py`（`board_facts`），任务台与工作台共用，节点计数一致。
+- `workbench_tasks` 每个任务新增 `node` / `node_label`（未完成任务按事实判定，已完成为 done）、`status_reason`、`waiting_days`（未完成任务自生成起的天数）；原拼接等待天数的 `reason` 移除。`public.py` 新增暴露 `NODES`、`NODE_LABELS`。

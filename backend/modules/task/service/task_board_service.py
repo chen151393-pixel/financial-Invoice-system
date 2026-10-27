@@ -4,25 +4,18 @@
 进行中的任务全部参与节点计数（需按事实逐个判定当前节点）；已完成任务只按状态计数，选中时再分页读取。
 """
 
-from collections import Counter, defaultdict
+from collections import Counter
 
 from sqlalchemy.exc import SQLAlchemyError
 
 from backend.core.errors import ApiError
 
-from ..dao import (
-    declaration_document_dao,
-    document_dao,
-    notification_dao,
-    signed_contract_dao,
-    task_dao,
-    task_line_dao,
-)
-from ..mapper import document_mapper, notification_mapper, task_mapper
-from ..policy.board_policy import NODE_HINTS, NODE_LABELS, NODES, current_node, next_action
+from ..dao import notification_dao, task_dao
+from ..mapper import task_mapper
+from ..policy.board_policy import NODE_HINTS, NODE_LABELS, NODES, next_action
 from ..policy.task_policy import OPEN_STATUSES
 from ..vo.task_vo import BoardItem, BoardNode, TaskBoard
-from .basis_guard import CHANGED, changed_task_ids
+from .board_facts import board_facts
 from .task_service import READ_ERROR
 
 
@@ -58,7 +51,7 @@ class TaskBoardService:
                 )
                 open_rows = task_dao.by_statuses(connection, where, OPEN_STATUSES)
                 done_total = task_dao.status_counts(connection, where).get("completed", 0)
-                facts = self._facts(connection, open_rows)
+                facts = board_facts(connection, open_rows)
                 if query.node == "done":
                     page_rows = task_dao.by_statuses(
                         connection,
@@ -68,7 +61,7 @@ class TaskBoardService:
                         limit=query.pageSize,
                         newest_first=True,
                     )
-                    facts.update(self._facts(connection, page_rows))
+                    facts.update(board_facts(connection, page_rows))
                     total = done_total
                 else:
                     # 工作台按报关单阶段下钻时，保留该范围内已完成的同单任务。
@@ -77,7 +70,7 @@ class TaskBoardService:
                         if query.stage and not query.node
                         else []
                     )
-                    facts.update(self._facts(connection, scoped_done))
+                    facts.update(board_facts(connection, scoped_done))
                     selected = [
                         row
                         for row in open_rows + scoped_done
@@ -108,48 +101,6 @@ class TaskBoardService:
             pageSize=query.pageSize,
             pages=max(1, (total + query.pageSize - 1) // query.pageSize),
         )
-
-    def _facts(self, connection, rows):
-        """批量读取判定节点所需的事实：合同归档、最新通知、报关资料、回签合同与来源是否变化。"""
-        if not rows:
-            return {}
-        task_ids = [row["id"] for row in rows]
-        lines = task_line_dao.by_tasks(connection, task_ids)
-        own = defaultdict(list)
-        for line in lines:
-            own[line["task_id"]].append(line)
-        archived = document_dao.archived_orders(connection, task_ids)
-        latest = notification_dao.latest_by_tasks(connection, task_ids)
-        signed = signed_contract_dao.by_orders(
-            connection, sorted({line["purchase_order_id"] for line in lines})
-        )
-        declarations = declaration_document_dao.by_declarations(
-            connection, sorted({row["customs_declaration_id"] for row in rows})
-        )
-        changed = changed_task_ids(connection, lines)
-        result = {}
-        for row in rows:
-            order_ids = sorted({line["purchase_order_id"] for line in own[row["id"]]})
-            saved = archived.get(row["id"], set())
-            notice = latest.get(row["id"])
-            completion = document_mapper.completion_of(
-                order_ids, saved, declarations.get(row["customs_declaration_id"], {}), signed
-            )
-            steps = task_mapper.steps(
-                row["status"],
-                bool(order_ids) and set(order_ids) <= saved,
-                bool(notice and notice["status"] == "sent"),
-                notification_mapper.status_label(notice),
-                completion.reason,
-            )
-            result[row["id"]] = {
-                "lines": own[row["id"]],
-                "steps": steps,
-                "node": current_node(steps),
-                "missing": completion.missing,
-                "blocked": CHANGED if row["id"] in changed else "",
-            }
-        return result
 
     def _item(self, row, fact, names, contact):
         node = fact["node"]

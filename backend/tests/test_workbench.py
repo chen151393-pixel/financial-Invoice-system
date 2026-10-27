@@ -1,20 +1,15 @@
 """工作台：真实业务链路、全量筛选导出、币种日期口径和只读认证。"""
 
-from datetime import datetime, timedelta
+from datetime import datetime
 from decimal import Decimal
 
 from backend.app import create_app
 from backend.core.config import load_settings
-from backend.modules.invoice.entity import headers
 from backend.modules.matching.dto.matching_dto import ConfirmBody
 from backend.modules.matching.dto.workbench_dto import WorkbenchQuery
-from backend.modules.matching.policy.workbench_reports import (
-    BUSINESS_ZONE,
-    funnel,
-    month_report,
-    monthly_receipts,
-    supplier_ranking,
-)
+from backend.modules.matching.policy.workbench_flow import funnel, node_distribution
+from backend.modules.matching.policy.workbench_kpis import kpis
+from backend.modules.matching.policy.workbench_reports import monthly_receipts, supplier_ranking
 from backend.modules.matching.service.workbench_service import WorkbenchService
 from backend.tests.documents_ready import complete_documents
 from backend.tests.invoice_files import invoice
@@ -26,7 +21,6 @@ from backend.tests.test_matching import world as world
 from backend.tests.test_source_storage import ACCOUNT, bundle, customs, purchase, save
 from backend.tests.test_task import USER, approve
 from fastapi.testclient import TestClient
-from sqlalchemy import update
 
 
 def read(engine, **values):
@@ -46,7 +40,8 @@ def test_empty_auth_validation_and_export(engine, env):
             assert result.status_code == 200, result.text
         result = read(engine)
         assert result.counts.all == 0 and result.items == []
-        assert result.month.percent is None and result.trend == []
+        assert result.funnel.completionRate is None and result.nodes.total == 0
+        assert [k.key for k in result.kpis] == ["expected", "received", "outstanding", "review", "notify"]
 
 
 def test_review_to_task_to_receipt_and_version_review(engine, ns, world):
@@ -71,11 +66,13 @@ def test_review_to_task_to_receipt_and_version_review(engine, ns, world):
         world["allocations"].confirm(int(row.id), ConfirmBody(), USER)
     result = read(engine)
     assert result.counts.matching == result.counts.task == 0
-    assert result.month.completed == 1
-    assert Decimal(result.month.received[0].amount) == Decimal("120.5")
+    received = next(k for k in result.kpis if k.key == "received")
+    assert Decimal(received.value) == Decimal("120.5") and received.hint == "已收齐 1 / 1 个任务"
     # 漏斗与按月应开/已收：已完结的报关单走完全部环节；本月人民币应开与已收各 120.5
-    assert [(step.key, step.count) for step in result.funnel][-1] == ("completed", 1)
-    assert all(step.count == 1 for step in result.funnel) and result.funnel[1].rate == "100.0"
+    steps = result.funnel.steps
+    assert [(step.key, step.count) for step in steps][-1] == ("completed", 1)
+    assert all(step.count == 1 for step in steps) and steps[1].rate == "100.0"
+    assert result.funnel.completionRate == "100.0" and result.nodes.total == 0
     current = result.monthly[-1]
     assert (Decimal(current.expected), Decimal(current.received), current.percent) == (
         Decimal("120.5"),
@@ -86,7 +83,8 @@ def test_review_to_task_to_receipt_and_version_review(engine, ns, world):
     import_invoices(world, [invoice(number, [INK, FLUID], remark="SUB-200 换版")])
     result = read(engine)
     assert result.counts.reverify == result.counts.matching == 1
-    assert result.counts.task == 1 and result.month.completed == 0
+    assert result.counts.task == 1
+    assert next(k for k in result.kpis if k.key == "received").hint == "已收齐 0 / 1 个任务"
 
 
 def test_filters_pagination_and_full_export(engine, ns, world, reviewed):
@@ -106,70 +104,6 @@ def test_filters_pagination_and_full_export(engine, ns, world, reviewed):
     assert exported["count"] == 2 and "CD870" in exported["content"] and "CD890" in exported["content"]
     assert "CD880" not in exported["content"]
     assert service.read(WorkbenchQuery(keyword="SUB-200"), export=True)["count"] == 1
-
-
-def test_invoice_trend_normal_only_by_date_currency_and_global_scope(engine, world):
-    today = datetime.now(BUSINESS_ZONE).date()
-    import_invoices(world, [invoice(f"2600000000000000991{i}", [INK]) for i in range(4)])
-    with engine.begin() as connection:
-        connection.execute(update(headers).values(invoice_date=today))
-        connection.execute(update(headers).where(headers.c.invoice_no.endswith("1")).values(currency="USD"))
-        connection.execute(update(headers).where(headers.c.invoice_no.endswith("2")).values(status="void"))
-        connection.execute(
-            update(headers)
-            .where(headers.c.invoice_no.endswith("3"))
-            .values(invoice_date=today - timedelta(days=7))
-        )
-    data = read(
-        engine,
-        account="NO_NS_ACCOUNT",
-        keyword="没有匹配",
-        kind="task",
-        trendStart=today - timedelta(days=6),
-        trendEnd=today,
-    )
-    assert data.total == 0
-    trend = {row.currency: row for row in data.trend}
-    assert set(trend) == {"CNY", "USD"}
-    for series in trend.values():
-        assert len(series.points) == 1 and Decimal(series.points[-1].amount) == Decimal("100.5")
-        assert series.points[-1].percent == "100.0"
-        assert series.points[0].date == today.isoformat()
-
-
-def test_month_uses_shanghai_boundary_not_completion_month():
-    today = datetime(2026, 10, 19).date()
-    base = {
-        "created_at": datetime(2026, 9, 30, 16),
-        "status": "completed",
-        "currency": "CNY",
-        "received": Decimal("0.1"),
-    }
-    report = month_report(
-        [
-            base,
-            {**base, "created_at": datetime(2026, 9, 30, 15, 59)},
-            {**base, "status": "awaiting_invoice", "currency": "USD", "received": Decimal("0.2")},
-        ],
-        today,
-    )
-    assert report["total"] == 2 and report["completed"] == 1 and report["percent"] == "50.0"
-    assert report["received"] == [{"currency": "CNY", "amount": "0.1"}, {"currency": "USD", "amount": "0.2"}]
-
-
-def test_funnel_accumulates_stages_and_rates():
-    stages = [
-        {"key": "pending_review", "count": 16},
-        {"key": "notify", "count": 17},
-        {"key": "invoicing", "count": 41},
-        {"key": "documents", "count": 8},
-        {"key": "completed", "count": 46},
-    ]
-    steps = funnel(stages)
-    assert [step["count"] for step in steps] == [128, 112, 95, 54, 46]
-    assert steps[0]["rate"] is None and steps[1]["rate"] == "87.5"
-    empty = funnel([{"key": key, "count": 0} for key in ("pending_review", "notify")])
-    assert all(step["rate"] is None for step in empty)
 
 
 def test_monthly_receipts_by_creation_month_cny_only():
@@ -202,6 +136,7 @@ def test_ranking_does_not_mix_currencies_or_partial_unknown_totals():
         "currency": "CNY",
         "outstanding": Decimal("0.1"),
     }
+    base["waiting_days"] = 3
     result, unknown = supplier_ranking(
         [
             base,
@@ -214,29 +149,13 @@ def test_ranking_does_not_mix_currencies_or_partial_unknown_totals():
     )
     assert unknown == 1
     assert [(row["currency"], row["amount"]) for row in result] == [("CNY", "0.3"), ("USD", "10")]
+    assert result[0]["longestDays"] == 3 and not result[0]["overdue"]
 
 
 def test_source_changes_return_to_review(engine, ns, world, reviewed):
     assert read(engine).counts.review == 0
     save(ns, engine, bundle([purchase(amounts=("200", "20"))], [customs("870")]))
     assert read(engine).counts.review == 1
-
-
-def test_trend_preserves_unknown_and_negative_values():
-    from backend.modules.matching.policy.workbench_reports import invoice_trend
-
-    today = datetime(2026, 10, 19).date()
-    result = invoice_trend(
-        [
-            {"date": today, "currency": "CNY", "amount": Decimal("-10.123456")},
-            {"date": today - timedelta(days=1), "currency": "CNY", "amount": None},
-        ],
-        today,
-    )[0]
-    assert result["hasNegative"]
-    assert result["points"][-1]["amount"] == "-10.123456"
-    assert result["points"][-1]["negative"]
-    assert result["points"][-2]["amount"] is None
 
 
 def test_export_treats_external_names_as_text(engine, ns):
@@ -248,73 +167,94 @@ def test_export_treats_external_names_as_text(engine, ns):
     assert "' =HYPERLINK" in content
 
 
-def test_trend_defaults_to_current_month_and_custom_historical_range(engine, world):
-    today = datetime.now(BUSINESS_ZONE).date()
-    previous = today.replace(day=1) - timedelta(days=1)
-    import_invoices(world, [invoice(f"2600000000000000888{i}", [INK]) for i in range(3)])
-    with engine.begin() as connection:
-        connection.execute(update(headers).values(invoice_date=previous))
-        connection.execute(
-            update(headers).where(headers.c.invoice_no.endswith("1")).values(invoice_date=today)
-        )
-        connection.execute(
-            update(headers)
-            .where(headers.c.invoice_no.endswith("2"))
-            .values(invoice_date=today, status="void")
-        )
-    default = read(engine)
-    assert (default.trendStart, default.trendEnd) == (today.replace(day=1).isoformat(), today.isoformat())
-    assert len(default.trend[0].points) == 1
-    assert Decimal(default.trend[0].points[-1].amount) == Decimal("100.50")
-    custom = read(engine, trendStart=previous, trendEnd=today)
-    assert len(custom.trend[0].points) == 2
-    assert sum(Decimal(p.amount) for p in custom.trend[0].points) == Decimal("201.00")
-    assert custom.counts == default.counts
-    with engine.begin() as connection:
-        connection.execute(update(headers).values(invoice_date=previous))
-    historical_only = read(engine)
-    assert historical_only.trend == []
-    assert historical_only.latestInvoiceDate == previous.isoformat()
-    assert read(engine, trendStart=previous, trendEnd=previous).trend
+def test_funnel_counts_positions_and_stuck_breakdown():
+    from collections import Counter
 
-
-def test_invalid_trend_ranges_rejected_by_api(engine, env):
-    app = create_app(load_settings(env), engine=engine)
-    with TestClient(app) as client:
-        auth = {"Authorization": "Bearer " + env["SERVICE_API_KEY"]}
-        for payload in (
-            {"trendStart": "2026-08-14"},
-            {"trendStart": "2026-08-22", "trendEnd": "2026-08-14"},
-            {"trendStart": "2026-01-01", "trendEnd": "2026-10-19"},
-            {"trendStart": "invalid", "trendEnd": "2026-08-22"},
-        ):
-            assert client.post("/api/matching/workbench/query", json=payload, headers=auth).status_code == 400
-        response = client.post(
-            "/api/matching/workbench/query",
-            json={"trendStart": "2026-08-14", "trendEnd": "2026-08-22"},
-            headers=auth,
-        )
-        assert response.status_code == 200
-        assert response.json()["trendStart"] == "2026-08-14"
-
-
-def test_trend_only_includes_invoiced_dates_even_for_zero_amounts():
-    from backend.modules.matching.policy.workbench_reports import invoice_trend
-
-    end = datetime(2026, 8, 31).date()
-    start = end.replace(day=1)
-    result = invoice_trend(
-        [
-            {"date": end.replace(day=22), "currency": "CNY", "amount": Decimal("10.50")},
-            {"date": end.replace(day=14), "currency": "CNY", "amount": Decimal("0.00")},
-            {"date": end.replace(day=18), "currency": "USD", "amount": None},
-            {"date": start - timedelta(days=1), "currency": "CNY", "amount": Decimal("99.00")},
-        ],
-        end,
-        start,
+    positions = Counter(
+        pending_review=16, documents=6, notification=11, invoices=27, comparison=5, completion=8, done=54
     )
-    assert [point["date"] for point in result[0]["points"]] == ["2026-08-14", "2026-08-22"]
-    assert result[0]["points"][0]["amount"] == "0.00"
-    assert result[0]["points"][1]["percent"] == "100.0"
-    assert [point["date"] for point in result[1]["points"]] == ["2026-08-18"]
-    assert result[1]["points"][0]["amount"] is None
+    result = funnel(positions)
+    steps = result["steps"]
+    assert [step["count"] for step in steps] == [127, 111, 105, 94, 67, 54]
+    assert steps[0]["rate"] is None and steps[1]["rate"] == "87.4"
+    assert [(s["key"], s["count"]) for s in steps[1]["stuck"]] == [("pending_review", 16)]
+    assert [(s["label"], s["count"]) for s in steps[-1]["stuck"]] == [("部分收票", 5), ("待补资料", 8)]
+    assert result["completionRate"] == "42.5"
+    empty = funnel(Counter())
+    assert empty["completionRate"] is None and all(step["rate"] is None for step in empty["steps"])
+
+
+def test_node_distribution_excludes_completed_tasks():
+    tasks = [{"node": "invoices"}] * 3 + [{"node": "documents"}, {"node": "done"}]
+    result = node_distribution(tasks)
+    assert result["total"] == 4
+    shares = {row["key"]: (row["count"], row["percent"]) for row in result["nodes"]}
+    assert shares["invoices"] == (3, "75.0") and shares["completion"] == (0, "0.0")
+    assert "done" not in shares
+
+
+def test_kpis_month_change_outstanding_and_counts():
+    today = datetime(2026, 10, 19).date()
+    monthly = [
+        {"month": m, "expected": e, "received": r, "percent": p}
+        for m, e, r, p in (
+            ("2026-05", "0", "0", None),
+            ("2026-06", "0", "0", None),
+            ("2026-07", "0", "0", None),
+            ("2026-08", "0", "0", None),
+            ("2026-09", "200", "100", "50.0"),
+            ("2026-10", "250", "50", "20.0"),
+        )
+    ]
+    base = {
+        "created_at": datetime(2026, 10, 2),
+        "currency": "CNY",
+        "status": "awaiting_invoice",
+        "node": "invoices",
+        "ns_account": "A",
+        "supplier_id": 1,
+        "outstanding": Decimal("30"),
+        "waiting_days": 17,
+    }
+    tasks = [
+        base,
+        {**base, "supplier_id": 2, "outstanding": None, "node": "notification", "waiting_days": 2},
+        {**base, "node": "documents", "status": "documents_pending"},
+        {**base, "status": "completed", "node": "done", "outstanding": Decimal("0")},
+        {**base, "currency": "USD", "outstanding": Decimal("999")},
+    ]
+    reviews = [{"changed": True, "ns_created_at": datetime(2026, 9, 3)}, {"changed": False}]
+    found = {k["key"]: k for k in kpis(monthly=monthly, tasks=tasks, reviews=reviews, today=today)}
+    assert found["expected"]["delta"] == "较上月 +25.0%" and found["expected"]["direction"] == "up"
+    assert found["expected"]["hint"] == "本月生成 4 个开票任务"
+    assert found["received"]["delta"] == "收票率 20.0%" and found["received"]["hint"] == "已收齐 1 / 4 个任务"
+    outstanding = found["outstanding"]
+    assert outstanding["value"] == "60" and outstanding["tone"] == "warning"
+    assert outstanding["hint"] == "涉及 1 家供应商，另有 1 个任务金额待核实"
+    assert outstanding["series"][-1] == "60"
+    assert found["review"]["value"] == "2" and found["review"]["delta"] == "1 张来源变化需重审"
+    assert found["review"]["series"][-2:] == ["1", "0"]
+    assert (found["notify"]["value"], found["notify"]["delta"]) == ("1", "另有 1 个待存合同")
+    assert found["notify"]["role"] == "purchase"
+
+
+def test_anomaly_counts_only_proposals_and_skip_missing_data():
+    from backend.modules.matching.service.workbench_service import anomaly_counts
+
+    def check(key, result, value="x"):
+        return {"key": key, "label": key, "result": result, "invoiceValue": value}
+
+    rows = [
+        {"status": "proposed", "checks": {"items": [check("unit", "mismatch"), check("price", "mismatch")]}},
+        {
+            "status": "proposed",
+            "checks": {"items": [check("unit", "partial"), check("buyer", "missing", None)]},
+        },
+        {"status": "proposed", "checks": {"items": [check("price", "missing")]}},
+        {"status": "proposed", "checks": None},
+        {"status": "confirmed", "checks": {"items": [check("amount", "mismatch")]}},
+    ]
+    assert anomaly_counts(rows) == [
+        {"label": "单位", "count": 2, "percent": "100.0"},
+        {"label": "价格", "count": 1, "percent": "50.0"},
+    ]

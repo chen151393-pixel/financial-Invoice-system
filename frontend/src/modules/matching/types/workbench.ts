@@ -10,8 +10,6 @@ export type WorkbenchQuery = {
   sort: "priority" | "oldest" | "newest";
   page: number;
   pageSize: number;
-  trendStart?: string | null;
-  trendEnd?: string | null;
 };
 export type Todo = {
   key: string;
@@ -31,19 +29,40 @@ export type Todo = {
   createdAt: string;
   priority: number;
   attention: boolean;
+  // 处理方与自入库或生成起的天数（后端给出）
+  role: Role;
+  waitingDays: number | null;
 };
+export type Role = "finance" | "purchase";
 export type WorkbenchCounts = Record<TodoKind | "reverify" | "preparation", number>;
+// 关键指标：value 为十进制字符串（金额）或整数文本，series 为近 6 个月序列，只用于画走势线
+export type Kpi = {
+  key: string;
+  label: string;
+  role: Role;
+  value: string;
+  unit: string;
+  currency: string;
+  delta: string;
+  direction: "up" | "down" | "flat";
+  tone: "positive" | "warning" | "neutral";
+  hint: string;
+  series: string[];
+};
+export type FunnelStep = {
+  key: string;
+  label: string;
+  count: number;
+  // 相对上一步的通过率；第一步或上一步为 0 时为空
+  rate: string | null;
+  // 卡在上一步与这一步之间的报关单，key 为 pending_review 或开票跟进节点
+  stuck: { key: string; label: string; count: number }[];
+};
 export type Workbench = {
   generatedAt: string;
   accounts: string[];
   counts: WorkbenchCounts;
   filteredCounts: WorkbenchCounts;
-  // 业务状态分区（按报关单计数）
-  stages: {
-    key: "pending_review" | "notify" | "invoicing" | "documents" | "completed";
-    label: string;
-    count: number;
-  }[];
   noTaskCount: number;
   supplierOptions: { id: string; name: string }[];
   items: Todo[];
@@ -51,13 +70,7 @@ export type Workbench = {
   page: number;
   pageSize: number;
   pages: number;
-  month: {
-    month: string;
-    total: number;
-    completed: number;
-    percent: string | null;
-    received: { currency: string; amount: string | null }[];
-  };
+  kpis: Kpi[];
   suppliers: {
     key: string;
     supplier: string;
@@ -65,13 +78,14 @@ export type Workbench = {
     currency: string;
     amount: string;
     percent: string;
+    longestDays: number;
+    overdue: boolean;
   }[];
   unknownSupplierAmounts: number;
-  trendStart: string;
-  trendEnd: string;
-  latestInvoiceDate: string | null;
-  // 业务流程漏斗（后端由业务状态累加，rate 为相对上一步的通过率）
-  funnel: { key: string; label: string; count: number; rate: string | null }[];
+  // 业务流程漏斗（按报关单）与整体完结率
+  funnel: { steps: FunnelStep[]; completionRate: string | null } | null;
+  // 进行中开票任务按节点分布
+  nodes: { total: number; nodes: { key: string; label: string; count: number; percent: string }[] } | null;
   // 按任务生成月份的人民币应开与目前已收票金额（最近 6 个月）
   monthly: {
     month: string;
@@ -81,13 +95,14 @@ export type Workbench = {
     percent: string | null;
     unknownTasks: number;
   }[];
-  // 待审核比对建议按置信度分档
-  queue: { all: number; high: number; medium: number; low: number } | null;
-  trend: {
-    currency: string;
-    hasNegative: boolean;
-    points: { date: string; amount: string | null; percent: string; negative: boolean }[];
-  }[];
+  // 待审核比对建议按置信度分档，以及比对项不一致的分类计数
+  queue: {
+    all: number;
+    high: number;
+    medium: number;
+    low: number;
+    anomalies: { label: string; count: number; percent: string }[];
+  } | null;
 };
 export const todoLabels: Record<TodoKind, string> = {
   all: "全部待办",
@@ -95,3 +110,4 @@ export const todoLabels: Record<TodoKind, string> = {
   matching: "待比对 / 复核",
   task: "待开票",
 };
+export const roleLabels: Record<Role, string> = { finance: "财务", purchase: "采购" };

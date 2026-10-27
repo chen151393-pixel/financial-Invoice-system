@@ -23,7 +23,7 @@ import { Card, CardHeader, CardContent, MetricCard, MetricGrid, Badge } from "..
 | ---------------------------------------------------- | ---------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
 | `SectionTitle`                                       | 页面分区标题（左侧主色竖条） | 可带数量 `count` 与右侧 `actions`                                                                                                            |
 | `Card` / `CardHeader` / `CardContent` / `CardFooter` | 内容面板                     | 按头、内容、底部组合；`CardContent flush` 用于表格贴边                                                                                       |
-| `MetricCard` / `MetricGrid`                          | 指标卡与栅格                 | `featured` 主色主指标（一屏最多一个）；`delta.tone` 由调用方按业务含义指定；`onSelect`+`selected` 时作为筛选按钮；可带 `sparkline`、`footer` |
+| `MetricCard` / `MetricGrid`                          | 指标卡与栅格                 | `featured` 主色主指标（一屏最多一个；`true` 浅主色底，`"solid"` 主色实底白字，用于总览页头号指标）；`badge` 右上角标签（如财务 / 采购）；`delta.tone` 由调用方按业务含义指定（`warning` 为需关注）；`onSelect`+`selected` 时作为筛选按钮；可带 `sparkline`、`footer` |
 | `StatCard` / `StatGrid`                              | 概况卡与栅格                 | 一个字的图块 + 标签 + 数值 + 说明；`tone`：neutral / warning（积压提醒）/ primary（合计）；`compact` 一行排开多张；`onSelect`+`selected` 作筛选；`StatGrid min` 设最小列宽 |
 | `Badge`                                              | 状态徽标                     | `tone`：warning 待处理、info 等外部、progress 部分完成、success 已完成、danger 失败/阻塞、neutral 已替代                                     |
 | `StageTabs`                                          | 流程分区条                   | 按流程顺序横排各阶段（数量 + 说明），阶段间箭头连接，左侧可放合计；`terminal` 终态不画箭头；窄屏换行为多列                                   |
@@ -61,3 +61,9 @@ import { Card, CardHeader, CardContent, MetricCard, MetricGrid, Badge } from "..
 ## 验证
 
 2026-10-25 在本地隔离 SQLite（合成数据）预览：`/ui-kit` 与 `/tasks/board` 在 1440px 与 375px 下检查，无页面横向溢出；任务台节点筛选与地址同步、来源变化提示、已完成分区可用。未做浏览器以外的视觉回归基线；暗色模式未适配（项目当前无暗色主题）。
+
+## 2026-10-27 补充
+
+- `TrendChart` 新增 `grouped`（并排柱）与 `lineAxis="percent"`（折线按右侧 0–100% 轴绘制并在点上显示 `texts`，“—”不标注）；系列可传 `color`（设计变量）。展示页新增“应开与已收票金额趋势”示例。
+- `Sparkline` 新增 `warning`、`inverse`（实底卡片上反白）色调。
+- 设计变量新增 `--color-warning`：超期、需关注等小面积标记（条形、走势线），不用于大面积底色。

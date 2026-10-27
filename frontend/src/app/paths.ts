@@ -36,10 +36,14 @@ function withQuery(path: string, filters: Record<string, string>) {
 export const reviewListPath = (filters: { status?: string }) => withQuery(paths.review, filters);
 export const taskListPath = (filters: {
   stage?: string;
+  // 开票跟进节点（documents / notification / invoices / comparison / completion / done）
+  node?: string;
   supplierId?: string;
   createdFrom?: string;
   createdTo?: string;
 }) => withQuery(paths.tasks, filters);
+// 比对审核队列：tier 为置信度分档（high / medium / low），空为全部
+export const matchingQueuePath = (filters: { tier?: string }) => withQuery(paths.matching, filters);
 export const syncBatchPath = (id: string) => `${paths.syncBatches}/${encodeURIComponent(id)}`;
 export const writebackRequestPath = (id: string) => `${paths.writeback}/${encodeURIComponent(id)}`;
 export const matchingInvoicePath = (invoiceId: string) =>

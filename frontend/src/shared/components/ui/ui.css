@@ -335,6 +335,12 @@ button.ui-metric:focus-visible {
 .ui-metric__delta[data-tone="negative"] {
   color: var(--color-danger-text);
 }
+.ui-metric__delta[data-tone="warning"] {
+  color: var(--color-feedback);
+}
+.ui-metric__badge {
+  flex-shrink: 0;
+}
 .ui-metric__delta > span {
   margin-left: 4px;
   color: var(--color-muted);
@@ -360,6 +366,27 @@ button.ui-metric:focus-visible {
 .ui-metric--featured .ui-metric__value strong {
   font-size: 34px;
   color: var(--color-primary-strong);
+}
+/* 实底主指标：主色底白字，文字与走势线统一反白 */
+.ui-metric--solid {
+  border-color: var(--color-primary);
+  background: var(--color-primary);
+  color: var(--color-surface);
+}
+.ui-metric--solid .ui-metric__label,
+.ui-metric--solid .ui-metric__value strong,
+.ui-metric--solid .ui-metric__value span,
+.ui-metric--solid .ui-metric__delta,
+.ui-metric--solid .ui-metric__delta[data-tone],
+.ui-metric--solid .ui-metric__hint {
+  color: var(--color-surface);
+}
+.ui-metric--solid .ui-metric__hint {
+  opacity: 0.85;
+}
+.ui-metric--solid .ui-badge {
+  background: color-mix(in srgb, var(--color-surface) 18%, transparent);
+  color: var(--color-surface);
 }
 
 /* Segmented */
@@ -1024,6 +1051,12 @@ button.ui-metric:focus-visible {
   stroke: currentColor;
   stroke-width: 2;
 }
+.ui-chart__point-label {
+  fill: var(--color-chart-line);
+  font-size: 11px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
 .ui-chart__tooltip {
   position: absolute;
   transform: translateX(-50%);
@@ -1106,6 +1139,12 @@ button.ui-metric:focus-visible {
 }
 .ui-sparkline[data-tone="danger"] polyline {
   stroke: var(--color-danger-text);
+}
+.ui-sparkline[data-tone="warning"] polyline {
+  stroke: var(--color-warning);
+}
+.ui-sparkline[data-tone="inverse"] polyline {
+  stroke: var(--color-surface);
 }
 .ui-gauge {
   display: inline-grid;

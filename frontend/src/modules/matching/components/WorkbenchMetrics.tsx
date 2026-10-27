@@ -1,92 +1,70 @@
 import { Link } from "react-router";
 import { reviewListPath, taskListPath } from "../../../app/paths";
-import type { Workbench, WorkbenchQuery } from "../types/workbench";
+import type { Workbench } from "../types/workbench";
 import "./workbench-metrics.css";
 
-// 漏斗每一步“卡在上一步”的报关单即对应的业务状态分区
-const STUCK: Record<string, Workbench["stages"][number]["key"]> = {
-  approved: "pending_review",
-  notified: "notify",
-  received: "invoicing",
-  completed: "documents",
-};
-
 /**
- * 业务流程漏斗：后端由五个业务状态累加出“至少走到这一步”的报关单数与上一环节通过率；
- * 每步附“卡在上一环节”的分区计数，点击进入带同样筛选条件的列表。条长只按第一步计数画图。
+ * 业务流程漏斗：后端按报关单给出六步"至少走到这一步"的计数、上一环节通过率、整体完结率，
+ * 以及卡在上一步的分项（待财务审核或开票跟进节点），分项链接进入对应列表。条长只按第一步计数画图。
  */
 export function WorkbenchMetrics({
-  stages,
   funnel,
   noTaskCount,
-  query,
 }: {
-  stages: Workbench["stages"];
-  funnel: Workbench["funnel"];
+  funnel: NonNullable<Workbench["funnel"]>;
   noTaskCount: number;
-  query: WorkbenchQuery;
 }) {
-  const scope = {
-    supplierId: query.supplierId,
-    createdFrom: query.createdFrom,
-    createdTo: query.createdTo,
-  };
-  const first = Math.max(1, funnel[0]?.count ?? 0);
-  const stageOf = (key: string) => stages.find((stage) => stage.key === key);
+  const first = Math.max(1, funnel.steps[0]?.count ?? 0);
   return (
     <section className="wb-panel" aria-labelledby="wb-flow-title">
-      <div className="wb-panel__head">
-        <h2 id="wb-flow-title">业务流程</h2>
-        <span className="wb-count">按报关单累计</span>
+      <div className="wb-panel__head wb-panel__head--split">
+        <div>
+          <h2 id="wb-flow-title">业务流程漏斗</h2>
+          <p className="wb-panel__sub">报关单从入库到资料齐全完结，各环节通过量与停留量</p>
+        </div>
+        <span className="wb-flow__rate">
+          整体完结率 <strong>{funnel.completionRate === null ? "—" : `${funnel.completionRate}%`}</strong>
+        </span>
       </div>
       <ol className="wb-flow" aria-label="业务流程漏斗">
-        {funnel.map((step, index) => {
-          const stuck = STUCK[step.key] ? stageOf(STUCK[step.key]) : undefined;
-          return (
-            <li key={step.key} className="wb-flow__row">
-              <span className="wb-flow__step">
-                <b>{index + 1}</b>
-                {step.label}
+        {funnel.steps.map((step, index) => (
+          <li key={step.key} className="wb-flow__row">
+            <span className="wb-flow__step">{step.label}</span>
+            <span className="wb-flow__bar">
+              <span
+                data-step={index}
+                style={{ width: `${Math.max(6, Math.round((step.count / first) * 100))}%` }}
+              >
+                {step.count}
               </span>
-              <span className="wb-flow__bar" aria-hidden="true">
-                <span
-                  data-step={index}
-                  style={{ width: `${Math.max(4, Math.round((step.count / first) * 100))}%` }}
-                />
-              </span>
-              <span className="wb-flow__value">
-                <strong>{step.count}</strong>
-                <span>张报关单</span>
-              </span>
-              <span className="wb-flow__note">
+            </span>
+            <span className="wb-flow__note">
+              <span>
                 {index === 0
                   ? "起点"
                   : step.rate === null
                     ? "上一环节为 0，暂无通过率"
                     : `上一环节通过 ${step.rate}%`}
-                {stuck && stuck.count > 0 && (
-                  <>
-                    {" · "}
-                    <Link
-                      to={
-                        stuck.key === "pending_review"
-                          ? reviewListPath({ status: "pending" })
-                          : taskListPath({ ...scope, stage: stuck.key })
-                      }
-                    >
-                      {stuck.count} 张{stuck.label} →
-                    </Link>
-                  </>
-                )}
               </span>
-            </li>
-          );
-        })}
+              {step.stuck.map((item) => (
+                <Link
+                  key={item.key}
+                  className="wb-flow__stuck"
+                  to={
+                    item.key === "pending_review"
+                      ? reviewListPath({ status: "pending" })
+                      : taskListPath({ node: item.key })
+                  }
+                >
+                  {item.count} 张{item.label} →
+                </Link>
+              ))}
+            </span>
+          </li>
+        ))}
       </ol>
       {noTaskCount > 0 && (
-        <p className="wb-report-note wb-flow__foot">
-          另有 {noTaskCount} 张无需开票（供应商关闭通知），不计入漏斗。
-        </p>
+        <p className="wb-report-note">另有 {noTaskCount} 张无需开票（供应商关闭通知），不计入漏斗。</p>
       )}
     </section>
   );

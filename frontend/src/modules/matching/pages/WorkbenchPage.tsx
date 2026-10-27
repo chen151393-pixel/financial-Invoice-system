@@ -1,14 +1,20 @@
 import { Button } from "../../../shared/components/Button";
 import { WorkbenchKpis } from "../components/WorkbenchKpis";
 import { WorkbenchMetrics } from "../components/WorkbenchMetrics";
-import { WorkbenchQueueTiers, WorkbenchReceipts } from "../components/WorkbenchReceipts";
+import { WorkbenchNodes } from "../components/WorkbenchNodes";
+import { WorkbenchQueue } from "../components/WorkbenchQueue";
+import { WorkbenchReceipts } from "../components/WorkbenchReceipts";
 import { WorkbenchSuppliers } from "../components/WorkbenchSuppliers";
 import { WorkbenchTodos } from "../components/WorkbenchTodos";
 import { WorkbenchToolbar } from "../components/WorkbenchToolbar";
-import { WorkbenchTrend } from "../components/WorkbenchTrend";
 import type { useWorkbench } from "../hooks/useWorkbench";
 import "../components/workbench.css";
+import "../components/workbench-reports.css";
 
+/**
+ * 财务 · 采购总体工作台：关键指标 → 业务流程漏斗 → 应开与已收趋势 + 节点分布 → 供应商待收排行 + 比对队列 → 优先处理。
+ * 所有数字来自后端，页面只排版；查询和导出不触发审核、通知或 NS 写入。
+ */
 export function WorkbenchPage({ state }: { state: ReturnType<typeof useWorkbench> }) {
   return (
     <div className="wb">
@@ -23,33 +29,22 @@ export function WorkbenchPage({ state }: { state: ReturnType<typeof useWorkbench
           <strong>工作台暂时无法加载</strong>
           <p>{state.error}</p>
           <Button onClick={state.refresh}>重新加载</Button>
-          {(state.query.trendStart || state.query.trendEnd) && (
-            <Button onClick={() => state.change({ trendStart: null, trendEnd: null })}>
-              恢复默认开票日期
-            </Button>
-          )}
         </div>
       )}
       {state.data && (
         <>
-          <WorkbenchKpis data={state.data} />
-          {/* 业务流程漏斗与比对队列、应开已收与供应商待收票分两行并排，窄屏上下排列 */}
+          <WorkbenchKpis kpis={state.data.kpis} />
+          {state.data.funnel && (
+            <WorkbenchMetrics funnel={state.data.funnel} noTaskCount={state.data.noTaskCount} />
+          )}
           <div className="wb-columns">
-            <WorkbenchMetrics
-              stages={state.data.stages ?? []}
-              funnel={state.data.funnel ?? []}
-              noTaskCount={state.data.noTaskCount ?? 0}
-              query={state.query}
-            />
-            {state.data.queue && <WorkbenchQueueTiers queue={state.data.queue} />}
+            <WorkbenchReceipts monthly={state.data.monthly} />
+            {state.data.nodes && <WorkbenchNodes nodes={state.data.nodes} />}
           </div>
-          <div className="wb-columns">
-            <WorkbenchReceipts monthly={state.data.monthly ?? []} />
-            <aside className="wb-aside" aria-label="收票情况">
-              <WorkbenchSuppliers data={state.data} />
-            </aside>
+          <div className="wb-columns wb-columns--even">
+            <WorkbenchSuppliers data={state.data} />
+            {state.data.queue && <WorkbenchQueue queue={state.data.queue} />}
           </div>
-          <WorkbenchTrend data={state.data} change={state.change} />
           {state.exportNotice && (
             <p className="wb-feedback" role="status">
               {state.exportNotice}
@@ -65,16 +60,15 @@ export function WorkbenchPage({ state }: { state: ReturnType<typeof useWorkbench
           <details className="wb-definitions">
             <summary>统计口径</summary>
             <p>
-              业务状态分区按报关单计数：待审核的为“待审批”，其余取报关单下当前任务中最慢的阶段（待通知开票 →
-              待核票 → 资料已回 →
-              开票完成）；没有开票任务（供应商均关闭通知）的为“无需开票”，不进分区。待办表中待核对以报关单计数；比对待办按发票与采购账套计数，含待审核建议与待复核分配；待开票以未完成、未被替代的任务计数。不同类型可能涉及同一业务，合计为待办事项数，不是唯一单据数。
+              关键指标的金额只统计人民币任务：本月应开与已收票按任务生成月份（北京时间），待收金额为所有未完成任务；走势线为近
+              6 个月的同口径序列。待财务审核按报关单计数，待通知供应商按开票跟进节点计数。
             </p>
             <p>
-              报关单可能共享子采购行，工作台不重复汇总应开金额；进入核对页查看明细。待收金额沿用任务逐行扣减有效收票的口径，未知值以“—”展示，各币种独立统计。
+              业务流程漏斗按报关单计数：待审核的停在“财务审核”，其余取报关单下当前任务中最慢的开票跟进节点（与开票跟进页同一判定），全部任务完成为“资料齐全完结”；没有开票任务（供应商均关闭通知）的为“无需开票”，不进漏斗。节点分布按进行中的任务计数。
             </p>
             <p>
-              流程：同步报关与子采购 → 财务审核 → 准备合同并通知供应商 → 导入进项发票 → 人工比对审核 →
-              自动更新任务收票进度。页面查询和导出不触发审核、通知或 NS 写入。
+              供应商待收票按供应商、账套与币种分组，各币种取前 6
+              名；金额或币种不完整的分组不参与排名。比对队列的不一致分类按待审核建议计数，一条建议可属多类。待办中不同类型可能涉及同一业务，合计为待办事项数，不是唯一单据数。
             </p>
           </details>
         </>

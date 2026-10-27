@@ -26,7 +26,6 @@ from .service.invoice_reader import (
     read_invoice_status_scope,
     read_invoices,
 )
-from .service.invoice_trend_reader import invoice_daily_amounts, latest_invoice_date
 from .service.lemon_refresh_reader import read_lemon_refresh_targets
 from .vo.invoice_vo import InvoiceList
 
@@ -41,8 +40,6 @@ class InvoicesImported:
 __all__ = [
     "invoice_ids_between",
     "read_lemon_refresh_targets",
-    "invoice_daily_amounts",
-    "latest_invoice_date",
     "InvoicesImported",
     "lock_invoice",
     "invoices_by_number",

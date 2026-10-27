@@ -16,15 +16,27 @@ CATEGORIES = {
 }
 
 
+def check_categories(checks):
+    """比对项 → 不一致的异常分类；checks 为 (key, label, result, invoiceValue)。
+
+    工作台按原始比对项统计时只用这一步；超开与不能通过需要完整分配视图，见 anomalies。
+    """
+    return list(
+        dict.fromkeys(
+            CATEGORIES.get(key, label)
+            for key, label, result, invoice_value in checks
+            if result != "match"
+            and not (key == "buyer" and invoice_value is None)
+            and not (key == "price" and result == "missing")
+        )
+    )
+
+
 def anomalies(view):
     """view：分配视图（AllocationView）；返回异常分类列表，空表示正常。"""
-    found = [
-        CATEGORIES.get(check.key, check.label)
-        for check in view.checks
-        if check.result != "match"
-        and not (check.key == "buyer" and check.invoiceValue is None)
-        and not (check.key == "price" and check.result == "missing")
-    ]
+    found = check_categories(
+        (check.key, check.label, check.result, check.invoiceValue) for check in view.checks
+    )
     if view.exceedsExpected:
         found.append("超开")
     if not view.confirm.allowed:

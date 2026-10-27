@@ -2,9 +2,10 @@ import { useState } from "react";
 import "./workbench-todos.css";
 import { Link } from "react-router";
 import { matchingInvoicePath, paths, taskPath } from "../../../app/paths";
-import { Button, Pagination, Tabs } from "../../../shared/components/ui";
+import { Badge, Button, Pagination, Tabs } from "../../../shared/components/ui";
 import { money } from "../../../shared/format/money";
 import {
+  roleLabels,
   todoLabels,
   type Todo,
   type TodoKind,
@@ -35,7 +36,10 @@ export function WorkbenchTodos({
   return (
     <section className="wb-panel wb-todos" aria-labelledby="wb-todos-title">
       <div className="wb-panel__head">
-        <h2 id="wb-todos-title">待办处理</h2>
+        <div>
+          <h2 id="wb-todos-title">优先处理</h2>
+          <p className="wb-panel__sub">按紧急程度排序 · 标签标明由财务还是采购处理</p>
+        </div>
         <span className="wb-count">共 {data.counts.all} 项</span>
       </div>
       <div className="wb-todos__tabs">
@@ -97,29 +101,25 @@ export function WorkbenchTodos({
       )}
       <div className="wb-table-scroll" role="region" aria-label="待办表格，可横向滚动">
         <table className="wb-table">
-          <colgroup>
-            <col className="wb-col-kind" />
-            <col className="wb-col-document" />
-            <col className="wb-col-supplier" />
-            <col className="wb-col-amount" />
-            <col className="wb-col-status" />
-            <col className="wb-col-action" />
-          </colgroup>
           <thead>
             <tr>
-              <th>类型</th>
-              <th>关联单据</th>
-              <th>供应商</th>
-              <th className="wb-number">待处理金额</th>
-              <th>关注原因</th>
-              <th>操作</th>
+              <th className="wb-col-kind">事项</th>
+              <th className="wb-col-document">单据</th>
+              <th className="wb-col-supplier">供应商</th>
+              <th className="wb-col-amount wb-number">金额</th>
+              <th className="wb-col-wait wb-number">等待</th>
+              <th className="wb-col-status">原因</th>
+              <th className="wb-col-action">操作</th>
             </tr>
           </thead>
           <tbody>
             {data.items.map((row) => (
               <tr key={row.key}>
                 <td>
-                  <span className="wb-kind" data-kind={row.kind}>
+                  <span className="wb-kind">
+                    <Badge dot={false} tone={row.role === "finance" ? "info" : "warning"}>
+                      {roleLabels[row.role]}
+                    </Badge>
                     {todoLabels[row.kind]}
                   </span>
                 </td>
@@ -132,6 +132,7 @@ export function WorkbenchTodos({
                   {row.amount !== null ? `${row.currency || "币种待核实"} ${money(row.amount)}` : "—"}
                   <small>{row.amountLabel}</small>
                 </td>
+                <td className="wb-number">{row.waitingDays === null ? "—" : `${row.waitingDays} 天`}</td>
                 <td>
                   <span className={`wb-status${row.attention ? " wb-status--attention" : ""}`}>
                     {row.statusLabel}

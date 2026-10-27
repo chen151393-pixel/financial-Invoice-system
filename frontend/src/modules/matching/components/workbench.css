@@ -69,9 +69,18 @@
 .wb-panel__body {
   padding: 0 20px 18px;
 }
-.wb-panel__head h2 small {
-  margin-left: 8px;
-  font-weight: 400;
+.wb-panel__head h2 {
+  font-size: 16px;
+  font-weight: 700;
+}
+.wb-panel__sub {
+  margin: 4px 0 0;
+  color: var(--color-muted);
+  font-size: 12px;
+}
+.wb-panel__head--split {
+  align-items: flex-end;
+  flex-wrap: wrap;
 }
 .wb-count {
   padding: 3px 7px;
@@ -87,9 +96,8 @@
   gap: 20px;
   align-items: stretch;
 }
-.wb-aside {
-  display: grid;
-  gap: 20px;
+.wb-columns--even {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 .wb-track {
   height: 5px;
@@ -134,19 +142,13 @@
   overflow: hidden;
   clip-path: inset(50%);
 }
-@media (max-width: 1360px) {
-  .wb-columns {
+@media (max-width: 1180px) {
+  .wb-columns,
+  .wb-columns--even {
     grid-template-columns: minmax(0, 1fr);
   }
 }
 @media (max-width: 760px) {
-  .wb-aside {
-    grid-template-columns: minmax(0, 1fr);
-  }
-  .wb-panel__head h2 small {
-    display: block;
-    margin: 5px 0 0;
-  }
   .wb-toolbar {
     justify-content: flex-start;
   }

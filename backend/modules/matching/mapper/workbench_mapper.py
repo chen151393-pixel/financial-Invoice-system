@@ -11,7 +11,11 @@ def iso(value):
     return value.replace(tzinfo=UTC).isoformat()
 
 
-def review_todo(row):
+def days_since(value, now):
+    return max(0, (now - value.replace(tzinfo=UTC)).days)
+
+
+def review_todo(row, now):
     return Todo(
         key=f"review:{row['id']}",
         kind="review",
@@ -29,6 +33,8 @@ def review_todo(row):
         reason=row["reason"],
         createdAt=iso(row["created_at"]),
         priority=2,
+        role="finance",
+        waitingDays=days_since(row["created_at"], now),
     )
 
 
@@ -49,14 +55,16 @@ def task_todo(row, declarations):
         statusLabel=row["status_label"],
         stage=task_stage(row["status"]) or "",
         stageLabel=STAGE_LABELS.get(task_stage(row["status"]) or "", ""),
-        reason=row["reason"],
+        reason=row["status_reason"],
         createdAt=iso(row["created_at"]),
         priority=3,
         attention=row["status"] in ("documents_pending", "notify_pending", "documents_incomplete"),
+        role="purchase",
+        waitingDays=row["waiting_days"],
     )
 
 
-def matching_todo(key, rows, invoice, contexts):
+def matching_todo(key, rows, invoice, contexts, now):
     invoice_id, account = key
     reverify = any(row["status"] == "confirmed" for row in rows)
     orders = sorted({contexts.get(row["purchase_line_id"], {}).get("order_no") or "" for row in rows})
@@ -80,4 +88,6 @@ def matching_todo(key, rows, invoice, contexts):
         createdAt=iso(min(row["created_at"] for row in rows)),
         priority=0 if reverify else 1,
         attention=reverify,
+        role="finance",
+        waitingDays=days_since(min(row["created_at"] for row in rows), now),
     )

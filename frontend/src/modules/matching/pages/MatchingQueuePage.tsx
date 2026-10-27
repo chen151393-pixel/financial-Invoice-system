@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useSearchParams } from "react-router";
 import {
   Alert,
   Button,
@@ -30,8 +31,10 @@ const TABS: [QueueQuery["tier"], string][] = [
 ];
 
 export function MatchingQueuePage() {
+  // 工作台"高置信度可批量通过"带 ?tier=high 进入，只用作初始分档
+  const [searchParams] = useSearchParams();
   const [query, setQuery] = useState<QueueQuery>({
-    tier: "all",
+    tier: TABS.find(([tier]) => tier === searchParams.get("tier"))?.[0] ?? "all",
     anomaly: "all",
     supplierId: "",
     invoiceFrom: "",

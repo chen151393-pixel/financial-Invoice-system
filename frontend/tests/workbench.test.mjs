@@ -6,7 +6,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { MemoryRouter } from "react-router";
 import { createServer } from "vite";
 
-let server, Todos, Trend, Page, Metrics, Kpis, api, paths, Queue, Filters;
+let server, Todos, Page, Metrics, Kpis, api, paths, Queue, Filters, Nodes, WbQueue, Suppliers;
 before(async () => {
   server = await createServer({
     configFile: fileURLToPath(new URL("../vite.config.ts", import.meta.url)),
@@ -17,8 +17,14 @@ before(async () => {
   ({ WorkbenchTodos: Todos } = await server.ssrLoadModule(
     "/src/modules/matching/components/WorkbenchTodos.tsx",
   ));
-  ({ WorkbenchTrend: Trend } = await server.ssrLoadModule(
-    "/src/modules/matching/components/WorkbenchTrend.tsx",
+  ({ WorkbenchNodes: Nodes } = await server.ssrLoadModule(
+    "/src/modules/matching/components/WorkbenchNodes.tsx",
+  ));
+  ({ WorkbenchQueue: WbQueue } = await server.ssrLoadModule(
+    "/src/modules/matching/components/WorkbenchQueue.tsx",
+  ));
+  ({ WorkbenchSuppliers: Suppliers } = await server.ssrLoadModule(
+    "/src/modules/matching/components/WorkbenchSuppliers.tsx",
   ));
   ({ WorkbenchPage: Page } = await server.ssrLoadModule("/src/modules/matching/pages/WorkbenchPage.tsx"));
   api = await server.ssrLoadModule("/src/modules/matching/api/workbench-api.ts");
@@ -52,6 +58,8 @@ const row = {
   statusLabel: "待财务核对",
   reason: "核实依据",
   attention: false,
+  role: "finance",
+  waitingDays: 4,
 };
 const data = {
   counts,
@@ -66,6 +74,8 @@ const data = {
       targetId: "3",
       amount: "9007199254740993.123456",
       currency: "CNY",
+      role: "purchase",
+      waitingDays: null,
     },
   ],
   total: 3,
@@ -73,10 +83,6 @@ const data = {
   pages: 1,
   pageSize: 5,
   suppliers: [],
-  trend: [],
-  trendStart: "2026-10-13",
-  trendEnd: "2026-10-19",
-  latestInvoiceDate: "2026-10-19",
   unknownSupplierAmounts: 0,
 };
 const query = {
@@ -90,21 +96,36 @@ const query = {
   page: 1,
   pageSize: 5,
 };
-const stages = [
-  { key: "pending_review", label: "待审批", count: 2 },
-  { key: "notify", label: "待通知开票", count: 1 },
-  { key: "invoicing", label: "待核票", count: 3 },
-  { key: "documents", label: "资料已回", count: 0 },
-  { key: "completed", label: "开票完成", count: 4 },
-];
-// 后端由五个业务状态累加得出的漏斗
-const funnel = [
-  { key: "synced", label: "已入库待开票报关单", count: 10, rate: null },
-  { key: "approved", label: "财务审核通过", count: 8, rate: "80.0" },
-  { key: "notified", label: "已通知供应商", count: 7, rate: "87.5" },
-  { key: "received", label: "发票已收齐", count: 4, rate: "57.1" },
-  { key: "completed", label: "资料齐全完结", count: 4, rate: "100.0" },
-];
+// 后端按报关单位置累加得出的六步漏斗
+const funnel = {
+  completionRate: "40.0",
+  steps: [
+    { key: "synced", label: "已入库待开票报关单", count: 10, rate: null, stuck: [] },
+    {
+      key: "approved",
+      label: "财务审核通过",
+      count: 8,
+      rate: "80.0",
+      stuck: [{ key: "pending_review", label: "待财务审核", count: 2 }],
+    },
+    { key: "archived", label: "子采购合同归档", count: 8, rate: "100.0", stuck: [] },
+    {
+      key: "notified",
+      label: "已通知供应商",
+      count: 7,
+      rate: "87.5",
+      stuck: [{ key: "notification", label: "待通知供应商", count: 1 }],
+    },
+    {
+      key: "invoiced",
+      label: "已收到发票",
+      count: 4,
+      rate: "57.1",
+      stuck: [{ key: "invoices", label: "待供应商开票", count: 3 }],
+    },
+    { key: "completed", label: "资料齐全完结", count: 4, rate: "100.0", stuck: [] },
+  ],
+};
 const render = (component, props) =>
   renderToStaticMarkup(createElement(MemoryRouter, null, createElement(component, props)));
 
@@ -115,6 +136,10 @@ test("待办真实下钻到核对、发票比对和任务详情，金额保留�
   assert.match(html, /href="\/tasks\/3"/);
   assert.match(html, /9,007,199,254,740,993.123456/);
   assert.match(html, /按子采购行核对/);
+  // 处理方标签与等待天数来自后端；已完成等没有天数的显示“—”
+  assert.match(html, /财务<\/span>待核对/);
+  assert.match(html, /采购<\/span>待开票/);
+  assert.match(html, />4 天</);
   assert.doesNotMatch(html, /模拟审核|超期/);
 });
 
@@ -128,26 +153,6 @@ test("待办空结果明确显示，导出禁用", () => {
   });
   assert.match(html, /当前条件下没有待办/);
   assert.match(html, /disabled=""[^>]*>↓ 导出全部结果/);
-});
-
-test("趋势只显示已开票，按币种逐日展示后端值与明确范围", () => {
-  const html = render(Trend, {
-    change() {},
-    data: {
-      ...data,
-      trend: [{ currency: "USD", points: [{ date: "2026-10-19", amount: "120.500001", percent: "60.2" }] }],
-    },
-  });
-  assert.match(html, /已开票金额趋势/);
-  assert.match(html, /统计范围：2026-10-13 至 2026-10-19/);
-  assert.match(html, /本月/);
-  assert.match(html, /USD/);
-  assert.match(html, /120.500001/);
-  assert.match(html, /height:60.2%/);
-  assert.match(html, /dateTime="2026-10-19"/);
-  assert.equal((html.match(/role="listitem"/g) || []).length, 1);
-  assert.doesNotMatch(html, /dateTime="2026-10-18"/);
-  assert.doesNotMatch(html, /计划开票|超期/);
 });
 
 test("初始加载不显示伪造零指标或空结果", () => {
@@ -181,34 +186,23 @@ test("查询与导出携带相同筛选，导出结果完全取自后端", async
   );
 });
 
-test("业务流程漏斗展示累计计数与通过率，卡点按业务状态分区链接到对应列表并带同样筛选", () => {
-  const scoped = {
-    ...query,
-    account: "A",
-    supplierId: "7",
-    createdFrom: "2026-10-01",
-    createdTo: "2026-10-31",
-  };
-  const html = render(Metrics, { stages, funnel, noTaskCount: 2, query: scoped });
-  for (const label of ["已入库待开票报关单", "财务审核通过", "资料齐全完结", "上一环节通过 87.5%"])
+test("业务流程漏斗展示六步计数、通过率与完结率，卡点链接到核对或开票跟进节点", () => {
+  const html = render(Metrics, { funnel, noTaskCount: 2 });
+  for (const label of ["已入库待开票报关单", "子采购合同归档", "资料齐全完结", "上一环节通过 87.5%"])
     assert.ok(html.includes(label), label);
-  // 卡点：审核通过一步卡在“待审批”2 张、收齐一步卡在“待核票”3 张；计数为 0 的分区不显示链接
-  assert.match(html, /2 张待审批 →/);
-  assert.match(html, /3 张待核票 →/);
-  assert.doesNotMatch(html, /0 张资料已回/);
-  // 上线只有 NS 正式环境，跳转不携带 NS 账套
-  assert.match(html, /href="\/review\?status=pending"/);
-  assert.match(
-    html,
-    /href="\/tasks\?supplierId=7&amp;createdFrom=2026-10-01&amp;createdTo=2026-10-31&amp;stage=invoicing"/,
-  );
+  assert.match(html, /整体完结率 <strong>40.0%<\/strong>/);
+  assert.match(html, /href="\/review\?status=pending"[^>]*>2 张待财务审核 →/);
+  assert.match(html, /href="\/tasks\?node=invoices"[^>]*>3 张待供应商开票 →/);
   assert.match(html, /另有 2 张无需开票/);
-  assert.match(html, /<strong>10<\/strong><span>张报关单/);
+  assert.equal((html.match(/起点/g) || []).length, 1);
 });
 
 test("列表地址只写入已填写的筛选条件", () => {
   assert.equal(paths.taskListPath({ stage: "notify", supplierId: "" }), "/tasks?stage=notify");
   assert.equal(paths.reviewListPath({}), "/review");
+  assert.equal(paths.taskListPath({ node: "documents" }), "/tasks?node=documents");
+  assert.equal(paths.matchingQueuePath({ tier: "high" }), "/matching?tier=high");
+  assert.equal(paths.matchingQueuePath({}), "/matching");
 });
 
 test("比对队列显示异常分类，异常建议不能勾选批量通过；筛选含只看异常", () => {
@@ -244,54 +238,104 @@ test("比对队列显示异常分类，异常建议不能勾选批量通过；�
   assert.match(filters, /只看正常/);
 });
 
-test("本月有效已收票只展示有金额的币种，人民币优先；全为零时不显示“币种待核实”", () => {
-  const base = {
-    counts: { all: 0, review: 0, matching: 0, task: 0, reverify: 0, preparation: 0 },
-    month: { month: "2026-10", total: 20, completed: 0, percent: "0.0", received: [] },
-  };
-  const zero = render(Kpis, {
-    data: {
-      ...base,
-      month: {
-        ...base.month,
-        received: [
-          { currency: "", amount: "0" },
-          { currency: "CNY", amount: "0" },
-        ],
-      },
-    },
-  });
-  assert.doesNotMatch(zero, /币种待核实/);
-  assert.match(zero, /¥ 0.00/);
-  assert.match(zero, /本月新建任务暂无比对通过的发票/);
-  const mixed = render(Kpis, {
-    data: {
-      ...base,
-      month: {
-        ...base.month,
-        received: [
-          { currency: "", amount: "12.5" },
-          { currency: "CNY", amount: "301.25" },
-        ],
-      },
-    },
-  });
-  assert.match(mixed, /¥ 301.25/);
-  assert.match(mixed, /另有 币种待核实 12.50/);
-});
-
 test("漏斗上一环节为 0 时说明暂无通过率，只有第一步标为起点", () => {
   const html = render(Metrics, {
-    stages,
-    funnel: [
-      { key: "synced", label: "已入库待开票报关单", count: 158, rate: null },
-      { key: "approved", label: "财务审核通过", count: 3, rate: "1.9" },
-      { key: "notified", label: "已通知供应商", count: 0, rate: "0.0" },
-      { key: "received", label: "发票已收齐", count: 0, rate: null },
-    ],
+    funnel: {
+      completionRate: "0.0",
+      steps: [
+        { key: "synced", label: "已入库待开票报关单", count: 158, rate: null, stuck: [] },
+        { key: "approved", label: "财务审核通过", count: 3, rate: "1.9", stuck: [] },
+        { key: "archived", label: "子采购合同归档", count: 0, rate: "0.0", stuck: [] },
+        { key: "notified", label: "已通知供应商", count: 0, rate: null, stuck: [] },
+      ],
+    },
     noTaskCount: 0,
-    query,
   });
   assert.equal((html.match(/起点/g) || []).length, 1);
   assert.match(html, /上一环节为 0，暂无通过率/);
+});
+
+test("关键指标：首张实底主指标，金额格式化后端值，标签区分财务与采购", () => {
+  const kpi = {
+    role: "finance",
+    unit: "",
+    currency: "CNY",
+    direction: "up",
+    tone: "neutral",
+    series: ["0", "1", "2"],
+  };
+  const html = render(Kpis, {
+    kpis: [
+      {
+        ...kpi,
+        key: "expected",
+        label: "本月应开金额",
+        value: "3286400.5",
+        delta: "较上月 +12.4%",
+        hint: "本月生成 3 个开票任务",
+      },
+      {
+        ...kpi,
+        key: "notify",
+        label: "待通知供应商",
+        role: "purchase",
+        value: "11",
+        unit: "个",
+        currency: "",
+        direction: "flat",
+        tone: "warning",
+        delta: "另有 1 个待存合同",
+        hint: "合同已归档，可通知供应商开票",
+      },
+    ],
+  });
+  assert.equal((html.match(/ui-metric--solid/g) || []).length, 1);
+  assert.match(html, /¥ 3,286,400.50/);
+  assert.match(html, /较上月 \+12.4%/);
+  assert.match(html, />财务</);
+  assert.match(html, />采购</);
+  assert.match(html, /data-tone="warning"[^>]*>.*另有 1 个待存合同/);
+});
+
+test("节点分布、比对队列与供应商排行只展示后端计数和比例", () => {
+  const nodes = render(Nodes, {
+    nodes: {
+      total: 4,
+      nodes: [
+        { key: "documents", label: "待存合同", count: 1, percent: "25.0" },
+        { key: "invoices", label: "待供应商开票", count: 3, percent: "75.0" },
+      ],
+    },
+  });
+  assert.match(nodes, /待供应商开票/);
+  assert.match(nodes, /3 · 75.0%/);
+  const queue = render(WbQueue, {
+    queue: { all: 5, high: 3, medium: 1, low: 1, anomalies: [{ label: "单位", count: 2, percent: "100.0" }] },
+  });
+  assert.match(queue, /高置信度 3 条，去队列批量通过 →/);
+  assert.match(queue, /href="\/matching\?tier=high"/);
+  assert.match(queue, /单位不一致/);
+  const empty = render(WbQueue, { queue: { all: 0, high: 0, medium: 0, low: 0, anomalies: [] } });
+  assert.match(empty, /比对项全部一致/);
+  assert.match(empty, /去比对审核队列 →/);
+  const suppliers = render(Suppliers, {
+    data: {
+      ...data,
+      suppliers: [
+        {
+          key: "A:1:CNY",
+          supplier: "供应商甲",
+          account: "A",
+          currency: "CNY",
+          amount: "286400",
+          percent: "100.0",
+          longestDays: 21,
+          overdue: true,
+        },
+      ],
+    },
+  });
+  assert.match(suppliers, /¥ 286,400.00/);
+  assert.match(suppliers, /is-overdue">最长 21 天/);
+  assert.match(suppliers, /data-tone="warning"/);
 });

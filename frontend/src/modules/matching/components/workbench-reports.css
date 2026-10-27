@@ -1,181 +1,156 @@
-.wb-trend-panel .wb-empty {
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-}
-.wb-trend-panel .wb-panel__head > a {
-  font-size: 12px;
-}
+/* 工作台报表面板：说明文字、供应商待收票排行与发票比对队列。 */
 .wb-report-note {
   color: var(--color-muted);
   font-size: 11px;
   margin: 0 20px 16px;
   line-height: 1.8;
 }
-.wb-trend {
-  padding: 0 20px 22px;
-}
-.wb-trend h3 {
-  color: var(--color-muted);
-  font-size: 11px;
-  font-weight: 400;
-  margin-bottom: 14px;
-}
-.wb-chart {
-  display: flex;
-  gap: 12px;
-  overflow-x: auto;
-  padding-bottom: 6px;
-}
-.wb-chart__column {
-  flex: 1;
-  min-width: 60px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-}
-.wb-chart__amount {
-  font-size: 10px;
-  white-space: nowrap;
-  font-variant-numeric: tabular-nums;
-  margin-bottom: 6px;
-}
-.wb-chart__well {
-  position: relative;
-  height: 125px;
-  width: 100%;
-  display: flex;
-  justify-content: center;
-  align-items: flex-end;
-  border-bottom: 1px solid var(--color-border);
-  background: repeating-linear-gradient(
-    to top,
-    transparent 0,
-    transparent 40px,
-    var(--color-border) 40px,
-    var(--color-border) 41px
-  );
-}
-.wb-chart__well::after {
-  content: "";
-  position: absolute;
-  width: 100%;
-  top: 100%;
-  border-top: 1px solid var(--color-input-border);
-}
-.wb-chart__half {
-  position: absolute;
-  top: 0;
-  height: 100%;
-  width: 100%;
-  display: flex;
-  align-items: flex-end;
-  justify-content: center;
-}
-.wb-chart__half--negative {
-  top: 50%;
-  align-items: flex-start;
-}
-.wb-chart--signed .wb-chart__well::after {
-  top: 50%;
-}
-.wb-chart--signed .wb-chart__half {
-  height: 50%;
-}
-.wb-chart__half > span {
-  width: 22px;
-  max-width: 50%;
-  background: var(--color-primary);
-  border-radius: 3px 3px 0 0;
-}
-.wb-chart__half--negative > span {
-  background: var(--color-feedback);
-  border-radius: 0 0 3px 3px;
-}
-.wb-chart__date {
-  margin-top: 9px;
-  color: var(--color-muted);
-  font-size: 11px;
-}
-.wb-rank-list {
-  display: grid;
-  gap: 22px;
-  padding: 4px 20px 24px;
-}
-.wb-rank > div:first-child {
-  display: flex;
-  align-items: start;
-  justify-content: space-between;
-  gap: 12px;
-}
-.wb-rank strong {
-  font-size: 12px;
-  font-weight: 400;
-  overflow-wrap: anywhere;
-}
-.wb-rank > div > span {
-  color: var(--color-primary);
-  font-size: 11px;
-  white-space: nowrap;
-  font-variant-numeric: tabular-nums;
-}
-.wb-rank .wb-track {
-  height: 4px;
-  margin-top: 12px;
-}
-@media (max-width: 1150px) {
-}
-
-.wb-trend-range {
-  padding: 0 20px 16px;
-}
-.wb-trend-range form {
-  display: flex;
-  align-items: end;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-.wb-trend-range label {
-  display: grid;
-  gap: 5px;
-  color: var(--color-muted);
-  font-size: 11px;
-}
-.wb-trend-range form > span {
-  padding-bottom: 8px;
-}
-.wb-trend-range .wb-caption {
+.wb-panel__body .wb-report-note {
   margin: 10px 0 0;
 }
 
-.wb-chart--dense {
-  gap: 2px;
-  padding-top: 22px;
+/* 供应商待收票排行：序号、名称、金额一行，条形与最长等待一行 */
+.wb-rank-list {
+  display: grid;
+  gap: 16px;
+  margin: 0;
+  padding: 4px 20px 22px;
+  list-style: none;
 }
-.wb-chart--dense .wb-chart__column {
+.wb-rank__head {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+.wb-rank__no {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  background: var(--color-primary-soft);
+  color: var(--color-primary-strong);
+  font-size: 12px;
+  font-weight: 600;
+}
+.wb-rank__head strong {
+  flex: 1;
   min-width: 0;
-  flex-basis: 0;
-  position: relative;
+  font-size: 13px;
+  font-weight: 500;
+  overflow-wrap: anywhere;
 }
-.wb-chart--dense .wb-chart__date {
-  font-size: 10px;
+.wb-rank__amount {
+  font-weight: 600;
   white-space: nowrap;
-  visibility: hidden;
+  font-variant-numeric: tabular-nums;
 }
-.wb-chart--dense .wb-chart__column:nth-child(5n + 1) .wb-chart__date,
-.wb-chart--dense .wb-chart__column:last-child .wb-chart__date {
-  visibility: visible;
+.wb-rank__bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 8px 0 0 32px;
 }
-.wb-chart--dense .wb-chart__amount {
-  position: absolute;
-  bottom: calc(100% - 4px);
-  opacity: 0;
-  z-index: 1;
-  padding: 2px 4px;
-  background: var(--color-surface);
-  pointer-events: none;
+.wb-rank__bar .ui-progress {
+  flex: 1;
 }
-.wb-chart--dense .wb-chart__column:hover .wb-chart__amount,
-.wb-chart--dense .wb-chart__column:focus .wb-chart__amount {
-  opacity: 1;
+.wb-rank__bar .ui-progress__track {
+  width: 100%;
+}
+.wb-rank__days {
+  min-width: 64px;
+  color: var(--color-muted);
+  font-size: 11px;
+  text-align: right;
+  white-space: nowrap;
+}
+.wb-rank__days.is-overdue {
+  color: var(--color-feedback);
+  font-weight: 600;
+}
+
+/* 发票比对队列：置信度堆叠条、图例与不一致分类 */
+.wb-queue {
+  display: grid;
+  gap: 14px;
+}
+.wb-queue__bar {
+  display: flex;
+  gap: 2px;
+  height: 14px;
+  overflow: hidden;
+  border-radius: 7px;
+  background: var(--color-canvas);
+}
+.wb-queue__bar > span,
+.wb-queue__legend i {
+  background: var(--color-chart-1);
+}
+.wb-queue__bar > [data-tier="medium"],
+.wb-queue__legend i[data-tier="medium"] {
+  background: var(--color-chart-2);
+}
+.wb-queue__bar > [data-tier="low"],
+.wb-queue__legend i[data-tier="low"] {
+  background: var(--color-chart-3);
+}
+.wb-queue__bar > span {
+  flex-basis: 0;
+}
+.wb-queue__legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 18px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  color: var(--color-muted);
+  font-size: 12px;
+}
+.wb-queue__legend li {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.wb-queue__legend i {
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+}
+.wb-queue__legend strong {
+  color: var(--color-text);
+  font-variant-numeric: tabular-nums;
+}
+.wb-queue h3 {
+  margin-top: 4px;
+  color: var(--color-muted);
+  font-weight: 500;
+}
+.wb-queue__anomalies {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.wb-queue__anomalies li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(80px, 140px) 32px;
+  align-items: center;
+  gap: 12px;
+}
+.wb-queue__anomalies .ui-progress,
+.wb-queue__anomalies .ui-progress__track {
+  width: 100%;
+}
+.wb-queue__anomalies strong {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.wb-queue .wb-queue__empty {
+  margin: 0;
+}
+.wb .wb-queue__action {
+  font-weight: 500;
 }

@@ -141,3 +141,14 @@ MySQL 的 `SUM(CASE ...)` 返回 Decimal，待审核建议非空时曾导致队�
 ## 进项发票按匹配状态筛选（2026-10-27）
 
 `POST /api/matching/invoices/query`（`service/invoice_list_service.py`，方案见 [设计文档](../../../docs/invoice-match-status-filter.md)）：请求为发票列表筛选条件加 `matchStatus`（all / confirmed / partial / proposed / needs_review / none / excluded）与分页；在同一只读快照中经 invoice 门面 `read_invoice_status_scope` 从新到旧分批读取范围内发票，按 `policy/invoice_match_policy.py` 判定状态并计数，再由 `read_invoice_page` 在选中发票内按原排序分页。返回 `list`（与发票列表同结构）、`counts`（不受所选匹配状态影响）、本页 `summaries` 与 `notice`（范围超过 20,000 张时只覆盖最新的 20,000 张并提示，也是升级为投影表的信号）。`POST /api/matching/summaries` 改用同一策略，文字统一为 已匹配 / 部分匹配 / 待审核 / 待复核 / 未匹配 / 不参与比对。测试：`backend/tests/test_invoice_match_filter.py`。
+
+## 总体工作台对齐设计稿（2026-10-27）
+
+`POST /api/matching/workbench/query` 调整（口径见[总体工作台](../../../docs/invoice-workbench.md)）：
+
+- 新增 `kpis`（`policy/workbench_kpis.py`：本月应开、已收票、待收、待财务审核、待通知供应商，含对比说明与近 6 个月序列）、`nodes`（进行中任务按开票跟进节点分布）。
+- `funnel` 改为 `{steps, completionRate}`（`policy/workbench_flow.py`）：六步按报关单所处位置累加——待审核，或其当前任务中最慢的开票跟进节点（task 门面 `workbench_tasks` 的 `node`，与任务台同一判定），每步附卡点分项 `stuck`。
+- `queue` 新增 `anomalies`：待审核建议按不一致比对项分类计数与条长，分类规则 `anomaly_policy.check_categories` 与比对队列共用。
+- `suppliers` 每币种前 6 名、人民币在前，新增 `longestDays` / `overdue`（> 15 天）；待办新增 `role`（finance / purchase）与 `waitingDays`，CSV 增加“等待天数”列，任务原因不再拼接等待天数。
+- 移除 `stages`、`month`、`trend`、`trendStart`、`trendEnd`、`latestInvoiceDate` 与请求参数 `trendStart` / `trendEnd`；`stage_counts`、`month_report`、`invoice_trend` 一并删除，invoice 门面的 `invoice_daily_amounts`、`latest_invoice_date` 及其读取器、DAO 已无调用方，同时删除。
+- 验证：`backend/tests/test_workbench.py`。

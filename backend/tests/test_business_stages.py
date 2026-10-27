@@ -87,20 +87,11 @@ def read(engine, **values):
 
 def test_workbench_partitions_count_declarations_and_skip_no_task(engine, seeded):
     result = read(engine)
-    assert {stage.key: stage.count for stage in result.stages} == {
-        "pending_review": 1,
-        "notify": 1,
-        "invoicing": 0,
-        "documents": 0,
-        "completed": 0,
-    }
-    assert [stage.label for stage in result.stages] == [
-        "待审批",
-        "待通知开票",
-        "待核票",
-        "资料已回",
-        "开票完成",
-    ]
+    # 漏斗按报关单：CD890 待财务审核，CD870 已审核、任务停在合同或通知节点
+    steps = {step.key: step for step in result.funnel.steps}
+    assert (steps["synced"].count, steps["approved"].count) == (2, 1)
+    assert [(s.key, s.count) for s in steps["approved"].stuck] == [("pending_review", 1)]
+    assert steps["notified"].count == 0 and result.nodes.total == 1
     assert result.noTaskCount == 1  # CD891：供应商关闭通知，无需开票，不进分区与待办
     assert all("CD891" not in item.title for item in result.items)
     labels = {item.title: item.stageLabel for item in result.items}
@@ -111,10 +102,11 @@ def test_workbench_partitions_count_declarations_and_skip_no_task(engine, seeded
 
 def test_workbench_supplier_and_created_date_filters(engine, seeded):
     second = read(engine, supplierId=supplier(engine, "第二供应商"))
-    assert {stage.key: stage.count for stage in second.stages}["pending_review"] == 1
-    assert sum(stage.count for stage in second.stages) == 1 and [i.title for i in second.items] == ["CD890"]
+    first = second.funnel.steps[0]
+    assert first.count == 1 and second.funnel.steps[1].stuck[0].key == "pending_review"
+    assert [i.title for i in second.items] == ["CD890"]
     october = read(engine, createdFrom=date(2026, 10, 5), createdTo=date(2026, 10, 5))
-    assert sum(stage.count for stage in october.stages) == 1 and [i.title for i in october.items] == ["CD890"]
+    assert october.funnel.steps[0].count == 1 and [i.title for i in october.items] == ["CD890"]
     exported = WorkbenchService(engine).read(WorkbenchQuery(), export=True)
     assert "业务状态" in exported["content"] and "待通知开票" in exported["content"]
     with pytest.raises(ValueError):

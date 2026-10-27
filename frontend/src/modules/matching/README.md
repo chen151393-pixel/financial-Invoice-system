@@ -31,11 +31,11 @@
 
 ## 发票工作台
 
-新增正式入口 /workbench（默认首页），复用本模块只读汇总接口。页面依次为环节卡片（`WorkbenchMetrics`：待财务核对 → 待开票任务 → 待比对 / 复核 → 本月任务完成）、待办表格与供应商待收票排名（`WorkbenchTodos`、`WorkbenchSuppliers`）、已开票金额趋势（`WorkbenchTrend`），统计口径收在页面底部可展开区域。指标、待办筛选和报表均由后端返回；详情跳转、加载、失败、导出反馈在前端管理。完整口径与接口见[发票工作台](../../../../docs/invoice-workbench.md)。
+正式入口 /workbench（默认首页），复用本模块只读汇总接口。2026-10-27 起按设计稿依次为关键指标（`WorkbenchKpis`）、业务流程漏斗（`WorkbenchMetrics`）、应开与已收票金额趋势与节点分布（`WorkbenchReceipts`、`WorkbenchNodes`）、供应商待收票排行与比对队列（`WorkbenchSuppliers`、`WorkbenchQueue`）、优先处理（`WorkbenchTodos`），统计口径收在页面底部可展开区域；原 `WorkbenchTrend` / `WorkbenchTrendRange` 已删除。指标、待办筛选和报表均由后端返回；详情跳转、加载、失败、导出反馈在前端管理。完整口径与接口见[发票工作台](../../../../docs/invoice-workbench.md)。
 
 ## 业务状态分区与筛选（2026-10-23）
 
-- 工作台顶部直接展示 `WorkbenchMetrics` 五个业务状态卡片（按报关单计数）与本月完成卡片，不再提供供应商、报关单创建日期筛选栏。“待审批”进入财务核对（待审核），其余进入带业务状态的开票跟进列表；地址由 `app/paths.ts` 的 `reviewListPath` / `taskListPath` 生成。待办区域保留关键词、分类与排序，趋势区域保留开票日期范围。
+- 工作台不提供供应商、报关单创建日期筛选栏。漏斗卡点中“待财务审核”进入财务核对（待审核），其余进入开票跟进对应节点（`taskListPath({ node })`）；地址由 `app/paths.ts` 生成。待办区域保留关键词、分类、排序与导出。
 - 比对队列新增 `QueueFilters`（供应商、开票日期），三档计数随条件变化。
 
 ## 只看异常与申报价校验（2026-10-23）
@@ -45,3 +45,10 @@
 ## 发票文件批量上传（2026-10-26）
 
 比对队列页标题右侧“批量上传发票文件”打开 `components/InvoiceFileUploadDialog.tsx`，由统一组件库 `BatchUpload` 组合；接口在 `api/invoice-file-api.ts`，类型与结果中文映射在 `types/invoice-file.ts`。识别不了号码或匹配多张发票的文件可填写发票号码后单独重传；能否归档、保存位置全部以后端结果为准。
+
+## 总体工作台对齐设计稿（2026-10-27）
+
+- 关键指标用 `MetricCard`（首张 `featured="solid"` 实底，右上角 `badge` 标明财务 / 采购），数值、对比说明、提示与近 6 个月走势全部来自后端 `kpis`。
+- 漏斗六步、整体完结率与卡点分项来自后端 `funnel`；趋势用 `TrendChart grouped lineAxis="percent"`；节点分布用 `DonutChart`；供应商排行与不一致分类条长为后端百分比（`Progress`）；置信度堆叠条只按后端计数画宽度。
+- 比对队列页读取 `?tier=high` 作为初始分档（`matchingQueuePath`），供工作台“高置信度可批量通过”进入。
+- 按用户决定不做视角切换、统计区间与页头导出报表。口径见[总体工作台](../../../../docs/invoice-workbench.md)。
