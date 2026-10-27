@@ -8,11 +8,12 @@ from decimal import Decimal
 
 from backend.modules.source.public import unit_label
 
+from ..policy.auto_review_policy import auto_review_reasons, margin_alert
 from ..policy.margin_policy import declared_margin
 from ..policy.purchase_display_policy import group_purchase_lines
 from ..policy.review_policy import CHANGED_WARNING, STATUS_LABELS
 from ..public import ApprovedLine
-from ..vo.review_vo import CustomsLine, Declaration, PurchaseLine, ReviewState
+from ..vo.review_vo import AutoReview, CustomsLine, Declaration, PurchaseLine, ReviewState
 
 
 def text(value):
@@ -125,6 +126,19 @@ def declaration(content, state, changed, active_review, allowed, reason):
         )
         for row in content["customs_lines"]
     }
+    unlinked = by_customs[None]
+    reasons = auto_review_reasons(
+        state,
+        changed,
+        len(unlinked),
+        content["purchase_lines"],
+        all(
+            (content.get("bases", {}).get(row["id"]) or {}).get("allowed")
+            or orders[row["purchase_order_id"]]["currency"]
+            for row in content["purchase_lines"]
+        ),
+        list(margins.values()),
+    )
     customs_lines = [
         CustomsLine(
             id=f"customs-{row['id']}",
@@ -171,7 +185,9 @@ def declaration(content, state, changed, active_review, allowed, reason):
         customsCount=len(customs_lines),
         purchaseCount=len(content["purchase_lines"]),
         customsLines=customs_lines,
-        unlinkedLines=group_purchase_lines([line.model_dump() for line in by_customs[None]]),
+        unlinkedLines=group_purchase_lines([line.model_dump() for line in unlinked]),
+        marginAlert=margin_alert(margins.values()),
+        autoReview=AutoReview(eligible=not reasons, reasons=reasons),
         warnings=[CHANGED_WARNING] if changed else [],
         review=review_state(state, active_review, allowed, reason),
     )

@@ -100,6 +100,8 @@ def test_list_states_counts_and_purchase_basis(service, seeded, engine):
         "approved": 0,
         "changed": 0,
         "approvedThisMonth": 0,
+        "marginAlert": 0,
+        "autoApprovable": 1,
         "customs": 2,
         "purchase": 2,
         "shown": 1,
@@ -117,6 +119,21 @@ def test_list_states_counts_and_purchase_basis(service, seeded, engine):
     assert pending.company == "采购公司A"
     assert pending.customsLines[0].originPlace == "深圳"
     assert pending.customsLines[0].parent == ""  # 报关明细缺值时不能用子采购的 PO-100 补充
+    # 关联完整、金额与币种齐全、申报幅度均已算出且不为负：可自动审核通过（只作预判，不自动写入）
+    assert not pending.marginAlert and pending.autoReview.eligible, pending.autoReview.reasons
+    assert [item.recordNumber for item in service.browse(query(status="auto")).groups] == ["CD870"]
+    assert service.browse(query(status="margin_alert")).total == 0
+    assert rows(engine, "SELECT id FROM review_records") == []
+
+
+def test_negative_margin_is_alerted_and_not_auto_approvable(service, ns, engine):
+    save(ns, engine, bundle([purchase(amounts=("99999.00", "99999.00"))], [customs("870")]))
+    result = service.browse(query())
+    assert result.counts["marginAlert"] == 1 and result.counts["autoApprovable"] == 0
+    item = result.groups[0]
+    assert item.marginAlert and not item.autoReview.eligible
+    assert "申报幅度为负数（采购价高于申报价）" in item.autoReview.reasons
+    assert [g.recordNumber for g in service.browse(query(status="margin_alert")).groups] == ["CD870"]
 
 
 def test_customs_parent_and_origin_from_own_source(service, ns, engine):

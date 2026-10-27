@@ -90,3 +90,21 @@ class WecomGroupList(StrictModel):
     page: int
     pageSize: int
     pages: int
+
+
+class SupplierSpeed(StrictModel):
+    supplierId: str
+    supplier: str
+    # 平均天数（一位小数的十进制字符串）
+    days: str
+    tasks: int
+    slow: bool
+
+
+class InvoicingSpeed(StrictModel):
+    windowDays: int
+    slowDays: int
+    # 全部样本任务的平均天数；无样本为 None
+    average: str | None
+    taskCount: int
+    suppliers: list[SupplierSpeed]

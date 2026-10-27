@@ -16,6 +16,7 @@ import {
   StatGrid,
 } from "../../../shared/components/ui";
 import { matchWecomGroups, saveSupplierGroup, saveSupplierNotify } from "../api/supplier-group";
+import { InvoicingSpeedCard } from "../components/InvoicingSpeedCard";
 import { SupplierGroupEditor } from "../components/SupplierGroupEditor";
 import { SupplierProfilesTable } from "../components/SupplierProfilesTable";
 import { useSupplierProfiles } from "../hooks/useSupplierProfiles";
@@ -107,100 +108,106 @@ export function SupplierGroupsPage() {
           />
         </StatGrid>
       )}
-      <Card className="sg-panel">
-        <CardHeader
-          title="供应商"
-          description={state.kind === "ready" ? `共 ${state.data.total} 家` : undefined}
-          actions={
-            state.kind === "ready" ? <span className="sg-manage">{state.data.manage.reason}</span> : undefined
-          }
-        />
-        <FilterBar
-          embedded
-          key={JSON.stringify(query)}
-          onSubmit={(element) => {
-            const form = new FormData(element);
-            change({
-              keyword: String(form.get("keyword") || ""),
-              status: String(form.get("status")) as SupplierProfileQuery["status"],
-            });
-          }}
-          actions={
-            <>
-              <Button type="submit" variant="primary" disabled={busy}>
-                查询
-              </Button>
-              <Button disabled={busy} onClick={reload}>
-                刷新
-              </Button>
-              {/* 外部群导入是供应商档案的下级功能，入口放在本页查询栏，不放页头 */}
-              <Link className="ui-button ui-button--secondary" to={paths.externalGroups}>
-                外部群导入与关联
-              </Link>
-            </>
-          }
-        >
-          <Field label="供应商 / 外部群 / 群主" grow>
-            <input
-              type="search"
-              name="keyword"
-              defaultValue={query.keyword}
-              placeholder="输入供应商名称、群名或群主"
-            />
-          </Field>
-          <Field label="绑定状态">
-            <select name="status" defaultValue={query.status}>
-              <option value="all">全部供应商</option>
-              <option value="unbound">未绑定</option>
-              <option value="enabled">已绑定 · 启用</option>
-              <option value="disabled">已绑定 · 停用</option>
-            </select>
-          </Field>
-        </FilterBar>
-        {state.kind === "loading" && <Skeleton label="正在读取供应商档案" />}
-        {state.kind === "error" && (
-          <ErrorState
-            title="供应商档案暂时无法加载"
-            message={state.message}
-            action={<Button onClick={reload}>重新加载</Button>}
+      {/* 供应商列表与开票时效并排，窄屏上下排列 */}
+      <div className="sg-layout">
+        <Card className="sg-panel">
+          <CardHeader
+            title="供应商"
+            description={state.kind === "ready" ? `共 ${state.data.total} 家` : undefined}
+            actions={
+              state.kind === "ready" ? (
+                <span className="sg-manage">{state.data.manage.reason}</span>
+              ) : undefined
+            }
           />
-        )}
-        {state.kind === "ready" && (
-          <>
-            {state.data.items.length === 0 ? (
-              <EmptyState
-                title="没有符合条件的供应商"
-                description="可调整查询条件；供应商尚未出现时，请先同步相应子采购订单。"
+          <FilterBar
+            embedded
+            key={JSON.stringify(query)}
+            onSubmit={(element) => {
+              const form = new FormData(element);
+              change({
+                keyword: String(form.get("keyword") || ""),
+                status: String(form.get("status")) as SupplierProfileQuery["status"],
+              });
+            }}
+            actions={
+              <>
+                <Button type="submit" variant="primary" disabled={busy}>
+                  查询
+                </Button>
+                <Button disabled={busy} onClick={reload}>
+                  刷新
+                </Button>
+                {/* 外部群导入是供应商档案的下级功能，入口放在本页查询栏，不放页头 */}
+                <Link className="ui-button ui-button--secondary" to={paths.externalGroups}>
+                  外部群导入与关联
+                </Link>
+              </>
+            }
+          >
+            <Field label="供应商 / 外部群 / 群主" grow>
+              <input
+                type="search"
+                name="keyword"
+                defaultValue={query.keyword}
+                placeholder="输入供应商名称、群名或群主"
               />
-            ) : (
-              <SupplierProfilesTable
-                items={state.data.items}
-                disabled={!state.data.manage.allowed || editor !== null}
-                saving={saving}
-                onNotify={(item, enabled) => void notify(item, enabled)}
-                onEdit={(item) => {
-                  trigger.current =
-                    document.activeElement instanceof HTMLElement ? document.activeElement : null;
-                  setFeedback("");
-                  setEditor(item);
-                }}
-              />
-            )}
-            <CardFooter>
-              <Pagination
-                label="供应商档案分页"
-                total={state.data.total}
-                page={state.data.page}
-                pageCount={state.data.pages}
-                pageSize={state.data.pageSize}
-                pageSizes={[10, 20, 50]}
-                onPageChange={(page) => change({ page })}
-                onPageSizeChange={(pageSize) => change({ pageSize })}
-              />
-            </CardFooter>
-          </>
-        )}
-      </Card>
+            </Field>
+            <Field label="绑定状态">
+              <select name="status" defaultValue={query.status}>
+                <option value="all">全部供应商</option>
+                <option value="unbound">未绑定</option>
+                <option value="enabled">已绑定 · 启用</option>
+                <option value="disabled">已绑定 · 停用</option>
+              </select>
+            </Field>
+          </FilterBar>
+          {state.kind === "loading" && <Skeleton label="正在读取供应商档案" />}
+          {state.kind === "error" && (
+            <ErrorState
+              title="供应商档案暂时无法加载"
+              message={state.message}
+              action={<Button onClick={reload}>重新加载</Button>}
+            />
+          )}
+          {state.kind === "ready" && (
+            <>
+              {state.data.items.length === 0 ? (
+                <EmptyState
+                  title="没有符合条件的供应商"
+                  description="可调整查询条件；供应商尚未出现时，请先同步相应子采购订单。"
+                />
+              ) : (
+                <SupplierProfilesTable
+                  items={state.data.items}
+                  disabled={!state.data.manage.allowed || editor !== null}
+                  saving={saving}
+                  onNotify={(item, enabled) => void notify(item, enabled)}
+                  onEdit={(item) => {
+                    trigger.current =
+                      document.activeElement instanceof HTMLElement ? document.activeElement : null;
+                    setFeedback("");
+                    setEditor(item);
+                  }}
+                />
+              )}
+              <CardFooter>
+                <Pagination
+                  label="供应商档案分页"
+                  total={state.data.total}
+                  page={state.data.page}
+                  pageCount={state.data.pages}
+                  pageSize={state.data.pageSize}
+                  pageSizes={[10, 20, 50]}
+                  onPageChange={(page) => change({ page })}
+                  onPageSizeChange={(pageSize) => change({ pageSize })}
+                />
+              </CardFooter>
+            </>
+          )}
+        </Card>
+        <InvoicingSpeedCard />
+      </div>
       <details className="sg-definitions">
         <summary>使用说明</summary>
         <p>

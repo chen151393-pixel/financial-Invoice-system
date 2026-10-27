@@ -1,18 +1,21 @@
 """供应商档案：来源门面分页读取真实供应商，叠加本模块群绑定与"是否开启供应商通知"设置。"""
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 
 from backend.core.errors import ApiError
 from backend.core.write_lock import transaction
 
-from ..dao import supplier_group_dao, supplier_setting_dao
+from ..dao import event_dao, supplier_group_dao, supplier_setting_dao
 from ..mapper.supplier_group_mapper import binding, notify
-from ..vo.supplier_group_vo import SupplierNotify, SupplierProfileList
+from ..policy.invoicing_speed_policy import NOTIFIED, RECEIVED, SLOW_DAYS, average, task_durations
+from ..vo.supplier_group_vo import InvoicingSpeed, SupplierNotify, SupplierProfileList, SupplierSpeed
 from .supplier_group_service import SupplierGroupService
 
 CONFLICT = "供应商通知设置已被他人修改，请刷新后重试"
+SPEED_WINDOW_DAYS = 90
+SPEED_LIMIT = 8
 
 
 class SupplierProfileService:
@@ -84,6 +87,40 @@ class SupplierProfileService:
             "unbound": total(exclude_ids=bound),
             "notifyOff": total(include_ids=notify_off),
         }
+
+    def invoicing_speed(self, now=None):
+        """近 90 天发票收齐的任务：通知到收齐的平均天数，按供应商从慢到快取前 8 家。"""
+        now = now or datetime.now(timezone.utc)
+        since = (now - timedelta(days=SPEED_WINDOW_DAYS)).replace(tzinfo=None)
+        try:
+            with self.engine.connect() as connection:
+                rows = event_dao.first_reached(connection, (NOTIFIED, *RECEIVED))
+        except SQLAlchemyError:
+            raise ApiError(503, "开票时效读取失败，请检查业务数据库") from None
+        durations = task_durations(rows, since)
+        names = self.directory.describe(supplier_ids=[i for i in durations if i is not None])["suppliers"]
+        ranked = sorted(
+            ((supplier_id, average(values), len(values)) for supplier_id, values in durations.items()),
+            key=lambda item: item[1],
+            reverse=True,
+        )
+        samples = [value for values in durations.values() for value in values]
+        return InvoicingSpeed(
+            windowDays=SPEED_WINDOW_DAYS,
+            slowDays=int(SLOW_DAYS),
+            average=format(average(samples), "f") if samples else None,
+            taskCount=len(samples),
+            suppliers=[
+                SupplierSpeed(
+                    supplierId=str(supplier_id or ""),
+                    supplier=(names.get(supplier_id) or {}).get("name") or "供应商待确认",
+                    days=format(days, "f"),
+                    tasks=count,
+                    slow=days > SLOW_DAYS,
+                )
+                for supplier_id, days, count in ranked[:SPEED_LIMIT]
+            ],
+        )
 
     def set_notify(self, body, actor):
         """人工开启或关闭供应商通知；带版本保存，只影响之后的财务审核。"""

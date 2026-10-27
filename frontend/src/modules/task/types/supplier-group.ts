@@ -81,3 +81,12 @@ export interface SupplierProfileList extends GroupPage<SupplierProfile> {
   // 档案概况，不受关键字与状态筛选影响
   counts: { all: number; bound: number; unbound: number; notifyOff: number };
 }
+
+// 开票时效：通知供应商到发票收齐的平均天数（后端统计，近 windowDays 天）
+export interface InvoicingSpeed {
+  windowDays: number;
+  slowDays: number;
+  average: string | null;
+  taskCount: number;
+  suppliers: { supplierId: string; supplier: string; days: string; tasks: number; slow: boolean }[];
+}

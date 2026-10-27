@@ -10,7 +10,8 @@ from backend.core.dto import StrictModel
 class DeclarationListQuery(StrictModel):
     keyword: str = Field(default="", max_length=120)
     account: str = Field(default="", max_length=80, pattern=r"^[a-zA-Z0-9_-]*$")
-    status: Literal["all", "pending", "approved"] = "all"
+    # margin_alert：待审核且申报幅度异常；auto：待审核且满足可自动审核条件
+    status: Literal["all", "pending", "approved", "margin_alert", "auto"] = "all"
     supplierId: str = Field(default="", max_length=20, pattern=r"^([1-9][0-9]*)?$")
     page: int = Field(default=1, ge=1, le=100000)
     pageSize: int = Field(default=20, ge=1, le=50)

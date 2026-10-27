@@ -4,6 +4,7 @@
 """
 
 import base64
+from decimal import Decimal
 from pathlib import Path
 
 import pytest
@@ -141,6 +142,11 @@ def test_stats_follow_list_filters(engine, imports):
     assert len(stats.months) == 6 and sum(item.count for item in stats.months) == 3
     assert stats.months == sorted(stats.months, key=lambda item: item.month)
     assert [(item.count) for item in stats.accounts] == [3]
+    # 人民币金额：按月与按账套合计一致，等于列表的人民币价税合计
+    listed = InvoiceService(engine).browse(InvoiceQuery())
+    cny = next(item.gross for item in listed.amounts if item.currency == "CNY")
+    assert stats.accounts[0].gross == cny == f"{sum(Decimal(m.gross) for m in stats.months):.2f}"
+    assert stats.otherCurrencyCount == 0
     red = InvoiceStatsService(engine).stats(InvoiceQuery(status="red_letter"))
     assert sum(item.count for item in red.statuses) == 1 and red.accounts[0].count == 1
     empty = InvoiceStatsService(engine).stats(InvoiceQuery(q="不存在"))

@@ -72,8 +72,17 @@ class CurrencyCheck(StrictModel):
     reason: str
 
 
+class AutoReview(StrictModel):
+    eligible: bool = False
+    # 不能自动审核的原因（eligible 为 False 时）
+    reasons: list[str] = Field(default_factory=list)
+
+
 class Declaration(StrictModel):
     salesOrders: str = ""
+    # 任一报关行申报幅度为负数时为 True，列表主行突出显示
+    marginAlert: bool = False
+    autoReview: AutoReview = Field(default_factory=AutoReview)
     currencyEvidenceSummary: list[str] = Field(default_factory=list)
     currencyChecks: list[CurrencyCheck] = Field(default_factory=list)
     id: str

@@ -246,3 +246,7 @@ MySQL 命名锁保证多实例单消费者，并对同一任务的同一子采�
 新表 `task_signed_upload_jobs`（迁移 `0030`）只存清单、偏移、摘要、操作者、结果及路径。文件暂存在 `SIGNED_CONTRACT_UPLOAD_ROOT`（默认 `data/signed-contract-uploads`），不得放到临时清理目录；Docker 已有 `./data:/app/data` 挂载可持久保存。同库多进程需共用同一暂存目录。上传和消费者使用 MySQL 命名锁；重启接续 queued/running，原件先核对大小及摘要，归档复用同内容幂等与不覆盖保护。成功登记后清理该原件暂存；失败及未传完的原件保留用于人工重试，管理员清理前须核实任务状态。文件尚未传完时关闭页面不会继续传输，已经接收完整的文件会继续归档。
 
 部署：执行 `npm.cmd run db:upgrade`，构建前端并重启后端。验证包括 100 MiB 分片边界、旧 128 KiB 故障回归、身份隔离、重复清单/分片、磁盘未提交尾部恢复、摘要损坏拒绝、单文件隔离和重启恢复；MySQL 并发测试单独标记，没有专用库时跳过，不能作为并发通过。
+
+## 供应商开票时效（2026-10-27）
+
+`GET /api/tasks/supplier-groups/profiles/invoicing-speed`：近 90 天发票收齐的任务，统计通知供应商到发票收齐的天数，按供应商取平均（一位小数），从慢到快返回前 8 家，超过 15 天标为偏慢。通知时间取任务首次进入 `awaiting_invoice` 的事件时间，收齐时间取首次进入 `documents_incomplete` 或 `completed` 的事件时间（`event_dao.first_reached`，不含被替代任务）；规则在 `policy/invoicing_speed_policy.py`。供应商档案接口另返回 `counts`（全部、已绑定开票群、未绑定、已关闭通知），不受关键字与状态筛选影响。测试：`backend/tests/test_invoicing_speed.py`、`test_supplier_profiles.py`。

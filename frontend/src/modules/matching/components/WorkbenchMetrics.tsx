@@ -3,24 +3,26 @@ import { reviewListPath, taskListPath } from "../../../app/paths";
 import type { Workbench, WorkbenchQuery } from "../types/workbench";
 import "./workbench-metrics.css";
 
-const NOTES: Record<Workbench["stages"][number]["key"], string> = {
-  pending_review: "待财务审核或来源变化需重审",
-  notify: "待保存子采购合同或待通知供应商",
-  invoicing: "等待供应商开票或部分收票",
-  documents: "发票已收齐，资料待补齐",
-  completed: "发票收齐且资料全部到齐",
+// 漏斗每一步“卡在上一步”的报关单即对应的业务状态分区
+const STUCK: Record<string, Workbench["stages"][number]["key"]> = {
+  approved: "pending_review",
+  notified: "notify",
+  received: "invoicing",
+  completed: "documents",
 };
 
 /**
- * 业务流程：五个业务状态按报关单计数（取报关单下最慢的任务），从审核到完结逐行排开，
- * 点击进入带同样筛选条件的列表。条长只按最大计数画图，不作为业务比率。
+ * 业务流程漏斗：后端由五个业务状态累加出“至少走到这一步”的报关单数与上一环节通过率；
+ * 每步附“卡在上一环节”的分区计数，点击进入带同样筛选条件的列表。条长只按第一步计数画图。
  */
 export function WorkbenchMetrics({
   stages,
+  funnel,
   noTaskCount,
   query,
 }: {
   stages: Workbench["stages"];
+  funnel: Workbench["funnel"];
   noTaskCount: number;
   query: WorkbenchQuery;
 }) {
@@ -29,48 +31,59 @@ export function WorkbenchMetrics({
     createdFrom: query.createdFrom,
     createdTo: query.createdTo,
   };
-  const widest = Math.max(1, ...stages.map((stage) => stage.count));
+  const first = Math.max(1, funnel[0]?.count ?? 0);
+  const stageOf = (key: string) => stages.find((stage) => stage.key === key);
   return (
     <section className="wb-panel" aria-labelledby="wb-flow-title">
       <div className="wb-panel__head">
         <h2 id="wb-flow-title">业务流程</h2>
-        <span className="wb-count">按报关单计数</span>
+        <span className="wb-count">按报关单累计</span>
       </div>
-      <ol className="wb-flow" aria-label="按业务状态查看报关单">
-        {stages.map((stage, index) => (
-          <li key={stage.key}>
-            <Link
-              className="wb-flow__row"
-              to={
-                stage.key === "pending_review"
-                  ? reviewListPath({ status: "pending" })
-                  : taskListPath({ ...scope, stage: stage.key })
-              }
-            >
+      <ol className="wb-flow" aria-label="业务流程漏斗">
+        {funnel.map((step, index) => {
+          const stuck = STUCK[step.key] ? stageOf(STUCK[step.key]) : undefined;
+          return (
+            <li key={step.key} className="wb-flow__row">
               <span className="wb-flow__step">
                 <b>{index + 1}</b>
-                {stage.label}
+                {step.label}
               </span>
               <span className="wb-flow__bar" aria-hidden="true">
                 <span
-                  data-stage={stage.key}
-                  style={{ width: `${Math.max(4, Math.round((stage.count / widest) * 100))}%` }}
+                  data-step={index}
+                  style={{ width: `${Math.max(4, Math.round((step.count / first) * 100))}%` }}
                 />
               </span>
               <span className="wb-flow__value">
-                <strong>{stage.count}</strong>
+                <strong>{step.count}</strong>
                 <span>张报关单</span>
               </span>
               <span className="wb-flow__note">
-                {NOTES[stage.key]}
-                {stage.key === "completed" &&
-                  noTaskCount > 0 &&
-                  `；另有 ${noTaskCount} 张无需开票（供应商关闭通知）`}
+                {step.rate === null ? "起点" : `上一环节通过 ${step.rate}%`}
+                {stuck && stuck.count > 0 && (
+                  <>
+                    {" · "}
+                    <Link
+                      to={
+                        stuck.key === "pending_review"
+                          ? reviewListPath({ status: "pending" })
+                          : taskListPath({ ...scope, stage: stuck.key })
+                      }
+                    >
+                      {stuck.count} 张{stuck.label} →
+                    </Link>
+                  </>
+                )}
               </span>
-            </Link>
-          </li>
-        ))}
+            </li>
+          );
+        })}
       </ol>
+      {noTaskCount > 0 && (
+        <p className="wb-report-note wb-flow__foot">
+          另有 {noTaskCount} 张无需开票（供应商关闭通知），不计入漏斗。
+        </p>
+      )}
     </section>
   );
 }

@@ -46,3 +46,9 @@ def counts(connection, scope):
         select(table.c.phase, func.count()).where(table.c.scope_key == scope).group_by(table.c.phase)
     )
     return {phase: count for phase, count in rows}
+
+
+def since(connection, start):
+    """start（UTC）之后开始的同步批次：时间、来源与批次状态，供同步情况统计。"""
+    query = select(table.c.started_at, table.c.source, table.c.phase).where(table.c.started_at >= start)
+    return [dict(row) for row in connection.execute(query).mappings()]

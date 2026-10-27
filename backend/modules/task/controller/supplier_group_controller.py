@@ -15,6 +15,7 @@ from ..dto.supplier_group_dto import (
 from ..vo.supplier_group_vo import (
     GroupBinding,
     GroupList,
+    InvoicingSpeed,
     SupplierList,
     SupplierNotify,
     SupplierProfileList,
@@ -28,6 +29,11 @@ def create_router(service, profiles):
     @router.post("/profiles/query", response_model=SupplierProfileList)
     def profile_list(body: SupplierProfileQuery, owner: Owner):
         return profiles.browse(body, owner)
+
+    @router.get("/profiles/invoicing-speed", response_model=InvoicingSpeed)
+    def invoicing_speed(owner: Owner):
+        """近 90 天：通知供应商到发票收齐的平均天数，按供应商从慢到快。"""
+        return profiles.invoicing_speed()
 
     @router.post("/profiles/notify", response_model=SupplierNotify)
     def profile_notify(body: SupplierNotifySave, owner: Owner):

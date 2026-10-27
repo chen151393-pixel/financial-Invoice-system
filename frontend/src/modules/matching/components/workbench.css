@@ -66,6 +66,9 @@
   gap: 12px;
   padding: 20px 20px 12px;
 }
+.wb-panel__body {
+  padding: 0 20px 18px;
+}
 .wb-panel__head h2 small {
   margin-left: 8px;
   font-weight: 400;

@@ -27,3 +27,9 @@ def finish(connection, scope, request_id, status, *, result=None, error=None):
         .where(table.c.scope_key == scope, table.c.request_id == request_id, table.c.status == "running")
         .values(status=status, result=result, error=error, updated_at=datetime.now(timezone.utc))
     ).rowcount
+
+
+def since(connection, start):
+    """start（UTC）之后创建的 NS 批次：时间、单据类型与状态，供同步情况统计。"""
+    query = select(table.c.created_at, table.c.kind, table.c.status).where(table.c.created_at >= start)
+    return [dict(row) for row in connection.execute(query).mappings()]

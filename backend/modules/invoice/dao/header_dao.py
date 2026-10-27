@@ -101,9 +101,15 @@ def status_counts(connection, query):
     return [dict(row) for row in result]
 
 
+# 人民币价税合计（当前柠檬云发票均为人民币；其他币种不混入合计，另行计数）
+CNY_GROSS = func.sum(case((headers.c.currency == "CNY", headers.c.amount_including_tax), else_=None)).label(
+    "gross"
+)
+
+
 def account_counts(connection, query):
     result = connection.execute(
-        select(headers.c.lemon_account.label("account"), func.count().label("count"))
+        select(headers.c.lemon_account.label("account"), func.count().label("count"), CNY_GROSS)
         .where(*_conditions(query))
         .group_by(headers.c.lemon_account)
         .order_by(func.count().desc(), headers.c.lemon_account)
@@ -111,10 +117,17 @@ def account_counts(connection, query):
     return [dict(row) for row in result]
 
 
+def other_currency_count(connection, query):
+    """当前筛选下非人民币发票张数（不计入人民币金额图）。"""
+    return connection.scalar(
+        select(func.count()).select_from(headers).where(*_conditions(query), headers.c.currency != "CNY")
+    )
+
+
 def date_counts(connection, query):
     """当前筛选下按开票日期计数（月份在服务层汇总，避免依赖数据库日期函数）。"""
     result = connection.execute(
-        select(headers.c.invoice_date.label("date"), func.count().label("count"))
+        select(headers.c.invoice_date.label("date"), func.count().label("count"), CNY_GROSS)
         .where(*_conditions(query), headers.c.invoice_date.is_not(None))
         .group_by(headers.c.invoice_date)
     ).mappings()

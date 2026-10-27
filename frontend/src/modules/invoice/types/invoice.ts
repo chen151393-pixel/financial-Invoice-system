@@ -67,9 +67,11 @@ export type InvoiceAccountOption = { value: string; label: string };
 // 分布统计：口径与列表筛选一致，全部由后端计数
 export type InvoiceStats = {
   total: number;
-  months: { month: string; count: number }[];
+  // 非人民币发票张数；金额只统计人民币
+  otherCurrencyCount: number;
+  months: { month: string; count: number; gross: string }[];
   statuses: { key: string; label: string; count: number }[];
-  accounts: { account: string; count: number }[];
+  accounts: { account: string; count: number; gross: string }[];
 };
 
 export type ImportFile = { filename: string; content: string };

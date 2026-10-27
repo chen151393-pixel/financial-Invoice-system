@@ -51,6 +51,7 @@ from .modules.sync.controller.lemon_batch_controller import create_router as lem
 from .modules.sync.controller.lemon_binding_controller import create_router as lemon_binding_router
 from .modules.sync.controller.lemon_invoice_controller import create_router as lemon_invoice_router
 from .modules.sync.controller.ns_run_controller import create_router as ns_run_router
+from .modules.sync.controller.sync_health_controller import create_router as sync_health_router
 from .modules.sync.public import LemonInvoicesFetched
 from .modules.sync.pull_service import PullService
 from .modules.sync.service import ConnectionService
@@ -62,6 +63,7 @@ from .modules.sync.service.lemon_job_service import LemonJobService
 from .modules.sync.service.lemon_plan_service import LemonPlanService
 from .modules.sync.service.lemon_worker import LemonWorker
 from .modules.sync.service.ns_run_service import NsRunService
+from .modules.sync.service.sync_health_service import SyncHealthService
 from .modules.task.controller.board_controller import create_router as task_board_router
 from .modules.task.controller.delivery_controller import create_router as delivery_router
 from .modules.task.controller.external_group_controller import create_router as external_group_router
@@ -257,3 +259,4 @@ def _register_business(app, settings, ns, contract_ns, wecom, engine, lemon_invo
     app.include_router(sync_router(ConnectionService(settings, ns), pulls))
     app.state.ns_runs = NsRunService(engine, pulls)
     app.include_router(ns_run_router(app.state.ns_runs))
+    app.include_router(sync_health_router(SyncHealthService(engine)))

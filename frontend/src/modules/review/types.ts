@@ -1,7 +1,8 @@
 // 与后端 /api/review 的响应一致；金额、数量为十进制字符串，前端不重算。
 // unshipped：未出库。自 2026-10-23 起拉取时即跳过，列表不再返回；保留类型以显示后端兜底拒绝。
 export type ReviewStatus = "pending" | "approved" | "unshipped";
-export type ReviewFilter = "all" | "pending" | "approved";
+// margin_alert：待审核且申报幅度为负；auto：待审核且满足可自动审核条件（后端判定）
+export type ReviewFilter = "all" | "pending" | "approved" | "margin_alert" | "auto";
 export interface UnitPriceMargin {
   // 后端按人民币报关单价与合并采购单价（含税总金额 / 总数量）比较，前端只展示。
   margin?: string;
@@ -62,6 +63,10 @@ export interface ComparisonGroup {
   purchaseCount: number;
   customsLines: CustomsLine[];
   unlinkedLines: PurchaseLine[];
+  // 任一报关行申报幅度为负（采购价高于申报价）
+  marginAlert?: boolean;
+  // 可自动审核通过的预判：只用于提示与筛选，审核仍需确认
+  autoReview?: { eligible: boolean; reasons: string[] };
   warnings: string[];
   review: {
     status: ReviewStatus;
@@ -77,7 +82,19 @@ export interface ComparisonGroup {
 export interface ComparisonResult {
   groups: ComparisonGroup[];
   // changed：待审核中来源已变化的张数；approvedThisMonth：北京时间本月审核通过张数
-  counts: Record<ReviewFilter | "customs" | "purchase" | "shown" | "changed" | "approvedThisMonth", number>;
+  counts: Record<
+    | "all"
+    | "pending"
+    | "approved"
+    | "customs"
+    | "purchase"
+    | "shown"
+    | "changed"
+    | "approvedThisMonth"
+    | "marginAlert"
+    | "autoApprovable",
+    number
+  >;
   notices: string[];
   accounts: string[];
   suppliers: { id: string; name: string }[];

@@ -92,3 +92,60 @@ def invoice_trend(rows, today, start=None):
             }
         )
     return result
+
+
+# 业务流程漏斗：由五个互斥业务状态累加得出“至少走到这一步”的报关单数（不含无需开票的报关单）
+FUNNEL = (
+    ("synced", "已入库待开票报关单", ("pending_review", "notify", "invoicing", "documents", "completed")),
+    ("approved", "财务审核通过", ("notify", "invoicing", "documents", "completed")),
+    ("notified", "已通知供应商", ("invoicing", "documents", "completed")),
+    ("received", "发票已收齐", ("documents", "completed")),
+    ("completed", "资料齐全完结", ("completed",)),
+)
+
+
+def funnel(stages):
+    counts = {stage["key"]: stage["count"] for stage in stages}
+    result, previous = [], None
+    for key, label, keys in FUNNEL:
+        count = sum(counts.get(item, 0) for item in keys)
+        rate = (
+            None if previous is None else (percent(Decimal(count), Decimal(previous)) if previous else None)
+        )
+        result.append({"key": key, "label": label, "count": count, "rate": rate})
+        previous = count
+    return result
+
+
+def monthly_receipts(tasks, today, months=6, currency="CNY"):
+    """按任务生成月份（北京时间）汇总人民币应开与目前已收票金额，最近 months 个月；
+    应开金额缺失的任务不计入应开与已收，另计张数提示。"""
+    keys = []
+    year, month = today.year, today.month
+    for _ in range(months):
+        keys.append(f"{year:04d}-{month:02d}")
+        year, month = (year, month - 1) if month > 1 else (year - 1, 12)
+    keys.reverse()
+    expected = dict.fromkeys(keys, Decimal(0))
+    received = dict.fromkeys(keys, Decimal(0))
+    unknown = dict.fromkeys(keys, 0)
+    for row in tasks:
+        key = local_date(row["created_at"]).strftime("%Y-%m")
+        if key not in expected or (row["currency"] or "") != currency:
+            continue
+        if row["expected"] is None:
+            unknown[key] += 1
+            continue
+        expected[key] += row["expected"]
+        received[key] += row["received"]
+    return [
+        {
+            "month": key,
+            "currency": currency,
+            "expected": format(expected[key], "f"),
+            "received": format(received[key], "f"),
+            "percent": percent(received[key], expected[key]) if expected[key] else None,
+            "unknownTasks": unknown[key],
+        }
+        for key in keys
+    ]

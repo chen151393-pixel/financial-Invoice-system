@@ -85,6 +85,31 @@ class InvoiceTrend(StrictModel):
     points: list[TrendPoint]
 
 
+class FunnelStep(StrictModel):
+    key: str
+    label: str
+    count: int
+    # 相对上一步的通过率（百分比字符串）；第一步或上一步为 0 时为空
+    rate: str | None
+
+
+class MonthlyReceipt(StrictModel):
+    month: str
+    currency: str
+    expected: str
+    received: str
+    percent: str | None
+    # 当月应开金额缺失、未计入的任务数
+    unknownTasks: int
+
+
+class QueueTiers(StrictModel):
+    all: int
+    high: int
+    medium: int
+    low: int
+
+
 class Workbench(StrictModel):
     generatedAt: str
     accounts: list[str]
@@ -107,6 +132,10 @@ class Workbench(StrictModel):
     trendEnd: str
     latestInvoiceDate: str | None
     trend: list[InvoiceTrend]
+    # 业务流程漏斗（由五个业务状态累加）、按任务生成月份的人民币应开与已收、待审核比对建议的置信度分档
+    funnel: list[FunnelStep] = Field(default_factory=list)
+    monthly: list[MonthlyReceipt] = Field(default_factory=list)
+    queue: QueueTiers | None = None
 
 
 class WorkbenchExport(StrictModel):

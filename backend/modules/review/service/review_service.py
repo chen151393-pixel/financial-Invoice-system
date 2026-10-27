@@ -79,15 +79,29 @@ class ReviewService:
             for declaration_id, (state, _, _) in states.items()
             if state == "approved" and actives[declaration_id]["approved_at"] >= month_start
         )
-        wanted = {"all": ("pending", "approved")}.get(query.status, (query.status,))
-        selected = [row["id"] for row in index if states[row["id"]][0] in wanted]
+        # 待审核的报关单逐张算出申报幅度与可自动审核预判，用于计数和筛选；本页复用同一结果
+        pending_ids = [row["id"] for row in index if states[row["id"]][0] == "pending"]
+        built = self._declarations(pending_ids, states, actives)
+        counts["marginAlert"] = sum(1 for group in built.values() if group.marginAlert)
+        counts["autoApprovable"] = sum(1 for group in built.values() if group.autoReview.eligible)
+        if query.status in ("margin_alert", "auto"):
+            selected = [
+                declaration_id
+                for declaration_id in pending_ids
+                if declaration_id in built
+                and (
+                    built[declaration_id].marginAlert
+                    if query.status == "margin_alert"
+                    else built[declaration_id].autoReview.eligible
+                )
+            ]
+        else:
+            wanted = {"all": ("pending", "approved")}.get(query.status, (query.status,))
+            selected = [row["id"] for row in index if states[row["id"]][0] in wanted]
         start = (query.page - 1) * query.pageSize
         page_ids = selected[start : start + query.pageSize]
-        groups = [
-            self._declaration(content, states[content["declaration"]["id"]], actives)
-            for content in self.declarations.details(page_ids)
-            if content is not None
-        ]
+        built.update(self._declarations([i for i in page_ids if i not in built], states, actives))
+        groups = [built[declaration_id] for declaration_id in page_ids if declaration_id in built]
         counts.update(
             customs=sum(group.customsCount for group in groups),
             purchase=sum(group.purchaseCount for group in groups),
@@ -107,19 +121,35 @@ class ReviewService:
             pages=max(1, (len(selected) + query.pageSize - 1) // query.pageSize),
         )
 
-    def _declaration(self, content, state, actives):
+    def _declarations(self, declaration_ids, states, actives):
+        """按 ID 组装报关单页面数据（同一连接读取开票依据与单位名称）；来源缺失的跳过。"""
+        if not declaration_ids:
+            return {}
+        contents = [content for content in self.declarations.details(declaration_ids) if content is not None]
         try:
             with self.engine.connect() as connection:
-                content = {
-                    **content,
-                    "bases": current_bases(connection, [r["id"] for r in content["purchase_lines"]]),
-                    "unit_names": unit_names(connection),
+                names = unit_names(connection)
+                bases = {
+                    content["declaration"]["id"]: current_bases(
+                        connection, [r["id"] for r in content["purchase_lines"]]
+                    )
+                    for content in contents
                 }
         except SQLAlchemyError:
             raise ApiError(503, "审核依据读取失败，请检查数据库及迁移状态") from None
-        state, changed, reason = state
-        active = actives.get(content["declaration"]["id"])
-        return declaration_mapper.declaration(content, state, changed, active, state == "pending", reason)
+        built = {}
+        for content in contents:
+            declaration_id = content["declaration"]["id"]
+            state, changed, reason = states[declaration_id]
+            built[declaration_id] = declaration_mapper.declaration(
+                {**content, "bases": bases[declaration_id], "unit_names": names},
+                state,
+                changed,
+                actives.get(declaration_id),
+                state == "pending",
+                reason,
+            )
+        return built
 
     def approve(self, declaration_id, body, actor):
         _require_reviewer(actor)
@@ -223,7 +253,7 @@ class ReviewService:
             len(content["orders"]),
             actives.get(declaration_id),
         )
-        return self._declaration(content, state, actives)
+        return self._declarations([declaration_id], {declaration_id: state}, actives)[declaration_id]
 
 
 def _require_reviewer(actor):

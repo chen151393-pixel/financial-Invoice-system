@@ -18,9 +18,17 @@ from backend.modules.source.public import (
 )
 from backend.modules.task.public import workbench_tasks
 
-from ..dao import workbench_allocation_dao
+from ..dao import allocation_dao, workbench_allocation_dao
 from ..mapper.workbench_mapper import matching_todo, review_todo, task_todo
-from ..policy.workbench_reports import BUSINESS_ZONE, invoice_trend, month_report, supplier_ranking
+from ..policy.comparison_policy import HIGH, MEDIUM
+from ..policy.workbench_reports import (
+    BUSINESS_ZONE,
+    funnel,
+    invoice_trend,
+    month_report,
+    monthly_receipts,
+    supplier_ranking,
+)
 from ..policy.workbench_scope import Scope, stage_counts, supplier_options
 from ..vo.workbench_vo import Workbench, WorkbenchCounts
 
@@ -144,6 +152,9 @@ class WorkbenchService:
             trend=invoice_trend(
                 invoice_daily_amounts(connection, trend_start, trend_end), trend_end, trend_start
             ),
+            funnel=funnel(stages),
+            monthly=monthly_receipts(scoped_tasks, today),
+            queue=allocation_dao.proposal_counts(connection, HIGH, MEDIUM),
         )
 
 

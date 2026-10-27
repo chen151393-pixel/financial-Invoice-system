@@ -183,3 +183,7 @@ API 拉票支持 `businessTypes` 文本多选，默认“采购固定资产、�
 ## 未出库报关单拉取时跳过（2026-10-23）
 
 保存时由 source 按出库准入跳过没有真实报关单号或没有关联子采购单的报关单（及只因它带出的子采购单），详见 [source 说明](../source/README.md)。部分保存模式的逐单结果新增状态 `skipped`（“未出库，已跳过”），`batch.counts.skipped` 单独计数，不计为失败，也不阻止翻页。同步页逐单结果表与汇总文字同步显示。
+
+## 近 14 天同步情况（2026-10-27）
+
+`GET /api/sync/health`（`controller/sync_health_controller.py` → `service/sync_health_service.py`）：按北京时间汇总最近 14 天 NS 报关单、NS 子采购、柠檬云发票三行的每日执行结果。数据来自 `sync_ns_runs`（NS 批次，按 `created_at`）、`sync_runs`（后台批次，按 `started_at`）和 `sync_lemon_runs` 中不属于批次的手动拉票；排队、已拆分的分片不算一次执行。每天的结果由 `policy/sync_health_policy.py` 判定：全部成功、全部失败、成败混合或有部分成功记为部分成功、只有执行中记为执行中、没有执行记为未执行；返回当天执行次数与失败次数。只读，不触发同步。测试：`backend/tests/test_sync_health.py`。

@@ -1,6 +1,7 @@
-"""进项发票分布统计：按月张数（最近 6 个月）、票面展示状态、柠檬云账套，口径与列表筛选一致。"""
+"""进项发票分布统计：按月张数与人民币金额（最近 6 个月）、票面展示状态、柠檬云账套，口径与列表筛选一致。"""
 
 from datetime import date
+from decimal import Decimal
 
 from sqlalchemy.exc import SQLAlchemyError
 
@@ -11,6 +12,12 @@ from ..policy.invoice_status_policy import LABELS
 from ..vo.invoice_stats_vo import AccountCount, InvoiceStats, MonthCount, StatusCount
 
 MONTHS = 6
+CENT = Decimal("0.01")
+
+
+def _money(value):
+    # 数据库合计可能返回浮点或空值，统一转为两位小数的十进制字符串
+    return format(Decimal(str(value or 0)).quantize(CENT), "f")
 
 
 def _month_window(last):
@@ -35,13 +42,18 @@ class InvoiceStatsService:
                 statuses = header_dao.status_counts(connection, query)
                 accounts = header_dao.account_counts(connection, query)
                 dates = header_dao.date_counts(connection, query)
+                others = header_dao.other_currency_count(connection, query)
         except SQLAlchemyError:
             raise ApiError(503, "发票统计读取失败，请检查业务数据库及迁移状态") from None
         return InvoiceStats(
             total=sum(row["count"] for row in statuses),
+            otherCurrencyCount=others or 0,
             months=_months(dates, query.date_to or today or date.today()),
             statuses=_statuses(statuses),
-            accounts=[AccountCount(account=row["account"], count=row["count"]) for row in accounts],
+            accounts=[
+                AccountCount(account=row["account"], count=row["count"], gross=_money(row["gross"]))
+                for row in accounts
+            ],
         )
 
 
@@ -50,11 +62,13 @@ def _months(rows, fallback):
     last = max((row["date"] for row in rows), default=fallback)
     window = _month_window(last)
     counts = dict.fromkeys(window, 0)
+    gross = {key: Decimal(0) for key in window}
     for row in rows:
         key = f"{row['date'].year:04d}-{row['date'].month:02d}"
         if key in counts:
             counts[key] += row["count"]
-    return [MonthCount(month=key, count=value) for key, value in counts.items()]
+            gross[key] += Decimal(str(row["gross"] or 0))
+    return [MonthCount(month=key, count=value, gross=_money(gross[key])) for key, value in counts.items()]
 
 
 def _statuses(rows):

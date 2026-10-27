@@ -2,6 +2,7 @@ import { Link } from "react-router";
 import { syncBatchPath } from "../../app/paths";
 import { Button } from "../../shared/components/Button";
 import { Pagination } from "../../shared/components/Pagination";
+import { SyncHealthGrid } from "./components/SyncHealthGrid";
 import { SyncPhaseTag } from "./components/SyncPhaseTag";
 import { SyncSourceCards } from "./components/SyncSourceCards";
 import { useSyncBatches } from "./hooks/useSyncBatches";
@@ -21,6 +22,7 @@ export function SyncOverview() {
   return (
     <>
       <SyncSourceCards plan={data?.plan ?? null} />
+      <SyncHealthGrid />
       <section className="sync-background sync-background--flush" aria-label="同步执行记录">
         <div className="sync-background__head" id="sync-platforms">
           <div className="sync-background__title">

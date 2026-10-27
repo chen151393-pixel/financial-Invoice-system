@@ -26,6 +26,10 @@ def workbench_tasks(connection, now):
                 **task,
                 "outstanding": outstanding,
                 "received": sum((line["received_amount"] for line in own), Decimal(0)),
+                # 应开合计；任一行应开金额缺失时为空，不以部分金额冒充
+                "expected": None
+                if not own or any(line["expected_amount"] is None for line in own)
+                else sum((line["expected_amount"] for line in own), Decimal(0)),
                 "supplier": next(
                     (s["supplier_name"] for s in sources if s.get("supplier_name")), "供应商待确认"
                 ),

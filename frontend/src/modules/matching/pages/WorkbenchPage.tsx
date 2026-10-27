@@ -1,6 +1,7 @@
 import { Button } from "../../../shared/components/Button";
 import { WorkbenchKpis } from "../components/WorkbenchKpis";
 import { WorkbenchMetrics } from "../components/WorkbenchMetrics";
+import { WorkbenchQueueTiers, WorkbenchReceipts } from "../components/WorkbenchReceipts";
 import { WorkbenchSuppliers } from "../components/WorkbenchSuppliers";
 import { WorkbenchTodos } from "../components/WorkbenchTodos";
 import { WorkbenchToolbar } from "../components/WorkbenchToolbar";
@@ -32,13 +33,18 @@ export function WorkbenchPage({ state }: { state: ReturnType<typeof useWorkbench
       {state.data && (
         <>
           <WorkbenchKpis data={state.data} />
-          {/* 业务流程与供应商待收票并排，窄屏上下排列 */}
+          {/* 业务流程漏斗与比对队列、应开已收与供应商待收票分两行并排，窄屏上下排列 */}
           <div className="wb-columns">
             <WorkbenchMetrics
               stages={state.data.stages ?? []}
+              funnel={state.data.funnel ?? []}
               noTaskCount={state.data.noTaskCount ?? 0}
               query={state.query}
             />
+            {state.data.queue && <WorkbenchQueueTiers queue={state.data.queue} />}
+          </div>
+          <div className="wb-columns">
+            <WorkbenchReceipts monthly={state.data.monthly ?? []} />
             <aside className="wb-aside" aria-label="收票情况">
               <WorkbenchSuppliers data={state.data} />
             </aside>

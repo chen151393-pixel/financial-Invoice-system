@@ -32,7 +32,11 @@ export function DeclarationRow({
   const selectable = checkable && review.status === "pending" && review.allowed;
   return (
     <tbody>
-      <tr className={`fr-declaration-row${checked ? " is-checked" : ""}${open ? " is-open" : ""}`}>
+      <tr
+        className={`fr-declaration-row${checked ? " is-checked" : ""}${open ? " is-open" : ""}${
+          group.marginAlert ? " is-alert" : ""
+        }`}
+      >
         {checkable && (
           <td className="fr-check-cell">
             {selectable && (
@@ -70,8 +74,17 @@ export function DeclarationRow({
           {group.customsCount} 条报关行<small>{group.purchaseCount} 条子采购行</small>
         </td>
         <td>
-          <span title={review.reason}>
-            <Badge tone={STATUS_TONE[review.status] ?? "neutral"}>{review.label}</Badge>
+          <span className="fr-status-badges">
+            <span title={review.reason}>
+              <Badge tone={STATUS_TONE[review.status] ?? "neutral"}>{review.label}</Badge>
+            </span>
+            {/* 申报幅度为负时突出显示；可自动审核为后端预判，悬停显示依据 */}
+            {group.marginAlert && <Badge tone="danger">申报幅度异常</Badge>}
+            {group.autoReview?.eligible && (
+              <span title="关联、金额、币种齐全且申报幅度正常">
+                <Badge tone="info">可自动审核</Badge>
+              </span>
+            )}
           </span>
         </td>
         <td className="fr-declaration-action">

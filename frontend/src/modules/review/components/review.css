@@ -452,3 +452,14 @@
 .fr-currency-evidence fieldset {
   border-radius: var(--radius-control);
 }
+
+/* 申报幅度异常的报关单：主行左侧橙色提示条，状态列附“申报幅度异常”文字标签 */
+.fr-declaration-row.is-alert > th:first-child,
+.fr-declaration-row.is-alert > td:first-child {
+  box-shadow: inset 3px 0 var(--color-feedback);
+}
+.fr-status-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}

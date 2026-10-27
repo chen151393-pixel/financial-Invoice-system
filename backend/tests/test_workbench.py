@@ -8,7 +8,13 @@ from backend.core.config import load_settings
 from backend.modules.invoice.entity import headers
 from backend.modules.matching.dto.matching_dto import ConfirmBody
 from backend.modules.matching.dto.workbench_dto import WorkbenchQuery
-from backend.modules.matching.policy.workbench_reports import BUSINESS_ZONE, month_report, supplier_ranking
+from backend.modules.matching.policy.workbench_reports import (
+    BUSINESS_ZONE,
+    funnel,
+    month_report,
+    monthly_receipts,
+    supplier_ranking,
+)
 from backend.modules.matching.service.workbench_service import WorkbenchService
 from backend.tests.documents_ready import complete_documents
 from backend.tests.invoice_files import invoice
@@ -67,6 +73,16 @@ def test_review_to_task_to_receipt_and_version_review(engine, ns, world):
     assert result.counts.matching == result.counts.task == 0
     assert result.month.completed == 1
     assert Decimal(result.month.received[0].amount) == Decimal("120.5")
+    # 漏斗与按月应开/已收：已完结的报关单走完全部环节；本月人民币应开与已收各 120.5
+    assert [(step.key, step.count) for step in result.funnel][-1] == ("completed", 1)
+    assert all(step.count == 1 for step in result.funnel) and result.funnel[1].rate == "100.0"
+    current = result.monthly[-1]
+    assert (Decimal(current.expected), Decimal(current.received), current.percent) == (
+        Decimal("120.5"),
+        Decimal("120.5"),
+        "100.0",
+    )
+    assert result.queue.all == 0
     import_invoices(world, [invoice(number, [INK, FLUID], remark="SUB-200 换版")])
     result = read(engine)
     assert result.counts.reverify == result.counts.matching == 1
@@ -139,6 +155,42 @@ def test_month_uses_shanghai_boundary_not_completion_month():
     )
     assert report["total"] == 2 and report["completed"] == 1 and report["percent"] == "50.0"
     assert report["received"] == [{"currency": "CNY", "amount": "0.1"}, {"currency": "USD", "amount": "0.2"}]
+
+
+def test_funnel_accumulates_stages_and_rates():
+    stages = [
+        {"key": "pending_review", "count": 16},
+        {"key": "notify", "count": 17},
+        {"key": "invoicing", "count": 41},
+        {"key": "documents", "count": 8},
+        {"key": "completed", "count": 46},
+    ]
+    steps = funnel(stages)
+    assert [step["count"] for step in steps] == [128, 112, 95, 54, 46]
+    assert steps[0]["rate"] is None and steps[1]["rate"] == "87.5"
+    empty = funnel([{"key": key, "count": 0} for key in ("pending_review", "notify")])
+    assert all(step["rate"] is None for step in empty)
+
+
+def test_monthly_receipts_by_creation_month_cny_only():
+    today = datetime(2026, 10, 19).date()
+    base = {"created_at": datetime(2026, 10, 1, 2), "currency": "CNY", "received": Decimal("40")}
+    rows = [
+        {**base, "expected": Decimal("100")},
+        {**base, "expected": None},  # 应开缺失：不计入金额，另计张数
+        {**base, "currency": "USD", "expected": Decimal("999")},  # 非人民币不混入
+        {**base, "created_at": datetime(2026, 9, 30, 15, 59), "expected": Decimal("50")},  # 北京时间 9 月
+    ]
+    months = monthly_receipts(rows, today)
+    assert [item["month"] for item in months][0] == "2026-05" and len(months) == 6
+    october, september = months[-1], months[-2]
+    assert (october["expected"], october["received"], october["percent"], october["unknownTasks"]) == (
+        "100",
+        "40",
+        "40.0",
+        1,
+    )
+    assert september["expected"] == "50" and months[0]["percent"] is None
 
 
 def test_ranking_does_not_mix_currencies_or_partial_unknown_totals():

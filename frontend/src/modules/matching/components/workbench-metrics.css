@@ -1,4 +1,4 @@
-/* 业务流程：五个业务状态逐行排开，条长按最大计数绘制，点击进入对应列表。 */
+/* 业务流程漏斗：五步累计计数与上一环节通过率，条长按第一步计数绘制；卡点链接进入对应列表。 */
 .wb-flow {
   display: grid;
   gap: 4px;
@@ -6,7 +6,7 @@
   padding: 0 12px 14px;
   list-style: none;
 }
-.wb .wb-flow__row {
+.wb-flow__row {
   display: grid;
   grid-template-columns: 150px minmax(0, 1fr) 120px;
   grid-template-areas:
@@ -18,14 +18,6 @@
   border-radius: var(--radius-control);
   color: var(--color-text);
   text-decoration: none;
-}
-.wb .wb-flow__row:hover {
-  background: var(--color-canvas);
-  text-decoration: none;
-}
-.wb-flow__row:focus-visible {
-  outline: 2px solid var(--color-primary);
-  outline-offset: 2px;
 }
 .wb-flow__step {
   grid-area: step;
@@ -59,18 +51,22 @@
   border-radius: inherit;
   background: var(--color-chart-1);
 }
-/* 从审核到完结由深到浅，同一色系 */
-.wb-flow__bar > [data-stage="notify"] {
+/* 从入库到完结由深到浅，同一色系 */
+.wb-flow__bar > [data-step="1"] {
   background: var(--color-chart-2);
 }
-.wb-flow__bar > [data-stage="invoicing"] {
+.wb-flow__bar > [data-step="2"] {
   background: var(--color-chart-3);
 }
-.wb-flow__bar > [data-stage="documents"] {
+.wb-flow__bar > [data-step="3"] {
   background: var(--color-chart-4);
 }
-.wb-flow__bar > [data-stage="completed"] {
+.wb-flow__bar > [data-step="4"] {
   background: var(--color-chart-line);
+}
+.wb-flow__foot {
+  margin: 0;
+  padding: 0 20px 16px;
 }
 .wb-flow__value {
   grid-area: value;
@@ -94,7 +90,7 @@
   grid-area: note;
 }
 @media (max-width: 760px) {
-  .wb .wb-flow__row {
+  .wb-flow__row {
     grid-template-columns: minmax(0, 1fr) auto;
     grid-template-areas:
       "step value"

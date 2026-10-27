@@ -133,3 +133,7 @@ MySQL 的 `SUM(CASE ...)` 返回 Decimal，待审核建议非空时曾导致队�
 - 只归档文件，不发布事件、不改变比对、收票进度与任务状态；报关资料中的“发票”（NS 下载）仍由 task 管理，两者互不替代。
 - 新增读取：`invoice.public.invoices_by_number`、`source.public.line_declarations`。
 - 验证：`backend/tests/test_matching_invoice_files.py`（未通过不归档、文件名识别与人工指定、同内容幂等与不同内容不覆盖、多号码歧义、服务身份只读、HTTP 登录校验）。
+
+## 工作台漏斗、应开与已收、比对队列分档（2026-10-27）
+
+`POST /api/matching/workbench/query` 新增：`funnel`（由五个业务状态累加的“至少走到这一步”报关单数及相对上一步的通过率，不含无需开票的报关单）、`monthly`（最近 6 个月按任务生成月份的人民币应开合计与目前已收票合计、收票率；应开金额缺失的任务不计入并计数）、`queue`（待审核比对建议按置信度高 / 中 / 低分档计数）。规则在 `policy/workbench_reports.py`，任务应开合计由 task 门面 `workbench_tasks` 的 `expected` 字段提供（任一行缺失为空）。

@@ -94,7 +94,14 @@ const stages = [
   { key: "documents", label: "资料已回", count: 0 },
   { key: "completed", label: "开票完成", count: 4 },
 ];
-const month = { month: "2026-10", total: 0, completed: 0, percent: null, received: [] };
+// 后端由五个业务状态累加得出的漏斗
+const funnel = [
+  { key: "synced", label: "已入库待开票报关单", count: 10, rate: null },
+  { key: "approved", label: "财务审核通过", count: 8, rate: "80.0" },
+  { key: "notified", label: "已通知供应商", count: 7, rate: "87.5" },
+  { key: "received", label: "发票已收齐", count: 4, rate: "57.1" },
+  { key: "completed", label: "资料齐全完结", count: 4, rate: "100.0" },
+];
 const render = (component, props) =>
   renderToStaticMarkup(createElement(MemoryRouter, null, createElement(component, props)));
 
@@ -171,7 +178,7 @@ test("查询与导出携带相同筛选，导出结果完全取自后端", async
   );
 });
 
-test("五个业务状态分区按报关单计数，点击带同样筛选进入对应列表", () => {
+test("业务流程漏斗展示累计计数与通过率，卡点按业务状态分区链接到对应列表并带同样筛选", () => {
   const scoped = {
     ...query,
     account: "A",
@@ -179,9 +186,13 @@ test("五个业务状态分区按报关单计数，点击带同样筛选进入�
     createdFrom: "2026-10-01",
     createdTo: "2026-10-31",
   };
-  const html = render(Metrics, { stages, noTaskCount: 2, month, query: scoped });
-  for (const label of ["待审批", "待通知开票", "待核票", "资料已回", "开票完成"])
-    assert.ok(html.includes(label));
+  const html = render(Metrics, { stages, funnel, noTaskCount: 2, query: scoped });
+  for (const label of ["已入库待开票报关单", "财务审核通过", "资料齐全完结", "上一环节通过 87.5%"])
+    assert.ok(html.includes(label), label);
+  // 卡点：审核通过一步卡在“待审批”2 张、收齐一步卡在“待核票”3 张；计数为 0 的分区不显示链接
+  assert.match(html, /2 张待审批 →/);
+  assert.match(html, /3 张待核票 →/);
+  assert.doesNotMatch(html, /0 张资料已回/);
   // 上线只有 NS 正式环境，跳转不携带 NS 账套
   assert.match(html, /href="\/review\?status=pending"/);
   assert.match(
@@ -189,7 +200,7 @@ test("五个业务状态分区按报关单计数，点击带同样筛选进入�
     /href="\/tasks\?supplierId=7&amp;createdFrom=2026-10-01&amp;createdTo=2026-10-31&amp;stage=invoicing"/,
   );
   assert.match(html, /另有 2 张无需开票/);
-  assert.match(html, /<strong>3<\/strong><span>张报关单/);
+  assert.match(html, /<strong>10<\/strong><span>张报关单/);
 });
 
 test("列表地址只写入已填写的筛选条件", () => {

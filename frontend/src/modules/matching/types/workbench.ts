@@ -70,6 +70,19 @@ export type Workbench = {
   trendStart: string;
   trendEnd: string;
   latestInvoiceDate: string | null;
+  // 业务流程漏斗（后端由业务状态累加，rate 为相对上一步的通过率）
+  funnel: { key: string; label: string; count: number; rate: string | null }[];
+  // 按任务生成月份的人民币应开与目前已收票金额（最近 6 个月）
+  monthly: {
+    month: string;
+    currency: string;
+    expected: string;
+    received: string;
+    percent: string | null;
+    unknownTasks: number;
+  }[];
+  // 待审核比对建议按置信度分档
+  queue: { all: number; high: number; medium: number; low: number } | null;
   trend: {
     currency: string;
     hasNegative: boolean;

@@ -98,3 +98,11 @@ def finish(connection, scope, request_id, status, *, result=None, error=None):
         .where(table.c.scope_key == scope, table.c.request_id == request_id, table.c.status == "running")
         .values(**values)
     ).rowcount
+
+
+def manual_since(connection, start):
+    """start（UTC）之后的手动拉票（不属于后台批次），只含真实拉取过的记录。"""
+    query = select(table.c.created_at, table.c.status).where(
+        table.c.created_at >= start, table.c.run_id.is_(None), table.c.status.in_(PULLED)
+    )
+    return [dict(row) for row in connection.execute(query).mappings()]

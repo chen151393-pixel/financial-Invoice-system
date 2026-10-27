@@ -18,7 +18,9 @@ import type {
   ReviewFilter,
 } from "../types";
 
-const FILTER_LABELS: Record<ReviewFilter, string> = {
+// 状态切换只列三种基本状态；申报幅度异常、可自动审核由上方概况卡进入
+const FILTERS = ["all", "pending", "approved"] as const;
+const FILTER_LABELS: Record<(typeof FILTERS)[number], string> = {
   all: "全部报关单",
   pending: "待审核",
   approved: "审核通过",
@@ -117,21 +119,33 @@ export function ReviewPage() {
   const busy = state.kind === "loading" || submitting;
   return (
     <div className="fr-page">
-      {counts && <ReviewStats counts={counts} />}
+      {counts && (
+        <ReviewStats
+          counts={counts}
+          value={query.status}
+          onSelect={(status) => setQuery((current) => ({ ...current, status, page: 1 }))}
+        />
+      )}
       <Card className="fr-panel">
         <CardHeader
-          title="报关单"
+          title={
+            query.status === "margin_alert"
+              ? "报关单 · 申报幅度异常"
+              : query.status === "auto"
+                ? "报关单 · 可自动审核通过"
+                : "报关单"
+          }
           actions={
             <Segmented
               label="按审核状态筛选"
               value={query.status}
               disabled={busy}
-              options={(Object.keys(FILTER_LABELS) as ReviewFilter[]).map((key) => ({
+              options={FILTERS.map((key) => ({
                 value: key,
                 label: FILTER_LABELS[key],
                 count: counts?.[key],
               }))}
-              onChange={(status) => setQuery((current) => ({ ...current, status, page: 1 }))}
+              onChange={(status: ReviewFilter) => setQuery((current) => ({ ...current, status, page: 1 }))}
             />
           }
         />
