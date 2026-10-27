@@ -59,7 +59,11 @@ export function WorkbenchMetrics({
                 <span>张报关单</span>
               </span>
               <span className="wb-flow__note">
-                {step.rate === null ? "起点" : `上一环节通过 ${step.rate}%`}
+                {index === 0
+                  ? "起点"
+                  : step.rate === null
+                    ? "上一环节为 0，暂无通过率"
+                    : `上一环节通过 ${step.rate}%`}
                 {stuck && stuck.count > 0 && (
                   <>
                     {" · "}

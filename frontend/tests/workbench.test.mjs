@@ -6,7 +6,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { MemoryRouter } from "react-router";
 import { createServer } from "vite";
 
-let server, Todos, Trend, Page, Metrics, api, paths, Queue, Filters;
+let server, Todos, Trend, Page, Metrics, Kpis, api, paths, Queue, Filters;
 before(async () => {
   server = await createServer({
     configFile: fileURLToPath(new URL("../vite.config.ts", import.meta.url)),
@@ -22,6 +22,9 @@ before(async () => {
   ));
   ({ WorkbenchPage: Page } = await server.ssrLoadModule("/src/modules/matching/pages/WorkbenchPage.tsx"));
   api = await server.ssrLoadModule("/src/modules/matching/api/workbench-api.ts");
+  ({ WorkbenchKpis: Kpis } = await server.ssrLoadModule(
+    "/src/modules/matching/components/WorkbenchKpis.tsx",
+  ));
   ({ WorkbenchMetrics: Metrics } = await server.ssrLoadModule(
     "/src/modules/matching/components/WorkbenchMetrics.tsx",
   ));
@@ -239,4 +242,56 @@ test("比对队列显示异常分类，异常建议不能勾选批量通过；�
   });
   assert.match(filters, /<option value="abnormal" selected="">只看异常/);
   assert.match(filters, /只看正常/);
+});
+
+test("本月有效已收票只展示有金额的币种，人民币优先；全为零时不显示“币种待核实”", () => {
+  const base = {
+    counts: { all: 0, review: 0, matching: 0, task: 0, reverify: 0, preparation: 0 },
+    month: { month: "2026-10", total: 20, completed: 0, percent: "0.0", received: [] },
+  };
+  const zero = render(Kpis, {
+    data: {
+      ...base,
+      month: {
+        ...base.month,
+        received: [
+          { currency: "", amount: "0" },
+          { currency: "CNY", amount: "0" },
+        ],
+      },
+    },
+  });
+  assert.doesNotMatch(zero, /币种待核实/);
+  assert.match(zero, /¥ 0.00/);
+  assert.match(zero, /本月新建任务暂无比对通过的发票/);
+  const mixed = render(Kpis, {
+    data: {
+      ...base,
+      month: {
+        ...base.month,
+        received: [
+          { currency: "", amount: "12.5" },
+          { currency: "CNY", amount: "301.25" },
+        ],
+      },
+    },
+  });
+  assert.match(mixed, /¥ 301.25/);
+  assert.match(mixed, /另有 币种待核实 12.50/);
+});
+
+test("漏斗上一环节为 0 时说明暂无通过率，只有第一步标为起点", () => {
+  const html = render(Metrics, {
+    stages,
+    funnel: [
+      { key: "synced", label: "已入库待开票报关单", count: 158, rate: null },
+      { key: "approved", label: "财务审核通过", count: 3, rate: "1.9" },
+      { key: "notified", label: "已通知供应商", count: 0, rate: "0.0" },
+      { key: "received", label: "发票已收齐", count: 0, rate: null },
+    ],
+    noTaskCount: 0,
+    query,
+  });
+  assert.equal((html.match(/起点/g) || []).length, 1);
+  assert.match(html, /上一环节为 0，暂无通过率/);
 });

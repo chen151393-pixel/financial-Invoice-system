@@ -6,7 +6,12 @@ import { todoLabels } from "../types/workbench";
 /** 工作台关键指标：待办计数（不受待办筛选影响）与本月任务完成、有效已收票，全部来自后端。 */
 export function WorkbenchKpis({ data }: { data: Workbench }) {
   const { counts, month } = data;
-  const [firstReceived, ...otherReceived] = month.received;
+  // 只展示有金额的币种：没有已收票的分组（含币种待核实的任务）不占主数值；人民币优先
+  const received = month.received
+    .filter((item) => item.amount !== null && Number(item.amount) !== 0)
+    .sort((a, b) => Number(b.currency === "CNY") - Number(a.currency === "CNY"));
+  const [firstReceived, ...otherReceived] = received;
+  const currency = (code: string) => (code === "CNY" ? "¥" : code || "币种待核实");
   return (
     <StatGrid label="关键指标" min={190}>
       <StatCard
@@ -40,14 +45,14 @@ export function WorkbenchKpis({ data }: { data: Workbench }) {
         glyph="收"
         label="本月有效已收票"
         value={
-          firstReceived ? `${firstReceived.currency || "币种待核实"} ${money(firstReceived.amount)}` : "—"
+          firstReceived ? `${currency(firstReceived.currency)} ${money(firstReceived.amount)}` : "¥ 0.00"
         }
         note={
           otherReceived.length
-            ? otherReceived.map((item) => `${item.currency || "币种待核实"} ${money(item.amount)}`).join("；")
+            ? `另有 ${otherReceived.map((item) => `${currency(item.currency)} ${money(item.amount)}`).join("；")}`
             : firstReceived
-              ? "比对通过的发票金额"
-              : "本月暂无已收票"
+              ? "本月新建任务中比对通过的发票金额"
+              : "本月新建任务暂无比对通过的发票"
         }
       />
     </StatGrid>
