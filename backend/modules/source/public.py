@@ -11,7 +11,7 @@ from .service.declaration_service import DeclarationService, digest, snapshot
 from .service.declared_price_reader import declared_prices
 from .service.directory_service import SourceDirectory, china_day_range
 from .service.pl_comparison_service import PlScriptService
-from .service.purchase_context import purchase_lines, supplier_line_ids
+from .service.purchase_context import line_declarations, purchase_lines, supplier_line_ids
 from .service.workbench_reader import workbench_declarations
 
 __all__ = [
@@ -34,6 +34,8 @@ __all__ = [
     # 子采购行比对上下文（matching）：purchase_lines(connection, line_ids) → {ID: 上下文含 digest}
     "purchase_lines",
     "supplier_line_ids",
+    # 子采购行所属子采购单号与报关单 ID（matching 归档发票文件）
+    "line_declarations",
     # 申报价换算为人民币（按对应销售单汇率）：review 申报幅度、matching 价格校验
     "declared_cny",
     "declared_unit_price_cny",

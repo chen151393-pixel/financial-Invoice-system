@@ -36,6 +36,8 @@ import { Card, CardHeader, CardContent, MetricCard, MetricGrid, Badge } from "..
 | `TrendChart`                                         | 趋势图                       | 堆叠柱 `bars` + 折线 `line`；悬停提示；附读屏数据表；不用于含负数序列                                                                        |
 | `DonutChart`                                         | 环形占比                     | 中心合计 + 图例，图例文本由调用方给出                                                                                                        |
 | `Sparkline` / `Gauge`                                | 迷你走势、半圆仪表           | 只表达形状或单一比率                                                                                                                         |
+| `Dialog`                                             | 模态弹窗                     | 焦点进入弹窗、背景不可操作，关闭后回到触发控件；`busy` 时不能关闭                                                                             |
+| `BatchUpload`                                        | 批量上传窗口                 | 分批提交文件、逐个展示后端结果；`assignable` 状态的文件可填写归属编号重传；格式与归属不在前端判断                                              |
 | `Icon`                                               | 线性图标                     | 新图标在 `Icon.tsx` 登记，不在页面手画                                                                                                       |
 | `Button` / `Pagination`                              | 既有公共组件                 | `Button` 支持 `primary` / `secondary` / `ghost` 与 `size="sm"`；同样从本入口导出                                                             |
 

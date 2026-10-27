@@ -13,6 +13,8 @@ import {
 } from "../../../shared/components/ui";
 import { openLocalSession } from "../../identity/api";
 import { confirmBatch, getMatchingQueue } from "../api";
+import { uploadInvoiceFiles } from "../api/invoice-file-api";
+import { InvoiceFileUploadDialog } from "../components/InvoiceFileUploadDialog";
 import { QueueFilters } from "../components/QueueFilters";
 import { batchable, QueueTable } from "../components/QueueTable";
 import type { Queue, QueueQuery } from "../types/matching";
@@ -42,6 +44,7 @@ export function MatchingQueuePage() {
   const [state, setState] = useState<Remote>({ kind: "loading" });
   const [selected, setSelected] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
+  const [uploading, setUploading] = useState(false);
   const [feedback, setFeedback] = useState<{ error: boolean; text: string } | null>(null);
 
   useEffect(() => {
@@ -111,11 +114,19 @@ export function MatchingQueuePage() {
         title="待审核比对建议"
         count={data ? `共 ${data.total} 条` : undefined}
         actions={
-          <Button disabled={busy} onClick={() => setRefresh((value) => value + 1)}>
-            刷新
-          </Button>
+          <span className="matching-row">
+            <Button disabled={busy} onClick={() => setUploading(true)}>
+              批量上传发票文件
+            </Button>
+            <Button disabled={busy} onClick={() => setRefresh((value) => value + 1)}>
+              刷新
+            </Button>
+          </span>
         }
       />
+      {uploading && (
+        <InvoiceFileUploadDialog upload={uploadInvoiceFiles} onClose={() => setUploading(false)} />
+      )}
       <Card className="matching-queue" aria-labelledby="matching-queue-title">
         <div className="matching-queue__tabs">
           <Tabs

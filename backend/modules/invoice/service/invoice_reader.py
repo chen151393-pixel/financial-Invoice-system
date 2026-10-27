@@ -64,3 +64,8 @@ def read_invoice_amount_scope(connection, filters, *, after_id=0):
     query = InvoiceQuery(**filters)
     totals = header_dao.amounts(connection, query) if after_id == 0 else None
     return totals, header_dao.amount_page(connection, query, after_id, 500)
+
+
+def invoices_by_number(connection, numbers):
+    """[{id, invoice_no, status, seller_name}]：号码精确匹配的发票；同号可能对应多张（不同账套或发票代码）。"""
+    return header_dao.by_numbers(connection, numbers)

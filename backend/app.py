@@ -27,11 +27,13 @@ from .modules.invoice.public import InvoiceChanged, InvoiceChanging, InvoicesImp
 from .modules.invoice.service.import_service import ImportService
 from .modules.invoice.service.invoice_service import InvoiceService
 from .modules.invoice.service.lemon_invoice_service import on_lemon_invoices_fetched
+from .modules.matching.controller.invoice_file_controller import create_router as invoice_file_router
 from .modules.matching.controller.matching_controller import create_router as matching_router
 from .modules.matching.controller.workbench_controller import create_router as workbench_router
 from .modules.matching.public import AllocationChanged
 from .modules.matching.service import ledger_service
 from .modules.matching.service.allocation_service import AllocationService
+from .modules.matching.service.invoice_file_service import InvoiceFileService
 from .modules.matching.service.matching_query_service import MatchingQueryService
 from .modules.matching.service.proposal_service import ProposalService, on_invoices_imported
 from .modules.matching.service.workbench_service import WorkbenchService
@@ -247,6 +249,7 @@ def _register_business(app, settings, ns, contract_ns, wecom, engine, lemon_invo
             ProposalService(engine),
         )
     )
+    app.include_router(invoice_file_router(InvoiceFileService(engine, directory, archive)))
     pulls = PullService(settings, ns, source_storage)
     app.include_router(sync_router(ConnectionService(settings, ns), pulls))
     app.state.ns_runs = NsRunService(engine, pulls)

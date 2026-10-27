@@ -3,7 +3,7 @@
 > 本文件由 `npm.cmd run db:map` 根据迁移链离线 MySQL DDL、实体定义和字段字典生成，请勿手工修改；迁移或实体变化后重新生成，`backend/tests/test_schema_map.py` 会检查是否过期。
 > “修改”含加列、改列、索引与中文备注；数据回填仅在线执行，不在离线 DDL 中体现。
 
-当前最新迁移：`0030_task_signed_upload_jobs`；共 30 个迁移、39 张实体表。
+当前最新迁移：`0031_matching_invoice_files`；共 31 个迁移、40 张实体表。
 
 ## 1. 按模块查表
 
@@ -65,6 +65,7 @@
 | 表 | 中文说明 | 新建 | 后续修改 | 字段字典 |
 | --- | --- | --- | --- | --- |
 | `matching_allocations` | 发票行与子采购行的比对与分配 | `0001` | `0009`、`0014` | [查看](current-data-dictionary.md#matching_allocations) |
+| `matching_invoice_files` | 发票文件归档记录，按发票×报关单一份，不保存文件正文 | `0031` | — | [查看](current-data-dictionary.md#matching_invoice_files) |
 
 ### sync
 
@@ -112,3 +113,4 @@
 | [`0028_task_document_completion`](../../backend/migrations/versions/0028_task_document_completion.py) | `task_declaration_documents`、`task_signed_contracts` | `task_tasks` | task：报关资料与回签合同归档记录；任务新增 documents_incomplete（发票已收齐、资料待补齐）。 |
 | [`0029_source_sales_orders`](../../backend/migrations/versions/0029_source_sales_orders.py) | `source_sales_orders` | `source_purchase_orders` | source：销售单单头（币种、汇率）与子采购单的销售单关联，供申报幅度与发票价格校验（2026-10-23）。 |
 | [`0030_task_signed_upload_jobs`](../../backend/migrations/versions/0030_task_signed_upload_jobs.py) | `task_signed_upload_jobs` | — | task：回签合同分片上传与持久归档队列，不保存文件正文。 |
+| [`0031_matching_invoice_files`](../../backend/migrations/versions/0031_matching_invoice_files.py) | `matching_invoice_files` | — | matching：发票文件归档记录（2026-10-26）。 |

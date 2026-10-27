@@ -71,6 +71,7 @@ flowchart LR
 | [invoice_items](#invoice_items)                                 | 发票逻辑商品行         |     17 |
 | [invoice_versions](#invoice_versions)                           | 发票不可变业务版本     |     13 |
 | [matching_allocations](#matching_allocations)                   | 发票与采购行分配台账   |     35 |
+| [matching_invoice_files](#matching_invoice_files) | 发票文件归档记录 | 11 |
 | [sync_runs](#sync_runs)                                         | 同步运行记录           |     18 |
 | [sync_cursors](#sync_cursors)                                   | 增量同步水位           |      6 |
 | [sync_lemon_bindings](#sync_lemon_bindings) | 柠檬云已有账号绑定状态 | 8 |
@@ -1409,3 +1410,32 @@ NS 来源按批后台保存记录与结果，不保存令牌。
 | created_at / updated_at | 本地创建和更新时间，UTC |
 
 迁移 `0030_task_signed_upload_jobs` 新建；拥有 `(status, created_at)` 索引，状态检查约束包括 uploading、queued、running、saved、unmatched、ambiguous、conflict、failed。
+
+
+<a id="matching_invoice_files"></a>
+
+### matching_invoice_files｜发票文件归档记录
+
+一行一张发票在一个报关单文件夹中的归档文件（迁移 `0031_matching_invoice_files`，2026-10-26）。比对通过的发票人工批量上传，按发票号码找到分配的子采购单及所属报关单；发票跨报关单时各存一份。内容不同不覆盖，文件正文不存数据库。
+
+结构依据：[表定义](../../backend/modules/matching/entity/invoice_file.py)；业务说明：[matching 模块](../../backend/modules/matching/README.md)。
+
+| 字段 | MySQL 类型 | 可空 | 默认 | 中文含义 |
+| --- | --- | --- | --- | --- |
+| `id` | `BIGINT UNSIGNED` | 否 | 自增 | 发票文件记录主键 |
+| `invoice_id` | `BIGINT UNSIGNED` | 否 | — | 本地发票 ID，指向 invoice_headers.id |
+| `customs_declaration_id` | `BIGINT UNSIGNED` | 否 | — | 归档所在报关单本地主键，指向 source_customs_declarations.id |
+| `invoice_no` | `VARCHAR(100)` | 否 | — | 发票号码 |
+| `original_filename` | `VARCHAR(255)` | 否 | — | 上传时的原文件名 |
+| `filename` | `VARCHAR(255)` | 否 | — | 归档文件名：发票_发票号码 |
+| `sha256` | `CHAR(64)` | 否 | — | 文件内容摘要，用于防止静默覆盖 |
+| `archive_path` | `VARCHAR(2048)` | 否 | — | 共享盘路径 |
+| `uploaded_by` | `VARCHAR(200)` | 否 | — | 上传的认证身份 |
+| `created_at` | `DATETIME(6)` | 否 | CURRENT_TIMESTAMP(6) | 本地记录创建时间，UTC |
+| `updated_at` | `DATETIME(6)` | 否 | CURRENT_TIMESTAMP(6) | 本地记录最后更新时间，UTC；由 DAO 更新 |
+
+**关联与约束**
+
+- 主键：`id`。
+- 唯一约束 `uq_matching_invoice_file`：`(invoice_id, customs_declaration_id)`。
+- 跨模块只存 ID，不建外键。

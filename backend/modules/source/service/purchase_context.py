@@ -66,3 +66,8 @@ def purchase_lines(connection, line_ids, *, lock=False):
     for line_id, declared in declared_prices(connection, list(result)).items():
         result[line_id]["declared"] = declared
     return result
+
+
+def line_declarations(connection, line_ids):
+    """子采购行所属子采购单号与报关单 ID，供 matching 归档发票文件时确定报关单文件夹。"""
+    return purchase_order_dao.line_declarations(connection, line_ids)

@@ -137,3 +137,15 @@ def by_ids(connection, invoice_ids, *, lock=False):
     if lock:
         query = query.with_for_update()
     return [dict(row) for row in connection.execute(query).mappings()]
+
+
+def by_numbers(connection, numbers):
+    """发票号码精确命中的票头（含作废、红冲），供人工上传发票文件时识别归属。"""
+    if not numbers:
+        return []
+    query = (
+        select(headers.c.id, headers.c.invoice_no, headers.c.status, headers.c.seller_name)
+        .where(headers.c.invoice_no.in_(sorted(set(numbers))))
+        .order_by(headers.c.id)
+    )
+    return [dict(row) for row in connection.execute(query).mappings()]

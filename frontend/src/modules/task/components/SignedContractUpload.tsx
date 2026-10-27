@@ -4,6 +4,7 @@ import {
   Badge,
   Button,
   DataTable,
+  Dialog,
   EmptyState,
   ErrorState,
   Progress,
@@ -11,7 +12,6 @@ import {
 } from "../../../shared/components/ui";
 import { useSignedUploads } from "../hooks/useSignedUploads";
 import { UPLOAD_STATUS, type UploadBatch } from "../types/signed-upload";
-import { NotificationDialog } from "./NotificationDialog";
 import "./signed-contract-upload.css";
 
 /** 上传传输和后台归档分开展示；关闭后可重新打开查看持久任务。 */
@@ -95,7 +95,7 @@ export function SignedContractUpload({ onClose }: { onClose: (changed: boolean) 
   }
 
   return (
-    <NotificationDialog title="批量上传回签合同" busy={state.busy} onClose={() => onClose(changed)}>
+    <Dialog title="批量上传回签合同" busy={state.busy} onClose={() => onClose(changed)}>
       <div className="itd-upload">
         <Alert tone="info" title="单个文件最高 100 MB">
           支持 PDF、JPG、PNG。文件逐个上传，完整接收后自动进入后台队列；单个失败不影响其他文件。
@@ -145,6 +145,6 @@ export function SignedContractUpload({ onClose }: { onClose: (changed: boolean) 
         )}
         {state.jobs.map(results)}
       </div>
-    </NotificationDialog>
+    </Dialog>
   );
 }

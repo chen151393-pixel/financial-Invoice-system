@@ -29,6 +29,7 @@ TABLES = ALL_TABLES - {
     "task_signed_contracts",
     "task_signed_upload_jobs",
     "source_sales_orders",
+    "matching_invoice_files",
 }
 COMMENT_HEAD = "0015_sync_comments"
 

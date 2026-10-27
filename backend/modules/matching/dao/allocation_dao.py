@@ -159,3 +159,18 @@ def proposal_counts(connection, high, medium, *, line_ids=None, invoice_ids=None
         "medium": medium_count,
         "low": total - high_count - medium_count,
     }
+
+
+def valid_confirmed_lines(connection, invoice_ids):
+    """{发票 ID: 子采购行 ID 集合}：已通过且复核有效的分配；待复核、已失效的不计入。"""
+    if not invoice_ids:
+        return {}
+    query = select(allocations.c.invoice_id, allocations.c.purchase_line_id).where(
+        allocations.c.invoice_id.in_(sorted(set(invoice_ids))),
+        allocations.c.status == "confirmed",
+        allocations.c.verification_status == "valid",
+    )
+    result = {}
+    for invoice_id, line_id in connection.execute(query):
+        result.setdefault(invoice_id, set()).add(line_id)
+    return result

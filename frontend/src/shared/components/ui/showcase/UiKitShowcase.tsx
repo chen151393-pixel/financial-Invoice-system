@@ -2,12 +2,14 @@ import { useState } from "react";
 import {
   Alert,
   Badge,
+  BatchUpload,
   Button,
   Card,
   CardContent,
   CardFooter,
   CardHeader,
   DataTable,
+  Dialog,
   DonutChart,
   EmptyState,
   ErrorState,
@@ -97,8 +99,25 @@ const STEPS = [
   { key: "completion", label: "完成", description: "尚缺：回签合同", state: "waiting" as const },
 ];
 
+// 演示上传：不提交文件，按文件名是否含“8 位以上数字”返回示例结果
+async function demoUpload(files: { file: File; target: string }[]) {
+  return files.map(({ file, target }) => {
+    const number = target || /\d{8,}/.exec(file.name)?.[0] || "";
+    return number
+      ? {
+          filename: file.name,
+          target: number,
+          status: "saved",
+          reason: "演示：已保存",
+          paths: [`演示/2026年10月/CD10086_REAL10086/文件_${number}.pdf`],
+        }
+      : { filename: file.name, target: "", status: "unmatched", reason: "演示：未识别编号", paths: [] };
+  });
+}
+
 export function UiKitShowcase() {
   const [range, setRange] = useState<"7" | "30">("7");
+  const [dialog, setDialog] = useState<"" | "dialog" | "upload">("");
   const [node, setNode] = useState("all");
   const [stage, setStage] = useState("");
   return (
@@ -361,6 +380,38 @@ export function UiKitShowcase() {
           ]}
         />
       </Card>
+
+      <SectionTitle title="弹窗 Dialog / 批量上传 BatchUpload" />
+      <Card>
+        <CardContent className="uk-stack">
+          <p>
+            Dialog 打开后焦点进入弹窗、提交期间不能关闭；BatchUpload
+            分批提交文件并逐个展示后端结果，识别不了归属的文件可填写编号重传。
+          </p>
+          <span>
+            <Button onClick={() => setDialog("dialog")}>打开弹窗</Button>{" "}
+            <Button onClick={() => setDialog("upload")}>打开批量上传</Button>
+          </span>
+        </CardContent>
+      </Card>
+      {dialog === "dialog" && (
+        <Dialog title="演示弹窗" onClose={() => setDialog("")}>
+          <p>弹窗正文与操作区；按 Esc 或“关闭”退出，焦点回到触发按钮。</p>
+        </Dialog>
+      )}
+      {dialog === "upload" && (
+        <BatchUpload
+          title="演示批量上传"
+          help="演示：不会提交文件。文件名含 8 位以上数字视为已识别编号。"
+          accept=".pdf,.jpg,.jpeg,.png"
+          targetLabel="编号"
+          targetMaxLength={100}
+          statusLabels={{ saved: "已保存", unmatched: "未识别编号" }}
+          assignable={["unmatched"]}
+          upload={demoUpload}
+          onClose={() => setDialog("")}
+        />
+      )}
 
       <SectionTitle title="请求状态 EmptyState / ErrorState / Skeleton" />
       <div className="uk-states">

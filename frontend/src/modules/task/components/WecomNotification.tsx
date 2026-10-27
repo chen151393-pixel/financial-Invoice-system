@@ -1,8 +1,8 @@
 import { useState } from "react";
 import { Button } from "../../../shared/components/Button";
+import { Dialog } from "../../../shared/components/ui";
 import type { DeliveryController } from "../types/delivery";
 import { formatTime } from "./format";
-import { NotificationDialog } from "./NotificationDialog";
 
 export function WecomNotification({ controller: ui }: { controller: DeliveryController }) {
   const [reason, setReason] = useState("");
@@ -109,7 +109,7 @@ export function WecomNotification({ controller: ui }: { controller: DeliveryCont
         </details>
       ))}
       {ui.preview && (
-        <NotificationDialog title="确认提交企微群发" busy={ui.busy} onClose={ui.closePreview}>
+        <Dialog className="itn-dialog" title="确认提交企微群发" busy={ui.busy} onClose={ui.closePreview}>
           <p>
             供应商：{ui.preview.supplier} · 采购公司：{ui.preview.company}
           </p>
@@ -137,7 +137,7 @@ export function WecomNotification({ controller: ui }: { controller: DeliveryCont
           >
             {ui.busy ? "正在提交…" : "提交，等待群主确认"}
           </Button>
-        </NotificationDialog>
+        </Dialog>
       )}
     </section>
   );

@@ -1,7 +1,7 @@
 """invoice 模块对外门面：其他模块唯一可以导入的文件。
 
 - 事件 InvoicesImported：发票导入事务中发布，matching 订阅后生成比对建议。
-- 只读函数（需传入调用方的数据库连接，便于在同一事务中读取）：read_invoices、lock_invoice。
+- 只读函数（需传入调用方的数据库连接，便于在同一事务中读取）：read_invoices、lock_invoice、invoices_by_number。
 """
 
 from dataclasses import dataclass
@@ -14,6 +14,7 @@ from .policy.lemon_scope_policy import (
 )
 from .service.invoice_reader import (
     invoice_ids_between,
+    invoices_by_number,
     lock_invoice,
     read_invoice_accounts,
     read_invoice_amount_scope,
@@ -37,6 +38,7 @@ __all__ = [
     "latest_invoice_date",
     "InvoicesImported",
     "lock_invoice",
+    "invoices_by_number",
     "read_invoices",
     "read_invoice_accounts",
     "read_invoice_amount_scope",

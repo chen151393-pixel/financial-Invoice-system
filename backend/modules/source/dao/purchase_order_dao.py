@@ -216,3 +216,34 @@ def all_line_ids(connection, order_ids):
         if order_ids
         else []
     )
+
+
+def line_declarations(connection, line_ids):
+    """{子采购行 ID: {order_no, customs_declaration_id}}：所属子采购单及其有效关联报关单（无关联为 None）。"""
+    if not line_ids:
+        return {}
+    declaration = (
+        select(func.max(customs_purchase_links.c.customs_declaration_id))
+        .where(
+            customs_purchase_links.c.purchase_order_id == purchase_orders.c.id,
+            customs_purchase_links.c.status == "active",
+        )
+        .scalar_subquery()
+    )
+    query = (
+        select(
+            purchase_order_lines.c.id,
+            purchase_orders.c.order_no,
+            declaration.label("customs_declaration_id"),
+        )
+        .select_from(
+            purchase_order_lines.join(
+                purchase_orders, purchase_orders.c.id == purchase_order_lines.c.purchase_order_id
+            )
+        )
+        .where(purchase_order_lines.c.id.in_(sorted(set(line_ids))))
+    )
+    return {
+        row["id"]: {"order_no": row["order_no"], "customs_declaration_id": row["customs_declaration_id"]}
+        for row in connection.execute(query).mappings()
+    }

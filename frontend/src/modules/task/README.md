@@ -20,7 +20,7 @@
 | ------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `api/`        | `board.ts`（节点与任务查询）、`task.ts`（详情、保存合同、通知草稿、登记发送）、`supplier-group.ts`                                                                                                                                       |
 | `types/`      | 与后端 VO 一致的类型；金额、数量为字符串                                                                                                                                                                                                 |
-| `components/` | `BoardTaskItem`、`BoardNodeTabs`、`TaskOverview`、`TaskDocuments`、`TaskLines`、`TaskHistory`、`TaskNotification`（含 `NotificationDialog`、`NotificationRecordForm`、`NotificationHistory`）、`SupplierGroupEditor`、`WecomGroupPicker` |
+| `components/` | `BoardTaskItem`、`BoardNodeTabs`、`TaskOverview`、`TaskDocuments`、`TaskLines`、`TaskHistory`、`TaskNotification`（含 `NotificationRecordForm`、`NotificationHistory`）、`SupplierGroupEditor`、`WecomGroupPicker` |
 
 组件不直接调用接口：请求函数由页面传入（通知保存与登记、供应商与企微群查询、群配置保存）。时间统一按北京时间显示（`components/format.ts`）。
 

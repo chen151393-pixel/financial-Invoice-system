@@ -123,3 +123,13 @@ MySQL 的 `SUM(CASE ...)` 返回 Decimal，待审核建议非空时曾导致队�
 - 比对项新增“申报价”（权重 0，不影响置信度）：发票不含税总价高于对应报关行人民币申报价，或单位一致时不含税单价高于申报单价（容差 0.01 元），结果为不一致——通过须填写说明（“发票不含税价格高于申报价”），因此不能批量通过。部分分配时按含税比例折算不含税金额。无法换算申报价（无行级报关关联、汇率缺失等）时为“未校验”并写明原因，不算异常、不要求说明。
 - 比对队列 `anomaly`：all / abnormal（需要说明或当前不能通过）/ normal。按异常筛选时逐条计算比对项，单次最多核对 3000 条（超过时返回 `notice` 提示缩小范围），分档计数按筛选结果统计。每行返回 `anomalies`（价格、数量、单位、金额、品名、供应商、子采购单号、超开、不能通过）。
 - 验证：`backend/tests/test_declared_price.py`。
+
+## 发票文件批量上传（2026-10-26）
+
+- 接口 `POST /api/matching/invoice-files/upload`（`invoice_file_controller.py` → `invoice_file_service.py`）：请求为原文件 base64 与可选人工指定的 `invoiceNo`，单次最多 20 个、单个 10 MB，仅 PDF、JPG、PNG（按文件头识别）。
+- 识别：文件名中独立的 8–20 位数字串作为候选发票号码（税务平台下载的 `dzfp_<发票号码>_...` 可直接识别）；命中多个号码或同号多张已通过发票时返回 `ambiguous`，不猜测。
+- 归属：只认 `confirmed` 且 `verification_status = valid` 的分配；经 `source.public.line_declarations` 找到子采购单所属报关单，按 `月份/CD号_真实报关单号/发票_<发票号码>` 归档（复用 `integrations/contract_archive.py`）。发票跨多张报关单时每个文件夹各存一份；作废、红冲、未通过或待复核返回 `not_ready`。
+- 记录：`matching_invoice_files`（`invoice_file_dao.py`），发票 × 报关单唯一；同内容视为已上传，不同内容返回 `conflict` 且不覆盖。顺序为事务外读取并写共享盘 → 短事务登记。
+- 只归档文件，不发布事件、不改变比对、收票进度与任务状态；报关资料中的“发票”（NS 下载）仍由 task 管理，两者互不替代。
+- 新增读取：`invoice.public.invoices_by_number`、`source.public.line_declarations`。
+- 验证：`backend/tests/test_matching_invoice_files.py`（未通过不归档、文件名识别与人工指定、同内容幂等与不同内容不覆盖、多号码歧义、服务身份只读、HTTP 登录校验）。

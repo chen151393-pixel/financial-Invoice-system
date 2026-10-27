@@ -50,6 +50,7 @@ TABLES = {
     "invoice_headers",
     "invoice_items",
     "matching_allocations",
+    "matching_invoice_files",
     "sync_runs",
     "sync_cursors",
     "sync_lemon_bindings",

@@ -3,8 +3,10 @@
 import "./ui.css";
 
 export { Badge, type Tone } from "./Badge";
+export { BatchUpload, type BatchUploadFile, type BatchUploadResult } from "./BatchUpload";
 export { Card, CardContent, CardFooter, CardHeader, SectionTitle } from "./Card";
 export { DataTable, type Column } from "./DataTable";
+export { Dialog } from "./Dialog";
 export { Field, FilterBar } from "./FilterBar";
 export { Icon, type IconName } from "./Icon";
 export { MetricCard, MetricGrid, type MetricDelta } from "./MetricCard";

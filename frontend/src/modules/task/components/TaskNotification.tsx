@@ -1,10 +1,10 @@
 import { useId, useState } from "react";
 import { Button } from "../../../shared/components/Button";
+import { Dialog } from "../../../shared/components/ui";
 import type { NotificationDraft, NotificationRecord, TaskDetail } from "../types/task";
 import type { DeliveryController } from "../types/delivery";
 import { WecomNotification } from "./WecomNotification";
 import { NotificationCopyButton } from "./NotificationCopyButton";
-import { NotificationDialog } from "./NotificationDialog";
 import { NotificationRecipients } from "./NotificationRecipients";
 import { NotificationHistory } from "./NotificationHistory";
 import { NotificationRecordForm, type RecordInput } from "./NotificationRecordForm";
@@ -160,7 +160,8 @@ export function TaskNotification({
       <WecomNotification controller={delivery} />
       <NotificationHistory history={notification.history} />
       {dialog && (
-        <NotificationDialog
+        <Dialog
+          className="itn-dialog"
           title={dialog === "preview" ? "供应商开票通知预览" : "登记已人工发送"}
           busy={busy}
           onClose={() => setDialog(null)}
@@ -177,7 +178,7 @@ export function TaskNotification({
           ) : (
             <NotificationRecordForm busy={busy} onSubmit={(value) => void record(value)} />
           )}
-        </NotificationDialog>
+        </Dialog>
       )}
     </div>
   );
