@@ -151,8 +151,12 @@ test("明细按后端显式树展示，数量和金额保留原十进制字符�
   const tableRows = [...html.matchAll(/<tr\b[^>]*>(.*?)<\/tr>/gs)];
   assert.equal(tableRows.length, 3, "一行公共表头、一行报关、一行采购");
   assert.equal((html.match(/<colgroup>/g) || []).length, 1);
-  for (const row of tableRows) assert.equal((row[1].match(/<(?:td|th)\b/g) || []).length, 12);
+  for (const row of tableRows) assert.equal((row[1].match(/<(?:td|th)\b/g) || []).length, 11);
   assert.match(tableRows[2][0], /data-tone="accent"/);
+  // 不单设"来源"列，子采购行在首列缩进挂在报关行下
+  assert.doesNotMatch(tableRows[0][1], />来源</);
+  assert.match(tableRows[1][1], /fr-tree--customs/);
+  assert.match(tableRows[2][1], /fr-tree--purchase/);
   assert.doesNotMatch(html, /aria-expanded|hidden=|fr-purchase-list|<dl/);
 });
 test("报关行后紧跟它的全部采购行，未关联行保留且明确提示", () => {

@@ -28,31 +28,43 @@ export function CustomsRows({
     ...group.unlinkedLines.map((line) => ({ kind: "purchase" as const, line, key: `unlinked-${line.id}` })),
   );
 
+  // 不单设"来源"列：子采购行在首列向右缩进一级并以连线挂在所属报关行下，报关行加粗。
   const columns: Column<ComparisonRow>[] = [
     {
-      key: "source",
-      header: "来源",
-      width: "6%",
+      key: "parent",
+      header: "母采购单号",
+      width: "15%",
       render: (row) =>
         row.kind === "customs" ? (
-          <strong>报关 {row.line.lineNo}</strong>
+          <span className="fr-tree fr-tree--customs" aria-label={`报关第 ${row.line.lineNo} 行`}>
+            <strong>{row.line.parent || "—"}</strong>
+          </span>
         ) : (
           <span
+            className="fr-tree fr-tree--purchase"
             aria-label={
               row.customsLineNo ? `报关第 ${row.customsLineNo} 行关联子采购` : "未关联报关行的子采购"
             }
           >
-            子采购<small>{row.line.scope === "order" ? "订单口径" : "本次口径"}</small>
-            {Boolean(row.line.members?.length) && <small>合并 {row.line.members?.length} 行</small>}
+            {row.line.parent || "—"}
           </span>
         ),
     },
-    { key: "parent", header: "母采购单号", width: "11%", render: ({ line }) => line.parent || "—" },
     {
       key: "child",
       header: "子采购单号",
-      width: "12%",
-      render: (row) => (row.kind === "purchase" ? row.line.child || "—" : "—"),
+      width: "14%",
+      render: (row) =>
+        row.kind === "purchase" ? (
+          <>
+            {row.line.child || "—"}
+            {/* 订单口径的数量金额是整张子单，不是本次报关范围，须保留标注 */}
+            {row.line.scope === "order" && <small>订单口径</small>}
+            {Boolean(row.line.members?.length) && <small>合并 {row.line.members?.length} 行</small>}
+          </>
+        ) : (
+          "—"
+        ),
     },
     {
       key: "origin",

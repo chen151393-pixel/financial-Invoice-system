@@ -15,6 +15,25 @@
   color: var(--color-muted);
   font-size: inherit;
 }
+/* 层级缩进：报关行顶格加粗，子采购行缩进一级并以连线挂在报关行下 */
+.fr-tree {
+  position: relative;
+  display: block;
+}
+.fr-tree--purchase {
+  padding-left: 22px;
+}
+.fr-tree--purchase::before {
+  content: "";
+  position: absolute;
+  top: -6px;
+  left: 6px;
+  width: 10px;
+  height: 14px;
+  border-left: 1.5px solid var(--color-input-border);
+  border-bottom: 1.5px solid var(--color-input-border);
+  border-bottom-left-radius: 4px;
+}
 .fr-margin--negative strong,
 .fr-margin--negative small {
   color: var(--color-feedback);
