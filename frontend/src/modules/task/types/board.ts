@@ -32,6 +32,10 @@ export interface TaskBoard {
 }
 
 export interface TaskBoardQuery {
+  // 兼容发票工作台和旧跟进链接的报关单范围，由后端校验和筛选。
+  stage?: string;
+  createdFrom?: string;
+  createdTo?: string;
   keyword: string;
   supplierId: string;
   // 空为全部进行中的任务

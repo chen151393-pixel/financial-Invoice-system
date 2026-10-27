@@ -1,5 +1,7 @@
 """采购开票任务台：节点归类与计数、节点筛选、与详情页节点一致、资料补齐提示、来源变化提示、HTTP。"""
 
+from datetime import date
+
 import pytest
 from backend.app import create_app
 from backend.modules.task.dto.task_dto import TaskBoardQuery
@@ -104,6 +106,29 @@ def test_reapproval_shows_only_current_task(ns, engine, board, app_services, app
 def test_query_has_no_ns_environment_filter():
     with pytest.raises(ValidationError):
         TaskBoardQuery(account="sandbox")
+
+
+def test_workbench_scope_keeps_declaration_stage_dates_and_completed(engine, board, approved):
+    assert board.browse(TaskBoardQuery(stage="notify")).total == 1
+    assert board.browse(TaskBoardQuery(stage="invoicing")).total == 0
+    hit = TaskBoardQuery(stage="notify", createdFrom=date(2026, 9, 2), createdTo=date(2026, 9, 2))
+    miss = TaskBoardQuery(stage="notify", createdFrom=date(2026, 9, 1), createdTo=date(2026, 9, 1))
+    assert board.browse(hit).total == 1
+    assert board.browse(miss).total == 0
+    set_status(engine, approved["id"], "completed")
+    result = board.browse(TaskBoardQuery(stage="completed"))
+    assert result.total == 1 and result.openTotal == 0 and counts(result)["done"] == 1
+    assert result.items[0].task.id == str(approved["id"])
+    assert board.browse(TaskBoardQuery(stage="notify")).total == 0
+
+
+def test_board_scope_rejects_incomplete_or_reversed_dates():
+    with pytest.raises(ValidationError):
+        TaskBoardQuery(createdFrom=date(2026, 9, 2))
+    with pytest.raises(ValidationError):
+        TaskBoardQuery(createdFrom=date(2026, 9, 2), createdTo=date(2026, 9, 1))
+    with pytest.raises(ValidationError):
+        TaskBoardQuery(stage="pending_review")
 
 
 def test_http_board_route(context, ns, engine):

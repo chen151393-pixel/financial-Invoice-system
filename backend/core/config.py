@@ -36,6 +36,7 @@ class Settings:
     declaration_doc_deploy: str = ""
     subpo_connection_file: Path | None = field(default=None, repr=False)
     subpo_archive_root: Path | None = None
+    signed_upload_root: Path = ROOT / "data" / "signed-contract-uploads"
     origin: str = "http://localhost:3000"
     admin_user: str = "admin"
     admin_password: str = field(default="", repr=False)
@@ -206,6 +207,9 @@ def load_settings(source=None):
         declaration_doc_script=declaration_script,
         declaration_doc_deploy=declaration_deploy,
         subpo_archive_root=archive_root,
+        signed_upload_root=(
+            ROOT / get("SIGNED_CONTRACT_UPLOAD_ROOT", "data/signed-contract-uploads")
+        ).resolve(),
         subpo_connection_file=(ROOT / get("NETSUITE_SUBPO_CONNECTION_FILE")).resolve()
         if get("NETSUITE_SUBPO_CONNECTION_FILE")
         else None,

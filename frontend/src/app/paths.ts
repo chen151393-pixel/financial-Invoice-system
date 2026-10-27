@@ -5,7 +5,6 @@ export const paths = {
   pl: "/pl-reconciliation",
   review: "/review",
   tasks: "/tasks",
-  taskBoard: "/tasks/board",
   supplierGroups: "/suppliers",
   externalGroups: "/suppliers/external-groups",
   invoices: "/invoices",
@@ -20,6 +19,7 @@ export const paths = {
 
 // 旧地址，路由中重定向到新地址；保留一个版本后删除。
 export const legacyPaths = {
+  taskBoard: "/tasks/board",
   finance: "/finance-reconciliation",
   invoiceFollowup: "/invoice-followup",
   supplierGroups: "/invoice-followup/supplier-groups",
@@ -54,7 +54,6 @@ export type View =
   | "pl"
   | "finance"
   | "invoice-followup"
-  | "task-board"
   | "writeback"
   | "supplier-profiles"
   | "ui-kit";
@@ -67,7 +66,6 @@ const viewPaths: Record<View, string> = {
   pl: paths.pl,
   finance: paths.review,
   "invoice-followup": paths.tasks,
-  "task-board": paths.taskBoard,
   writeback: paths.writeback,
   "supplier-profiles": paths.supplierGroups,
   "ui-kit": paths.uiKit,

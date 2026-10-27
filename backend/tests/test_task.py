@@ -53,7 +53,14 @@ class FakeContracts:
         found = self.declaration_files.get(doc_type, [self.content])
         if isinstance(found, Exception):
             raise found
-        return {"ns_id": "901", "environment": "prod", "files": found}
+        return {
+            "ns_id": "901",
+            "environment": "prod",
+            "files": [
+                item if isinstance(item, dict) else {"content": item, "format": "pdf", "extension": ".pdf"}
+                for item in found
+            ],
+        }
 
     def download(self, number, supplier, declaration):
         self.calls.append((number, supplier, declaration))

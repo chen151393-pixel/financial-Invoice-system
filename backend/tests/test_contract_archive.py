@@ -1,4 +1,4 @@
-"""共享盘命名、不可覆盖与路径边界：月份/CD号_真实报关单号/子采购合同_子采购单号_供应商.pdf。"""
+"""共享盘命名、不可覆盖与路径边界：月份/CD号_真实报关单号/子采购单号_供应商_真实报关单号.pdf。"""
 
 from datetime import datetime
 from pathlib import Path
@@ -16,10 +16,10 @@ DECLARATION = {
 }
 
 
-def test_month_declaration_folder_type_prefixed_name_and_same_content_reuse(tmp_path):
+def test_month_declaration_folder_contract_name_and_same_content_reuse(tmp_path):
     archive = ContractArchive(tmp_path)
     path, name = archive.save(DECLARATION, "YE-HH20260422-X1004-1", "浙江洪皓工贸有限公司", PDF)
-    assert name == "子采购合同_YE-HH20260422-X1004-1_浙江洪皓工贸有限公司.pdf"
+    assert name == "YE-HH20260422-X1004-1_浙江洪皓工贸有限公司_REAL870.pdf"
     target = Path(path)
     assert target.parent.name == "CD000870_REAL870" and target.parent.parent.name == "2026年09月"
     original = target.stat().st_mtime_ns
@@ -45,10 +45,10 @@ def test_missing_share_is_not_created_and_bad_names_cannot_escape(tmp_path):
     with pytest.raises(ApiError) as error:
         ContractArchive(root).save(DECLARATION, "SUB-1", "供应商", PDF)
     assert error.value.status == 503 and not root.exists()
-    assert contract_filename("../SUB:1", "公司/部门*") == "子采购合同_.._SUB_1_公司_部门_.pdf"
+    assert contract_filename("../SUB:1", "公司/部门*", "REAL:870") == ".._SUB_1_公司_部门__REAL_870.pdf"
     assert declaration_folder("../CD:1", "..\\REAL") == ".._CD_1_.._REAL"
     with pytest.raises(ApiError):
-        contract_filename("", "公司")
+        contract_filename("", "公司", "REAL870")
 
 
 @pytest.mark.parametrize(

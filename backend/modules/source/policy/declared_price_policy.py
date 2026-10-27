@@ -7,6 +7,8 @@
 
 from decimal import Decimal
 
+from .currency_policy import currency_code
+
 CNY = "CNY"
 
 
@@ -27,14 +29,29 @@ def declared_cny(amount, unit_price, currency, sales_order, sales_reason=""):
     """返回 (人民币申报金额, 人民币申报单价, 原因)；无法换算时金额为 None 并给出原因。"""
     if amount is None:
         return None, None, "报关行金额缺失"
-    if (currency or "").upper() == CNY:
+    # 报关明细保留 NS 名称（如 US Dollar），销售单保存代码（USD），先按同一规则识别。
+    customs_currency = currency_code({"currencyname": currency})
+    if not customs_currency:
+        return None, None, "报关行币种待核实"
+    if customs_currency == CNY:
         return amount, unit_price, ""
     if sales_order is None:
         return None, None, sales_reason or "未同步到对应销售单"
-    if (sales_order.get("currency") or "").upper() != (currency or "").upper():
+    sales_currency = currency_code({"currencyname": sales_order.get("currency")})
+    if not sales_currency:
+        return None, None, "销售单币种待核实"
+    if sales_currency != customs_currency:
         return None, None, "报关行币种与销售单币种不一致"
     rate = sales_order.get("exchange_rate")
     if not rate or Decimal(rate) <= 0:
         return None, None, "销售单汇率待同步"
     rate = Decimal(rate)
     return amount * rate, (unit_price * rate if unit_price is not None else None), ""
+
+
+def declared_unit_price_cny(unit_price, currency, sales_order, sales_reason=""):
+    """单价独立换算，不要求报关总金额存在，也不从金额和数量倒算单价。"""
+    if unit_price is None:
+        return None, "报关单价缺失"
+    converted, _, reason = declared_cny(unit_price, None, currency, sales_order, sales_reason)
+    return converted, reason

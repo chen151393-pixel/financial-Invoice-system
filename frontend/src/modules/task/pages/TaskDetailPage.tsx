@@ -10,7 +10,6 @@ import {
   prepareTaskDocument,
   recordTaskNotification,
   saveTaskNotification,
-  uploadSignedContracts,
 } from "../api/task";
 import { SignedContractUpload } from "../components/SignedContractUpload";
 import { TaskDocuments } from "../components/TaskDocuments";
@@ -218,7 +217,6 @@ export function TaskDetailPage({ id }: { id: string }) {
         )}
         {uploading && (
           <SignedContractUpload
-            upload={uploadSignedContracts}
             onClose={(changed) => {
               setUploading(false);
               if (changed) setRefresh((n) => n + 1);

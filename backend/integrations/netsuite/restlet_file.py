@@ -22,7 +22,12 @@ def fetch_json(ns, script, deploy, params, label, *, limit=RESPONSE_LIMIT):
             "GET",
             url,
             params={"script": script, "deploy": deploy, **params},
-            headers={"Authorization": f"Bearer {ns.token()}", "Accept": "application/json"},
+            headers={
+                "Authorization": f"Bearer {ns.token()}",
+                "Accept": "application/json",
+                # RESTlet 按请求 Content-Type 序列化返回值，GET 也须明确要求 JSON。
+                "Content-Type": "application/json",
+            },
             timeout=90,
             follow_redirects=False,
         ) as response:

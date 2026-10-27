@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Link, useSearchParams } from "react-router";
 import { paths } from "../../../app/paths";
 import {
+  Alert,
   Button,
   Card,
   CardFooter,
@@ -15,11 +16,11 @@ import {
 } from "../../../shared/components/ui";
 import { openLocalSession } from "../../identity/api";
 import { queryTaskBoard } from "../api/board";
-import { uploadSignedContracts } from "../api/task";
 import { BoardNodeTabs } from "../components/BoardNodeTabs";
 import { BoardTaskItem } from "../components/BoardTaskItem";
 import { SignedContractUpload } from "../components/SignedContractUpload";
 import type { BoardNodeKey, TaskBoard, TaskBoardQuery } from "../types/board";
+import { stageLabels } from "../types/task";
 import "./task-board.css";
 
 const NODE_KEYS: readonly BoardNodeKey[] = [
@@ -36,12 +37,15 @@ function readNode(value: string | null): TaskBoardQuery["node"] {
   return NODE_KEYS.find((key) => key === value) ?? "";
 }
 
-/** 采购开票任务台：按当前节点分区，逐个任务展示六个节点与采购下一步。只读，处理在跟进详情中进行。 */
+/** 开票跟进：按当前节点分区，展示流程与下一步；单项处理进入详情，回签合同支持批量上传。 */
 export function TaskBoardPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const [query, setQuery] = useState<TaskBoardQuery>({
     keyword: "",
     supplierId: searchParams.get("supplierId") || "",
+    ...(searchParams.has("stage") ? { stage: searchParams.get("stage") || "" } : {}),
+    ...(searchParams.has("createdFrom") ? { createdFrom: searchParams.get("createdFrom") || "" } : {}),
+    ...(searchParams.has("createdTo") ? { createdTo: searchParams.get("createdTo") || "" } : {}),
     node: readNode(searchParams.get("node")),
     page: 1,
     pageSize: 20,
@@ -67,7 +71,7 @@ export function TaskBoardPage() {
         if (active)
           setState({
             kind: "error",
-            message: error instanceof Error ? error.message : "采购开票任务加载失败",
+            message: error instanceof Error ? error.message : "开票任务加载失败",
           });
       }
     }
@@ -85,6 +89,9 @@ export function TaskBoardPage() {
     const params = new URLSearchParams();
     if (next.node) params.set("node", next.node);
     if (next.supplierId) params.set("supplierId", next.supplierId);
+    if (next.stage) params.set("stage", next.stage);
+    if (next.createdFrom) params.set("createdFrom", next.createdFrom);
+    if (next.createdTo) params.set("createdTo", next.createdTo);
     setSearchParams(params, { replace: true });
   }
   function reload() {
@@ -94,19 +101,35 @@ export function TaskBoardPage() {
   function showAll() {
     setKeyword("");
     setSupplierId("");
-    change({ keyword: "", supplierId: "", node: "" });
+    change({ keyword: "", supplierId: "", node: "", stage: "", createdFrom: "", createdTo: "" });
   }
 
   const busy = state.kind === "loading";
   const board = state.kind === "ready" ? state.data : last;
   const nodeLabel = query.node
     ? (board?.nodes.find((node) => node.key === query.node)?.label ?? "任务")
-    : "全部进行中";
-  const filtered = Boolean(query.keyword || query.supplierId);
+    : query.stage
+      ? "当前业务状态的任务"
+      : "全部进行中";
+  const scoped = Boolean(query.stage || query.createdFrom || query.createdTo);
+  const filtered = Boolean(query.keyword || query.supplierId || scoped);
   const edited = keyword !== query.keyword || supplierId !== query.supplierId;
 
   return (
     <div className="tb">
+      <SectionTitle title="任务节点" />
+      {board ? (
+        <BoardNodeTabs
+          nodes={board.nodes}
+          openTotal={board.openTotal}
+          value={query.node}
+          showOpenTotal={!query.stage}
+          onChange={(node) => !busy && change({ node })}
+        />
+      ) : (
+        state.kind === "loading" && <Skeleton rows={1} label="正在汇总任务节点" />
+      )}
+
       <FilterBar
         onSubmit={() => change({ keyword, supplierId })}
         pending={edited ? "条件已修改，点击「查询」生效" : undefined}
@@ -120,7 +143,7 @@ export function TaskBoardPage() {
               onClick={() => {
                 setKeyword("");
                 setSupplierId("");
-                change({ keyword: "", supplierId: "" });
+                change({ keyword: "", supplierId: "", stage: "", createdFrom: "", createdTo: "" });
               }}
             >
               清除
@@ -152,16 +175,23 @@ export function TaskBoardPage() {
         </Field>
       </FilterBar>
 
-      <SectionTitle title="任务节点" />
-      {board ? (
-        <BoardNodeTabs
-          nodes={board.nodes}
-          openTotal={board.openTotal}
-          value={query.node}
-          onChange={(node) => !busy && change({ node })}
-        />
-      ) : (
-        state.kind === "loading" && <Skeleton rows={1} label="正在汇总任务节点" />
+      {scoped && (
+        <Alert tone="info" title="已应用报关单范围">
+          {query.stage && (
+            <span>
+              业务状态：{Object.entries(stageLabels).find(([key]) => key === query.stage)?.[1] ?? query.stage}
+              。{" "}
+            </span>
+          )}
+          {(query.createdFrom || query.createdTo) && (
+            <span>
+              创建日期：{query.createdFrom || "未填写"} 至 {query.createdTo || "未填写"}。{" "}
+            </span>
+          )}
+          <Button size="sm" onClick={() => change({ stage: "", createdFrom: "", createdTo: "", node: "" })}>
+            清除范围
+          </Button>
+        </Alert>
       )}
 
       <SectionTitle
@@ -171,18 +201,14 @@ export function TaskBoardPage() {
         actions={
           <>
             <span className="tb-order">{query.node === "done" ? "最新完成的在前" : "等待最久的在前"}</span>
-            {/* 回签合同是采购补齐资料最常见的一项，在待补资料分区直接提供上传入口 */}
-            {query.node === "completion" && (
-              <Button variant="primary" onClick={() => setUploading(true)}>
-                批量上传回签合同
-              </Button>
-            )}
+            <Button disabled={busy} onClick={() => setUploading(true)}>
+              批量上传回签合同
+            </Button>
           </>
         }
       />
       {uploading && (
         <SignedContractUpload
-          upload={uploadSignedContracts}
           onClose={(changed) => {
             setUploading(false);
             if (changed) reload();
@@ -190,12 +216,12 @@ export function TaskBoardPage() {
         />
       )}
       <section aria-labelledby="tb-list-title">
-        {state.kind === "loading" && <Skeleton label="正在读取采购开票任务" />}
+        {state.kind === "loading" && <Skeleton label="正在读取开票任务" />}
 
         {state.kind === "error" && (
           <Card>
             <ErrorState
-              title="采购开票任务暂时无法加载"
+              title="开票任务暂时无法加载"
               message={state.message}
               action={<Button onClick={reload}>重新加载</Button>}
             />
@@ -204,11 +230,11 @@ export function TaskBoardPage() {
 
         {state.kind === "ready" &&
           (state.data.items.length ? (
-            <div className="tb-list">
+            <Card className="tb-list">
               {state.data.items.map((item) => (
                 <BoardTaskItem key={item.task.id} item={item} />
               ))}
-            </div>
+            </Card>
           ) : (
             <Card>
               <EmptyState
@@ -240,7 +266,7 @@ export function TaskBoardPage() {
         {state.kind === "ready" && state.data.total > 0 && (
           <CardFooter className="tb-pagination">
             <Pagination
-              label="采购开票任务分页"
+              label="开票任务分页"
               total={state.data.total}
               page={state.data.page}
               pageCount={state.data.pages}
@@ -259,7 +285,7 @@ export function TaskBoardPage() {
           六个节点与任务详情页一致，各按自身事实判断：资料准备看子采购合同是否全部保存到共享盘；通知供应商看最新通知是否已发送（人工登记或企微确认）；等待收票看是否收到发票；发票比对看全部任务行是否已结束；完成要求发票收齐且子采购合同、报关单、销售合同、发票、回签合同全部到齐。
         </p>
         <p>
-          任务按“第一个未完成的节点”归入分区；发票可能先于合同或通知到达，此时停在较早的节点。分区计数覆盖全部筛选结果，不只本页。来源或开票依据变化的任务显示“暂不能推进”，需财务重新审核。本页只读，不触发下载、通知或
+          任务按“第一个未完成的节点”归入分区；发票可能先于合同或通知到达，此时停在较早的节点。分区计数覆盖全部筛选结果，不只本页。来源或开票依据变化的任务显示“暂不能推进”，需财务重新审核。查询和切换节点不会触发下载、通知或
           NS 写入。
         </p>
       </details>

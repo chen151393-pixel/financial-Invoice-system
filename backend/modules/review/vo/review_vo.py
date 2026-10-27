@@ -7,6 +7,16 @@ from pydantic import Field
 from backend.core.dto import StrictModel
 
 
+class UnitPriceMargin(StrictModel):
+    """按单价计算的幅度；人民币单价保留换算精度，前端不重算。"""
+
+    margin: str = ""
+    marginStatus: Literal["ok", "negative", "unavailable"] = "unavailable"
+    marginNote: str = ""
+    declaredUnitPriceCny: str = ""
+    combinedPurchaseUnitPrice: str = ""
+
+
 class PurchaseLine(StrictModel):
     id: str
     name: str
@@ -23,8 +33,14 @@ class PurchaseLine(StrictModel):
     scope: Literal["declared", "order"] = "order"
 
 
-class CustomsLine(StrictModel):
+class PurchaseGroup(PurchaseLine):
+    members: list[PurchaseLine] = Field(default_factory=list)
+
+
+class CustomsLine(UnitPriceMargin):
     id: str
+    parent: str = ""
+    originPlace: str = ""
     lineNo: int
     name: str
     model: str
@@ -34,13 +50,7 @@ class CustomsLine(StrictModel):
     amount: str
     currency: str
     purchaseCount: int
-    purchaseLines: list[PurchaseLine]
-    # 申报幅度 =（申报价 − 采购价）÷ 申报价；申报价按对应销售单汇率换算为人民币，采购价为含税金额合计
-    margin: str = ""
-    marginStatus: Literal["ok", "negative", "unavailable"] = "unavailable"
-    marginNote: str = ""
-    declaredCny: str = ""
-    purchaseTotal: str = ""
+    purchaseLines: list[PurchaseGroup]
 
 
 class ReviewState(StrictModel):
@@ -63,6 +73,7 @@ class CurrencyCheck(StrictModel):
 
 
 class Declaration(StrictModel):
+    salesOrders: str = ""
     currencyEvidenceSummary: list[str] = Field(default_factory=list)
     currencyChecks: list[CurrencyCheck] = Field(default_factory=list)
     id: str
@@ -75,7 +86,7 @@ class Declaration(StrictModel):
     customsCount: int
     purchaseCount: int
     customsLines: list[CustomsLine]
-    unlinkedLines: list[PurchaseLine]
+    unlinkedLines: list[PurchaseGroup]
     warnings: list[str]
     review: ReviewState
 

@@ -60,7 +60,7 @@ modules/task/
 │   ├── task.ts
 │   └── supplier-group.ts
 ├── pages/                    一个路由一个页面
-│   ├── TaskListPage.tsx
+│   ├── TaskBoardPage.tsx
 │   ├── TaskDetailPage.tsx
 │   └── SupplierGroupsPage.tsx
 ├── components/               只在本模块使用的组件，组件和样式同名放在一起

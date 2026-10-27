@@ -63,6 +63,8 @@ from .modules.task.controller.board_controller import create_router as task_boar
 from .modules.task.controller.delivery_controller import create_router as delivery_router
 from .modules.task.controller.external_group_controller import create_router as external_group_router
 from .modules.task.controller.signed_contract_controller import create_router as signed_contract_router
+from .modules.task.controller.signed_upload_controller import JSON_BODY_LIMITS
+from .modules.task.controller.signed_upload_controller import create_router as signed_upload_router
 from .modules.task.controller.supplier_group_controller import create_router as task_group_router
 from .modules.task.controller.task_controller import create_router as task_router
 from .modules.task.service.closure_service import ClosureService
@@ -78,6 +80,9 @@ from .modules.task.service.group_import_service import GroupImportService
 from .modules.task.service.notification_service import NotificationService
 from .modules.task.service.progress_service import on_allocation_changed
 from .modules.task.service.signed_contract_service import SignedContractService
+from .modules.task.service.signed_upload_service import SignedUploadService
+from .modules.task.service.signed_upload_store import SignedUploadStore
+from .modules.task.service.signed_upload_worker import SignedUploadWorker
 from .modules.task.service.supplier_group_service import SupplierGroupService as TaskGroupService
 from .modules.task.service.supplier_profile_service import SupplierProfileService
 from .modules.task.service.task_board_service import TaskBoardService
@@ -106,9 +111,12 @@ def create_app(settings=None, ns=None, engine=None, wecom=None, lemon=None, lemo
         try:
             verify_database(engine)
             app.state.contract_worker.start()
+            app.state.signed_upload_worker.start()
             app.state.lemon_worker.start()
             yield
         finally:
+            if hasattr(app.state, "signed_upload_worker"):
+                await asyncio.to_thread(app.state.signed_upload_worker.stop)
             if hasattr(app.state, "lemon_worker"):
                 await asyncio.to_thread(app.state.lemon_worker.stop)
             if hasattr(app.state, "contract_worker"):
@@ -131,7 +139,9 @@ def create_app(settings=None, ns=None, engine=None, wecom=None, lemon=None, lemo
     app = FastAPI(title="NS 发票对账后端", lifespan=lifespan, docs_url=None, redoc_url=None, openapi_url=None)
     identity = IdentityService(settings)
     app.state.identity = identity
-    app.add_middleware(RequestGuard, secure=settings.origin.startswith("https://"))
+    app.add_middleware(
+        RequestGuard, secure=settings.origin.startswith("https://"), json_body_limits=JSON_BODY_LIMITS
+    )
     register_error_handlers(app)
     app.include_router(identity_router(identity, settings))
     app.state.lemon_binding = LemonBindingService(settings, engine, lemon)
@@ -220,7 +230,12 @@ def _register_business(app, settings, ns, contract_ns, wecom, engine, lemon_invo
         )
     )
     app.include_router(task_board_router(TaskBoardService(engine, directory, task_queries)))
-    app.include_router(signed_contract_router(SignedContractService(engine, directory, archive)))
+    signed_contracts = SignedContractService(engine, directory, archive)
+    app.include_router(signed_contract_router(signed_contracts))
+    upload_store = SignedUploadStore(settings.signed_upload_root)
+    app.state.signed_uploads = SignedUploadService(engine, upload_store)
+    app.state.signed_upload_worker = SignedUploadWorker(engine, upload_store, signed_contracts)
+    app.include_router(signed_upload_router(app.state.signed_uploads))
     # 发票导入 → matching 生成比对建议；比对通过 / 取消 → task 重算收票进度（均在发布方事务中）。
     app.include_router(invoice_router(ImportService(engine, events), InvoiceService(engine)))
     matching_queries = MatchingQueryService(engine)

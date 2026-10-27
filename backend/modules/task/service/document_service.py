@@ -1,7 +1,7 @@
 """子采购合同：从 NS 下载并保存到共享盘，数据库只记录路径与校验值。
 
 顺序固定（后端规则第 7 节）：事务外下载 → 短事务登记首次获取记录 → 事务外写共享盘 → 短事务标记已归档；
-全部子采购单的合同都已归档时，任务进入"待通知供应商"。共享盘按首次获取日期建文件夹，重试不会另存一份。
+全部子采购单的合同都已归档时，任务进入"待通知供应商"。共享盘按 NS 报关单创建月份建文件夹。
 """
 
 import hashlib
@@ -13,6 +13,7 @@ from backend.core.errors import ApiError
 from backend.core.write_lock import transaction
 
 from ..dao import contract_job_dao, document_dao, task_dao, task_line_dao
+from ..policy.contract_name_policy import supplier_filename_name
 from .basis_guard import require_current
 from .contract_lock import BUSY_REASON, contract_lock
 from .progress_service import refresh_task
@@ -60,7 +61,9 @@ class DocumentService:
         if record["status"] == "archived":
             return self.tasks.detail(task_id)
         try:
-            path, filename = self.archive.save(declaration, order_no, supplier, contract["content"])
+            path, filename = self.archive.save(
+                declaration, order_no, supplier_filename_name(supplier), contract["content"]
+            )
         except ApiError as error:
             self._fail(record["id"], error.message)
             raise

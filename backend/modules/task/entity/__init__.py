@@ -16,4 +16,5 @@ from .group_import import group_imports as group_imports
 from .notification_delivery import deliveries as deliveries
 from .notification_group_guard import notification_group_guards as notification_group_guards
 from .signed_contract import signed_contracts as signed_contracts
+from .signed_upload_job import signed_upload_jobs as signed_upload_jobs
 from .supplier_setting import supplier_settings as supplier_settings

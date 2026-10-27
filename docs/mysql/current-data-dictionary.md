@@ -1393,3 +1393,19 @@ NS 来源按批后台保存记录与结果，不保存令牌。
 | error | VARCHAR(500) | 是 | — | 脱敏原因 |
 | created_at | DATETIME(6) | 否 | CURRENT_TIMESTAMP(6) | 记录创建时间，UTC |
 | updated_at | DATETIME(6) | 否 | CURRENT_TIMESTAMP(6) | DAO 更新的最近修改时间，UTC |
+
+
+### task_signed_upload_jobs｜回签合同上传队列
+
+| 字段 | 说明 |
+| --- | --- |
+| id | 服务端文件 UUID 主键 |
+| batch_id / actor / position | 客户端批次 UUID、认证操作者和文件顺序；联合唯一 |
+| manifest_sha256 | 原始批次清单摘要，约束请求重试幂等 |
+| filename / order_no | 文件名与指定或匹配到的子采购单号 |
+| size_bytes / received_bytes / sha256 | 声明大小、持久接收进度与完整文件摘要 |
+| status / reason | 上传、排队、归档及逐文件结果；中文原因 |
+| archive_path | 最终共享盘路径，上传文件正文不入库 |
+| created_at / updated_at | 本地创建和更新时间，UTC |
+
+迁移 `0030_task_signed_upload_jobs` 新建；拥有 `(status, created_at)` 索引，状态检查约束包括 uploading、queued、running、saved、unmatched、ambiguous、conflict、failed。

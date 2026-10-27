@@ -328,6 +328,40 @@ export function UiKitShowcase() {
         </CardFooter>
       </Card>
 
+      <SectionTitle title="紧凑对照表 DataTable" />
+      <Card>
+        <DataTable
+          label="紧凑来源对照（演示）"
+          density="compact"
+          rowKey={(row) => row.id}
+          rowTone={(row) => (row.accent ? "accent" : undefined)}
+          rows={[
+            {
+              id: "a",
+              source: "来源 A",
+              name: "演示商品",
+              quantity: "20.0000",
+              amount: "100.00",
+              accent: false,
+            },
+            {
+              id: "b",
+              source: "来源 B",
+              name: "演示商品",
+              quantity: "20.0000",
+              amount: "120.00",
+              accent: true,
+            },
+          ]}
+          columns={[
+            { key: "source", header: "来源", render: (row) => row.source },
+            { key: "name", header: "品名", render: (row) => row.name },
+            { key: "quantity", header: "数量", align: "right", render: (row) => row.quantity },
+            { key: "amount", header: "金额（CNY）", align: "right", render: (row) => row.amount },
+          ]}
+        />
+      </Card>
+
       <SectionTitle title="请求状态 EmptyState / ErrorState / Skeleton" />
       <div className="uk-states">
         <Card>

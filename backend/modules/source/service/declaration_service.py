@@ -18,6 +18,7 @@ from ..dao import (
     raw_record_dao,
     sales_order_dao,
 )
+from ..mapper.customs_display_mapper import customs_display_lines
 from ..policy.content_digest import content_digest
 
 EVIDENCE_TYPE = "relation_evidence"
@@ -39,7 +40,9 @@ def snapshot(connection, declaration_id):
     orders = purchase_order_dao.orders(connection, order_ids)
     return {
         "declaration": head,
-        "customs_lines": customs_declaration_dao.lines(connection, declaration_id),
+        "customs_lines": customs_display_lines(
+            head, customs_declaration_dao.lines(connection, declaration_id)
+        ),
         "links": links,
         "orders": orders,
         # 销售单头（币种、汇率）只用于申报幅度，不参与内容摘要

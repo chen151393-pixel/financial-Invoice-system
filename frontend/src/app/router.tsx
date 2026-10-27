@@ -1,5 +1,5 @@
 import { lazy, Suspense, type ReactNode } from "react";
-import { createBrowserRouter, Navigate, Outlet } from "react-router";
+import { createBrowserRouter, Navigate, Outlet, useLocation } from "react-router";
 import { SessionProvider } from "../modules/identity/SessionProvider";
 import { RequireSession } from "../modules/identity/RequireSession";
 import { identityRoutes } from "../modules/identity/routes";
@@ -21,6 +21,11 @@ function page(label: string, element: ReactNode) {
   return <Suspense fallback={<p role="status">正在加载{label}…</p>}>{element}</Suspense>;
 }
 
+function TaskBoardRedirect() {
+  const { search, hash } = useLocation();
+  return <Navigate to={`${paths.tasks}${search}${hash}`} replace />;
+}
+
 export const router = createBrowserRouter([
   {
     element: (
@@ -38,7 +43,7 @@ export const router = createBrowserRouter([
           { path: paths.review, element: page("财务核对", <ReviewWorkspacePage />) },
           { path: legacyPaths.finance, element: <Navigate to={paths.review} replace /> },
           { path: paths.tasks, element: page("开票跟进", <TaskWorkspacePage />) },
-          { path: paths.taskBoard, element: page("采购开票任务台", <TaskWorkspacePage />) },
+          { path: legacyPaths.taskBoard, element: <TaskBoardRedirect /> },
           { path: paths.externalGroups, element: page("外部群导入与关联", <TaskWorkspacePage />) },
           { path: paths.supplierGroups, element: page("供应商档案", <TaskWorkspacePage />) },
           { path: `${paths.tasks}/:taskId`, element: page("开票任务详情", <TaskWorkspacePage />) },

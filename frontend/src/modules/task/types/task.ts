@@ -39,26 +39,13 @@ export interface TaskSummary {
   lastContactAt?: string | null;
   waitingLabel?: string;
 }
-// 六个流程节点；key 与详情页分区、采购任务台的节点一致
+// 六个流程节点；key 与详情页分区、开票跟进的节点一致
 export type TaskStepKey = "review" | "documents" | "notification" | "invoices" | "comparison" | "completion";
 export interface TaskStep {
   key: TaskStepKey;
   label: string;
   description: string;
   state: "done" | "current" | "waiting";
-}
-export interface TaskCounts {
-  tasks: number;
-  awaitingInvoice: number;
-  completed: number;
-  needsAttention: number;
-}
-export interface TaskGroup {
-  id: string;
-  label: string;
-  account: string;
-  counts: TaskCounts;
-  tasks: TaskSummary[];
 }
 // 业务状态（按报关单下最慢的任务归类）；空为不限
 export type TaskStage = "" | "notify" | "invoicing" | "documents" | "completed";
@@ -68,32 +55,6 @@ export const stageLabels: Record<Exclude<TaskStage, "">, string> = {
   documents: "资料已回",
   completed: "开票完成",
 };
-// 上线只同步 NS 正式环境，列表不再按 NS 环境筛选（后端参数保留为可选）
-export interface TaskListQuery {
-  keyword: string;
-  supplierId: string;
-  stage: TaskStage;
-  // 报关单创建日期（YYYY-MM-DD），须同时填写
-  createdFrom: string;
-  createdTo: string;
-  groupBy: "supplier" | "declaration";
-  status: "current" | "superseded" | "all";
-  page: number;
-  pageSize: number;
-}
-export interface TaskList {
-  groupBy: TaskListQuery["groupBy"];
-  groups: TaskGroup[];
-  counts: TaskCounts;
-  accounts: string[];
-  // 供应商筛选选项由后端按当前任务返回
-  suppliers: { id: string; name: string }[];
-  total: number;
-  page: number;
-  pageSize: number;
-  pages: number;
-}
-
 export interface TaskLine {
   purchaseBasisId: string | null;
   ledgerSha256: string | null;
@@ -165,19 +126,6 @@ export interface TaskCompletion {
   missing: string[];
   reason: string;
 }
-export interface SignedUploadFile {
-  filename: string;
-  content: string;
-  orderNo: string;
-}
-export interface SignedUploadItem {
-  filename: string;
-  orderNumber: string;
-  status: "saved" | "unmatched" | "ambiguous" | "conflict" | "failed";
-  reason: string;
-  archivePath: string | null;
-}
-
 export interface TaskDetail {
   task: TaskSummary;
   lines: TaskLine[];

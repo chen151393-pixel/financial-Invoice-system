@@ -104,6 +104,34 @@ def test_list_states_counts_and_purchase_basis(service, seeded, engine):
     line = pending.customsLines[0].purchaseLines[0]
     assert (line.quantity, line.unit, line.amount) == ("10", "个", "100.5")  # 开票口径：采购数量与单位
     assert "报关数量 5 千克" in line.note
+    assert pending.salesOrders == "SO1"  # 同一销售单在多个报关行出现，只在单头展示一次
+    assert pending.company == "采购公司A"
+    assert pending.customsLines[0].originPlace == "深圳"
+    assert pending.customsLines[0].parent == ""  # 报关明细缺值时不能用子采购的 PO-100 补充
+
+
+def test_customs_parent_and_origin_from_own_source(service, ns, engine):
+    source = customs("870")
+    source[2][0][1]["custrecord_swc_purachse_no"] = {
+        "id": "407555",
+        "refName": "采购订单 #YE-MQ260909-Y707",
+    }
+    source[2][0][1]["custrecord_swc_goods_place"] = {"id": "10", "refName": "深圳市"}
+    source[2][1][1]["custrecord_swc_purachse_no"] = "采购订单 #SECOND"
+    save(ns, engine, bundle([purchase()], [source]))
+    current = group(service, "CD870")
+    first, second = current.customsLines
+    assert first.parent == "采购订单 #YE-MQ260909-Y707"
+    assert first.originPlace == "深圳市"
+    assert first.purchaseLines[0].parent == "PO-100"
+    assert second.parent == "采购订单 #SECOND"
+
+
+def test_customs_parent_internal_id_is_not_order_number(service, ns, engine):
+    source = customs("870")
+    source[2][0][1]["custrecord_swc_purachse_no"] = {"id": "407555"}
+    save(ns, engine, bundle([purchase()], [source]))
+    assert group(service, "CD870").customsLines[0].parent == ""
 
 
 def test_status_filter_and_pagination(service, seeded, ns, engine):

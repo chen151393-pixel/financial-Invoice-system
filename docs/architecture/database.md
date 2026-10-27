@@ -1058,3 +1058,8 @@ API 发票默认版使用 `source=lemon_open2`、`lemon_account=open2:` 加 `SHA
 | `task_tasks.status` | 新增 `documents_incomplete`：发票已收齐、资料待补齐。检查约束 `ck_task_status` 同步更新。 |
 
 降级拒绝删除资料归档记录。部署时执行 `npm.cmd run db:business:upgrade` 后重启后端。
+
+
+## 回签合同持久上传队列（2026-10-26，迁移 0030）
+
+`task_signed_upload_jobs` 属于 task，每行一个上传文件。UUID 主键；`actor + batch_id + position` 唯一，批次状态由文件行汇总，不新增重复的批次状态表。保存清单摘要、原始文件名、声明大小、已接收字节数、完整文件 SHA256、指定单号、处理状态、结果和最终归档路径；不存文件正文。状态为 uploading → queued → running → saved / unmatched / ambiguous / conflict / failed；后四类完整文件可人工重试，saved 不再修改。暂存路径只由服务器 UUID 推导，不接受客户端路径。归档的文件与业务登记保持已有同内容幂等、不同内容不覆盖；running 在重启后先校验持久原件，再核对并接续本地归档，不能推广到 NS 写入或其他结果未知的外部操作。迁移仅新增表和索引，不回填或删除已有业务数据，禁止降级删除。

@@ -3,7 +3,7 @@
 > 本文件由 `npm.cmd run db:map` 根据迁移链离线 MySQL DDL、实体定义和字段字典生成，请勿手工修改；迁移或实体变化后重新生成，`backend/tests/test_schema_map.py` 会检查是否过期。
 > “修改”含加列、改列、索引与中文备注；数据回填仅在线执行，不在离线 DDL 中体现。
 
-当前最新迁移：`0029_source_sales_orders`；共 29 个迁移、38 张实体表。
+当前最新迁移：`0030_task_signed_upload_jobs`；共 30 个迁移、39 张实体表。
 
 ## 1. 按模块查表
 
@@ -46,6 +46,7 @@
 | `task_notification_group_guards` | 同群跨任务发送互斥守卫 | `0022` | — | [查看](current-data-dictionary.md#task_notification_group_guards) |
 | `task_notifications` | 供应商开票通知：每次保存一个版本 | `0001` | `0003`、`0012`、`0022` | [查看](current-data-dictionary.md#task_notifications) |
 | `task_signed_contracts` | 回签合同上传记录，按子采购单一份，不保存文件正文 | `0028` | — | [查看](current-data-dictionary.md#task_signed_contracts) |
+| `task_signed_upload_jobs` | 回签合同上传及后台归档队列，仅保存元数据，文件另存持久暂存目录 | `0030` | — | [查看](current-data-dictionary.md#task_signed_upload_jobs回签合同上传队列) |
 | `task_supplier_groups` | 供应商默认企微群 | `0001` | `0012` | [查看](current-data-dictionary.md#task_supplier_groups) |
 | `task_supplier_settings` | 供应商档案人工设置：是否开启供应商通知 | `0026` | — | [查看](current-data-dictionary.md#task_supplier_settings) |
 | `task_tasks` | 开票任务：审核通过后按 供应商 × 采购公司 × 币种 分组 | `0001` | `0003`、`0007`、`0012`、`0028` | [查看](current-data-dictionary.md#task_tasks) |
@@ -110,3 +111,4 @@
 | [`0027_source_customs_created_at`](../../backend/migrations/versions/0027_source_customs_created_at.py) | — | `source_customs_declarations` | source：报关单保存 NS 创建时间，用于归档文件夹的月份（2026-10-23 业务确认按报关单创建日期）。 |
 | [`0028_task_document_completion`](../../backend/migrations/versions/0028_task_document_completion.py) | `task_declaration_documents`、`task_signed_contracts` | `task_tasks` | task：报关资料与回签合同归档记录；任务新增 documents_incomplete（发票已收齐、资料待补齐）。 |
 | [`0029_source_sales_orders`](../../backend/migrations/versions/0029_source_sales_orders.py) | `source_sales_orders` | `source_purchase_orders` | source：销售单单头（币种、汇率）与子采购单的销售单关联，供申报幅度与发票价格校验（2026-10-23）。 |
+| [`0030_task_signed_upload_jobs`](../../backend/migrations/versions/0030_task_signed_upload_jobs.py) | `task_signed_upload_jobs` | — | task：回签合同分片上传与持久归档队列，不保存文件正文。 |

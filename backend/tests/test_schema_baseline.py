@@ -35,6 +35,7 @@ TABLES = {
     "task_supplier_settings",
     "task_declaration_documents",
     "task_signed_contracts",
+    "task_signed_upload_jobs",
     "task_external_groups",
     "task_group_imports",
     "task_tasks",

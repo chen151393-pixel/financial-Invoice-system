@@ -28,5 +28,5 @@ class SubpoContractSource:
         return declaration_documents.unavailable_reason(self.ns.settings)
 
     def download_declaration(self, record_no, declaration_no, doc_type):
-        """按 CD 编号与真实报关单号定位报关单，返回 {ns_id, environment, files: [PDF 字节]}。"""
+        """按 CD 编号与真实报关单号定位，files 每项含 content、format 和 extension。"""
         return declaration_documents.read_documents(self.ns, record_no, declaration_no, doc_type)

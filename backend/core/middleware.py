@@ -2,6 +2,7 @@
 
 import json
 import logging
+import re
 import time
 
 from fastapi.exceptions import RequestValidationError
@@ -14,8 +15,9 @@ logger = logging.getLogger("ns_api")
 
 
 class RequestGuard:
-    def __init__(self, app, secure):
+    def __init__(self, app, secure, json_body_limits=None):
         self.app, self.secure = app, secure
+        self.json_body_limits = json_body_limits or {}
 
     async def __call__(self, scope, receive, send):
         if scope["type"] != "http":
@@ -86,6 +88,10 @@ class RequestGuard:
                     }
                     else 128 * 1024
                 )
+                for pattern, configured_limit in self.json_body_limits.items():
+                    if re.fullmatch(pattern, scope["path"]):
+                        limit = configured_limit
+                        break
                 while True:
                     message = await receive()
                     if message["type"] == "http.disconnect":

@@ -1,153 +1,149 @@
 import { useState } from "react";
-import { readImportFile } from "../../../shared/api/import-file";
-import { Button } from "../../../shared/components/Button";
-import type { SignedUploadFile, SignedUploadItem } from "../types/task";
+import {
+  Alert,
+  Badge,
+  Button,
+  DataTable,
+  EmptyState,
+  ErrorState,
+  Progress,
+  Skeleton,
+} from "../../../shared/components/ui";
+import { useSignedUploads } from "../hooks/useSignedUploads";
+import { UPLOAD_STATUS, type UploadBatch } from "../types/signed-upload";
 import { NotificationDialog } from "./NotificationDialog";
 import "./signed-contract-upload.css";
 
-const STATUS: Record<SignedUploadItem["status"], string> = {
-  saved: "已保存",
-  unmatched: "未识别单号",
-  ambiguous: "匹配多个单号",
-  conflict: "已有不同文件，未覆盖",
-  failed: "未保存",
-};
-// 单次请求文件数与后端限制一致；更多文件分批提交
-const BATCH = 5;
-
-type Row = { file: File; result: SignedUploadItem; orderNo: string };
-
-/** 回签合同批量上传窗口：只读取文件并提交，归属、格式与覆盖规则以后端结果为准。 */
-export function SignedContractUpload({
-  upload,
-  onClose,
-}: {
-  upload: (files: SignedUploadFile[]) => Promise<{ items: SignedUploadItem[] }>;
-  onClose: (changed: boolean) => void;
-}) {
+/** 上传传输和后台归档分开展示；关闭后可重新打开查看持久任务。 */
+export function SignedContractUpload({ onClose }: { onClose: (changed: boolean) => void }) {
   const [files, setFiles] = useState<File[]>([]);
-  const [rows, setRows] = useState<Row[]>([]);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState("");
+  const [orders, setOrders] = useState<Record<string, string>>({});
+  const state = useSignedUploads();
+  const changed = state.jobs.some((job) => job.saved > 0);
 
-  async function send(selected: File[], orderNos: string[]) {
-    const results: SignedUploadItem[] = [];
-    for (let start = 0; start < selected.length; start += BATCH) {
-      const part = selected.slice(start, start + BATCH);
-      const read = await Promise.all(part.map(readImportFile));
-      const body = read.map((item, index) => ({ ...item, orderNo: orderNos[start + index] ?? "" }));
-      results.push(...(await upload(body)).items);
-    }
-    return results;
+  function results(job: UploadBatch) {
+    return (
+      <section key={job.id} className="itd-upload__job" aria-label={`上传任务 ${job.id}`}>
+        <h4>任务 {job.id.slice(0, 8)}</h4>
+        <Progress label="文件传输进度" width={job.uploadPercent} text={`文件传输 ${job.uploadPercent}%`} />
+        <Progress label="后台处理进度" width={job.progressPercent} text={job.message} />
+        <DataTable
+          label="逐文件处理结果"
+          rowKey={(row) => row.id}
+          rows={job.items}
+          columns={[
+            { key: "filename", header: "文件", render: (row) => row.filename },
+            {
+              key: "status",
+              header: "状态",
+              render: (row) => (
+                <Badge tone={row.status === "saved" ? "success" : row.canRetry ? "warning" : "info"}>
+                  {UPLOAD_STATUS[row.status]}
+                </Badge>
+              ),
+            },
+            {
+              key: "result",
+              header: "说明",
+              render: (row) => (
+                <>
+                  {state.transfers[row.id] ||
+                    row.reason ||
+                    (row.status === "uploading"
+                      ? "等待文件传输完成；页面关闭后需重新选择未传完的文件"
+                      : "后端正在处理，可关闭窗口")}
+                  {row.archivePath && <span className="it-secondary">{row.archivePath}</span>}
+                </>
+              ),
+            },
+            {
+              key: "action",
+              header: "子采购单 / 操作",
+              render: (row) =>
+                row.canRetry ? (
+                  <span className="itd-upload__assign">
+                    <input
+                      aria-label={`指定子采购单号：${row.filename}`}
+                      placeholder="子采购单号（可选）"
+                      maxLength={150}
+                      value={orders[row.id] ?? row.orderNumber}
+                      disabled={state.busy}
+                      onChange={(event) =>
+                        setOrders((current) => ({ ...current, [row.id]: event.target.value }))
+                      }
+                    />
+                    <Button
+                      size="sm"
+                      disabled={state.busy}
+                      onClick={() => void state.retry(job, row.id, orders[row.id] ?? row.orderNumber)}
+                    >
+                      重新排队
+                    </Button>
+                  </span>
+                ) : row.status === "uploading" && state.canResume(row.id) ? (
+                  <Button size="sm" disabled={state.busy} onClick={() => void state.retry(job, row.id, "")}>
+                    继续上传
+                  </Button>
+                ) : (
+                  row.orderNumber || "—"
+                ),
+            },
+          ]}
+        />
+      </section>
+    );
   }
 
-  async function submit() {
-    setBusy(true);
-    setError("");
-    try {
-      const results = await send(files, []);
-      setRows(results.map((result, index) => ({ file: files[index], result, orderNo: "" })));
-      setFiles([]);
-    } catch (reason) {
-      setError(reason instanceof Error ? reason.message : "上传失败，请核对后重试");
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function resend(index: number) {
-    const row = rows[index];
-    setBusy(true);
-    setError("");
-    try {
-      const [result] = await send([row.file], [row.orderNo.trim()]);
-      setRows((current) => current.map((item, i) => (i === index ? { ...item, result } : item)));
-    } catch (reason) {
-      setError(reason instanceof Error ? reason.message : "上传失败，请核对后重试");
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  const changed = rows.some((row) => row.result.status === "saved");
   return (
-    <NotificationDialog title="批量上传回签合同" busy={busy} onClose={() => onClose(changed)}>
+    <NotificationDialog title="批量上传回签合同" busy={state.busy} onClose={() => onClose(changed)}>
       <div className="itd-upload">
-        <p className="it-help">
-          支持 PDF、JPG、PNG，单个文件不超过 10
-          MB。文件名需包含子采购单号，系统据此保存到“月份/CD号_真实报关单号”文件夹；同一子采购单已上传不同文件时不会覆盖。
-        </p>
+        <Alert tone="info" title="单个文件最高 100 MB">
+          支持 PDF、JPG、PNG。文件逐个上传，完整接收后自动进入后台队列；单个失败不影响其他文件。
+          文件传输期间请保持页面打开，传完后可关闭，重新打开本窗口查看最近任务。
+          文件名需包含子采购单号；已有不同内容的回签合同不会覆盖。
+        </Alert>
         <label className="itd-upload__picker">
-          选择文件
+          选择回签合同
           <input
             type="file"
             multiple
             accept=".pdf,.jpg,.jpeg,.png"
-            disabled={busy}
+            disabled={state.busy}
             onChange={(event) => setFiles(Array.from(event.target.files ?? []))}
           />
         </label>
-        <Button variant="primary" disabled={busy || files.length === 0} onClick={() => void submit()}>
-          {busy ? "正在上传…" : `上传 ${files.length} 个文件`}
-        </Button>
-        {error && (
-          <p className="itd-feedback" role="alert">
-            {error}
-          </p>
+        <div className="itd-upload__actions">
+          <Button
+            variant="primary"
+            disabled={state.busy || files.length === 0}
+            onClick={() =>
+              void state.submit(files).then((accepted) => {
+                if (accepted) setFiles([]);
+              })
+            }
+          >
+            {state.busy ? "正在传输文件…" : `上传 ${files.length} 个文件并排队`}
+          </Button>
+          <Button disabled={state.busy} onClick={() => void state.refresh()}>
+            刷新任务
+          </Button>
+        </div>
+        {state.error && (
+          <ErrorState
+            title="上传任务操作失败"
+            message={state.error}
+            action={
+              <Button disabled={state.busy} onClick={() => void state.refresh()}>
+                重新查询
+              </Button>
+            }
+          />
         )}
-        {rows.length > 0 && (
-          <div className="it-table-wrap" role="region" aria-label="回签合同上传结果，可横向滚动">
-            <table>
-              <caption className="itd-upload__caption">上传结果</caption>
-              <thead>
-                <tr>
-                  <th scope="col">文件</th>
-                  <th scope="col">子采购单</th>
-                  <th scope="col">结果</th>
-                  <th scope="col">说明</th>
-                </tr>
-              </thead>
-              <tbody>
-                {rows.map((row, index) => (
-                  <tr key={`${row.file.name}-${index}`}>
-                    <td>{row.result.filename}</td>
-                    <td>
-                      {row.result.status === "unmatched" || row.result.status === "ambiguous" ? (
-                        <span className="itd-upload__assign">
-                          <input
-                            aria-label={`指定子采购单号：${row.result.filename}`}
-                            value={row.orderNo}
-                            maxLength={150}
-                            disabled={busy}
-                            onChange={(event) =>
-                              setRows((current) =>
-                                current.map((item, i) =>
-                                  i === index ? { ...item, orderNo: event.target.value } : item,
-                                ),
-                              )
-                            }
-                          />
-                          <Button disabled={busy || !row.orderNo.trim()} onClick={() => void resend(index)}>
-                            按此单号上传
-                          </Button>
-                        </span>
-                      ) : (
-                        row.result.orderNumber || "—"
-                      )}
-                    </td>
-                    <td>{STATUS[row.result.status]}</td>
-                    <td>
-                      {row.result.reason}
-                      {row.result.archivePath && (
-                        <span className="it-secondary">{row.result.archivePath}</span>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+        {state.loading && <Skeleton rows={3} label="正在读取上传任务" />}
+        {!state.loading && !state.error && state.jobs.length === 0 && (
+          <EmptyState title="暂无上传任务" description="选择合同文件后提交，处理结果会逐个显示。" />
         )}
+        {state.jobs.map(results)}
       </div>
     </NotificationDialog>
   );

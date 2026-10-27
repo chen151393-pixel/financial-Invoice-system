@@ -10,6 +10,9 @@
 - 来源保存：同步页按页读取 NS，完整补齐基础明细、关联子采购和 PL 名称后，在一个短事务内保存；精确追溯缺失单独标记。2026-10-16 取消本地累计 300 条详情及单类关联记录限制，超过后继续分页读取；详情任务保持固定并发，整批全部读取成功后才入库。
 - 关联维护：报关单—子采购单关联、依据状态（`relation_status`）、展示内容摘要（`content_sha256`）。
 - 只读门面：报关单分页、完整内容、审核确认期间的账户锁（供 review 模块使用）。
+- 报关行展示：`customs_display_mapper.py` 按原生明细键读取同一来源快照的 `custrecord_swc_purachse_no`，补充 `parent_order_no`（采购订单编号）；货源地沿用已保存的 `origin_place`（`custrecord_swc_goods_place`）。原始字段已保存的历史记录无需重新拉取；不从关联子采购推断报关行母单，也不改变审核摘要。
+
+- 报关资料门面 `SubpoContractSource.download_declaration` 返回 `{ns_id, environment, files}`；文件含 `content`（字节）、`format`（`pdf` / `excel_xml`）、`extension`（`.pdf` / `.xls`）。Excel XML 仅用于报关单与发票，适配器负责校验，task 负责归档。
 
 ## 目录
 
@@ -184,6 +187,7 @@
 
 - 同步时按子采购单的销售单引用（`custrecord_swc_subpo_so`）以固定只读 SuiteQL `sales_headers` 读取销售单头（单号、币种、汇率），保存到 `source_sales_orders`（迁移 `0029_source_sales_orders`），子采购单 `sales_order_id` 指向它。读取失败时提示“销售单汇率读取失败”，不影响单据保存，原关联保持不变。**真实 NS 的销售单汇率字段尚待一次只读核实。**
 - 报关行对应的销售单：其关联子采购单的销售单中单号与报关行销售订单号一致的；没有一致的且只有一个时取该销售单（`policy/declared_price_policy.py`）。
-- 申报幅度 =（申报价 − 采购价）÷ 申报价：申报价 = 报关行金额 × 对应销售单汇率（人民币报关行不换算）；采购价 = 该报关行行级关联子采购行的**含税**金额合计。报关行与子采购行单位不一致、采购币种不是人民币、金额或汇率缺失时不计算并写明原因；只标出负数（采购价高于申报价）。汇率**不参与**报关单内容摘要，变化不触发重审。
+- 换算前复用币种规则识别明确名称与代码：`US Dollar`／美元与 `USD` 等价，人民币／`Chinese Yuan` 与 `CNY` 等价。原始展示值不变；未知币种、内部 ID、模糊简称仍待核实，真实币种不一致仍拒绝换算。使用已同步销售单汇率，不另取实时汇率。
+- 2026-10-26 财务核对改为单价幅度：人民币报关单价 = 报关单价 × 销售单汇率；合并采购单价 = 关联采购行含税总金额 ÷ 总数量；幅度 =（人民币报关单价 − 合并采购单价）÷ 人民币报关单价。通过 `declared_unit_price_cny` 独立换算报关单价，不依赖报关总金额；规则及异常提示见 [review 说明](../review/README.md)。汇率不参与摘要；matching 继续通过 `declared_cny` 使用原金额／单价校验。
 - 门面：`declared_cny`、`pick_sales_order`（review 申报幅度）；`declared_prices(connection, purchase_line_ids)`（matching 价格校验）；`purchase_lines` 上下文新增 `declared`（不参与摘要）；报关单 `snapshot` 新增 `sales_orders`（不参与摘要）。
 - 验证：`backend/tests/test_declared_price.py`。

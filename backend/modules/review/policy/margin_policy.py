@@ -1,15 +1,15 @@
 """申报幅度（2026-10-23 业务确认），纯函数。
 
-申报幅度 =（申报价 − 采购价）÷ 申报价，按报关行金额合计计算：
-- 申报价：报关行金额按对应销售单汇率换算为人民币（source 规则）；
-- 采购价：该报关行行级关联子采购行的含税金额合计（采购价按含税算）；
-- 报关行与子采购行单位不一致、采购币种不是人民币、金额或汇率缺失时不计算，写明原因，不显示 0；
+申报幅度 =（人民币报关单价 − 合并采购单价）÷ 人民币报关单价：
+- 报关单价按对应销售单汇率换算为人民币（source 规则），不先舍入；
+- 合并采购单价 = 关联采购行含税总金额 ÷ 总数量，不先舍入；
+- 单位不一致、采购币种不是人民币、金额数量或报关单价汇率缺失时不计算，不显示 0；
 - 只标出负数（采购价高于申报价）。
 """
 
 from decimal import ROUND_HALF_UP, Decimal
 
-from backend.modules.source.public import declared_cny, pick_sales_order, unit_label
+from backend.modules.source.public import declared_unit_price_cny, pick_sales_order, unit_label
 
 CNY = "CNY"
 CENT = Decimal("0.01")
@@ -30,25 +30,34 @@ def declared_margin(customs_row, purchase_rows, orders, sales_orders, unit_names
     currencies = {(orders[row["purchase_order_id"]]["currency"] or "") for row in purchase_rows}
     if currencies != {CNY}:
         return unavailable("采购币种待核实" if "" in currencies else "采购币种不是人民币，不计算申报幅度")
+    if not customs_unit or any(not unit_label(row["unit"], unit_names) for row in purchase_rows):
+        return unavailable("单位缺失，无法计算合并采购单价")
     if any(row["amount"] is None for row in purchase_rows):
-        return unavailable("子采购金额缺失，无法计算")
-    purchase = sum((row["amount"] for row in purchase_rows), Decimal(0))
+        return unavailable("采购含税金额缺失，无法计算合并采购单价")
+    if any(row["quantity"] is None for row in purchase_rows):
+        return unavailable("采购数量缺失，无法计算合并采购单价")
+    quantity = sum((row["quantity"] for row in purchase_rows), Decimal(0))
+    if quantity <= 0:
+        return unavailable("采购总数量须大于 0，无法计算合并采购单价")
+    purchase = sum((row["amount"] for row in purchase_rows), Decimal(0)) / quantity
     candidates = [
         sales_orders.get(orders[row["purchase_order_id"]].get("sales_order_id")) for row in purchase_rows
     ]
     sales_order, sales_reason = pick_sales_order(customs_row["sales_order_no"], candidates)
-    declared, _, reason = declared_cny(
-        customs_row["amount"], customs_row["unit_price"], customs_row["currency"], sales_order, sales_reason
+    declared, reason = declared_unit_price_cny(
+        customs_row["unit_price"], customs_row["currency"], sales_order, sales_reason
     )
     if declared is None:
         return unavailable(f"{reason}，无法计算")
     if declared <= 0:
-        return unavailable("申报金额为 0，无法计算")
+        return unavailable("报关单价须大于 0，无法计算")
     margin = ((declared - purchase) / declared * 100).quantize(CENT, rounding=ROUND_HALF_UP)
+    if margin == 0:
+        margin = margin.copy_abs()
     return {
-        "status": "negative" if margin < 0 else "ok",
+        "status": "negative" if purchase > declared else "ok",
         "margin": margin,
-        "declared": declared.quantize(CENT, rounding=ROUND_HALF_UP),
+        "declared": declared,
         "purchase": purchase,
-        "note": "采购价高于申报价" if margin < 0 else "",
+        "note": "报关单价低于采购价" if purchase > declared else "",
     }

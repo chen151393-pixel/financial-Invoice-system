@@ -29,7 +29,6 @@ export function FinanceComparison({
   pagination?: ReactNode;
 }) {
   const [expanded, setExpanded] = useState<string[]>([]);
-  const [rows, setRows] = useState<Record<string, string[]>>({});
   const [checked, setChecked] = useState<string[]>([]);
   const [selected, setSelected] = useState<PurchaseLine | null>(null);
   if (state.kind !== "ready")
@@ -57,11 +56,6 @@ export function FinanceComparison({
   const selectable = result.groups.filter((g) => g.review.status === "pending" && g.review.allowed);
   const chosen = selectable.filter((g) => checked.includes(g.id));
   const allChosen = selectable.length > 0 && chosen.length === selectable.length;
-  const toggleRow = (groupId: string, id: string) =>
-    setRows((current) => {
-      const list = current[groupId] || [];
-      return { ...current, [groupId]: list.includes(id) ? list.filter((v) => v !== id) : [...list, id] };
-    });
   return (
     <div className="fr-preview">
       {result.notices.map((notice) => (
@@ -84,11 +78,6 @@ export function FinanceComparison({
           <button
             onClick={() => {
               setExpanded(result.groups.map((group) => group.id));
-              setRows(
-                Object.fromEntries(
-                  result.groups.map((group) => [group.id, group.customsLines.map((row) => row.id)]),
-                ),
-              );
             }}
           >
             全部展开
@@ -97,7 +86,6 @@ export function FinanceComparison({
           <button
             onClick={() => {
               setExpanded([]);
-              setRows({});
             }}
           >
             全部收起
@@ -142,9 +130,9 @@ export function FinanceComparison({
             tabIndex={0}
           >
             <table className="fr-declaration-table">
-              <caption className="fr-sr-only">报关单、报关明细及关联子采购逐级展开</caption>
+              <caption className="fr-sr-only">报关单主行，展开查看报关与子采购对照明细</caption>
               <colgroup>
-                {[4, 17, 19, 13, 17, 10, 10, 10].map((width, index) => (
+                {[3, 12, 16, 11, 15, 15, 10, 8, 10].map((width, index) => (
                   <col key={index} style={{ width: `${width}%` }} />
                 ))}
               </colgroup>
@@ -167,7 +155,8 @@ export function FinanceComparison({
                   </th>
                   <th scope="col">真实报关单号</th>
                   <th scope="col">PL 单号</th>
-                  <th scope="col">申报公司</th>
+                  <th scope="col">申报抬头</th>
+                  <th scope="col">销售单号</th>
                   <th scope="col">关联明细</th>
                   <th scope="col">审核状态</th>
                   <th scope="col" className="fr-declaration-action">
@@ -182,16 +171,13 @@ export function FinanceComparison({
                     key={group.id}
                     group={group}
                     open={open}
-                    expandedRows={rows[group.id] || []}
                     checked={checked.includes(group.id)}
                     checkable={Boolean(onBatchApprove)}
                     onToggle={() => {
                       setExpanded((current) =>
                         open ? current.filter((id) => id !== group.id) : [...current, group.id],
                       );
-                      setRows((current) => ({ ...current, [group.id]: [] }));
                     }}
-                    onToggleRow={(id) => toggleRow(group.id, id)}
                     onCheck={(value) =>
                       setChecked((current) =>
                         value ? [...current, group.id] : current.filter((id) => id !== group.id),

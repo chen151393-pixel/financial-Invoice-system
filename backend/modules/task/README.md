@@ -57,7 +57,9 @@ documents_pending → notify_pending → awaiting_invoice → partially_received
 - 详情页六个节点各按自身事实显示（合同是否归档、通知是否登记、是否收票、是否完成），不因任务完成而标记未做的步骤。
 - 每次状态变化写 `task_events`。
 
-**合同**：事务外下载 → 短事务登记首次获取记录（来源与 SHA-256）→ 事务外写共享盘（2026-10-23 起为 `YYYY年MM月/CD号_真实报关单号/子采购合同_子采购单号_供应商.pdf`，月份取 NS 报关单创建时间的中国日期）→ 短事务标记已归档。再次获取到不同内容时拒绝覆盖；共享盘失败记为 `failed` 并可重试。
+**合同**：事务外下载 → 短事务登记首次获取记录（来源与 SHA-256）→ 事务外写共享盘（2026-10-26 起新归档使用 `YYYY年MM月/CD号_真实报关单号/子采购单号_供应商简称_真实报关单号.pdf`，月份取 NS 报关单创建时间的中国日期）→ 短事务标记已归档。再次获取到不同内容时拒绝覆盖；共享盘失败记为 `failed` 并可重试。
+
+文件名简称规则见 `policy/contract_name_policy.py`：去除企业后缀、开头城市名后的“市”和一个常见末尾行业词（去行业词后至少保留四字），不截固定字数。例如“东莞市创远机械有限公司”变为“东莞创远”；无法可靠缩减时保留。只影响文件名，NS 查询、供应商匹配及业务记录仍用全称。已归档文件保留原文件名和路径。
 
 **通知**：每次保存新增一个版本（需带当前版本号，不一致返回 409）；群名与启用的默认群一致时记录群 ID。登记发送要求合同已全部归档、已填写群名和发送员工、确认已发送并填写说明，发送时间带时区且介于任务生成与当前之间；同一登记的重试返回原结果。
 
@@ -174,7 +176,7 @@ MySQL 命名锁保证多实例单消费者，并对同一任务的同一子采�
 
 - **是否开启供应商通知**：新表 `task_supplier_settings`（迁移 `0026_task_supplier_settings`），没有记录视为开启。供应商档案页人工维护：`POST /api/tasks/supplier-groups/profiles/notify`，请求 `{supplierId, enabled, revision}`，`revision` 为当前版本（从未设置为 0），不一致返回 409；服务身份 403；供应商不存在 404。档案列表每行返回 `notify: {enabled, revision, updatedBy, updatedAt}`。
 - **关闭的效果**：之后的财务审核不为该供应商生成开票任务（`task_generation_service.on_review_approved` 跳过该供应商的任务组）；同一报关单的其他供应商照常生成。已有任务不变。连带结果：该供应商子采购合同不会自动归档，其发票在比对中没有可分配的任务行。开关与企微外部群绑定无关。
-- **归档目录**：`integrations/contract_archive.py` 按 `月份/CD号_真实报关单号/` 建两级文件夹，文件名以单据类型开头。报关单头经 source 门面 `SourceDirectory.declarations` 读取；缺 NS 创建时间、CD 编号或真实报关单号时归档失败并保留原因（409），不改用其他日期或编号，补齐同步后可重试。原有安全措施不变：临时文件、同名同内容复用、同名不同内容不覆盖、路径不越出根目录。已按旧规则归档的文件不移动，记录中的原路径不变。
+- **归档目录**：`integrations/contract_archive.py` 按 `月份/CD号_真实报关单号/` 建两级文件夹；子采购合同命名见上文，其他资料文件名以单据类型开头。报关单头经 source 门面 `SourceDirectory.declarations` 读取；缺 NS 创建时间、CD 编号或真实报关单号时归档失败并保留原因（409），不改用其他日期或编号，补齐同步后可重试。原有安全措施不变：临时文件、同名同内容复用、同名不同内容不覆盖、路径不越出根目录。已按旧规则归档的文件不移动，记录中的原路径不变。
 - **开票跟进按供应商筛选**：`TaskListQuery.supplierId`（数字 ID）；列表返回 `suppliers` 选项（未被替代的任务涉及的供应商，名称经来源目录读取），计数与分页随筛选变化。
 - 验证：`backend/tests/test_task_supplier_notify.py`、`test_contract_archive.py`。
 
@@ -188,16 +190,19 @@ MySQL 命名锁保证多实例单消费者，并对同一任务的同一子采�
 | 报关单、销售合同、发票 | NS 报关资料 RESTlet（约定见 [NS 适配器](../../integrations/netsuite/README.md)） | `task_declaration_documents`（按报关单×类型，各供应商任务共用） | 审核通过生成任务时登记待下载，后台队列处理；每类可单独重试或重新下载 |
 | 回签合同 | 人工批量上传 | `task_signed_contracts`（按子采购单） | 按文件名识别子采购单号；不阻塞通知与收票 |
 
-- 全部文件保存到 `月份/CD号_真实报关单号/`，文件名以类型开头（`报关单_CD号.pdf`、`回签合同_子采购单号.pdf` 等）；同名不同内容不覆盖。
+- 全部文件保存到 `月份/CD号_真实报关单号/`，子采购合同命名见上文，其他资料文件名以类型开头（`报关单_CD号.pdf`、`回签合同_子采购单号.pdf` 等）；同名不同内容不覆盖。
 - **单项重试**：`POST /api/tasks/{taskId}/declaration-documents/{type}/prepare`（type：customs_declaration / sales_contract / invoice），返回任务详情。失败、未配置、已归档都可再次执行；已归档的重新下载内容相同时无变化，内容不同返回 409 且保留原文件。后台只处理待下载记录，失败后不自动反复重试。本功能上线前生成的任务没有登记记录，首次人工重试时补登记。
 - **回签合同上传**：`POST /api/tasks/signed-contracts/upload`，请求 `{files: [{filename, content(base64), orderNo?}]}`，每次 1–20 个；支持 PDF、JPG、PNG，单个不超过 10 MB。逐个返回 `saved`（含已上传过相同文件）/ `unmatched`（未识别单号或子采购单未关联报关单）/ `ambiguous`（匹配多个单号）/ `conflict`（已有不同文件，未覆盖）/ `failed`（格式、大小、共享盘问题）。识别规则：文件名包含的有效子采购单号，一个单号包含另一个时取较长者；`orderNo` 填写时按该单号精确匹配。
 - **任务详情**新增 `declarationDocuments`（类型、状态、文件路径、失败原因、尝试次数、`retry` 能力）、`signedContracts`（每张子采购单是否已上传）与 `completion`（是否齐全、尚缺资料）。
 - 资料到齐（报关资料归档、回签合同上传、子采购合同归档）时，在同一事务中重算相关任务状态。
+- 2026-10-26：报关单、发票支持原 NS 打印的 Excel XML（`.xls`）及旧 PDF，路由和后台队列不变；按适配器校验格式命名。重新下载改变内容、格式或份数时在写文件前拒绝，保留旧记录，无需迁移。NS Excel RESTlet 已部署为 485/1，真实下载及共享盘保存已验证；运行中服务需重启加载配置，任务队列状态联动待验收，销售合同尚未接入。参见 [外部下载接入说明](../../../netsuite/declaration_print/README.md)。
 - 验证：`backend/tests/test_task_documents_completion.py`、`test_task_documents.py`（NS 适配器）；收票类测试使用 `tests/documents_ready.py` 补齐资料。
 
-## 采购开票任务台（2026-10-25）
+## 开票跟进节点查询（原采购开票任务台）
 
-`POST /api/tasks/board/query`（`controller/board_controller.py` → `service/task_board_service.py`，只读）：请求 `{keyword, supplierId, node, page, pageSize}`，`node` 为空表示全部进行中，或 `documents / notification / invoices / comparison / completion / done`。上线只同步 NS 正式环境，不提供 NS 环境筛选（多传 `account` 返回 422）。
+`POST /api/tasks/board/query`（`controller/board_controller.py` → `service/task_board_service.py`，只读）：请求 `{keyword, supplierId, node, page, pageSize, stage?, createdFrom?, createdTo?}`，`node` 为空表示全部进行中，或 `documents / notification / invoices / comparison / completion / done`。上线只同步 NS 正式环境，不提供 NS 环境筛选（多传 `account` 返回 422）。
+
+前端统一入口 `/tasks`。工作台下钻的 `stage` 与成对日期复用原查询的报关单最慢阶段、来源创建日期口径；指定阶段且未选节点时包含该范围内已完成的同单任务。原 `/api/tasks/query` 暂留一个版本供旧客户端及兼容性测试使用，新前端统一调用节点查询；旧客户端迁移后删除旧查询契约。
 
 - 六个节点与详情页共用 `task_mapper.steps`（新增稳定 `key`），资料齐全用 `document_mapper.completion_of`，通知文案用 `notification_mapper.status_label`；任务按第一个未完成节点归入分区（`policy/board_policy.py` 负责分区文案与下一步提示）。
 - 响应：`nodes`（各分区计数，覆盖全部筛选结果）、`openTotal`、`items[]`（`task` 摘要、`steps`、`currentNode/currentLabel`、`nextAction`、`blockedReason`、`missing`）、`suppliers` 与分页。进行中按等待最久在前；已完成分区按最新在前并在数据库分页。
@@ -222,3 +227,22 @@ MySQL 命名锁保证多实例单消费者，并对同一任务的同一子采�
 - 开票跟进列表新增条件：`stage`（notify / invoicing / documents / completed，按报关单所处阶段筛选，显示该报关单的全部当前任务）、`createdFrom` / `createdTo`（报关单 NS 创建时间的中国日期，须成对填写，经 source 门面换算）。每个任务返回 `stage` / `stageLabel`（本任务自身阶段）。
 - 状态只读汇总，不提供人工修改业务状态的接口。
 - 验证：`backend/tests/test_business_stages.py`。
+
+
+## 回签合同后台上传队列（2026-10-26）
+
+新界面使用 `SignedUploadService`、`SignedUploadWorker`：单文件最高 100 MiB，每批 20 个，更多文件自动分批。先提交清单，再按接口返回的 `chunkBytes`（4 MiB）逐片上传；每片最多 6 MiB JSON，避免整批 Base64 常驻内存。文件完整落盘并记录摘要后进入持久队列，返回 202；后台逐文件调用既有 `SignedContractService.process_content` 匹配、无覆盖归档并更新任务完结状态。单项失败保留原因，不阻止同批其他文件。
+
+| 接口 | 请求 / 响应 |
+| --- | --- |
+| `POST /api/tasks/signed-contracts/upload-jobs` | `{requestId: UUID, files: [{filename, size, orderNo?}]}`；返回批次和服务端文件 ID。同身份同 requestId 同清单幂等，清单变化拒绝。空文件或超过 100 MiB 的文件逐项 failed。 |
+| `POST /api/tasks/signed-contracts/upload-jobs/{batchId}/files/{fileId}/chunks` | `{offset, content: Base64}`；按偏移接收，重复片内容必须一致，不支持跳跃写入；响应带接收字节数和处理进度。 |
+| `GET /api/tasks/signed-contracts/upload-jobs` | 当前登录身份最近 20 批；每批包含逐文件结果和进度。 |
+| `GET /api/tasks/signed-contracts/upload-jobs/{batchId}` | 查询一个持久批次；跨身份返回 404，服务身份不可操作。 |
+| `POST /api/tasks/signed-contracts/upload-jobs/{batchId}/files/{fileId}/retry` | `{orderNo?: string}`；已完整接收且未保存的文件可补单号并重新排队，无需重新传输。 |
+
+原 `POST /api/tasks/signed-contracts/upload` 为一个版本的兼容入口，保留每批 20 个、单文件 10 MiB 的原同步契约，请求上限 280 MiB；正式前端已无调用方，旧客户端升级到分片协议后删除。普通 JSON 接口仍限 128 KiB，不全局放大。
+
+新表 `task_signed_upload_jobs`（迁移 `0030`）只存清单、偏移、摘要、操作者、结果及路径。文件暂存在 `SIGNED_CONTRACT_UPLOAD_ROOT`（默认 `data/signed-contract-uploads`），不得放到临时清理目录；Docker 已有 `./data:/app/data` 挂载可持久保存。同库多进程需共用同一暂存目录。上传和消费者使用 MySQL 命名锁；重启接续 queued/running，原件先核对大小及摘要，归档复用同内容幂等与不覆盖保护。成功登记后清理该原件暂存；失败及未传完的原件保留用于人工重试，管理员清理前须核实任务状态。文件尚未传完时关闭页面不会继续传输，已经接收完整的文件会继续归档。
+
+部署：执行 `npm.cmd run db:upgrade`，构建前端并重启后端。验证包括 100 MiB 分片边界、旧 128 KiB 故障回归、身份隔离、重复清单/分片、磁盘未提交尾部恢复、摘要损坏拒绝、单文件隔离和重启恢复；MySQL 并发测试单独标记，没有专用库时跳过，不能作为并发通过。

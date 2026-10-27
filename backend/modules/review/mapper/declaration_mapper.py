@@ -9,6 +9,7 @@ from decimal import Decimal
 from backend.modules.source.public import unit_label
 
 from ..policy.margin_policy import declared_margin
+from ..policy.purchase_display_policy import group_purchase_lines
 from ..policy.review_policy import CHANGED_WARNING, STATUS_LABELS
 from ..public import ApprovedLine
 from ..vo.review_vo import CustomsLine, Declaration, PurchaseLine, ReviewState
@@ -84,6 +85,21 @@ def review_state(state, active_review, allowed, reason):
     )
 
 
+def margin_fields(margin):
+    return {
+        "margin": f"{margin['margin']}%" if margin["margin"] is not None else "",
+        "marginStatus": margin["status"],
+        "marginNote": margin["note"],
+        # 仅展示最多六位小数；幅度与异常已按未舍入单价判定。
+        "declaredUnitPriceCny": text(margin["declared"].quantize(Decimal("0.000001")))
+        if margin["declared"] is not None
+        else "",
+        "combinedPurchaseUnitPrice": text(margin["purchase"].quantize(Decimal("0.000001")))
+        if margin["purchase"] is not None
+        else "",
+    }
+
+
 def declaration(content, state, changed, active_review, allowed, reason):
     head = content["declaration"]
     orders = {order["id"]: order for order in content["orders"]}
@@ -92,14 +108,13 @@ def declaration(content, state, changed, active_review, allowed, reason):
     rows_by_customs = defaultdict(list)
     for row in content["purchase_lines"]:
         rows_by_customs[bound.get(row["id"])].append(row)
-        by_customs[bound.get(row["id"])].append(
-            purchase_line(
-                orders[row["purchase_order_id"]],
-                row,
-                content.get("bases", {}).get(row["id"]),
-                content.get("unit_names"),
-            )
+        line = purchase_line(
+            orders[row["purchase_order_id"]],
+            row,
+            content.get("bases", {}).get(row["id"]),
+            content.get("unit_names"),
         )
+        by_customs[bound.get(row["id"])].append(line)
     margins = {
         row["id"]: declared_margin(
             row,
@@ -113,6 +128,8 @@ def declaration(content, state, changed, active_review, allowed, reason):
     customs_lines = [
         CustomsLine(
             id=f"customs-{row['id']}",
+            parent=text(row.get("parent_order_no")),
+            originPlace=text(row["origin_place"]),
             lineNo=line_number(row["line_no"], index),
             name=text(row["declaration_name"]),
             model=text(row["specification"]),
@@ -122,12 +139,8 @@ def declaration(content, state, changed, active_review, allowed, reason):
             amount=text(row["amount"]),
             currency=text(row["currency"]),
             purchaseCount=len(by_customs[row["id"]]),
-            purchaseLines=by_customs[row["id"]],
-            margin=f"{margins[row['id']]['margin']}%" if margins[row["id"]]["margin"] is not None else "",
-            marginStatus=margins[row["id"]]["status"],
-            marginNote=margins[row["id"]]["note"],
-            declaredCny=text(margins[row["id"]]["declared"]),
-            purchaseTotal=text(margins[row["id"]]["purchase"]),
+            purchaseLines=group_purchase_lines([line.model_dump() for line in by_customs[row["id"]]]),
+            **margin_fields(margins[row["id"]]),
         )
         for index, row in enumerate(content["customs_lines"])
     ]
@@ -154,10 +167,11 @@ def declaration(content, state, changed, active_review, allowed, reason):
             + [text(order["pl_no"]) for order in content["orders"]]
         ),
         company=unique_text(text(row["company_name"]) for row in content["customs_lines"]),
+        salesOrders=unique_text(text(row["sales_order_no"]) for row in content["customs_lines"]),
         customsCount=len(customs_lines),
         purchaseCount=len(content["purchase_lines"]),
         customsLines=customs_lines,
-        unlinkedLines=by_customs[None],
+        unlinkedLines=group_purchase_lines([line.model_dump() for line in by_customs[None]]),
         warnings=[CHANGED_WARNING] if changed else [],
         review=review_state(state, active_review, allowed, reason),
     )

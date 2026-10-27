@@ -2,7 +2,7 @@ import { CurrencyEvidenceForm } from "./CurrencyEvidenceForm";
 import { Link } from "react-router";
 import { paths } from "../../../app/paths";
 import { useState } from "react";
-import { Button } from "../../../shared/components/Button";
+import { Button, DataTable } from "../../../shared/components/ui";
 import { useDialog } from "../hooks/useDialog";
 import type { ComparisonGroup, PurchaseLine, CurrencyEvidence } from "../types";
 
@@ -208,6 +208,38 @@ export function PurchaseDialog({ line, onClose }: { line: PurchaseLine; onClose:
             </div>
           ))}
         </dl>
+        {Boolean(line.members?.length) && (
+          <DataTable
+            label="合并前采购明细"
+            rows={line.members ?? []}
+            rowKey={(member) => member.id}
+            density="compact"
+            minWidth={620}
+            columns={[
+              { key: "name", header: "采购品名", render: (member) => member.name },
+              { key: "model", header: "规格型号", render: (member) => member.model || "—" },
+              {
+                key: "quantity",
+                header: "原始数量",
+                align: "right",
+                render: (member) => member.quantity || "未提供",
+              },
+              { key: "unit", header: "单位", render: (member) => member.unit },
+              {
+                key: "price",
+                header: "原含税单价",
+                align: "right",
+                render: (member) => member.price || "未提供",
+              },
+              {
+                key: "amount",
+                header: "原含税金额",
+                align: "right",
+                render: (member) => member.amount || "未提供",
+              },
+            ]}
+          />
+        )}
       </div>
       <footer>
         <Button onClick={onClose}>关闭</Button>

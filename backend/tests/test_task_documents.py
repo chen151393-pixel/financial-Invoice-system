@@ -40,6 +40,7 @@ def adapter(handler, *, supplier="供应商", declaration="CD000252"):
 def test_adapter_uses_production_resolved_id_and_double_json():
     def respond(request):
         assert request.method == "GET"
+        assert request.headers["Content-Type"] == "application/json"
         assert request.url.host == "5939865.restlets.api.netsuite.com"
         assert dict(request.url.params) == {"script": "476", "deploy": "1", "zid": "548"}
         return httpx.Response(
@@ -118,13 +119,15 @@ def files_payload(files, *, record="870", kind="invoice"):
 
 def test_declaration_documents_located_by_cd_number_and_return_all_pdfs():
     def respond(request):
+        assert request.headers["Content-Type"] == "application/json"
         assert dict(request.url.params) == {"script": "901", "deploy": "1", "id": "870", "type": "invoice"}
         return httpx.Response(200, json=json.dumps(files_payload([PDF, PDF + b" "])))
 
     ns = declaration_adapter(respond)
     try:
         result = read_documents(ns, "CD870", "REAL870", "invoice")
-        assert result["ns_id"] == "870" and result["files"] == [PDF, PDF + b" "]
+        assert result["ns_id"] == "870" and [item["content"] for item in result["files"]] == [PDF, PDF + b" "]
+        assert all(item["extension"] == ".pdf" for item in result["files"])
     finally:
         ns.client.close()
 

@@ -19,6 +19,7 @@ from backend.core.write_lock import transaction
 from backend.integrations.contract_archive import document_filename
 
 from ..dao import signed_contract_dao, task_dao
+from ..policy.signed_upload_policy import MAX_FILE_BYTES
 from ..vo.signed_contract_vo import SignedUploadItem, SignedUploadResult
 from .progress_service import refresh_tasks
 
@@ -51,20 +52,29 @@ class SignedContractService:
             content = base64.b64decode(item.content, validate=True)
         except (ValueError, binascii.Error):
             return SignedUploadItem(**result, status="failed", reason="文件内容无法读取，请重新选择文件")
+        return self.process_content(item.filename, content, item.orderNo, actor, max_bytes=MAX_BYTES)
+
+    def process_content(self, filename, content, order_no, actor, *, max_bytes=MAX_FILE_BYTES):
+        """后台队列与旧上传入口共用同一匹配、归档和完结规则。"""
+        if actor.startswith("service:"):
+            raise ApiError(403, "服务身份只读，不能上传回签合同")
+        if self.archive is None or self.archive.root is None:
+            raise ApiError(503, "合同共享盘路径尚未配置，回签合同未保存")
+        result = {"filename": filename, "orderNumber": order_no}
         extension = _extension(content)
         if extension is None:
             return SignedUploadItem(**result, status="failed", reason="仅支持 PDF、JPG、PNG 格式的回签合同")
-        if len(content) > MAX_BYTES:
-            return SignedUploadItem(**result, status="failed", reason="单个文件不能超过 10 MB")
+        if len(content) > max_bytes:
+            return SignedUploadItem(
+                **result, status="failed", reason=f"单个文件不能超过 {max_bytes // 1024 // 1024} MB"
+            )
         orders = (
-            self.directory.orders_by_number(item.orderNo)
-            if item.orderNo
-            else self._match(PurePath(item.filename).stem)
+            self.directory.orders_by_number(order_no) if order_no else self._match(PurePath(filename).stem)
         )
         if not orders:
             reason = (
                 "未找到该子采购单号，请核对后重试"
-                if item.orderNo
+                if order_no
                 else "未能从文件名识别子采购单号，请指定单号后重新上传"
             )
             return SignedUploadItem(**result, status="unmatched", reason=reason)
@@ -79,7 +89,7 @@ class SignedContractService:
             return SignedUploadItem(
                 **result, status="unmatched", reason="该子采购单尚未关联报关单，无法确定归档文件夹"
             )
-        return self._save(order, content, extension, item.filename, actor, result)
+        return self._save(order, content, extension, filename, actor, result)
 
     def _match(self, stem):
         """文件名中出现的子采购单号；一个单号包含另一个时取较长者（如 X-1 与 X-10）。"""

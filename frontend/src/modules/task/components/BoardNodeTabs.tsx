@@ -17,18 +17,20 @@ export function BoardNodeTabs({
   openTotal,
   value,
   onChange,
+  showOpenTotal = true,
 }: {
   nodes: BoardNode[];
   openTotal: number;
   value: TaskBoardQuery["node"];
   onChange: (node: TaskBoardQuery["node"]) => void;
+  showOpenTotal?: boolean;
 }) {
   return (
     <StageTabs
       label="按当前节点筛选任务"
       value={value}
       onChange={onChange}
-      total={{ label: "进行中任务", count: openTotal, hint: "未完成、未被替代" }}
+      total={showOpenTotal ? { label: "进行中任务", count: openTotal, hint: "未完成、未被替代" } : undefined}
       items={nodes.map((node) => ({
         key: node.key,
         label: node.label,

@@ -2,6 +2,14 @@
 // unshipped：未出库。自 2026-10-23 起拉取时即跳过，列表不再返回；保留类型以显示后端兜底拒绝。
 export type ReviewStatus = "pending" | "approved" | "unshipped";
 export type ReviewFilter = "all" | "pending" | "approved";
+export interface UnitPriceMargin {
+  // 后端按人民币报关单价与合并采购单价（含税总金额 / 总数量）比较，前端只展示。
+  margin?: string;
+  marginStatus?: "ok" | "negative" | "unavailable";
+  marginNote?: string;
+  declaredUnitPriceCny?: string;
+  combinedPurchaseUnitPrice?: string;
+}
 export interface PurchaseLine {
   id: string;
   name: string;
@@ -16,9 +24,12 @@ export interface PurchaseLine {
   currency: string;
   note: string;
   scope?: "declared" | "order";
+  members?: PurchaseLine[];
 }
-export interface CustomsLine {
+export interface CustomsLine extends UnitPriceMargin {
   id: string;
+  parent?: string;
+  originPlace?: string;
   lineNo: number;
   name: string;
   model: string;
@@ -29,12 +40,6 @@ export interface CustomsLine {
   currency: string;
   purchaseCount: number;
   purchaseLines: PurchaseLine[];
-  // 申报幅度由后端计算：（申报价 − 采购含税价）÷ 申报价；申报价按对应销售单汇率换算为人民币
-  margin?: string;
-  marginStatus?: "ok" | "negative" | "unavailable";
-  marginNote?: string;
-  declaredCny?: string;
-  purchaseTotal?: string;
 }
 export interface ComparisonGroup {
   currencyEvidenceSummary?: string[];
@@ -52,6 +57,7 @@ export interface ComparisonGroup {
   declaration: string;
   pl: string;
   company: string;
+  salesOrders?: string;
   customsCount: number;
   purchaseCount: number;
   customsLines: CustomsLine[];

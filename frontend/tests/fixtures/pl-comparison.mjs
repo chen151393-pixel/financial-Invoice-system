@@ -22,6 +22,7 @@ export function createPlComparisonState() {
     declaration: "合成真实报关号",
     pl: "PL-TEST",
     company: "合成申报公司",
+    salesOrders: "SO-TEST",
     customsCount: 1,
     purchaseCount: 1,
     warnings: [],
@@ -39,6 +40,8 @@ export function createPlComparisonState() {
       {
         id: "customs:0",
         lineNo: 1,
+        parent: "PO-TEST",
+        originPlace: "深圳",
         name: "合成相纸",
         model: "A4",
         quantity: "12.5000",

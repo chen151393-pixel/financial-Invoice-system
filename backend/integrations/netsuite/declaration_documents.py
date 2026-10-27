@@ -2,14 +2,15 @@
 
 RESTlet 约定（由 NS 侧提供，见本目录 README）：
 GET 参数 script、deploy、id（报关单内部 ID）、type（customs_declaration / sales_contract / invoice），
-返回 {"id": "<内部 ID>", "type": "<type>", "files": [{"filename": "...", "contentBase64": "<PDF>"}]}。
+files 项含 filename、contentBase64、可选 format（pdf 或 excel_xml）；旧响应默认 PDF。
 """
 
 import binascii
 
 from backend.core.errors import ApiError
 
-from .restlet_file import decode_pdf, fetch_json
+from .declaration_file import decode_file
+from .restlet_file import fetch_json
 
 RECORD_TYPE = "customrecord_swc_declare_record"
 REAL_NUMBER_FIELD = "custrecord_swc_realno"
@@ -27,7 +28,7 @@ def unavailable_reason(settings):
 
 
 def read_documents(ns, record_no, declaration_no, doc_type):
-    """返回 {ns_id, environment, files: [PDF 字节]}；身份或文件不符时拒绝，不保存部分结果。"""
+    """返回 {ns_id, environment, files: [{content, format, extension}]}；全部校验后返回。"""
     settings = ns.settings
     reason = unavailable_reason(settings)
     if reason:
@@ -60,13 +61,11 @@ def read_documents(ns, record_no, declaration_no, doc_type):
         files = data.get("files")
         if not isinstance(files, list) or len(files) > MAX_FILES:
             raise ValueError("unexpected files")
-        contents = [
-            decode_pdf(item.get("contentBase64") if isinstance(item, dict) else None) for item in files
-        ]
+        contents = [decode_file(item, doc_type) for item in files]
     except (ValueError, UnicodeError, binascii.Error):
-        raise ApiError(502, f"{label}返回的记录或 PDF 不完整，未保存文件") from None
+        raise ApiError(502, f"{label}返回的记录或文件格式无效、不完整，未保存文件") from None
     if not contents:
         raise ApiError(404, f"NS 中暂无该报关单的{label}文件，请在 NS 补齐后重试")
-    if sum(len(content) for content in contents) > TOTAL_LIMIT:
+    if sum(len(item["content"]) for item in contents) > TOTAL_LIMIT:
         raise ApiError(502, f"{label}文件合计超过 20 MB，未保存")
     return {"ns_id": ns_id, "environment": settings.account, "files": contents}

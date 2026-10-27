@@ -9,19 +9,14 @@ from pydantic import Field, field_validator, model_validator
 from backend.core.dto import StrictModel
 
 
-class TaskListQuery(StrictModel):
-    keyword: str = Field(default="", max_length=120)
-    account: str = Field(default="", max_length=100, pattern=r"^[a-zA-Z0-9_-]*$")
-    supplierId: str = Field(default="", max_length=20, pattern=r"^([1-9][0-9]*)?$")
-    groupBy: Literal["supplier", "declaration"] = "supplier"
-    status: Literal["current", "superseded", "all"] = "current"
+class TaskScopeQuery(StrictModel):
+    """工作台下钻与任务查询共用的报关单范围。"""
+
     # 业务状态按报关单汇总（报关单下当前任务中最慢的阶段）；空为不限
     stage: Literal["", "notify", "invoicing", "documents", "completed"] = ""
     # 报关单创建日期（NS 创建时间的中国日期），须成对填写
     createdFrom: date | None = Field(default=None, strict=False)
     createdTo: date | None = Field(default=None, strict=False)
-    page: int = Field(default=1, ge=1, le=100000)
-    pageSize: int = Field(default=20, ge=1, le=50)
 
     @model_validator(mode="after")
     def valid_dates(self):
@@ -32,8 +27,20 @@ class TaskListQuery(StrictModel):
         return self
 
 
-class TaskBoardQuery(StrictModel):
-    """采购开票任务台：只看未被替代的任务；node 为空表示全部进行中的任务。
+class TaskListQuery(TaskScopeQuery):
+    keyword: str = Field(default="", max_length=120)
+    account: str = Field(default="", max_length=100, pattern=r"^[a-zA-Z0-9_-]*$")
+    supplierId: str = Field(default="", max_length=20, pattern=r"^([1-9][0-9]*)?$")
+    groupBy: Literal["supplier", "declaration"] = "supplier"
+    status: Literal["current", "superseded", "all"] = "current"
+    page: int = Field(default=1, ge=1, le=100000)
+    pageSize: int = Field(default=20, ge=1, le=50)
+
+
+class TaskBoardQuery(TaskScopeQuery):
+    """开票跟进：只看未被替代的任务；默认展示进行中的任务。
+
+    stage 下钻且 node 为空时，包含该报关单范围内已完成的任务。
 
     上线后只同步 NS 正式环境，任务台不提供 NS 环境筛选。
     """

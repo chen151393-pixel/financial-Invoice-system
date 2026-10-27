@@ -18,12 +18,16 @@ export function DataTable<Row>({
   rows,
   rowKey,
   minWidth = 720,
+  density = "default",
+  rowTone,
 }: {
   label: string;
   columns: readonly Column<Row>[];
   rows: readonly Row[];
   rowKey: (row: Row) => string;
   minWidth?: number;
+  density?: "default" | "compact";
+  rowTone?: (row: Row) => "accent" | undefined;
 }) {
   return (
     <div
@@ -33,7 +37,7 @@ export function DataTable<Row>({
       role="region"
       aria-label={`${label}，可横向滚动`}
     >
-      <table className="ui-table" style={{ minWidth }}>
+      <table className="ui-table" data-density={density} style={{ minWidth }}>
         <colgroup>
           {columns.map((column) => (
             <col key={column.key} style={column.width ? { width: column.width } : undefined} />
@@ -50,7 +54,7 @@ export function DataTable<Row>({
         </thead>
         <tbody>
           {rows.map((row) => (
-            <tr key={rowKey(row)}>
+            <tr key={rowKey(row)} data-tone={rowTone?.(row)}>
               {columns.map((column) => (
                 <td key={column.key} data-align={column.align}>
                   {column.render(row)}

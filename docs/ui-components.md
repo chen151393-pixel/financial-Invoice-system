@@ -43,11 +43,15 @@ import { Card, CardHeader, CardContent, MetricCard, MetricGrid, Badge } from "..
 
 ## 页面使用情况（2026-10-26）
 
-已从组件库组合：采购开票任务台、开票跟进列表、任务详情概览、财务核对（查询栏、状态标签、三级展开徽标）、比对审核队列、进项发票、供应商档案、发票工作台（筛选与待办标签）、NS 回写列表（筛选与状态标签）。外部群导入、数据同步、采购报关联查、发票比对详情仍为原页面样式，修改时迁移。
+已从组件库组合：采购开票任务台、开票跟进列表、任务详情概览、财务核对（查询栏、状态标签、紧凑来源对照表）、比对审核队列、进项发票、供应商档案、发票工作台（待办标签）、NS 回写列表（筛选与状态标签）。外部群导入、数据同步、采购报关联查、发票比对详情仍为原页面样式，修改时迁移。
+
+## 紧凑表格与行底色
+
+`DataTable` 默认外观不变；`density="compact"` 使用 12px 正文与紧凑单元格留白，`rowTone(row)` 返回 `"accent"` 时使用项目浅蓝对照底色。调用方同时提供来源文字，不能只用底色区分。列宽与数值对齐仍由 `columns` 控制，顺序由后端数据决定。`/ui-kit` 已增加紧凑表格示例。
 
 ## 首个使用者
 
-采购开票任务台 `/tasks/board`（`frontend/src/modules/task/pages/TaskBoardPage.tsx`）：`FilterBar`、`SectionTitle`、`StageTabs`（节点分区，2026-10-26 由指标卡改为流程带）、`Card`+`Badge`+`Stepper`+`Progress`+`Alert`（任务卡片）、`Skeleton`/`EmptyState`/`ErrorState`、`Pagination`。
+开票跟进 `/tasks`（原采购开票任务台，`frontend/src/modules/task/pages/TaskBoardPage.tsx`）：`FilterBar`、`SectionTitle`、`StageTabs`（节点分区）、`Card`+`CardContent`（合并任务面板）、`Badge`+`Stepper`+`Progress`+`Alert`（每个任务的状态与默认展开流程）、`Skeleton`/`EmptyState`/`ErrorState`、`Pagination`。旧 `/tasks/board` 重定向到 `/tasks`。
 
 ## 验证
 

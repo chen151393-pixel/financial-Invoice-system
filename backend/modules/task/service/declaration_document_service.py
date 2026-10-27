@@ -88,7 +88,7 @@ class DeclarationDocumentService:
             head = self.directory.declarations([declaration_id]).get(declaration_id)
             if head is None:
                 raise ApiError(404, "报关单不存在")
-            files = self._download(head, doc_type)
+            files = self._download(head, doc_type, row["files"] or [])
         except ApiError as error:
             self._fail(row["id"], error.message)
             raise
@@ -108,13 +108,28 @@ class DeclarationDocumentService:
                 503, "文件已保存到共享盘，但记录保存失败；请重试，同内容文件不会重复覆盖"
             ) from None
 
-    def _download(self, head, doc_type):
+    def _download(self, head, doc_type, archived_files):
         # 网络下载与写共享盘都在数据库事务之外
         result = self.contracts.download_declaration(head["record_no"], head["declaration_no"], doc_type)
         label, count = DECLARATION_DOCUMENTS[doc_type], len(result["files"])
+        planned = [
+            {
+                "filename": document_filename(label, head["record_no"], index, count, item["extension"]),
+                "sha256": hashlib.sha256(item["content"]).hexdigest(),
+                "content": item["content"],
+            }
+            for index, item in enumerate(result["files"], 1)
+        ]
+        # 换格式或份数也属于原件变化；须在写任何文件之前核对整组，不能绕过同名保护。
+        if archived_files and [(f["filename"], f["sha256"]) for f in archived_files] != [
+            (f["filename"], f["sha256"]) for f in planned
+        ]:
+            raise ApiError(
+                409, "重新下载的文件与已归档原件不同（同名但内容不同、格式或份数变化），未覆盖；请人工核对"
+            )
         saved = []
-        for index, content in enumerate(result["files"], 1):
-            filename = document_filename(label, head["record_no"], index, count)
+        for item in planned:
+            filename, content = item["filename"], item["content"]
             path, name = self.archive.save_file(head, filename, content)
             saved.append({"filename": name, "sha256": hashlib.sha256(content).hexdigest(), "path": path})
         return {"ns_id": result["ns_id"], "files": saved}

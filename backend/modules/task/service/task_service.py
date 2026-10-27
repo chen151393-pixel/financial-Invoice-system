@@ -47,11 +47,9 @@ class TaskService:
         try:
             with self.engine.connect() as connection:
                 if query.stage:
-                    statuses = task_dao.declaration_statuses(connection, query.account)
-                    staged = {
-                        key for key, value in statuses.items() if declaration_stage(value) == query.stage
-                    }
-                    declaration_ids = staged if declaration_ids is None else declaration_ids & staged
+                    declaration_ids = self.filter_declarations_by_stage(
+                        connection, query.stage, declaration_ids, query.account
+                    )
                 where = task_dao.conditions(
                     scope=query.status,
                     account=query.account,
@@ -84,6 +82,12 @@ class TaskService:
             pageSize=query.pageSize,
             pages=max(1, (total + query.pageSize - 1) // query.pageSize),
         )
+
+    def filter_declarations_by_stage(self, connection, stage, declaration_ids, account=""):
+        """两种查询入口共用报关单最慢阶段口径，不按单个任务状态替代。"""
+        statuses = task_dao.declaration_statuses(connection, account)
+        staged = {key for key, value in statuses.items() if declaration_stage(value) == stage}
+        return staged if declaration_ids is None else declaration_ids & staged
 
     def supplier_options(self, supplier_ids):
         found = self.directory.describe(supplier_ids=supplier_ids)["suppliers"] if supplier_ids else {}

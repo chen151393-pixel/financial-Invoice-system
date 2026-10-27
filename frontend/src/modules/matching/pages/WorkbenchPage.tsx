@@ -1,5 +1,4 @@
 import { Button } from "../../../shared/components/Button";
-import { WorkbenchFilters } from "../components/WorkbenchFilters";
 import { WorkbenchMetrics } from "../components/WorkbenchMetrics";
 import { WorkbenchSuppliers } from "../components/WorkbenchSuppliers";
 import { WorkbenchTodos } from "../components/WorkbenchTodos";
@@ -29,16 +28,6 @@ export function WorkbenchPage({ state }: { state: ReturnType<typeof useWorkbench
       )}
       {state.data && (
         <>
-          <WorkbenchFilters
-            value={{
-              supplierId: state.query.supplierId,
-              createdFrom: state.query.createdFrom,
-              createdTo: state.query.createdTo,
-            }}
-            suppliers={state.data.supplierOptions ?? []}
-            busy={state.loading}
-            onApply={(filters) => state.change(filters)}
-          />
           <WorkbenchMetrics
             stages={state.data.stages ?? []}
             noTaskCount={state.data.noTaskCount ?? 0}

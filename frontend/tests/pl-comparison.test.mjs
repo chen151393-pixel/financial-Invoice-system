@@ -11,8 +11,8 @@ let server,
   BatchApproveDialog,
   CustomsRows,
   ReviewDialog,
+  PurchaseDialog,
   PlSourceComparison,
-  PurchaseRows,
   FinanceSearchForm,
   Pagination,
   viewPath,
@@ -33,13 +33,14 @@ before(async () => {
   ({ BatchApproveDialog } = await server.ssrLoadModule(
     "/src/modules/review/components/BatchApproveDialog.tsx",
   ));
-  ({ ReviewDialog } = await server.ssrLoadModule("/src/modules/review/components/ReviewDialog.tsx"));
+  ({ ReviewDialog, PurchaseDialog } = await server.ssrLoadModule(
+    "/src/modules/review/components/ReviewDialog.tsx",
+  ));
   ({ PlSourceComparison } = await server.ssrLoadModule(
     "/src/modules/source/components/PlSourceComparison.tsx",
   ));
   ({ viewPath } = await server.ssrLoadModule("/src/app/paths.ts"));
   ({ navigation } = await server.ssrLoadModule("/src/app/navigation.tsx"));
-  ({ PurchaseRows } = await server.ssrLoadModule("/src/modules/review/components/PurchaseRows.tsx"));
   ({ FinanceSearchForm } = await server.ssrLoadModule(
     "/src/modules/review/components/FinanceSearchForm.tsx",
   ));
@@ -65,12 +66,10 @@ const pagination = (props = {}) =>
     onPageSizeChange() {},
     ...props,
   });
-const customs = (value, expandedRows = []) =>
+const customs = (value) =>
   renderToStaticMarkup(
     createElement(CustomsRows, {
       group: value,
-      expandedRows,
-      toggleRow() {},
       selectLine() {},
     }),
   );
@@ -137,30 +136,47 @@ test("默认只展示报关单头，PL及公司同一行且审核按钮位于最
   assert.match(html, /真实报关单号/);
   assert.match(html, /PL-TEST/);
   assert.match(html, /合成申报公司/);
+  assert.match(html, /销售单号/);
+  assert.match(html, /SO-TEST/);
+  assert.match(html, /申报抬头/);
   assert.match(html, /aria-label="审核通过：CDTEST001"/);
   assert.match(html, /aria-expanded="false"/);
   assert.doesNotMatch(html, /SUB-TEST|fr-customs-table|财务审核/);
 });
 test("明细按后端显式树展示，数量和金额保留原十进制字符串", () => {
-  const html = customs(group(), ["customs:0"]);
+  const html = customs(group());
   for (const text of ["SUB-TEST", "12.5000", "9007199254740993.01", "16.2500", "USD", "CNY"])
     assert.ok(html.includes(text));
   assert.doesNotMatch(html, /财务审核|待审核/);
-  // 数值列只在同一层内对齐：只有报关行使用表格列宽，子采购为自带字段布局的明细行，不共用报关行列宽
-  const columns = [...html.matchAll(/<colgroup>(.*?)<\/colgroup>/g)].map((match) => match[1]);
-  assert.equal(columns.length, 1);
-  assert.match(html, /<ul class="fr-purchase-list"[^>]*>.*<dl class="fr-purchase-fields">/s);
-  // 第二层、第三层各自缩进一级，第三层嵌套在第二层内
-  const customsLevel = html.indexOf("fr-level fr-level--customs");
-  const purchaseLevel = html.indexOf("fr-level fr-level--purchase");
-  assert.ok(customsLevel >= 0 && purchaseLevel > customsLevel);
+  const tableRows = [...html.matchAll(/<tr\b[^>]*>(.*?)<\/tr>/gs)];
+  assert.equal(tableRows.length, 3, "一行公共表头、一行报关、一行采购");
+  assert.equal((html.match(/<colgroup>/g) || []).length, 1);
+  for (const row of tableRows) assert.equal((row[1].match(/<(?:td|th)\b/g) || []).length, 12);
+  assert.match(tableRows[2][0], /data-tone="accent"/);
+  assert.doesNotMatch(html, /aria-expanded|hidden=|fr-purchase-list|<dl/);
 });
-test("第二层默认收起，多个报关单的父子行控制ID独立", () => {
-  const a = group(),
-    b = { ...group(), id: "102", recordNumber: "CDTEST002" };
-  assert.match(customs(a), /aria-expanded="false"/);
-  assert.match(customs(a), /hidden="" id="purchases-101-customs:0"/);
-  assert.match(customs(b), /aria-controls="purchases-102-customs:0"/);
+test("报关行后紧跟它的全部采购行，未关联行保留且明确提示", () => {
+  const item = group();
+  item.customsLines[0].purchaseLines.push({
+    ...item.customsLines[0].purchaseLines[0],
+    id: "p2",
+    child: "SUB-SECOND",
+  });
+  item.customsLines.push({
+    ...item.customsLines[0],
+    id: "customs:1",
+    lineNo: 2,
+    name: "第二报关商品",
+    purchaseLines: [],
+    purchaseCount: 0,
+  });
+  item.unlinkedLines = [{ ...item.customsLines[0].purchaseLines[0], id: "p3", child: "SUB-UNLINKED" }];
+  const html = customs(item);
+  assert.ok(html.indexOf("SUB-TEST") < html.indexOf("SUB-SECOND"));
+  assert.ok(html.indexOf("SUB-SECOND") < html.indexOf("第二报关商品"));
+  assert.ok(html.indexOf("第二报关商品") < html.indexOf("SUB-UNLINKED"));
+  assert.match(html, /有子采购行尚未关联报关行/);
+  assert.doesNotMatch(html, /aria-expanded|<tr[^>]* hidden=/);
 });
 test("后端不允许审核时禁用按钮并展示实际原因", () => {
   const state = createPlComparisonState();
@@ -239,37 +255,18 @@ test("财务人工核对包含单头关联的采购行，不增加关联核实�
   assert.match(html, /9007199254740993.01/);
   assert.match(html, /子单数量|订单金额/);
   assert.doesNotMatch(html, /关联核实|重新核实NS/);
-  const rowHtml = customs(item, ["customs:0"]);
+  const rowHtml = customs(item);
   assert.doesNotMatch(rowHtml, /由财务一并核对|完成关联核实后才可审核|关联子采购明细（|展开关联子采购/);
-  assert.doesNotMatch(rowHtml, /associated-purchases|SUB-TEST|aria-expanded/);
-  assert.doesNotMatch(customs(item), /SUB-TEST/);
+  assert.match(rowHtml, /SUB-TEST/);
+  assert.match(rowHtml, /未关联报关行的子采购/);
+  assert.doesNotMatch(rowHtml, /aria-expanded/);
   assert.doesNotMatch(render(createPlComparisonState()), /待核实/);
 });
 
-test("点击报关行仅展开该行下的采购，多行独立展开，不混入整单未定位明细", () => {
-  const item = group();
-  const first = item.customsLines[0];
-  first.purchaseLines[0].scope = "order";
-  item.customsLines.push({
-    ...first,
-    id: "customs:1",
-    lineNo: 2,
-    name: "相纸",
-    purchaseLines: [{ ...first.purchaseLines[0], id: "paper", child: "SUB-PAPER", name: "相纸" }],
-  });
-  item.unlinkedLines = [{ ...first.purchaseLines[0], id: "unknown", child: "UNLOCATED" }];
-  const html = customs(item, [first.id]);
-  assert.match(html, /<tr id="purchases-101-customs:0"/);
-  assert.match(html, /<tr hidden="" id="purchases-101-customs:1"/);
-  assert.doesNotMatch(html, /UNLOCATED|associated-purchases|本次采购金额/);
-  const firstPurchase = html.indexOf('id="purchases-101-customs:0"');
-  const nextCustoms = html.indexOf('aria-controls="purchases-101-customs:1"');
-  const firstSection = html.slice(firstPurchase, nextCustoms);
-  assert.match(firstSection, /SUB-TEST|订单金额/);
-  assert.doesNotMatch(firstSection, /SUB-PAPER/);
-  assert.ok(html.indexOf("SUB-PAPER") > nextCustoms);
-  const both = customs(item, [first.id, "customs:1"]);
-  assert.doesNotMatch(both, /<tr hidden/);
+test("报关单暂无明细时显示明确空状态", () => {
+  const item = { ...group(), customsLines: [], unlinkedLines: [] };
+  assert.match(customs(item), /暂无报关与采购明细/);
+  assert.doesNotMatch(customs(item), /<table|aria-expanded/);
 });
 test("查询加载、空结果、失败可恢复，后端提示可见", () => {
   assert.match(render({ kind: "idle" }), /填写CD编号/);
@@ -294,19 +291,19 @@ test("本地自动列表标明来源账套并保持单头收起，不显示演�
   assert.doesNotMatch(html, /重置示例|演示数据|NS读取/);
 });
 
-test("未分摊的订单行明确标为子单数量和订单金额，不冒充本次报关范围", () => {
-  const html = renderToStaticMarkup(
-    createElement(PurchaseRows, {
-      lines: group().customsLines[0].purchaseLines,
-      label: "测试单",
-      scope: "order",
-      selectLine() {},
-    }),
-  );
-  assert.match(html, /子单数量/);
-  assert.match(html, /订单金额/);
-  assert.doesNotMatch(html, /本次数量|本次采购金额|待审核/);
-  assert.match(html, /9007199254740993.01/);
+test("订单口径、缺失金额和缺失单位不冒充报关口径或零值", () => {
+  const item = group();
+  item.customsLines[0].purchaseLines[0] = {
+    ...item.customsLines[0].purchaseLines[0],
+    scope: "order",
+    amount: "",
+    unit: "",
+  };
+  const html = customs(item);
+  assert.match(html, /订单口径/);
+  assert.match(html, /aria-label="子单数量"/);
+  assert.match(html, /aria-label="订单金额"><strong>未提供/);
+  assert.doesNotMatch(html, /本次数量|本次采购金额/);
 });
 
 test("财务搜索使用单一关键字与供应商筛选，支持刷新；上线只有正式环境，不提供 NS 账套筛选", () => {
@@ -410,6 +407,43 @@ test("任务差异结束遵循后端待复核限制并展示原因", async () =>
   assert.match(html, /按差异结束/);
 });
 
+test("采购合并行展示后端合计，查看弹窗保留原始数量单价金额", () => {
+  const item = group();
+  const original = item.customsLines[0].purchaseLines[0];
+  const merged = {
+    ...original,
+    id: "group-1",
+    quantity: "10",
+    amount: "180",
+    price: "18",
+    members: [
+      { ...original, id: "1", quantity: "2", amount: "20", price: "10" },
+      { ...original, id: "2", quantity: "8", amount: "160", price: "20" },
+    ],
+  };
+  item.customsLines[0].purchaseLines = [merged];
+  assert.match(customs(item), /合并 2 行/);
+  const html = renderToStaticMarkup(createElement(PurchaseDialog, { line: merged, onClose() {} }));
+  assert.match(html, /合并前采购明细/);
+  assert.match(html, /原始数量/);
+  assert.match(html, /原含税金额/);
+  for (const value of ["180", "160", "20", "18"]) assert.ok(html.includes(value));
+});
+
+test("单价异常由后端判定，舍入为零仍突出显示", () => {
+  const item = group();
+  Object.assign(item.customsLines[0], {
+    margin: "0.00%",
+    marginStatus: "negative",
+    marginNote: "报关单价低于采购价",
+    declaredUnitPriceCny: "237.8695",
+    combinedPurchaseUnitPrice: "237.87",
+  });
+  assert.match(customs(item), /data-tone="danger"[\s\S]*报关单价低于采购价/);
+  item.customsLines[0].marginStatus = "ok";
+  assert.doesNotMatch(customs(item), /data-tone="danger"|报关单价低于采购价/);
+});
+
 test("报关行最后一列显示后端计算的申报幅度；负数与无法计算都用文字说明", () => {
   const item = group();
   item.customsLines = [
@@ -417,9 +451,9 @@ test("报关行最后一列显示后端计算的申报幅度；负数与无法�
       ...item.customsLines[0],
       margin: "-12.68%",
       marginStatus: "negative",
-      marginNote: "采购价高于申报价",
-      declaredCny: "106.5",
-      purchaseTotal: "120",
+      marginNote: "报关单价低于采购价",
+      declaredUnitPriceCny: "10.65",
+      combinedPurchaseUnitPrice: "12",
     },
     {
       ...item.customsLines[0],
@@ -432,6 +466,7 @@ test("报关行最后一列显示后端计算的申报幅度；负数与无法�
   ];
   const html = customs(item);
   assert.match(html, /申报幅度/);
-  assert.match(html, /fr-margin--negative[\s\S]*-12.68%[\s\S]*采购价高于申报价 · 申报 106.5 \/ 采购 120/);
+  assert.match(html, /fr-margin--negative[\s\S]*-12.68%[\s\S]*data-tone="danger"[\s\S]*报关单价低于采购价/);
+  assert.match(html, /报关单价 10.65 \/ 合并采购单价 12 元/);
   assert.match(html, /fr-margin--unavailable[\s\S]*—[\s\S]*单位不一致，不计算申报幅度/);
 });

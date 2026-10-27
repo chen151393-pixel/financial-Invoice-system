@@ -10,23 +10,19 @@ const STATUS_TONE: Record<string, Tone> = { approved: "success", pending: "warni
 export function DeclarationRow({
   group,
   open,
-  expandedRows,
   checked,
   checkable,
   onToggle,
-  onToggleRow,
   onCheck,
   onReview,
   onSelectLine,
 }: {
   group: ComparisonGroup;
   open: boolean;
-  expandedRows: string[];
   checked: boolean;
   // 页面提供批量审核时才显示勾选框
   checkable: boolean;
   onToggle: () => void;
-  onToggleRow: (id: string) => void;
   onCheck: (checked: boolean) => void;
   onReview: () => void;
   onSelectLine: (line: PurchaseLine) => void;
@@ -67,6 +63,7 @@ export function DeclarationRow({
           {group.account && <small>NS {group.account}</small>}
         </td>
         <td>{group.company || "未提供"}</td>
+        <td>{group.salesOrders || "未提供"}</td>
         <td>
           {group.customsCount} 条报关行<small>{group.purchaseCount} 条子采购行</small>
         </td>
@@ -88,16 +85,11 @@ export function DeclarationRow({
         </td>
       </tr>
       <tr id={`declaration-${group.id}`} className="fr-declaration-detail" hidden={!open}>
-        <td colSpan={8}>
+        <td colSpan={9}>
           {open && (
             <>
               {review.reason && <p className="fr-review-reason">{review.reason}</p>}
-              <CustomsRows
-                group={group}
-                expandedRows={expandedRows}
-                toggleRow={onToggleRow}
-                selectLine={onSelectLine}
-              />
+              <CustomsRows group={group} selectLine={onSelectLine} />
             </>
           )}
         </td>

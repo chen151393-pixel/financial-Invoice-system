@@ -330,6 +330,9 @@ button.ui-metric:focus-visible {
   padding: 0;
   list-style: none;
 }
+.ui-stages__list:only-child {
+  grid-column: 1 / -1;
+}
 .ui-stages__list li {
   position: relative;
   display: flex;
@@ -827,6 +830,20 @@ button.ui-metric:focus-visible {
 }
 .ui-table [data-align="center"] {
   text-align: center;
+}
+.ui-table[data-density="compact"] {
+  font-size: 12px;
+  line-height: 1.6;
+}
+.ui-table[data-density="compact"] th,
+.ui-table[data-density="compact"] td {
+  padding: var(--space-small);
+}
+.ui-table tbody tr[data-tone="accent"] {
+  background: var(--color-table-purchase);
+}
+.ui-table tbody tr[data-tone="accent"]:hover {
+  background: color-mix(in srgb, var(--color-table-purchase) 80%, var(--color-primary-soft));
 }
 
 /* Charts */

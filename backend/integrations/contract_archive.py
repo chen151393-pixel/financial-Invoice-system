@@ -1,6 +1,6 @@
 """采购合同共享盘归档；先完整写临时文件，再无覆盖地发布。
 
-目录（2026-10-23 业务确认）：<根目录>/<YYYY年MM月>/<CD号_真实报关单号>/子采购合同_<子采购单号>_<供应商>.pdf，
+目录（2026-10-26 业务确认）：<根目录>/<YYYY年MM月>/<CD号_真实报关单号>/<子采购单号>_<供应商>_<真实报关单号>.pdf，
 月份取 NS 报关单创建时间（中国时间）。同一报关单的其他单据以后放入同一文件夹，文件名以单据类型开头区分。
 """
 
@@ -27,13 +27,11 @@ def _bounded(name, message):
     return name
 
 
-def contract_filename(order_number, supplier):
-    parts = [_clean(order_number), _clean(supplier)]
+def contract_filename(order_number, supplier, declaration_no):
+    parts = [_clean(order_number), _clean(supplier), _clean(declaration_no)]
     if not all(parts):
-        raise ApiError(409, "子采购单编号或供应商名称缺失，无法生成合同文件名")
-    return _bounded(
-        "子采购合同_" + "_".join(parts) + ".pdf", "合同文件名过长，请核对子采购单编号及供应商名称"
-    )
+        raise ApiError(409, "子采购单编号、供应商名称或真实报关单号缺失，无法生成合同文件名")
+    return _bounded("_".join(parts) + ".pdf", "合同文件名过长，请核对子采购单编号、供应商名称及真实报关单号")
 
 
 def document_filename(label, record_no, index=1, count=1, extension=".pdf"):
@@ -66,7 +64,9 @@ class ContractArchive:
 
     def save(self, declaration, order_number, supplier, content):
         """子采购合同；返回 (完整路径, 文件名)。"""
-        return self.save_file(declaration, contract_filename(order_number, supplier), content)
+        return self.save_file(
+            declaration, contract_filename(order_number, supplier, declaration.get("declaration_no")), content
+        )
 
     def save_file(self, declaration, filename, content):
         """declaration：{record_no, declaration_no, created_at}；把一个文件存入该报关单文件夹，返回 (完整路径, 文件名)。"""

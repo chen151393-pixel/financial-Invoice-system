@@ -1,137 +1,164 @@
-import { PurchaseRows } from "./PurchaseRows";
-import type { ComparisonGroup as Group, PurchaseLine as Line } from "../types";
-import { FinanceIcon as Icon } from "./FinanceIcon";
+import { Alert, Button, DataTable, EmptyState, type Column } from "../../../shared/components/ui";
+import type { ComparisonGroup, CustomsLine, PurchaseLine } from "../types";
+import { UnitPriceMargin } from "./UnitPriceMargin";
 import "./review-levels.css";
 
-// 第二层列宽只在报关行内对齐，与第三层子采购行互不共用。
-const COLUMNS = [22, 13, 9, 6, 9, 12, 11, 18];
+type ComparisonRow =
+  | { kind: "customs"; line: CustomsLine; key: string }
+  | { kind: "purchase"; line: PurchaseLine; key: string; customsLineNo?: number };
 
-/** 第二层：报关行，相对报关单缩进一级；展开后显示第三层子采购行。 */
+/** 报关行与它关联的采购行连续展示，共用列宽；不推断关联、不汇总金额。 */
 export function CustomsRows({
   group,
-  expandedRows,
-  toggleRow,
   selectLine,
 }: {
-  group: Group;
-  expandedRows: string[];
-  toggleRow: (id: string) => void;
-  selectLine: (line: Line) => void;
+  group: ComparisonGroup;
+  selectLine: (line: PurchaseLine) => void;
 }) {
+  const rows: ComparisonRow[] = group.customsLines.flatMap((line) => [
+    { kind: "customs" as const, line, key: line.id },
+    ...line.purchaseLines.map((purchase) => ({
+      kind: "purchase" as const,
+      line: purchase,
+      key: `${line.id}-${purchase.id}`,
+      customsLineNo: line.lineNo,
+    })),
+  ]);
+  rows.push(
+    ...group.unlinkedLines.map((line) => ({ kind: "purchase" as const, line, key: `unlinked-${line.id}` })),
+  );
+
+  const columns: Column<ComparisonRow>[] = [
+    {
+      key: "source",
+      header: "来源",
+      width: "6%",
+      render: (row) =>
+        row.kind === "customs" ? (
+          <strong>报关 {row.line.lineNo}</strong>
+        ) : (
+          <span
+            aria-label={
+              row.customsLineNo ? `报关第 ${row.customsLineNo} 行关联子采购` : "未关联报关行的子采购"
+            }
+          >
+            子采购<small>{row.line.scope === "order" ? "订单口径" : "本次口径"}</small>
+            {Boolean(row.line.members?.length) && <small>合并 {row.line.members?.length} 行</small>}
+          </span>
+        ),
+    },
+    { key: "parent", header: "母采购单号", width: "11%", render: ({ line }) => line.parent || "—" },
+    {
+      key: "child",
+      header: "子采购单号",
+      width: "12%",
+      render: (row) => (row.kind === "purchase" ? row.line.child || "—" : "—"),
+    },
+    {
+      key: "origin",
+      header: "货源地",
+      width: "6%",
+      render: (row) => (row.kind === "customs" ? row.line.originPlace || "—" : "—"),
+    },
+    {
+      key: "supplier",
+      header: "供应商",
+      width: "12%",
+      render: (row) => (row.kind === "purchase" ? row.line.supplier || "未提供" : "—"),
+    },
+    { key: "name", header: "开票品名", width: "8%", render: ({ line }) => line.name || "未提供" },
+    { key: "model", header: "规格型号", width: "10%", render: ({ line }) => line.model || "—" },
+    {
+      key: "quantity",
+      header: "数量",
+      width: "7%",
+      align: "right",
+      render: (row) => (
+        <span
+          aria-label={
+            row.kind === "customs" ? "申报数量" : row.line.scope === "order" ? "子单数量" : "本次数量"
+          }
+        >
+          {row.line.quantity || "未提供"}
+        </span>
+      ),
+    },
+    {
+      key: "unit",
+      header: "单位",
+      width: "4%",
+      align: "center",
+      render: ({ line }) => line.unit || "未提供",
+    },
+    {
+      key: "price",
+      header: "单价",
+      width: "6%",
+      align: "right",
+      render: (row) => (
+        <span aria-label={row.kind === "customs" ? "申报单价" : "采购含税单价"}>
+          {row.line.price || "未提供"}
+        </span>
+      ),
+    },
+    {
+      key: "amount",
+      header: "金额",
+      width: "8%",
+      align: "right",
+      render: (row) => (
+        <span
+          aria-label={
+            row.kind === "customs" ? "报关金额" : row.line.scope === "order" ? "订单金额" : "本次采购金额"
+          }
+        >
+          <strong>{row.line.amount || "未提供"}</strong>
+          <small>{row.line.currency || "未提供币种"}</small>
+        </span>
+      ),
+    },
+    {
+      key: "action",
+      header: "申报幅度（单价）/ 操作",
+      width: "10%",
+      align: "right",
+      render: (row) => (
+        <>
+          {row.kind === "customs" && <UnitPriceMargin line={row.line} />}
+          {row.kind === "purchase" && (
+            <Button
+              size="sm"
+              aria-label={`查看明细：${row.line.name} ${row.line.child}`}
+              onClick={() => selectLine(row.line)}
+            >
+              查看
+            </Button>
+          )}
+        </>
+      ),
+    },
+  ];
+
   return (
-    <div className="fr-level fr-level--customs">
-      <div
-        className="fr-table-scroll"
-        role="region"
-        aria-label={`${group.recordNumber} 报关行，可横向滚动`}
-        // eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex -- 宽表格需要键盘聚焦后用方向键滚动，保持内部原生表格语义，与正式核对页一致。
-        tabIndex={0}
-      >
-        <table className="fr-customs-table">
-          <caption className="fr-sr-only">
-            {group.recordNumber} 的报关明细，展开品名查看对应子采购订单行
-          </caption>
-          <colgroup>
-            {COLUMNS.map((width, index) => (
-              <col key={index} style={{ width: `${width}%` }} />
-            ))}
-          </colgroup>
-          <thead>
-            <tr>
-              <th scope="col" className="fr-toggle-heading">
-                报关行 / 商品品名
-              </th>
-              <th scope="col">规格型号</th>
-              <th scope="col" className="number">
-                申报数量
-              </th>
-              <th scope="col" className="fr-unit">
-                单位
-              </th>
-              <th scope="col" className="number">
-                申报单价
-              </th>
-              <th scope="col" className="number">
-                报关金额
-              </th>
-              <th scope="col">关联采购</th>
-              <th scope="col" className="number">
-                申报幅度
-              </th>
-            </tr>
-          </thead>
-          {group.customsLines.map((row) => {
-            const expanded = expandedRows.includes(row.id);
-            const canExpand = row.purchaseCount > 0;
-            const label = (
-              <>
-                <span className={`fr-chevron ${expanded ? "open" : ""}`} aria-hidden="true">
-                  {canExpand && <Icon kind="chevron" />}
-                </span>
-                <span className="fr-line-number">{row.lineNo}</span>
-                <strong>{row.name}</strong>
-              </>
-            );
-            return (
-              <tbody key={row.id}>
-                <tr className={`fr-customs-row ${expanded ? "is-expanded" : ""}`}>
-                  <th scope="row">
-                    {canExpand ? (
-                      <button
-                        className="fr-row-toggle"
-                        aria-expanded={expanded}
-                        aria-controls={`purchases-${group.id}-${row.id}`}
-                        aria-label={`${expanded ? "收起" : "展开"}报关行：${row.name}（${group.recordNumber} 第 ${row.lineNo} 行）`}
-                        onClick={() => toggleRow(row.id)}
-                      >
-                        {label}
-                      </button>
-                    ) : (
-                      <div className="fr-row-label">{label}</div>
-                    )}
-                  </th>
-                  <td>{row.model}</td>
-                  <td className="number">{row.quantity || "未提供"}</td>
-                  <td className="fr-unit">{row.unit || "未提供"}</td>
-                  <td className="number">{row.price || "未提供"}</td>
-                  <td className="number">
-                    <strong>{row.amount}</strong>
-                    <small>{row.currency || "未提供币种"}</small>
-                  </td>
-                  <td>
-                    <span className="fr-related-count">{row.purchaseCount} 条子采购行</span>
-                  </td>
-                  <td className={`number fr-margin fr-margin--${row.marginStatus ?? "unavailable"}`}>
-                    <strong>{row.margin || "—"}</strong>
-                    {row.marginStatus === "unavailable" ? (
-                      <small>{row.marginNote || "无法计算"}</small>
-                    ) : (
-                      <small>
-                        {row.marginNote ? `${row.marginNote} · ` : ""}申报 {row.declaredCny} / 采购{" "}
-                        {row.purchaseTotal} 元
-                      </small>
-                    )}
-                  </td>
-                </tr>
-                {row.purchaseCount > 0 && (
-                  <tr hidden={!expanded} id={`purchases-${group.id}-${row.id}`} className="fr-expanded-row">
-                    <td colSpan={COLUMNS.length}>
-                      <div className="fr-level fr-level--purchase">
-                        <PurchaseRows
-                          lines={row.purchaseLines}
-                          label={row.name}
-                          scope={row.purchaseLines[0]?.scope ?? "declared"}
-                          selectLine={selectLine}
-                        />
-                      </div>
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            );
-          })}
-        </table>
-      </div>
+    <div className="fr-comparison-lines">
+      {group.unlinkedLines.length > 0 && (
+        <Alert tone="warning" title="有子采购行尚未关联报关行">
+          未关联明细列在表格末尾，请核实来源关联。
+        </Alert>
+      )}
+      {rows.length ? (
+        <DataTable
+          label={`${group.recordNumber} 报关与采购对照`}
+          rows={rows}
+          columns={columns}
+          rowKey={(row) => row.key}
+          rowTone={(row) => (row.kind === "purchase" ? "accent" : undefined)}
+          density="compact"
+          minWidth={1320}
+        />
+      ) : (
+        <EmptyState title="暂无报关与采购明细" description="当前报关单尚未返回明细数据。" />
+      )}
     </div>
   );
 }

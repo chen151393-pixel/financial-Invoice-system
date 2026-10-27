@@ -62,11 +62,6 @@ export const navigation: readonly SidebarGroup<View>[] = [
         icon: <MenuIcon path="M5 3h14v18H5z M8 8h8 M8 12h8 M8 16h5" />,
       },
       {
-        id: "task-board",
-        label: "采购任务台",
-        icon: <MenuIcon path="M4 4h4v16H4z M10 4h4v10h-4z M16 4h4v6h-4z" />,
-      },
-      {
         id: "pl",
         label: "采购报关联查",
         icon: <MenuIcon path="M3 4h18v16H3z M3 9h18 M3 14h18 M9 4v16" />,

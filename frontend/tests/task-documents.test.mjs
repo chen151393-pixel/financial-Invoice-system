@@ -6,7 +6,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { createServer } from "vite";
 
 // 合成样本只用于组件验证，不连接真实 NS、共享盘或业务数据库。
-let server, api, Declarations, Signed, Upload, Toolbar;
+let server, api, uploadApi, Declarations, Signed, Upload;
 before(async () => {
   server = await createServer({
     configFile: fileURLToPath(new URL("../vite.config.ts", import.meta.url)),
@@ -21,9 +21,7 @@ before(async () => {
   ({ SignedContracts: Signed } = await server.ssrLoadModule(
     "/src/modules/task/components/SignedContracts.tsx",
   ));
-  ({ TaskListToolbar: Toolbar } = await server.ssrLoadModule(
-    "/src/modules/task/components/TaskListToolbar.tsx",
-  ));
+  uploadApi = await server.ssrLoadModule("/src/modules/task/api/signed-upload.ts");
   ({ SignedContractUpload: Upload } = await server.ssrLoadModule(
     "/src/modules/task/components/SignedContractUpload.tsx",
   ));
@@ -110,12 +108,12 @@ test("回签合同按子采购单显示是否已上传，并提供上传入口",
 });
 
 test("上传窗口说明格式、大小与不覆盖规则，未选择文件时不能提交", () => {
-  const html = renderToStaticMarkup(
-    createElement(Upload, { upload: async () => ({ items: [] }), onClose() {} }),
-  );
+  const html = renderToStaticMarkup(createElement(Upload, { onClose() {} }));
   assert.match(html, /批量上传回签合同/);
   assert.match(html, /PDF、JPG、PNG/);
   assert.match(html, /不会覆盖/);
+  assert.match(html, /100 MB/);
+  assert.match(html, /后台队列/);
   assert.match(html, /<input type="file" multiple=""/);
   assert.match(html, /<button[^>]*disabled=""[^>]*>上传 0 个文件/);
 });
@@ -128,42 +126,14 @@ test("报关资料重试与回签上传只提交必要字段，失败时返回�
   });
   await assert.rejects(api.prepareDeclarationDocument("12", "invoice"), /尚未配置/);
   await assert.rejects(
-    api.uploadSignedContracts([{ filename: "SUB-200.pdf", content: "JVBERi0=", orderNo: "" }]),
+    uploadApi.createSignedUpload("test-request", [{ filename: "SUB-200.pdf", size: 200000 }]),
     /尚未配置/,
   );
   assert.deepEqual(calls, [
     { url: "/api/tasks/12/declaration-documents/invoice/prepare", body: {} },
     {
-      url: "/api/tasks/signed-contracts/upload",
-      body: { files: [{ filename: "SUB-200.pdf", content: "JVBERi0=", orderNo: "" }] },
+      url: "/api/tasks/signed-contracts/upload-jobs",
+      body: { requestId: "test-request", files: [{ filename: "SUB-200.pdf", size: 200000 }] },
     },
   ]);
-});
-
-test("开票跟进显示业务状态与报关单创建日期筛选，可单独清除；未填日期提交 null", async (t) => {
-  const query = {
-    keyword: "",
-    account: "",
-    supplierId: "",
-    stage: "documents",
-    createdFrom: "2026-10-01",
-    createdTo: "2026-10-31",
-    groupBy: "supplier",
-    status: "current",
-    page: 1,
-    pageSize: 20,
-  };
-  const html = renderToStaticMarkup(
-    createElement(Toolbar, { query, busy: false, onChange() {}, onClear() {} }),
-  );
-  assert.match(html, /aria-label="清除业务状态：资料已回"/);
-  assert.match(html, /报关单创建：2026-10-01 至 2026-10-31/);
-  const calls = [];
-  t.mock.method(globalThis, "fetch", async (url, options) => {
-    calls.push(JSON.parse(options.body));
-    return Response.json({ error: "测试" }, { status: 503 });
-  });
-  await assert.rejects(api.listTasks({ ...query, createdFrom: "", createdTo: "" }));
-  assert.equal(calls[0].createdFrom, null);
-  assert.equal(calls[0].stage, "documents");
 });

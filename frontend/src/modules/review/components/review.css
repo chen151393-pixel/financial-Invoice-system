@@ -152,7 +152,7 @@
 }
 .fr-declaration-table {
   width: 100%;
-  min-width: 900px;
+  min-width: 1340px;
   table-layout: fixed;
   border-collapse: collapse;
   font-size: 12px;
@@ -219,8 +219,7 @@
 .fr-declaration-row > .fr-declaration-action {
   background: var(--color-surface);
 }
-.fr-declaration-table > thead > tr > .fr-toggle-heading,
-.fr-customs-table > thead > tr > .fr-toggle-heading {
+.fr-declaration-table > thead > tr > .fr-toggle-heading {
   padding-left: 36px;
 }
 .fr-declaration-detail > td {
@@ -242,102 +241,6 @@
   clip-path: inset(50%);
   white-space: nowrap;
   border: 0;
-}
-.fr-table-scroll {
-  width: 100%;
-  overflow-x: auto;
-  scrollbar-color: var(--color-input-border) var(--color-canvas);
-}
-.fr-customs-table {
-  width: 100%;
-  table-layout: fixed;
-  border-collapse: collapse;
-  font-size: 12px;
-  line-height: 1.6;
-}
-.fr-customs-table th,
-.fr-customs-table td {
-  padding: 8px 10px;
-  border-bottom: 1px solid var(--color-border);
-  vertical-align: middle;
-  overflow-wrap: anywhere;
-  text-align: left;
-  font-weight: 400;
-}
-.fr-customs-table thead th {
-  background: transparent;
-  font-size: 11px;
-  font-weight: 500;
-  color: var(--color-muted);
-  padding-top: 9px;
-  padding-bottom: 9px;
-}
-.fr-customs-table strong {
-  font-weight: 600;
-}
-.fr-customs-table small {
-  display: block;
-  color: var(--color-muted);
-  font-size: 12px;
-  margin-top: 4px;
-}
-.fr-customs-table .number {
-  text-align: right;
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-}
-.fr-customs-table .fr-unit {
-  text-align: center;
-  white-space: nowrap;
-}
-.fr-customs-row {
-  background: var(--color-surface);
-  height: 60px;
-}
-.fr-customs-row:hover {
-  background: var(--color-canvas);
-}
-.fr-customs-row > th {
-  padding: 0;
-}
-.fr-row-toggle,
-.fr-row-label {
-  display: flex;
-  gap: 10px;
-  align-items: center;
-  width: 100%;
-  padding: 10px;
-  border: 0;
-  background: transparent;
-  color: var(--color-text);
-  text-align: left;
-}
-.fr-row-toggle {
-  cursor: pointer;
-}
-.fr-row-toggle:hover {
-  color: var(--color-primary);
-}
-.fr-line-number {
-  display: grid;
-  place-items: center;
-  flex-shrink: 0;
-  min-width: 20px;
-  height: 20px;
-  padding: 0 5px;
-  border-radius: 999px;
-  background: var(--color-canvas);
-  color: var(--color-muted);
-  font-size: 11px;
-  font-variant-numeric: tabular-nums;
-}
-.fr-related-count {
-  color: var(--color-muted);
-  white-space: nowrap;
-}
-.fr-customs-table .fr-expanded-row > td {
-  padding: 0;
-  background: var(--color-surface);
 }
 .fr-declaration-action .ui-button {
   padding: 6px 8px;

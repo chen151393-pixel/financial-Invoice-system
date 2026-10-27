@@ -19,7 +19,9 @@ def worker(services, engine):
 
 
 def test_approval_queues_once_and_downloads_after_commit(engine, ns, app_services, monkeypatch):
-    save(ns, engine, bundle([purchase()], [customs("870")]))
+    order = purchase()
+    order[1]["custrecord_swc_subpo_vendor"]["refName"] = "东莞市创远机械有限公司"
+    save(ns, engine, bundle([order], [customs("870")]))
     approve(app_services, "CD870")
     approve(app_services, "CD870")
     assert len(rows(engine, "SELECT * FROM task_contract_jobs")) == 1
@@ -37,6 +39,9 @@ def test_approval_queues_once_and_downloads_after_commit(engine, ns, app_service
     job = rows(engine, "SELECT * FROM task_contract_jobs")[0]
     assert job["status"] == "completed" and job["actor"] == USER
     doc = rows(engine, "SELECT * FROM task_documents")[0]
+    assert doc["filename"] == "SUB-200_东莞创远_REAL870.pdf"
+    assert Path(doc["archive_path"]).name == doc["filename"]
+    assert app_services["contracts"].calls == [("SUB-200", "东莞市创远机械有限公司", "CD870")]
     assert Path(doc["archive_path"]).read_bytes() == app_services["contracts"].content
     worker(app_services, engine).run_once()
     assert len(app_services["contracts"].calls) == 1

@@ -36,8 +36,17 @@ class TaskBoardService:
             self.directory.search(query.keyword) if query.keyword else {"supplier_ids": [], "order_ids": []}
         )
         offset = (query.page - 1) * query.pageSize
+        declaration_ids = (
+            set(self.directory.declaration_ids_created(query.createdFrom, query.createdTo))
+            if query.createdFrom
+            else None
+        )
         try:
             with self.engine.connect() as connection:
+                if query.stage:
+                    declaration_ids = self.queries.filter_declarations_by_stage(
+                        connection, query.stage, declaration_ids
+                    )
                 where = task_dao.conditions(
                     scope="current",
                     account="",
@@ -45,6 +54,7 @@ class TaskBoardService:
                     supplier_ids=found["supplier_ids"],
                     order_ids=found["order_ids"],
                     supplier_id=int(query.supplierId) if query.supplierId else None,
+                    declaration_ids=declaration_ids,
                 )
                 open_rows = task_dao.by_statuses(connection, where, OPEN_STATUSES)
                 done_total = task_dao.status_counts(connection, where).get("completed", 0)
@@ -61,9 +71,19 @@ class TaskBoardService:
                     facts.update(self._facts(connection, page_rows))
                     total = done_total
                 else:
+                    # 工作台按报关单阶段下钻时，保留该范围内已完成的同单任务。
+                    scoped_done = (
+                        task_dao.by_statuses(connection, where, ("completed",))
+                        if query.stage and not query.node
+                        else []
+                    )
+                    facts.update(self._facts(connection, scoped_done))
                     selected = [
-                        row for row in open_rows if not query.node or facts[row["id"]]["node"] == query.node
+                        row
+                        for row in open_rows + scoped_done
+                        if not query.node or facts[row["id"]]["node"] == query.node
                     ]
+                    selected.sort(key=lambda row: (row["created_at"], row["id"]))
                     page_rows = selected[offset : offset + query.pageSize]
                     total = len(selected)
                 page_ids = [row["id"] for row in page_rows]

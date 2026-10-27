@@ -22,7 +22,7 @@ export function DeclarationDocuments({
       {documents.map((doc) => (
         <div key={doc.type} className="itd-document">
           <span className="itd-file-type" aria-hidden="true">
-            PDF
+            文件
           </span>
           <div className="itd-document__info">
             <strong>{doc.label}</strong>
