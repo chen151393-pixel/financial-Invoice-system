@@ -219,6 +219,7 @@ def test_http_upload_and_retry_routes(context, ns, engine, tmp_path):
     save(ns, engine, bundle([purchase()], [customs("870")]))
     settings = replace(context.settings, subpo_archive_root=tmp_path)
     app = create_app(settings, context.ns, engine)
+    app.state.review_calculations.rebuild()
     with TestClient(app) as client:
         path = "/api/tasks/signed-contracts/upload"
         assert client.post(path, json={"files": []}).status_code == 401

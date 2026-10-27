@@ -164,6 +164,7 @@ def test_application_lifecycle_consumes_queue(context, ns, engine, tmp_path, mon
     monkeypatch.setattr(module, "SourceContracts", lambda client: contracts)
     save(ns, engine, bundle([purchase()], [customs("870")]))
     app = module.create_app(settings, context.ns, engine, wecom=FakeWecom())
+    app.state.review_calculations.rebuild()
     original = app.state.contract_worker.documents._archive
 
     def archived(*args):

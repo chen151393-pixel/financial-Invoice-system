@@ -5,6 +5,7 @@ export function UnitPriceMargin({ line }: { line: Margin }) {
   return (
     <div className={`fr-margin fr-margin--${line.marginStatus ?? "unavailable"}`}>
       <strong>{line.margin || "—"}</strong>
+      {line.marginStatus === "ok" && line.marginNote && <small>{line.marginNote}</small>}
       {line.marginStatus === "negative" && (
         <>
           <Badge tone="danger" dot={false}>

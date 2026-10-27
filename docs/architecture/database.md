@@ -1067,3 +1067,11 @@ API 发票默认版使用 `source=lemon_open2`、`lemon_account=open2:` 加 `SHA
 ## 发票文件归档记录（2026-10-26，迁移 0031）
 
 `matching_invoice_files` 属于 matching：id；invoice_id + customs_declaration_id 唯一；invoice_no、original_filename、filename、sha256、archive_path、uploaded_by；created_at/updated_at。比对通过（`confirmed` 且 `valid`）的发票人工上传后，按分配的子采购单所属报关单各存一份「发票_发票号码」，同内容幂等、不同内容不覆盖，不存正文。只归档文件，不改变分配、收票进度和任务状态。迁移只新增表，禁止降级删除。
+
+## 财务后台计算与查询投影（0032，2026-10-27）
+
+新增 `review_calculation_jobs`、`review_declaration_snapshots`、`review_snapshot_suppliers`，结构见[字段字典](../mysql/current-data-dictionary.md#review_calculation_jobs)。这是可从来源及审核记录重建的读模型，不替代不可变审核和冻结依据。
+
+来源同步与审核通过的事务只登记账套重算代次，后台读取已提交数据并复用原 Decimal 计算规则。全部行幅度、人民币单价、原因及完整展示数据存入快照 JSON；统计与筛选列独立存储，列表用 SQL 聚合与 LIMIT/OFFSET，避免每次查询读取全部来源。共享销售汇率更新覆盖账套内相关单据；版本／容差变化触发补算。
+
+后台写入前锁定队列行并校验代次，旧计算不能覆盖新同步；同一事务替换快照与供应商投影并推进已完成代次。更新中不能使用旧幅度和自动审核预判。失败保留持久队列、中文原因和退避时间，重启接续；审核确认仍实时核对来源。`python -m backend.manage rebuild-review` 可重建已有数据，不调用 NS、不改变审核记录。

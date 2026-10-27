@@ -6,7 +6,6 @@ import { WorkbenchQueue } from "../components/WorkbenchQueue";
 import { WorkbenchReceipts } from "../components/WorkbenchReceipts";
 import { WorkbenchSuppliers } from "../components/WorkbenchSuppliers";
 import { WorkbenchTodos } from "../components/WorkbenchTodos";
-import { WorkbenchToolbar } from "../components/WorkbenchToolbar";
 import type { useWorkbench } from "../hooks/useWorkbench";
 import "../components/workbench.css";
 import "../components/workbench-reports.css";
@@ -18,7 +17,6 @@ import "../components/workbench-reports.css";
 export function WorkbenchPage({ state }: { state: ReturnType<typeof useWorkbench> }) {
   return (
     <div className="wb">
-      <WorkbenchToolbar state={state} />
       {state.loading && (
         <div className="wb-panel wb-loading" role="status">
           正在读取工作台数据…<p>正在汇总财务核对、发票比对和开票跟进。</p>

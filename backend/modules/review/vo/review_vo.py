@@ -29,6 +29,7 @@ class PurchaseLine(StrictModel):
     price: str
     amount: str
     currency: str
+    salesOrderExchangeRate: str = ""
     note: str
     scope: Literal["declared", "order"] = "order"
 
@@ -79,8 +80,10 @@ class AutoReview(StrictModel):
 
 
 class Declaration(StrictModel):
+    calculationStatus: Literal["ready", "pending", "failed"] = "ready"
+    calculatedAt: str | None = None
     salesOrders: str = ""
-    # 任一报关行申报幅度为负数时为 True，列表主行突出显示
+    # 任一报关行采购单价超出人民币报关单价容差时为 True
     marginAlert: bool = False
     autoReview: AutoReview = Field(default_factory=AutoReview)
     currencyEvidenceSummary: list[str] = Field(default_factory=list)

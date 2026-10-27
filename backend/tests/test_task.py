@@ -12,7 +12,6 @@ from backend.core.errors import ApiError
 from backend.integrations.contract_archive import ContractArchive
 from backend.modules.review.dto.review_dto import ApproveRequest, DeclarationListQuery
 from backend.modules.review.public import ApprovedLine, ReviewApproved
-from backend.modules.review.service.review_service import ReviewService
 from backend.modules.source.public import DeclarationService, SourceDirectory
 from backend.modules.task.dto.notification_dto import NotificationDraft, NotificationRecord
 from backend.modules.task.dto.supplier_group_dto import GroupQuery, GroupSave
@@ -23,6 +22,7 @@ from backend.modules.task.service.notification_service import NotificationServic
 from backend.modules.task.service.supplier_group_service import SupplierGroupService
 from backend.modules.task.service.task_generation_service import on_review_approved
 from backend.modules.task.service.task_service import TaskService
+from backend.tests.review_helpers import MaterializedReviewService as ReviewService
 from backend.tests.test_source_storage import bundle, customs, purchase, rows, save
 from backend.tests.test_source_storage import engine as engine  # 共用夹具
 from backend.tests.test_source_storage import ns as ns  # 共用夹具
@@ -331,6 +331,7 @@ def test_supplier_group_save_and_prefill(engine, app_services, approved):
 def test_http_task_routes(context, ns, engine, tmp_path):
     save(ns, engine, bundle([purchase()], [customs("870")]))
     app = create_app(context.settings, context.ns, engine, wecom=FakeWecom())
+    app.state.review_calculations.rebuild()
     with TestClient(app) as client:
         assert client.post("/api/tasks/query", json={}).status_code == 401
         headers = {"Origin": context.settings.origin}

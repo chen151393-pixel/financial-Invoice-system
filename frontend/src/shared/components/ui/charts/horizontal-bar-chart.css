@@ -1,0 +1,73 @@
+.ui-hbar {
+  --hbar-columns: minmax(96px, 150px) minmax(0, 1fr);
+}
+.ui-hbar--notes {
+  --hbar-columns: minmax(96px, 150px) minmax(0, 1fr) minmax(120px, 190px);
+}
+.ui-hbar__rows {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.ui-hbar__row,
+.ui-hbar__axis-row {
+  display: grid;
+  grid-template-columns: var(--hbar-columns);
+  align-items: center;
+  gap: 16px;
+}
+.ui-hbar__label {
+  font-size: 13px;
+  font-weight: 500;
+}
+.ui-hbar__plot {
+  display: flex;
+  align-items: center;
+  height: 34px;
+  margin-right: 48px;
+  border-left: 1px solid var(--color-chart-grid);
+}
+.ui-hbar__bar {
+  flex: none;
+  height: 100%;
+  border-radius: 0 4px 4px 0;
+  background: var(--color-primary);
+}
+.ui-hbar__value {
+  flex: none;
+  margin-left: 8px;
+  color: var(--color-text);
+  font-size: 13px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.ui-hbar__note {
+  min-width: 0;
+}
+.ui-hbar__axis {
+  position: relative;
+  grid-column: 2;
+  height: 24px;
+  margin: 10px 48px 0 0;
+  border-top: 1px solid var(--color-chart-grid);
+  color: var(--color-muted);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+.ui-hbar__axis > span {
+  position: absolute;
+  padding-top: 6px;
+  transform: translateX(-50%);
+}
+@media (max-width: 760px) {
+  .ui-hbar__row,
+  .ui-hbar__axis-row {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 6px;
+  }
+  .ui-hbar__axis {
+    grid-column: 1;
+  }
+}

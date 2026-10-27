@@ -30,6 +30,9 @@ TABLES = ALL_TABLES - {
     "task_signed_upload_jobs",
     "source_sales_orders",
     "matching_invoice_files",
+    "review_calculation_jobs",
+    "review_declaration_snapshots",
+    "review_snapshot_suppliers",
 }
 COMMENT_HEAD = "0015_sync_comments"
 

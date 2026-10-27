@@ -16,6 +16,7 @@ import {
   Field,
   FilterBar,
   Gauge,
+  HorizontalBarChart,
   Icon,
   MetricCard,
   MetricGrid,
@@ -265,7 +266,20 @@ export function UiKitShowcase() {
         ]}
       />
 
-      <SectionTitle title="图表 TrendChart / DonutChart" />
+      <SectionTitle title="图表 TrendChart / DonutChart / HorizontalBarChart" />
+      <Card>
+        <CardHeader title="横向条形图" description="演示数据：统一零刻度，零值仅显示数量" />
+        <CardContent>
+          <HorizontalBarChart
+            label="横向条形图（演示）"
+            items={[
+              { key: "a", label: "环节一", value: 158, text: "158" },
+              { key: "b", label: "环节二", value: 3, text: "3" },
+              { key: "c", label: "环节三", value: 0, text: "0" },
+            ]}
+          />
+        </CardContent>
+      </Card>
       <div className="uk-charts">
         <Card>
           <CardHeader

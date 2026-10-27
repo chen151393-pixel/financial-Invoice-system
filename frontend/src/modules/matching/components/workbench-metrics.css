@@ -1,56 +1,6 @@
-/* 业务流程漏斗：六步居中条形，条长按第一步计数绘制；右侧为通过率与卡点链接。 */
+/* 流程计数使用统一横向条形图；右侧保留通过率与卡点链接。 */
 .wb-flow {
-  display: grid;
-  gap: 10px;
-  margin: 0;
   padding: 4px 20px 20px;
-  list-style: none;
-}
-.wb-flow__row {
-  display: grid;
-  grid-template-columns: minmax(96px, 150px) minmax(0, 1fr) minmax(120px, 190px);
-  align-items: center;
-  gap: 16px;
-}
-.wb-flow__step {
-  font-size: 13px;
-  font-weight: 500;
-}
-.wb-flow__bar {
-  display: flex;
-  justify-content: center;
-  height: 34px;
-}
-.wb-flow__bar > span {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 44px;
-  height: 100%;
-  border-radius: 8px;
-  background: var(--color-primary-strong);
-  color: var(--color-surface);
-  font-size: 13px;
-  font-weight: 600;
-  font-variant-numeric: tabular-nums;
-}
-/* 从入库到完结由深到浅，同一色系；浅色条用深色文字 */
-.wb-flow__bar > [data-step="1"] {
-  background: var(--color-primary);
-}
-.wb-flow__bar > [data-step="2"] {
-  background: color-mix(in srgb, var(--color-primary) 85%, var(--color-surface));
-}
-.wb-flow__bar > [data-step="3"] {
-  background: var(--color-chart-2);
-}
-.wb-flow__bar > [data-step="4"] {
-  background: color-mix(in srgb, var(--color-chart-2) 70%, var(--color-surface));
-  color: var(--color-text);
-}
-.wb-flow__bar > [data-step="5"] {
-  background: var(--color-chart-3);
-  color: var(--color-text);
 }
 .wb-flow__note {
   display: grid;
@@ -76,12 +26,5 @@
 @media (max-width: 760px) {
   .wb-flow {
     padding: 4px 14px 16px;
-  }
-  .wb-flow__row {
-    grid-template-columns: minmax(0, 1fr);
-    gap: 6px;
-  }
-  .wb-flow__bar {
-    justify-content: flex-start;
   }
 }

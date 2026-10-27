@@ -40,17 +40,6 @@
   outline: 3px solid var(--color-primary);
   outline-offset: 3px;
 }
-.wb-toolbar {
-  display: flex;
-  justify-content: flex-end;
-  align-items: center;
-  gap: 12px;
-  flex-wrap: wrap;
-}
-.wb-toolbar > span {
-  color: var(--color-muted);
-  font-size: 11px;
-}
 .wb-panel {
   background: var(--color-surface);
   border: 1px solid var(--color-border);
@@ -149,9 +138,6 @@
   }
 }
 @media (max-width: 760px) {
-  .wb-toolbar {
-    justify-content: flex-start;
-  }
   .wb-panel__head,
   .wb-search {
     padding-left: 14px;

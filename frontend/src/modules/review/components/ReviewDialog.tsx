@@ -186,6 +186,7 @@ export function PurchaseDialog({ line, onClose }: { line: PurchaseLine; onClose:
     ["采购单价", line.price],
     [line.scope === "order" ? "订单金额（未分摊）" : "本次采购金额", line.amount],
     ["采购币种", line.currency],
+    ["销售订单汇率", line.salesOrderExchangeRate],
     ["来源说明", line.note],
   ];
   return (

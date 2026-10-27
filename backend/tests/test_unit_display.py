@@ -9,11 +9,11 @@ from backend.core.config import Settings
 from backend.modules.matching.mapper.allocation_mapper import check_views, purchase_side
 from backend.modules.matching.service.matching_query_service import MatchingQueryService
 from backend.modules.review.dto.review_dto import ApproveRequest, DeclarationListQuery
-from backend.modules.review.service.review_service import ReviewService
 from backend.modules.source.dto.pl_comparison import PlScriptQuery
 from backend.modules.source.public import DeclarationService, SourceDirectory, unit_label, unit_names
 from backend.modules.source.service.pl_comparison_service import PlScriptService
 from backend.modules.task.service.task_service import TaskService
+from backend.tests.review_helpers import MaterializedReviewService as ReviewService
 from backend.tests.test_pl_script import result as script_result
 from backend.tests.test_source_storage import bundle, customs, purchase, rows, save
 from backend.tests.test_source_storage import engine as engine

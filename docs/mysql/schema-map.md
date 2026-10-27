@@ -3,7 +3,7 @@
 > 本文件由 `npm.cmd run db:map` 根据迁移链离线 MySQL DDL、实体定义和字段字典生成，请勿手工修改；迁移或实体变化后重新生成，`backend/tests/test_schema_map.py` 会检查是否过期。
 > “修改”含加列、改列、索引与中文备注；数据回填仅在线执行，不在离线 DDL 中体现。
 
-当前最新迁移：`0031_matching_invoice_files`；共 31 个迁移、40 张实体表。
+当前最新迁移：`0032_review_calculations`；共 32 个迁移、43 张实体表。
 
 ## 1. 按模块查表
 
@@ -27,9 +27,12 @@
 
 | 表 | 中文说明 | 新建 | 后续修改 | 字段字典 |
 | --- | --- | --- | --- | --- |
+| `review_calculation_jobs` | 财务后台计算队列，按账套合并请求并持久重试 | `0032` | — | [查看](current-data-dictionary.md#review_calculation_jobs) |
+| `review_declaration_snapshots` | 财务报关单查询快照，后台计算后原子更新，列表只读取本表 | `0032` | — | [查看](current-data-dictionary.md#review_declaration_snapshots) |
 | `review_lines` | 审核冻结的子采购行范围，不可修改 | `0001` | `0006`、`0011` | [查看](current-data-dictionary.md#review_lines) |
 | `review_purchase_bases` | 全局开票依据版本 | `0006` | `0011` | [查看](current-data-dictionary.md#review_purchase_bases) |
 | `review_records` | 审核记录：一次审核通过一行，不可修改，全部行即审核历史 | `0001` | `0011` | [查看](current-data-dictionary.md#review_records) |
+| `review_snapshot_suppliers` | 财务查询快照的供应商筛选投影 | `0032` | — | [查看](current-data-dictionary.md#review_snapshot_suppliers) |
 
 ### task
 
@@ -114,3 +117,4 @@
 | [`0029_source_sales_orders`](../../backend/migrations/versions/0029_source_sales_orders.py) | `source_sales_orders` | `source_purchase_orders` | source：销售单单头（币种、汇率）与子采购单的销售单关联，供申报幅度与发票价格校验（2026-10-23）。 |
 | [`0030_task_signed_upload_jobs`](../../backend/migrations/versions/0030_task_signed_upload_jobs.py) | `task_signed_upload_jobs` | — | task：回签合同分片上传与持久归档队列，不保存文件正文。 |
 | [`0031_matching_invoice_files`](../../backend/migrations/versions/0031_matching_invoice_files.py) | `matching_invoice_files` | — | matching：发票文件归档记录（2026-10-26）。 |
+| [`0032_review_calculations`](../../backend/migrations/versions/0032_review_calculations.py) | `review_calculation_jobs`、`review_declaration_snapshots`、`review_snapshot_suppliers` | — | review：后台申报幅度计算队列与数据库分页快照。 |

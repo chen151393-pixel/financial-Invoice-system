@@ -2,6 +2,7 @@ import json
 import os
 import re
 from dataclasses import dataclass, field
+from decimal import Decimal
 from pathlib import Path
 from urllib.parse import urlsplit
 
@@ -42,6 +43,7 @@ class Settings:
     admin_password: str = field(default="", repr=False)
     service_key: str = field(default="", repr=False)
     business_database_url: str = field(default="", repr=False)
+    review_unit_price_tolerance_cny: Decimal = Decimal("0.10")
     wecom_corp_id: str = field(default="", repr=False)
     wecom_secret: str = field(default="", repr=False)
     wecom_connection_file: Path | None = field(default=None, repr=False)
@@ -91,6 +93,10 @@ def load_settings(source=None):
 
     def get(key, default=""):
         return env.get(key) or default
+
+    review_tolerance = get("REVIEW_UNIT_PRICE_TOLERANCE_CNY", "0.10").strip()
+    if not re.fullmatch(r"[0-9]+(?:\.[0-9]{1,2})?", review_tolerance):
+        raise ValueError("REVIEW_UNIT_PRICE_TOLERANCE_CNY 须为非负人民币金额，最多两位小数")
 
     sync_date_format = get("NETSUITE_SYNC_DATE_FORMAT", "YYYY-MM-DD")
     if sync_date_format not in {"YYYY-MM-DD", "M/D/YYYY", "D/M/YYYY"}:
@@ -218,6 +224,7 @@ def load_settings(source=None):
         admin_password=get("ADMIN_PASSWORD"),
         service_key=get("SERVICE_API_KEY"),
         business_database_url=business_url,
+        review_unit_price_tolerance_cny=Decimal(review_tolerance),
         wecom_corp_id=get("WECOM_CORP_ID"),
         wecom_send_enabled=wecom_send == "true",
         wecom_group_daily_limit=int(wecom_limit),

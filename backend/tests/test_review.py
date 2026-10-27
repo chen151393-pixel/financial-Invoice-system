@@ -11,8 +11,8 @@ from backend.core.errors import ApiError
 from backend.core.events import EventBus
 from backend.modules.review.dto.review_dto import ApproveRequest, BatchApproveRequest, DeclarationListQuery
 from backend.modules.review.public import ReviewApproved
-from backend.modules.review.service.review_service import ReviewService
 from backend.modules.source.public import DeclarationService, digest, snapshot
+from backend.tests.review_helpers import MaterializedReviewService as ReviewService
 from backend.tests.test_source_storage import ACCOUNT, bundle, customs, purchase, rows, save
 from backend.tests.test_source_storage import engine as engine  # 共用夹具
 from backend.tests.test_source_storage import ns as ns  # 共用夹具
@@ -132,7 +132,7 @@ def test_negative_margin_is_alerted_and_not_auto_approvable(service, ns, engine)
     assert result.counts["marginAlert"] == 1 and result.counts["autoApprovable"] == 0
     item = result.groups[0]
     assert item.marginAlert and not item.autoReview.eligible
-    assert "申报幅度为负数（采购价高于申报价）" in item.autoReview.reasons
+    assert "采购单价高于人民币报关单价且超出容差" in item.autoReview.reasons
     assert [g.recordNumber for g in service.browse(query(status="margin_alert")).groups] == ["CD870"]
 
 
@@ -307,6 +307,7 @@ def test_failing_subscriber_rolls_back_review(engine, seeded):
 
 def test_http_query_and_approve(context, seeded, engine):
     app = create_app(context.settings, context.ns, engine)
+    app.state.review_calculations.rebuild()
     with TestClient(app) as client:
         assert client.post("/api/review/declarations/query", json={}).status_code == 401
         login = client.post(

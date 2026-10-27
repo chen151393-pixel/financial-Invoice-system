@@ -41,6 +41,8 @@ from .modules.matching.service.proposal_service import ProposalService, on_invoi
 from .modules.matching.service.workbench_service import WorkbenchService
 from .modules.review.controller.review_controller import create_router as review_router
 from .modules.review.public import PurchaseBasisInvalidated, ReviewApproved
+from .modules.review.service.calculation_service import CalculationService, request_calculation
+from .modules.review.service.calculation_worker import CalculationWorker
 from .modules.review.service.purchase_basis_service import on_source_changed
 from .modules.review.service.review_service import ReviewService
 from .modules.source.controller.pl_comparison_controller import create_router as source_pl_router
@@ -119,8 +121,11 @@ def create_app(settings=None, ns=None, engine=None, wecom=None, lemon=None, lemo
             app.state.contract_worker.start()
             app.state.signed_upload_worker.start()
             app.state.lemon_worker.start()
+            app.state.review_calculation_worker.start()
             yield
         finally:
+            if hasattr(app.state, "review_calculation_worker"):
+                await asyncio.to_thread(app.state.review_calculation_worker.stop)
             if hasattr(app.state, "signed_upload_worker"):
                 await asyncio.to_thread(app.state.signed_upload_worker.stop)
             if hasattr(app.state, "lemon_worker"):
@@ -173,6 +178,8 @@ def create_events():
     events.subscribe(PurchaseBasisInvalidated, partial(ledger_service.on_basis_invalidated, events=events))
     events.subscribe(ReviewApproved, on_review_approved)
     events.subscribe(ReviewApproved, partial(ledger_service.on_review_approved, events=events))
+    events.subscribe(SourceChanged, request_calculation)
+    events.subscribe(ReviewApproved, request_calculation)
     events.subscribe(InvoiceChanging, ledger_service.on_invoice_changing)
     events.subscribe(InvoiceChanged, partial(ledger_service.on_invoice_changed, events=events))
     events.subscribe(InvoicesImported, on_invoices_imported)
@@ -196,7 +203,10 @@ def _register_business(app, settings, ns, contract_ns, wecom, engine, lemon_invo
     # source 保存来源，review 冻结依据，task 订阅审核通过生成任务。
     source_storage = SourceStorageService(ns, engine, events)
     declarations = DeclarationService(engine)
-    app.include_router(review_router(ReviewService(engine, declarations, events)))
+    review = ReviewService(engine, declarations, events, settings.review_unit_price_tolerance_cny)
+    app.state.review_calculations = CalculationService(review)
+    app.state.review_calculation_worker = CalculationWorker(app.state.review_calculations)
+    app.include_router(review_router(review))
     directory = SourceDirectory(engine)
     app.include_router(
         external_group_router(

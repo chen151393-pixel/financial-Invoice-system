@@ -9,6 +9,7 @@ from types import SimpleNamespace
 import pytest
 from backend.core.errors import ApiError
 from backend.modules.matching.dto.matching_dto import BatchBody, ConfirmBody, QueueQuery
+from backend.modules.review.mapper.declaration_mapper import declaration
 from backend.modules.review.policy.margin_policy import declared_margin
 from backend.modules.source.policy.declared_price_policy import declared_cny, pick_sales_order
 from backend.modules.source.service.sales_order_reader import WARNING, read_sales_orders
@@ -123,9 +124,10 @@ def test_margin_does_not_display_negative_zero():
         [{"unit": "片", "amount": Decimal("237.87"), "quantity": Decimal("1"), "purchase_order_id": 1}],
         {1: {"currency": "CNY", "sales_order_id": 9}},
         {9: {"id": 9, "order_no": "SO1", "currency": "USD", "exchange_rate": Decimal("6.71")}},
+        tolerance=Decimal("0"),
     )
     assert str(result["margin"]) == "0.00"
-    assert result["status"] == "negative"  # 四舍五入为零仍保留真实的单价倒挂提示
+    assert result["status"] == "negative"  # 关闭容差时，即使幅度舍入为零仍提示倒挂
     assert result["note"] == "报关单价低于采购价"
 
 
@@ -138,13 +140,34 @@ def test_review_page_shows_margin_per_customs_line(ns, engine, service):
     assert [(line.margin, line.marginStatus) for line in lines] == [("-12.68%", "negative"), ("81.22%", "ok")]
     assert lines[0].declaredUnitPriceCny == "10.65" and lines[0].combinedPurchaseUnitPrice == "12"
     assert lines[0].marginNote == "报关单价低于采购价"
+    assert lines[0].purchaseLines[0].salesOrderExchangeRate == "7.1"
     set_rate(engine, None)
     lines = group(service, "CD870").customsLines
     assert lines[0].margin == "" and lines[0].marginStatus == "unavailable" and "汇率" in lines[0].marginNote
+    assert lines[0].purchaseLines[0].salesOrderExchangeRate == ""
     # 汇率不参与内容摘要：汇率变化不会让报关单需要重审
     assert rows(engine, "SELECT content_sha256 FROM source_customs_declarations")[0]["content_sha256"] == (
         group(service, "CD870").contentSha256
     )
+
+
+def test_purchase_sales_rate_preserves_precision_and_requires_own_relation(ns, engine, service):
+    save(ns, engine, bundle([purchase()], [customs("870")]))
+    content = service.declarations.detail(int(group(service, "CD870").id))
+    sales_id = content["orders"][0]["sales_order_id"]
+    content["sales_orders"][sales_id]["exchange_rate"] = Decimal("6.712345678901")
+
+    def displayed():
+        result = declaration(content, "pending", False, None, True, "")
+        return result.customsLines[0].purchaseLines[0].salesOrderExchangeRate
+
+    assert displayed() == "6.712345678901"
+    # 即使本张报关单已有其他销售订单汇率，也不能借给缺少关联的子采购单。
+    content["orders"][0]["sales_order_id"] = None
+    assert displayed() == ""
+    content["orders"][0]["sales_order_id"] = sales_id
+    content["sales_orders"] = {}
+    assert displayed() == ""
 
 
 def price(world, engine, number):

@@ -1439,3 +1439,63 @@ NS 来源按批后台保存记录与结果，不保存令牌。
 - 主键：`id`。
 - 唯一约束 `uq_matching_invoice_file`：`(invoice_id, customs_declaration_id)`。
 - 跨模块只存 ID，不建外键。
+
+## 财务后台计算与查询快照（0032，2026-10-27）
+
+计算队列与投影归 review 所有；跨模块只记录来源 ID。来源、审批及冻结历史不被重建命令修改。
+
+<a id="review_calculation_jobs"></a>
+
+### review_calculation_jobs｜财务后台计算队列，按账套合并请求并持久重试
+
+| 字段 | 类型 | 说明 |
+| --- | --- | --- |
+| `id` | `BIGINT` | 计算队列本地主键 |
+| `ns_account` | `VARCHAR(100)` | 需要更新财务查询快照的 NS 账套 |
+| `requested_revision` | `INTEGER` | 同步或审核提交时递增的请求代次 |
+| `completed_revision` | `INTEGER` | 已原子发布的代次 |
+| `calculation_key` | `VARCHAR(100)` | 算法版本及人民币容差 |
+| `attempts` | `INTEGER` | 当前代次连续失败次数 |
+| `retry_at` | `DATETIME` | 失败后最早重试时间，UTC |
+| `last_error` | `VARCHAR(300)` | 计算失败的中文说明 |
+| `created_at` | `DATETIME` | 本地记录创建时间，UTC |
+| `updated_at` | `DATETIME` | 本地记录最后更新时间，UTC；由 DAO 更新 |
+
+
+<a id="review_declaration_snapshots"></a>
+
+### review_declaration_snapshots｜财务报关单查询快照，后台计算后原子更新，列表只读取本表
+
+| 字段 | 类型 | 说明 |
+| --- | --- | --- |
+| `id` | `BIGINT` | 财务查询快照本地主键 |
+| `customs_declaration_id` | `BIGINT` | 来源报关单本地主键；跨模块不建外键 |
+| `ns_account` | `VARCHAR(100)` | 来源 NS 账套 |
+| `declaration_date` | `DATE` | 申报日期，用于稳定分页排序 |
+| `review_status` | `VARCHAR(24)` | 审核状态：pending 或 approved |
+| `source_changed` | `BOOLEAN` | 来源是否变化且需要重审 |
+| `approved_at` | `DATETIME` | 有效审核时间，UTC；用于北京时间自然月统计 |
+| `margin_alert` | `BOOLEAN` | 是否有报关行采购单价超出人民币容差 |
+| `auto_eligible` | `BOOLEAN` | 是否满足自动审核预判条件；不代表自动批准 |
+| `search_text` | `TEXT` | CD、报关单号、PL、子采购单号和品名搜索文本 |
+| `payload` | `TEXT` | 完整展示快照 JSON；含逐行幅度、状态、原因和人民币单价 |
+| `calculated_at` | `DATETIME` | 后台计算时间，UTC |
+| `created_at` | `DATETIME` | 本地记录创建时间，UTC |
+| `updated_at` | `DATETIME` | 本地记录最后更新时间，UTC；由 DAO 更新 |
+
+
+<a id="review_snapshot_suppliers"></a>
+
+### review_snapshot_suppliers｜财务查询快照的供应商筛选投影
+
+| 字段 | 类型 | 说明 |
+| --- | --- | --- |
+| `id` | `BIGINT` | 财务快照供应商关联主键 |
+| `declaration_id` | `BIGINT` | 财务快照对应的来源报关单 ID |
+| `supplier_id` | `BIGINT` | 来源供应商 ID；跨模块不建外键 |
+| `ns_account` | `VARCHAR(100)` | 来源 NS 账套 |
+| `name` | `VARCHAR(500)` | 来源供应商名称快照 |
+| `created_at` | `DATETIME` | 本地记录创建时间，UTC |
+| `updated_at` | `DATETIME` | 本地记录最后更新时间，UTC；由 DAO 更新 |
+
+队列按 `ns_account` 唯一，快照按 `customs_declaration_id` 唯一，供应商关联按 `declaration_id + supplier_id` 唯一。快照到队列、供应商关联到快照设本模块外键；来源 ID 不设跨模块外键。列表按账套／审核状态／申报日期／来源 ID 索引分页，另设异常、自动审核、供应商筛选索引。

@@ -25,7 +25,7 @@ React + TypeScript + Vite 前端，Python + FastAPI + SQLAlchemy + Alembic 后�
 | `/sync/ns` | NS 分页读取；子采购和报关可补齐来源并保存 | 没有持久定时同步队列；依赖来源接口及字段配置 |
 | `/workbench`（默认首页） | [总体工作台](docs/invoice-workbench.md)：关键指标、业务流程分布、待办处理、供应商待收金额与已开票趋势 | 仅汇总已入库数据，口径见页面说明；超期暂不展示 |
 | `/pl-reconciliation` | 通过 NS 共用脚本实时查询采购报关依据 | 只读对照，页面查询不自动入库或审核 |
-| `/review`（原 `/finance-reconciliation`） | 已同步报关单与关联子采购逐级核对、整单人工审核，冻结子采购行的开票数量、单位与含税金额 | 来源变化后需重新审核 |
+| `/review`（原 `/finance-reconciliation`） | NS 同步后后台计算并保存申报幅度，列表直接查询快照并在数据库分页；整单人工审核冻结开票口径 | 来源变化后需重新审核；后台更新中显示提示，部署补算见 [review 说明](backend/modules/review/README.md#后台计算与数据库分页2026-10-27) |
 | `/tasks`（原 `/invoice-followup`、`/tasks/board`） | 统一节点式开票跟进、合并任务面板且流程默认展开；审核通过自动按供应商×采购公司×币种生成任务、审核后自动下载合同并归档到共享盘、供应商群配置、通知版本和人工发送登记 | 收票进度由发票比对通过的分配自动汇总，完成后任务自动结束；已接入企微群发提交与回执，仍需群主确认；默认关闭，启用前须完成定向验收 |
 | `/ui-kit` | [统一组件库](docs/ui-components.md)展示页，新页面从组件库组合 | 演示数据，不调用接口 |
 | `/suppliers`、`/suppliers/external-groups` | 供应商档案、七列外部群 Excel 导入预览、确认绑定及后续人工关联 | 群资料来自文件或企微查询；导入文件不代表实时核验，不发送通知 |

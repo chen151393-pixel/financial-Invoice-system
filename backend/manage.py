@@ -75,6 +75,7 @@ def main():
             "business-upgrade",
             "business-sql",
             "rebuild-ledger",
+            "rebuild-review",
             "schema-map",
         ],
         help="upgrade：升级新迁移链；schema-sql：仅输出结构 DDL 供审阅，不能代替在线数据升级；"
@@ -90,6 +91,25 @@ def main():
         print(f"已生成 {write().relative_to(ROOT).as_posix()}")
         return
     settings = load_settings()
+    if args.command == "rebuild-review":
+        from .core.events import EventBus
+        from .modules.review.service.calculation_service import CalculationService
+        from .modules.review.service.review_service import ReviewService
+        from .modules.source.public import DeclarationService
+
+        engine = make_business_engine(settings.business_database_url)
+        if engine is None:
+            raise ValueError("请先配置业务 MySQL")
+        try:
+            verify_database(engine)
+            service = ReviewService(
+                engine, DeclarationService(engine), EventBus(), settings.review_unit_price_tolerance_cny
+            )
+            count = CalculationService(service).rebuild()
+            print(f"财务审核查询快照补算完成：{count} 个账套；未调用 NS、未写入审核记录")
+        finally:
+            engine.dispose()
+        return
     if args.command == "rebuild-ledger":
         from .app import create_events
         from .modules.matching.service.rebuild_service import rebuild

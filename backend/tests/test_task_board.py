@@ -134,6 +134,7 @@ def test_board_scope_rejects_incomplete_or_reversed_dates():
 def test_http_board_route(context, ns, engine):
     save(ns, engine, bundle([purchase()], [customs("870")]))
     app = create_app(context.settings, context.ns, engine, wecom=FakeWecom())
+    app.state.review_calculations.rebuild()
     with TestClient(app) as client:
         assert client.post("/api/tasks/board/query", json={}).status_code == 401
         headers = {"Origin": context.settings.origin}

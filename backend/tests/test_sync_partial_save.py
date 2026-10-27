@@ -182,8 +182,8 @@ def test_saved_group_can_be_reviewed_and_generate_tasks(batch, engine):
 
     from backend.app import create_events
     from backend.modules.review.dto.review_dto import ApproveRequest, DeclarationListQuery
-    from backend.modules.review.service.review_service import ReviewService
     from backend.modules.source.public import DeclarationService
+    from backend.tests.review_helpers import MaterializedReviewService as ReviewService
 
     ns, page, records, _ = batch
     invalid_price(ns, records)

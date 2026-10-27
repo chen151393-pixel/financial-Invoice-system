@@ -253,6 +253,10 @@ test("漏斗上一环节为 0 时说明暂无通过率，只有第一步标为�
   });
   assert.equal((html.match(/起点/g) || []).length, 1);
   assert.match(html, /上一环节为 0，暂无通过率/);
+  assert.match(html, /aria-label="业务流程横向条形图"/);
+  assert.equal((html.match(/class="ui-hbar__bar" style="width:0%/g) || []).length, 2);
+  assert.match(html, /class="ui-hbar__bar" style="width:1.5%/);
+  assert.match(html, /class="ui-hbar__value">3<\/span>/);
 });
 
 test("关键指标：首张实底主指标，金额格式化后端值，标签区分财务与采购", () => {

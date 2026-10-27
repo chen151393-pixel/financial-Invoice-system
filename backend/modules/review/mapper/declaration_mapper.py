@@ -9,7 +9,7 @@ from decimal import Decimal
 from backend.modules.source.public import unit_label
 
 from ..policy.auto_review_policy import auto_review_reasons, margin_alert
-from ..policy.margin_policy import declared_margin
+from ..policy.margin_policy import DEFAULT_UNIT_PRICE_TOLERANCE_CNY, declared_margin
 from ..policy.purchase_display_policy import group_purchase_lines
 from ..policy.review_policy import CHANGED_WARNING, STATUS_LABELS
 from ..public import ApprovedLine
@@ -46,7 +46,7 @@ def line_bindings(content):
     }
 
 
-def purchase_line(order, row, basis=None, unit_names=None):
+def purchase_line(order, row, basis=None, unit_names=None, sales_order=None):
     declared = f"{text(row['declared_quantity'])} {unit_label(row['declared_unit'], unit_names)}".strip()
     note = "开票口径：子采购数量、单位与含税金额，审核通过后冻结为应开数量和金额。"
     if declared:
@@ -65,6 +65,7 @@ def purchase_line(order, row, basis=None, unit_names=None):
         price=text(row["unit_price"]),
         amount=text(row["amount"]),
         currency=text(basis["currency"] if basis and basis["allowed"] else order["currency"]),
+        salesOrderExchangeRate=text((sales_order or {}).get("exchange_rate")),
         scope="order",
         note=note,
     )
@@ -101,7 +102,15 @@ def margin_fields(margin):
     }
 
 
-def declaration(content, state, changed, active_review, allowed, reason):
+def declaration(
+    content,
+    state,
+    changed,
+    active_review,
+    allowed,
+    reason,
+    tolerance=DEFAULT_UNIT_PRICE_TOLERANCE_CNY,
+):
     head = content["declaration"]
     orders = {order["id"]: order for order in content["orders"]}
     bound = line_bindings(content)
@@ -109,11 +118,13 @@ def declaration(content, state, changed, active_review, allowed, reason):
     rows_by_customs = defaultdict(list)
     for row in content["purchase_lines"]:
         rows_by_customs[bound.get(row["id"])].append(row)
+        order = orders[row["purchase_order_id"]]
         line = purchase_line(
-            orders[row["purchase_order_id"]],
+            order,
             row,
             content.get("bases", {}).get(row["id"]),
             content.get("unit_names"),
+            sales_order=content.get("sales_orders", {}).get(order.get("sales_order_id")),
         )
         by_customs[bound.get(row["id"])].append(line)
     margins = {
@@ -123,6 +134,7 @@ def declaration(content, state, changed, active_review, allowed, reason):
             orders,
             content.get("sales_orders", {}),
             content.get("unit_names"),
+            tolerance=tolerance,
         )
         for row in content["customs_lines"]
     }

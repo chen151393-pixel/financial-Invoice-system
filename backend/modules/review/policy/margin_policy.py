@@ -4,7 +4,7 @@
 - 报关单价按对应销售单汇率换算为人民币（source 规则），不先舍入；
 - 合并采购单价 = 关联采购行含税总金额 ÷ 总数量，不先舍入；
 - 单位不一致、采购币种不是人民币、金额数量或报关单价汇率缺失时不计算，不显示 0；
-- 只标出负数（采购价高于申报价）。
+- 采购单价超过人民币报关单价且差额大于配置容差时才标异常；容差内保留真实幅度。
 """
 
 from decimal import ROUND_HALF_UP, Decimal
@@ -13,13 +13,21 @@ from backend.modules.source.public import declared_unit_price_cny, pick_sales_or
 
 CNY = "CNY"
 CENT = Decimal("0.01")
+DEFAULT_UNIT_PRICE_TOLERANCE_CNY = Decimal("0.10")
 
 
 def unavailable(note):
     return {"status": "unavailable", "margin": None, "declared": None, "purchase": None, "note": note}
 
 
-def declared_margin(customs_row, purchase_rows, orders, sales_orders, unit_names=None):
+def declared_margin(
+    customs_row,
+    purchase_rows,
+    orders,
+    sales_orders,
+    unit_names=None,
+    tolerance=DEFAULT_UNIT_PRICE_TOLERANCE_CNY,
+):
     """customs_row：报关行；purchase_rows：行级关联的子采购行；orders：{子采购单 ID: 单头}；
     sales_orders：{销售单 ID: 单头}。返回 {status, margin, declared, purchase, note}。"""
     if not purchase_rows:
@@ -54,10 +62,19 @@ def declared_margin(customs_row, purchase_rows, orders, sales_orders, unit_names
     margin = ((declared - purchase) / declared * 100).quantize(CENT, rounding=ROUND_HALF_UP)
     if margin == 0:
         margin = margin.copy_abs()
+    # 按未舍入的人民币单价差额判断，避免把刚超出阈值的差额舍入后放行。
+    difference = purchase - declared
+    abnormal = difference > tolerance
+    note = "报关单价低于采购价" if abnormal else ""
+    if Decimal(0) < difference <= tolerance:
+        difference_text = format(difference, "f")
+        if "." in difference_text:
+            difference_text = difference_text.rstrip("0").rstrip(".")
+        note = f"精度范围内一致（人民币单价差额 {difference_text} 元，容差 {tolerance:.2f} 元）"
     return {
-        "status": "negative" if purchase > declared else "ok",
+        "status": "negative" if abnormal else "ok",
         "margin": margin,
         "declared": declared,
         "purchase": purchase,
-        "note": "报关单价低于采购价" if purchase > declared else "",
+        "note": note,
     }

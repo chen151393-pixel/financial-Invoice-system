@@ -49,6 +49,6 @@
 ## 总体工作台对齐设计稿（2026-10-27）
 
 - 关键指标用 `MetricCard`（首张 `featured="solid"` 实底，右上角 `badge` 标明财务 / 采购），数值、对比说明、提示与近 6 个月走势全部来自后端 `kpis`。
-- 漏斗六步、整体完结率与卡点分项来自后端 `funnel`；趋势用 `TrendChart grouped lineAxis="percent"`；节点分布用 `DonutChart`；供应商排行与不一致分类条长为后端百分比（`Progress`）；置信度堆叠条只按后端计数画宽度。
+- 漏斗六步、整体完结率与卡点分项来自后端 `funnel`；六步计数用 `HorizontalBarChart` 左对齐展示，零值不画色条；顶部不显示更新时间与手动刷新按钮。趋势用 `TrendChart grouped lineAxis="percent"`；节点分布用 `DonutChart`；供应商排行与不一致分类条长为后端百分比（`Progress`）；置信度堆叠条只按后端计数画宽度。
 - 比对队列页读取 `?tier=high` 作为初始分档（`matchingQueuePath`），供工作台“高置信度可批量通过”进入。
 - 按用户决定不做视角切换、统计区间与页头导出报表。口径见[总体工作台](../../../../docs/invoice-workbench.md)。

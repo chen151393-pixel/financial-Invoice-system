@@ -3,7 +3,7 @@ import type { ComparisonResult, ReviewFilter } from "../types";
 
 /**
  * 财务核对概况：张数全部来自后端列表计数（随查询条件变化），前端只展示。
- * 待审核、申报幅度异常、可自动审核通过三张卡可点击，按对应范围筛选列表。
+ * 四张卡均可点击；本月审核通过卡进入全部已审核列表，其余按对应范围筛选。
  */
 export function ReviewStats({
   counts,
@@ -30,7 +30,7 @@ export function ReviewStats({
         tone={counts.marginAlert > 0 ? "warning" : "neutral"}
         label="申报幅度异常"
         value={`${counts.marginAlert} 张`}
-        note="采购价高于申报价，审核前请与采购核实"
+        note="采购价超出报关价容差，审核前请与采购核实"
         selected={value === "margin_alert"}
         onSelect={() => onSelect("margin_alert")}
       />
@@ -47,7 +47,9 @@ export function ReviewStats({
         glyph="月"
         label="本月审核通过"
         value={`${counts.approvedThisMonth} 张`}
-        note="按北京时间自然月统计"
+        note="按北京时间自然月统计，点击查看全部审核通过"
+        selected={value === "approved"}
+        onSelect={() => onSelect("approved")}
       />
     </StatGrid>
   );

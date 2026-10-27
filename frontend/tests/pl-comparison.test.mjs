@@ -57,6 +57,22 @@ const render = (state = createPlComparisonState(), props = {}) =>
     createElement(PlComparison, { state, onRetry() {}, onFilter() {}, onReview() {}, ...props }),
   );
 const group = () => createPlComparisonState().result.groups[0];
+test("后台计算未完成时展示原因，禁用审核且不显示旧的自动审核结论", () => {
+  const state = createPlComparisonState();
+  const reason = "来源或审核已更新，后台计算中，请稍后刷新";
+  state.result.notices = [reason];
+  const item = state.result.groups[0];
+  item.calculationStatus = "pending";
+  item.review.allowed = false;
+  item.review.reason = reason;
+  item.marginAlert = false;
+  item.autoReview = { eligible: false, reasons: [reason] };
+  state.result.groups = [item];
+  const html = render(state);
+  assert.match(html, /后台计算中，请稍后刷新/);
+  assert.match(html, /disabled=""[^>]*aria-label="审核通过/);
+  assert.doesNotMatch(html, />可自动审核<|>申报幅度异常</);
+});
 const pagination = (props = {}) =>
   createElement(Pagination, {
     label: "报关单分页",
@@ -434,6 +450,21 @@ test("任务差异结束遵循后端待复核限制并展示原因", async () =>
   assert.match(html, /按差异结束/);
 });
 
+test("采购查看弹窗原样显示销售订单汇率，缺失时不显示默认汇率", () => {
+  const line = group().customsLines[0].purchaseLines[0];
+  const detail = (rate) =>
+    renderToStaticMarkup(
+      createElement(PurchaseDialog, {
+        line: { ...line, salesOrderExchangeRate: rate },
+        onClose() {},
+      }),
+    );
+  assert.match(detail("6.712345678901"), /<dt>销售订单汇率<\/dt><dd>6\.712345678901<\/dd>/);
+  for (const rate of ["", undefined]) {
+    assert.match(detail(rate), /<dt>销售订单汇率<\/dt><dd>来源未提供<\/dd>/);
+  }
+});
+
 test("采购合并行展示后端合计，查看弹窗保留原始数量单价金额", () => {
   const item = group();
   const original = item.customsLines[0].purchaseLines[0];
@@ -468,7 +499,11 @@ test("单价异常由后端判定，舍入为零仍突出显示", () => {
   });
   assert.match(customs(item), /data-tone="danger"[\s\S]*报关单价低于采购价/);
   item.customsLines[0].marginStatus = "ok";
+  item.customsLines[0].margin = "-0.01%";
+  item.customsLines[0].marginNote = "精度范围内一致（人民币单价差额 0.0305 元，容差 0.10 元）";
   assert.doesNotMatch(customs(item), /data-tone="danger"|报关单价低于采购价/);
+  assert.match(customs(item), /精度范围内一致/);
+  assert.match(customs(item), /-0.01%/);
 });
 
 test("报关行最后一列显示后端计算的申报幅度；负数与无法计算都用文字说明", () => {

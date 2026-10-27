@@ -7,11 +7,11 @@ import pytest
 from backend.app import create_events
 from backend.core.errors import ApiError
 from backend.modules.review.dto.review_dto import ApproveRequest, DeclarationListQuery
-from backend.modules.review.service.review_service import ReviewService
 from backend.modules.source.mapper.storage_mapper import project
 from backend.modules.source.policy.ns_config import parse_config
 from backend.modules.source.public import DeclarationService
 from backend.modules.source.service.storage_service import StorageService
+from backend.tests.review_helpers import MaterializedReviewService as ReviewService
 from backend.tests.test_source_optional_sync import source as source
 from backend.tests.test_source_storage import declaration, rows
 from backend.tests.test_source_storage import engine as engine

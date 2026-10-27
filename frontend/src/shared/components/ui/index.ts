@@ -19,6 +19,7 @@ export { Stepper, type StepItem } from "./Stepper";
 export { Tabs } from "./Tabs";
 export { DonutChart, type DonutSegment } from "./charts/DonutChart";
 export { Gauge } from "./charts/Gauge";
+export { HorizontalBarChart, type HorizontalBarItem } from "./charts/HorizontalBarChart";
 export { Sparkline } from "./charts/Sparkline";
 export { TrendChart, type ChartSeries } from "./charts/TrendChart";
 // 已有公共组件同样从此处导出，页面只需一个导入来源

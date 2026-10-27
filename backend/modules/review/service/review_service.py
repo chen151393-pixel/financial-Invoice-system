@@ -5,7 +5,7 @@
 批量审核逐张走同一流程、各自一个事务：一张被拒绝不影响其他张，结果逐张返回。
 """
 
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 
 from sqlalchemy.exc import SQLAlchemyError
 
@@ -17,24 +17,19 @@ from backend.modules.source.public import snapshot as source_snapshot
 from ..dao import purchase_basis_dao, review_line_dao, review_record_dao
 from ..dto.review_dto import ApproveRequest
 from ..mapper import declaration_mapper
+from ..policy.margin_policy import DEFAULT_UNIT_PRICE_TOLERANCE_CNY
 from ..policy.review_policy import approve_block_reason, status
 from ..public import ReviewApproved
-from ..vo.review_vo import BatchApproveResult, BatchItemResult, ReviewList, SupplierOption
+from ..vo.review_vo import BatchApproveResult, BatchItemResult
 from .basis_reader import current_bases
 from .purchase_basis_service import freeze, same_evidence
-
-# 「本月审核通过」按北京时间自然月统计；审核时间以 UTC 存储
-BUSINESS_ZONE = timezone(timedelta(hours=8))
-
-
-def _month_start_utc(now):
-    local = now.astimezone(BUSINESS_ZONE).replace(day=1, hour=0, minute=0, second=0, microsecond=0)
-    return local.astimezone(timezone.utc).replace(tzinfo=None)
+from .review_query_service import ReviewQueryService
 
 
 class ReviewService:
-    def __init__(self, engine, declarations, events):
+    def __init__(self, engine, declarations, events, tolerance=DEFAULT_UNIT_PRICE_TOLERANCE_CNY):
         self.engine, self.declarations, self.events = engine, declarations, events
+        self.tolerance = tolerance
 
     def _actives(self, declaration_ids):
         try:
@@ -57,75 +52,17 @@ class ReviewService:
         return state, changed, admission_reason(issues)
 
     def browse(self, query):
-        index = self.declarations.index(query.account, query.keyword, query.supplierId or None)
-        actives = self._actives([row["id"] for row in index])
-        states = {
-            row["id"]: self._state(
-                row["content_sha256"], row["declaration_no"], row["order_count"], actives.get(row["id"])
-            )
-            for row in index
-        }
-        # 未出库的报关单自 2026-10-23 起拉取时即跳过；库中遗留的旧数据不显示、不计数
-        counts = {"all": 0, "pending": 0, "approved": 0}
-        for state, _, _ in states.values():
-            if state in counts:
-                counts[state] += 1
-        counts["all"] = counts["pending"] + counts["approved"]
-        # 概况卡：待审核中来源已变化、需重新核对的张数；本月（北京时间）审核通过的张数
-        month_start = _month_start_utc(datetime.now(timezone.utc))
-        counts["changed"] = sum(1 for state, changed, _ in states.values() if state == "pending" and changed)
-        counts["approvedThisMonth"] = sum(
-            1
-            for declaration_id, (state, _, _) in states.items()
-            if state == "approved" and actives[declaration_id]["approved_at"] >= month_start
-        )
-        # 待审核的报关单逐张算出申报幅度与可自动审核预判，用于计数和筛选；本页复用同一结果
-        pending_ids = [row["id"] for row in index if states[row["id"]][0] == "pending"]
-        built = self._declarations(pending_ids, states, actives)
-        counts["marginAlert"] = sum(1 for group in built.values() if group.marginAlert)
-        counts["autoApprovable"] = sum(1 for group in built.values() if group.autoReview.eligible)
-        if query.status in ("margin_alert", "auto"):
-            selected = [
-                declaration_id
-                for declaration_id in pending_ids
-                if declaration_id in built
-                and (
-                    built[declaration_id].marginAlert
-                    if query.status == "margin_alert"
-                    else built[declaration_id].autoReview.eligible
-                )
-            ]
-        else:
-            wanted = {"all": ("pending", "approved")}.get(query.status, (query.status,))
-            selected = [row["id"] for row in index if states[row["id"]][0] in wanted]
-        start = (query.page - 1) * query.pageSize
-        page_ids = selected[start : start + query.pageSize]
-        built.update(self._declarations([i for i in page_ids if i not in built], states, actives))
-        groups = [built[declaration_id] for declaration_id in page_ids if declaration_id in built]
-        counts.update(
-            customs=sum(group.customsCount for group in groups),
-            purchase=sum(group.purchaseCount for group in groups),
-            shown=len(groups),
-        )
-        return ReviewList(
-            groups=groups,
-            counts=counts,
-            accounts=self.declarations.accounts(),
-            suppliers=[
-                SupplierOption(id=str(row["id"]), name=row["name"] or f"供应商 {row['id']}")
-                for row in self.declarations.suppliers(query.account)
-            ],
-            page=query.page,
-            pageSize=query.pageSize,
-            total=len(selected),
-            pages=max(1, (len(selected) + query.pageSize - 1) // query.pageSize),
-        )
+        return ReviewQueryService(self.engine, self.tolerance).browse(query)
 
     def _declarations(self, declaration_ids, states, actives):
         """按 ID 组装报关单页面数据（同一连接读取开票依据与单位名称）；来源缺失的跳过。"""
         if not declaration_ids:
             return {}
         contents = [content for content in self.declarations.details(declaration_ids) if content is not None]
+        return self.build_declarations(contents, states, actives)
+
+    def build_declarations(self, contents, states, actives):
+        """后台计算与审核操作返回共用的展示计算；列表查询不调用。"""
         try:
             with self.engine.connect() as connection:
                 names = unit_names(connection)
@@ -148,6 +85,7 @@ class ReviewService:
                 actives.get(declaration_id),
                 state == "pending",
                 reason,
+                tolerance=self.tolerance,
             )
         return built
 

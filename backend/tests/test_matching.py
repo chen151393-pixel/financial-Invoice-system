@@ -41,8 +41,8 @@ FLUID = ("清洗液", "个", "10", "17.70", "2.30")  # 含税 20.00
 
 @pytest.fixture
 def world(engine):
-    from backend.modules.review.service.review_service import ReviewService
     from backend.modules.source.public import DeclarationService
+    from backend.tests.review_helpers import MaterializedReviewService as ReviewService
 
     events = create_events()
     queries = MatchingQueryService(engine)
@@ -280,6 +280,7 @@ def test_queue_batch_and_service_identity(engine, world, reviewed):
 def test_http_matching_routes(context, ns, engine):
     save(ns, engine, bundle([purchase()], [customs("870")]))
     app = create_app(context.settings, context.ns, engine)
+    app.state.review_calculations.rebuild()
     with TestClient(app) as client:
         assert client.post("/api/matching/queue", json={}).status_code == 401
         headers = {"Origin": context.settings.origin}
