@@ -2,6 +2,8 @@
 
 from ..dao import header_dao, item_dao
 from ..dto.invoice_dto import InvoiceQuery
+from ..mapper import invoice_mapper
+from ..policy.invoice_status_policy import display_status
 
 HEADER_FIELDS = (
     "current_version_id",
@@ -69,3 +71,31 @@ def read_invoice_amount_scope(connection, filters, *, after_id=0):
 def invoices_by_number(connection, numbers):
     """[{id, invoice_no, status, seller_name}]：号码精确匹配的发票；同号可能对应多张（不同账套或发票代码）。"""
     return header_dao.by_numbers(connection, numbers)
+
+
+STATUS_SCOPE_BATCH = 500
+
+
+def read_invoice_status_scope(connection, query, *, before_id=None):
+    """按列表筛选条件（InvoiceQuery）从新到旧分批返回 [{id, display_status, active_item_count}]，
+    每批至多 500 张；before_id 为上一批最后一张的 ID。供 matching 判定匹配状态。"""
+    rows = header_dao.status_page(connection, query, before_id, STATUS_SCOPE_BATCH)
+    return [
+        {
+            "id": row["id"],
+            "display_status": display_status(row),
+            "active_item_count": row["active_item_count"],
+        }
+        for row in rows
+    ]
+
+
+def read_invoice_page(connection, query, *, include_ids=None):
+    """与进项发票列表相同的排序、分页和汇总；include_ids 不为 None 时只在这些发票内分页。"""
+    total, amounts, rows = header_dao.page(connection, query, include_ids)
+    return invoice_mapper.invoice_list(query, total, amounts, rows)
+
+
+def invoice_display_status(header):
+    """票面展示状态：normal / red_letter / red_offset / void / unknown（负金额识别为红字）。"""
+    return display_status(header)

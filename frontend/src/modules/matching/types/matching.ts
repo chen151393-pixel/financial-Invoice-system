@@ -136,9 +136,11 @@ export type QueueQuery = {
   pageSize: number;
 };
 
+// 发票匹配状态（后端 invoice_match_policy 判定）；excluded 为红字、已被红冲、作废等不参与比对的发票
+export type MatchStatus = "confirmed" | "partial" | "proposed" | "needs_review" | "none" | "excluded";
 export type MatchingSummary = {
   invoiceId: string;
-  status: "none" | "proposed" | "partial" | "confirmed" | "needs_review";
+  status: MatchStatus;
   label: string;
   tier: Tier | null;
   proposed: number;
@@ -180,4 +182,22 @@ export const resultLabels: Record<Check["result"], string> = {
   partial: "部分一致",
   mismatch: "不一致",
   missing: "未提供",
+};
+
+// 进项发票按匹配状态筛选的列表：list 为发票列表分页结构（由调用方给出类型），counts 不受所选匹配状态影响
+export type InvoiceMatchFilters = {
+  q: string;
+  account: string;
+  status: string;
+  date_from: string;
+  date_to: string;
+  matchStatus: "all" | MatchStatus;
+  page: number;
+  pageSize: number;
+};
+export type InvoiceMatchList<List> = {
+  list: List;
+  counts: Record<"all" | MatchStatus, number>;
+  summaries: MatchingSummary[];
+  notice: string;
 };

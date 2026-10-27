@@ -35,6 +35,7 @@ from .modules.matching.public import AllocationChanged
 from .modules.matching.service import ledger_service
 from .modules.matching.service.allocation_service import AllocationService
 from .modules.matching.service.invoice_file_service import InvoiceFileService
+from .modules.matching.service.invoice_list_service import InvoiceListService
 from .modules.matching.service.matching_query_service import MatchingQueryService
 from .modules.matching.service.proposal_service import ProposalService, on_invoices_imported
 from .modules.matching.service.workbench_service import WorkbenchService
@@ -252,6 +253,7 @@ def _register_business(app, settings, ns, contract_ns, wecom, engine, lemon_invo
             matching_queries,
             AllocationService(engine, events, matching_queries),
             ProposalService(engine),
+            InvoiceListService(engine),
         )
     )
     app.include_router(invoice_file_router(InvoiceFileService(engine, directory, archive)))

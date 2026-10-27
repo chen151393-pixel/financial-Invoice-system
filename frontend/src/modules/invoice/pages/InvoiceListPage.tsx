@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useNavigate } from "react-router";
+import { useNavigate, useSearchParams } from "react-router";
 import { matchingInvoicePath } from "../../../app/paths";
 import {
   Alert,
@@ -8,16 +8,19 @@ import {
   CardHeader,
   EmptyState,
   Pagination,
+  Segmented,
   Skeleton,
 } from "../../../shared/components/ui";
 import { openLocalSession } from "../../identity/api";
 import {
   getInvoiceTotals,
-  getMatchingSummaries,
+  queryInvoiceMatchList,
+  type InvoiceMatchFilters,
+  type InvoiceMatchList,
   type InvoiceTotals,
   type MatchingSummary,
 } from "../../matching/api";
-import { getInvoice, getInvoiceStats, listInvoices } from "../api/invoice";
+import { getInvoice, getInvoiceStats } from "../api/invoice";
 import { emptyFilters, InvoiceFilters } from "../components/InvoiceFilters";
 import { InvoiceCharts } from "../components/InvoiceCharts";
 import { InvoiceDetailDrawer } from "../components/InvoiceDetailDrawer";
@@ -29,17 +32,45 @@ import { useInvoiceAccounts } from "../hooks/useInvoiceAccounts";
 import type { InvoiceDetail, InvoiceListResult, InvoiceStats } from "../types/invoice";
 import "./invoice-list.css";
 
-type Query = typeof emptyFilters & { page: number; pageSize: number; version: number };
+type MatchFilter = InvoiceMatchFilters["matchStatus"];
+type Query = typeof emptyFilters & {
+  matchStatus: MatchFilter;
+  page: number;
+  pageSize: number;
+  version: number;
+};
+
+// 匹配状态分段：张数由后端按其他筛选条件统计，不随所选状态变化
+const MATCH_OPTIONS: readonly [MatchFilter, string][] = [
+  ["all", "全部"],
+  ["confirmed", "已匹配"],
+  ["partial", "部分匹配"],
+  ["proposed", "待审核"],
+  ["needs_review", "待复核"],
+  ["none", "未匹配"],
+  ["excluded", "不参与比对"],
+];
+const readMatch = (value: string | null): MatchFilter =>
+  MATCH_OPTIONS.find(([key]) => key === value)?.[0] ?? "all";
 
 export function InvoiceListPage() {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [draft, setDraft] = useState(emptyFilters);
-  const [query, setQuery] = useState<Query>({ ...emptyFilters, page: 1, pageSize: 20, version: 0 });
+  const [query, setQuery] = useState<Query>({
+    ...emptyFilters,
+    // 匹配状态写入地址（?match=），刷新或分享链接后保持
+    matchStatus: readMatch(searchParams.get("match")),
+    page: 1,
+    pageSize: 20,
+    version: 0,
+  });
+  const [matchCounts, setMatchCounts] = useState<InvoiceMatchList<InvoiceListResult>["counts"] | null>(null);
+  const [notice, setNotice] = useState("");
   const [data, setData] = useState<InvoiceListResult | null>(null);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
   const [matching, setMatching] = useState<Record<string, MatchingSummary>>({});
-  const [matchingError, setMatchingError] = useState("");
   const [totals, setTotals] = useState<InvoiceTotals | null>(null);
   const [totalsLoading, setTotalsLoading] = useState(true);
   const [totalsError, setTotalsError] = useState("");
@@ -56,7 +87,7 @@ export function InvoiceListPage() {
     setSelected(null);
     setData(null);
     setMatching({});
-    setMatchingError("");
+    setNotice("");
     setTotals(null);
     setTotalsLoading(true);
     setTotalsError("");
@@ -66,6 +97,12 @@ export function InvoiceListPage() {
   }
   const refresh = () => updateQuery({ ...query, version: query.version + 1 });
   const detailRefresh = useDetailRefresh(data?.rows.map((row) => row.id) ?? [], refresh);
+  function changeMatch(matchStatus: MatchFilter) {
+    const params = new URLSearchParams(searchParams);
+    if (matchStatus === "all") params.delete("match");
+    else params.set("match", matchStatus);
+    setSearchParams(params, { replace: true });
+  }
   function changeQuery(next: Query) {
     detailRefresh.clearSelection();
     updateQuery(next);
@@ -119,20 +156,13 @@ export function InvoiceListPage() {
         for (const key of ["q", "account", "status", "date_from", "date_to"] as const)
           if (query[key]) filters.set(key, query[key]);
         void loadStats(filters);
-        const params = new URLSearchParams(filters);
-        params.set("page", String(query.page));
-        params.set("page_size", String(query.pageSize));
-        const response = await listInvoices(params);
+        // 列表、匹配状态张数与本页比对状态由比对模块一次返回（按匹配状态筛选需在比对模块组织）
+        const response = await queryInvoiceMatchList<InvoiceListResult>(query);
         if (!active) return;
-        setData(response);
-        setLoading(false);
-        if (!response.rows.length) return;
-        try {
-          const summaries = await getMatchingSummaries(response.rows.map((row) => row.id));
-          if (active) setMatching(Object.fromEntries(summaries.rows.map((row) => [row.invoiceId, row])));
-        } catch (reason) {
-          if (active) setMatchingError(reason instanceof Error ? reason.message : "比对状态读取失败");
-        }
+        setData(response.list);
+        setMatching(Object.fromEntries(response.summaries.map((row) => [row.invoiceId, row])));
+        setMatchCounts(response.counts);
+        setNotice(response.notice);
       } catch (reason) {
         if (active) {
           const message = reason instanceof Error ? reason.message : "读取发票失败";
@@ -188,17 +218,43 @@ export function InvoiceListPage() {
           loading={loading}
           onChange={setDraft}
           onSubmit={() =>
-            changeQuery({ ...draft, page: 1, pageSize: query.pageSize, version: query.version + 1 })
+            changeQuery({
+              ...draft,
+              matchStatus: query.matchStatus,
+              page: 1,
+              pageSize: query.pageSize,
+              version: query.version + 1,
+            })
           }
           onReset={() => {
             setDraft(emptyFilters);
-            changeQuery({ ...emptyFilters, page: 1, pageSize: query.pageSize, version: query.version + 1 });
+            changeMatch("all");
+            changeQuery({
+              ...emptyFilters,
+              matchStatus: "all",
+              page: 1,
+              pageSize: query.pageSize,
+              version: query.version + 1,
+            });
           }}
           onRefresh={() => changeQuery({ ...query, version: query.version + 1 })}
         />
+        <div className="invoice-list__match">
+          <Segmented
+            label="按匹配状态筛选"
+            value={query.matchStatus}
+            disabled={loading}
+            options={MATCH_OPTIONS.map(([value, label]) => ({ value, label, count: matchCounts?.[value] }))}
+            onChange={(matchStatus) => {
+              changeMatch(matchStatus);
+              changeQuery({ ...query, matchStatus, page: 1, version: query.version + 1 });
+            }}
+          />
+          <span>概况卡与分布图按票面条件统计，不随匹配状态变化</span>
+        </div>
+        {notice && <Alert tone="warning">{notice}</Alert>}
         <InvoiceDetailRefresh state={detailRefresh} />
         {error && <Alert tone="danger">{error}，可点击“刷新数据”重试。</Alert>}
-        {matchingError && <Alert tone="danger">{matchingError}，请点击“刷新数据”重试。</Alert>}
         {totalsError && totalsError !== error && (
           <Alert tone="danger">{totalsError}，请点击“刷新数据”重试。</Alert>
         )}
@@ -207,14 +263,22 @@ export function InvoiceListPage() {
           <>
             {data.rows.length === 0 ? (
               <EmptyState
-                title="当前条件下没有发票"
-                description="可调整筛选，或在“数据同步 → 柠檬云”导入发票。"
+                title={
+                  query.matchStatus === "all"
+                    ? "当前条件下没有发票"
+                    : `当前条件下没有「${MATCH_OPTIONS.find(([key]) => key === query.matchStatus)?.[1]}」的发票`
+                }
+                description={
+                  query.matchStatus === "all"
+                    ? "可调整筛选，或在“数据同步 → 柠檬云”导入发票。"
+                    : "可切换匹配状态或调整其他筛选条件。"
+                }
               />
             ) : (
               <InvoiceTable
                 rows={data.rows}
                 matching={matching}
-                matchingError={matchingError}
+                matchingError={error}
                 refresh={detailRefresh}
                 onMatch={openMatching}
                 onDetail={(id) => {

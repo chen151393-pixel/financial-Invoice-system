@@ -6,7 +6,6 @@ from backend.core.errors import ApiError
 
 from ..dao import header_dao, item_dao
 from ..mapper import invoice_mapper
-from ..vo.invoice_vo import AmountSummary, InvoiceList
 
 
 class InvoiceService:
@@ -24,24 +23,7 @@ class InvoiceService:
                 total, amounts, rows = header_dao.page(connection, query)
         except SQLAlchemyError:
             raise ApiError(503, "发票查询失败，请检查业务数据库及迁移状态") from None
-        return InvoiceList(
-            total=total,
-            page=query.page,
-            pageSize=query.page_size,
-            hasPrevious=query.page > 1,
-            hasNext=query.page * query.page_size < total,
-            rows=[invoice_mapper.row(row, row["line_count"]) for row in rows],
-            amounts=[
-                AmountSummary(
-                    currency=row["currency"],
-                    count=row["count"],
-                    net=invoice_mapper.text(row["net"]),
-                    tax=invoice_mapper.text(row["tax"]),
-                    gross=invoice_mapper.text(row["gross"]),
-                )
-                for row in amounts
-            ],
-        )
+        return invoice_mapper.invoice_list(query, total, amounts, rows)
 
     def detail(self, invoice_id):
         try:

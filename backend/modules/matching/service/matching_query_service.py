@@ -5,7 +5,7 @@ from decimal import Decimal
 from sqlalchemy.exc import SQLAlchemyError
 
 from backend.core.errors import ApiError
-from backend.modules.invoice.public import invoice_ids_between, read_invoices
+from backend.modules.invoice.public import invoice_display_status, invoice_ids_between, read_invoices
 from backend.modules.review.public import current_bases
 from backend.modules.source.public import purchase_lines, supplier_line_ids, unit_label, unit_names
 from backend.modules.task.public import open_lines
@@ -16,6 +16,7 @@ from ..policy import allocation_policy as rules
 from ..policy.anomaly_policy import anomalies
 from ..policy.comparison_policy import HIGH, MEDIUM, compare, text, tier
 from ..policy.confirmation_policy import evaluate
+from ..policy.invoice_match_policy import match_status
 from ..vo.matching_vo import (
     Candidate,
     Candidates,
@@ -33,6 +34,33 @@ READ_ERROR = "发票比对读取失败，请检查业务数据库及迁移状态
 TIERS = {"all": (None, None), "high": (HIGH, None), "medium": (MEDIUM, HIGH), "low": (None, MEDIUM)}
 # 按异常筛选需逐条计算比对项，单次最多核对的待审核建议条数
 ANOMALY_SCAN = 3000
+
+
+def summary_row(invoice_id, judged):
+    best = judged["best_confidence"]
+    return {
+        "invoiceId": str(invoice_id),
+        "status": judged["status"],
+        "label": judged["label"],
+        "tier": tier(best) if best is not None else None,
+        "proposed": judged["proposed"],
+        "confirmed": judged["confirmed"],
+    }
+
+
+def summary_rows(connection, invoice_ids, invoices):
+    """按 ID 顺序给出发票的匹配状态摘要；invoices 为 read_invoices 的结果（按 ID 索引）。"""
+    rows = allocation_dao.by_invoices(connection, invoice_ids)
+    result = []
+    for invoice_id in invoice_ids:
+        invoice = invoices[invoice_id]
+        judged = match_status(
+            invoice_display_status(invoice),
+            [row for row in rows if row["invoice_id"] == invoice_id],
+            sum(item["is_active"] for item in invoice["items"]),
+        )
+        result.append(summary_row(invoice_id, judged))
+    return result
 
 
 class MatchingQueryService:
@@ -229,43 +257,9 @@ class MatchingQueryService:
 
         def action(connection):
             invoices = {invoice["id"]: invoice for invoice in read_invoices(connection, invoice_ids)}
-            rows = allocation_dao.by_invoices(connection, invoice_ids)
-            result = []
-            for invoice_id in invoice_ids:
-                if invoice_id not in invoices:
-                    raise ApiError(404, "发票不存在")
-                own = [row for row in rows if row["invoice_id"] == invoice_id]
-                proposed = [row for row in own if row["status"] == "proposed"]
-                confirmed_items = {
-                    row["invoice_item_id"]
-                    for row in own
-                    if row["status"] == "confirmed" and row["verification_status"] == "valid"
-                }
-                item_count = sum(item["is_active"] for item in invoices[invoice_id]["items"])
-                if any(row["status"] == "confirmed" and row["verification_status"] != "valid" for row in own):
-                    status, label = "needs_review", "待复核占用"
-                elif confirmed_items and len(confirmed_items) >= item_count:
-                    status, label = "confirmed", "已比对"
-                elif confirmed_items:
-                    status, label = "partial", "部分比对"
-                elif proposed:
-                    status, label = "proposed", "待审核建议"
-                else:
-                    status, label = "none", "未比对"
-                best = max(
-                    (row["confidence"] for row in proposed if row["confidence"] is not None), default=None
-                )
-                result.append(
-                    {
-                        "invoiceId": str(invoice_id),
-                        "status": status,
-                        "label": label,
-                        "tier": tier(best) if best is not None else None,
-                        "proposed": len(proposed),
-                        "confirmed": len(confirmed_items),
-                    }
-                )
-            return Summaries(rows=result)
+            if any(invoice_id not in invoices for invoice_id in invoice_ids):
+                raise ApiError(404, "发票不存在")
+            return Summaries(rows=summary_rows(connection, invoice_ids, invoices))
 
         return self._read(action)
 

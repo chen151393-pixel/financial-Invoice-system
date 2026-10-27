@@ -1,4 +1,4 @@
-"""发票比对接口：发票比对视图、待审核队列、列表摘要、候选、审核动作与重新生成建议。"""
+"""发票比对接口：发票比对视图、待审核队列、列表摘要、按匹配状态筛选的发票列表、候选、审核动作与重新生成建议。"""
 
 from typing import Annotated
 
@@ -6,6 +6,7 @@ from fastapi import APIRouter, Path, Query
 
 from backend.core.dependencies import Owner
 
+from ..dto.invoice_list_dto import InvoiceListQuery
 from ..dto.invoice_totals_dto import InvoiceTotalsQuery
 from ..dto.matching_dto import (
     BatchBody,
@@ -19,18 +20,24 @@ from ..dto.matching_dto import (
     ReplaceBody,
     SummaryBody,
 )
+from ..vo.invoice_list_vo import InvoiceListResult
 from ..vo.invoice_totals_vo import InvoiceTotals
 from ..vo.matching_vo import BatchResult, Candidates, GenerateResult, InvoiceMatching, Queue, Summaries
 
 Id = Annotated[int, Path(ge=1, le=2**63 - 1)]
 
 
-def create_router(queries, allocations, proposals):
+def create_router(queries, allocations, proposals, invoice_lists):
     router = APIRouter(prefix="/api/matching", tags=["发票比对"])
 
     @router.get("/invoice-totals", response_model=InvoiceTotals)
     def invoice_totals(query: Annotated[InvoiceTotalsQuery, Query()], owner: Owner):
         return queries.invoice_totals(query)
+
+    @router.post("/invoices/query", response_model=InvoiceListResult)
+    def invoice_list(body: InvoiceListQuery, owner: Owner):
+        """进项发票列表按匹配状态筛选；返回与发票列表相同的分页结果、各状态张数和本页匹配摘要。"""
+        return invoice_lists.query(body)
 
     @router.get("/invoices/{invoice_id}", response_model=InvoiceMatching)
     def invoice(invoice_id: Id, owner: Owner):

@@ -4,12 +4,10 @@ import type {
   ImportFile,
   ImportResult,
   InvoiceDetail,
-  InvoiceListResult,
   InvoiceAccountOption,
   InvoiceStats,
 } from "../types/invoice";
 
-export const listInvoices = (query: URLSearchParams) => http<InvoiceListResult>(`/invoices?${query}`);
 export const getInvoiceAccounts = () =>
   http<{ items: InvoiceAccountOption[] }>("/sync/lemon/invoices/accounts");
 export const getInvoiceStats = (query: URLSearchParams) => http<InvoiceStats>(`/invoices/stats?${query}`);

@@ -74,7 +74,11 @@ def accounts(connection):
     )
 
 
-def amounts(connection, query):
+def amounts(connection, query, include_ids=None):
+    """按币种汇总；include_ids 不为 None 时只汇总这些发票（由调用方按其他模块的条件给出）。"""
+    if include_ids is not None and not include_ids:
+        return []
+    extra = [headers.c.id.in_(include_ids)] if include_ids is not None else []
     result = connection.execute(
         select(
             headers.c.currency,
@@ -83,7 +87,7 @@ def amounts(connection, query):
             func.sum(headers.c.tax_amount).label("tax"),
             func.sum(headers.c.amount_including_tax).label("gross"),
         )
-        .where(*_conditions(query))
+        .where(*_conditions(query), *extra)
         .group_by(headers.c.currency)
         .order_by(headers.c.currency)
     ).mappings()
@@ -134,6 +138,30 @@ def date_counts(connection, query):
     return [dict(row) for row in result]
 
 
+def status_page(connection, query, before_id, limit):
+    """按列表筛选条件从新到旧（主键倒序）分批读取：票面状态、价税合计与有效明细行数。"""
+    active_items = (
+        select(func.count())
+        .select_from(items)
+        .where(items.c.invoice_id == headers.c.id, items.c.is_active.is_(True))
+        .correlate(headers)
+        .scalar_subquery()
+    )
+    conditions = _conditions(query) + ([headers.c.id < before_id] if before_id else [])
+    result = connection.execute(
+        select(
+            headers.c.id,
+            headers.c.status,
+            headers.c.amount_including_tax,
+            active_items.label("active_item_count"),
+        )
+        .where(*conditions)
+        .order_by(headers.c.id.desc())
+        .limit(limit)
+    ).mappings()
+    return [dict(row) for row in result]
+
+
 def amount_page(connection, query, after_id, limit):
     """统计范围按主键分批读取，只返回匹配汇总需要的票头字段。"""
     result = connection.execute(
@@ -152,11 +180,14 @@ def amount_page(connection, query, after_id, limit):
     return [dict(row) for row in result]
 
 
-def page(connection, query):
-    """返回 (总数, 按币种汇总, 本页票头含明细行数)；同日期按主键倒序稳定分页。"""
-    conditions = _conditions(query)
+def page(connection, query, include_ids=None):
+    """返回 (总数, 按币种汇总, 本页票头含明细行数)；同日期按主键倒序稳定分页。
+    include_ids 不为 None 时只在这些发票内分页（空集合直接返回空结果）。"""
+    if include_ids is not None and not include_ids:
+        return 0, [], []
+    conditions = _conditions(query) + ([headers.c.id.in_(include_ids)] if include_ids is not None else [])
     total = connection.scalar(select(func.count()).select_from(headers).where(*conditions))
-    totals = amounts(connection, query)
+    totals = amounts(connection, query, include_ids)
     line_count = (
         select(func.count())
         .select_from(items)

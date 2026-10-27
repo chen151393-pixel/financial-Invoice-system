@@ -4,14 +4,15 @@ import type { InvoiceTotals, InvoiceTotalsFilters } from "../types/invoice-total
 import type {
   Candidate,
   ConfirmBody,
+  InvoiceMatchFilters,
+  InvoiceMatchList,
   InvoiceMatching,
   ManualBody,
-  MatchingSummary,
   Queue,
   QueueQuery,
 } from "../types/matching";
 
-export type { MatchingSummary } from "../types/matching";
+export type { InvoiceMatchFilters, InvoiceMatchList, MatchStatus, MatchingSummary } from "../types/matching";
 export type { InvoiceTotals } from "../types/invoice-totals";
 
 const allocation = (id: string) => `/matching/allocations/${encodeURIComponent(id)}`;
@@ -36,8 +37,18 @@ export const getMatchingQueue = (query: QueueQuery) =>
     invoiceFrom: query.invoiceFrom || null,
     invoiceTo: query.invoiceTo || null,
   });
-export const getMatchingSummaries = (invoiceIds: string[]) =>
-  read<{ rows: MatchingSummary[] }>("/matching/summaries", "POST", { invoiceIds });
+// 进项发票列表按匹配状态筛选；日期为空时提交 null，由后端按“不限”处理
+export const queryInvoiceMatchList = <List>(filters: InvoiceMatchFilters) =>
+  read<InvoiceMatchList<List>>("/matching/invoices/query", "POST", {
+    q: filters.q,
+    account: filters.account,
+    status: filters.status,
+    date_from: filters.date_from || null,
+    date_to: filters.date_to || null,
+    matchStatus: filters.matchStatus,
+    page: filters.page,
+    page_size: filters.pageSize,
+  });
 export function getInvoiceTotals(filters: InvoiceTotalsFilters) {
   const params = new URLSearchParams();
   for (const key of ["q", "account", "status", "date_from", "date_to"] as const)

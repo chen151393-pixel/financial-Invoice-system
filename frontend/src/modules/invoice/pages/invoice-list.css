@@ -15,6 +15,20 @@
   padding-bottom: 14px;
   border-bottom: 1px solid var(--color-border);
 }
+/* 匹配状态分段：位于查询栏下方，附说明概况卡不随它变化 */
+.invoice-list__match {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 14px;
+  padding: 12px 20px;
+  border-bottom: 1px solid var(--color-border);
+  color: var(--color-muted);
+  font-size: 12px;
+}
+.invoice-list__match .ui-segmented {
+  flex-wrap: wrap;
+}
 /* 分布图：按月、票面状态、账套三张卡片一行，窄屏换行 */
 .invoice-charts {
   display: grid;

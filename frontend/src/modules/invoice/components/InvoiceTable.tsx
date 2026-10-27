@@ -6,8 +6,13 @@ import { money, shown } from "./format";
 import "./invoice-status.css";
 
 const tierLabels = { high: "高", medium: "中", low: "低", manual: "人工" } as const;
+// 已匹配为成功色；未匹配与不参与比对为中性；部分匹配、待审核、待复核需要处理
 const tone = (summary?: MatchingSummary) =>
-  summary?.status === "confirmed" ? "success" : summary && summary.status !== "none" ? "warning" : "neutral";
+  summary?.status === "confirmed"
+    ? "success"
+    : summary && summary.status !== "none" && summary.status !== "excluded"
+      ? "warning"
+      : "neutral";
 
 export function InvoiceTable({
   rows,

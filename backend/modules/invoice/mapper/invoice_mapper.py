@@ -3,7 +3,7 @@
 from datetime import UTC
 
 from ..policy.invoice_status_policy import LABELS, NOTICES, display_status
-from ..vo.invoice_vo import InvoiceDetail, InvoiceLine, InvoiceRow
+from ..vo.invoice_vo import AmountSummary, InvoiceDetail, InvoiceLine, InvoiceList, InvoiceRow
 
 SOURCE_LABELS = {
     "lemon_excel": "Excel导入",
@@ -74,4 +74,26 @@ def detail(header, item_rows):
         buyerTaxNo=header["buyer_tax_no"],
         remark=header["remark"],
         lines=[line(item) for item in item_rows],
+    )
+
+
+def invoice_list(query, total, amounts, rows):
+    """列表分页结果；进项发票列表与按匹配状态筛选的列表共用同一结构。"""
+    return InvoiceList(
+        total=total,
+        page=query.page,
+        pageSize=query.page_size,
+        hasPrevious=query.page > 1,
+        hasNext=query.page * query.page_size < total,
+        rows=[row(header, header["line_count"]) for header in rows],
+        amounts=[
+            AmountSummary(
+                currency=item["currency"],
+                count=item["count"],
+                net=text(item["net"]),
+                tax=text(item["tax"]),
+                gross=text(item["gross"]),
+            )
+            for item in amounts
+        ],
     )

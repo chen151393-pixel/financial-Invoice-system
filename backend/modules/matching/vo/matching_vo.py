@@ -145,7 +145,7 @@ class Queue(StrictModel):
 
 class SummaryRow(StrictModel):
     invoiceId: str
-    status: Literal["none", "proposed", "partial", "confirmed", "needs_review"]
+    status: Literal["none", "proposed", "partial", "confirmed", "needs_review", "excluded"]
     label: str
     tier: Tier | None
     proposed: int

@@ -141,3 +141,73 @@ test("账套选项使用本地只读接口", async (t) => {
   });
   assert.deepEqual(await invoiceApi.getInvoiceAccounts(), { items: [] });
 });
+
+test("按匹配状态筛选的列表请求带全部筛选条件与匹配状态，空日期提交 null", async (t) => {
+  const calls = [];
+  t.mock.method(globalThis, "fetch", async (url, options) => {
+    calls.push({ url, body: JSON.parse(options.body) });
+    return Response.json({ list: { rows: [] }, counts: { all: 0 }, summaries: [], notice: "" });
+  });
+  await api.queryInvoiceMatchList({
+    ...emptyFilters,
+    q: "供应商",
+    date_from: "2026-10-01",
+    matchStatus: "proposed",
+    page: 2,
+    pageSize: 50,
+  });
+  assert.match(calls[0].url, /\/api\/matching\/invoices\/query$/);
+  assert.deepEqual(calls[0].body, {
+    q: "供应商",
+    account: "",
+    status: "",
+    date_from: "2026-10-01",
+    date_to: null,
+    matchStatus: "proposed",
+    page: 2,
+    page_size: 50,
+  });
+});
+
+test("不参与比对的发票显示后端文字且不标为待处理", async () => {
+  const { InvoiceTable } = await server.ssrLoadModule("/src/modules/invoice/components/InvoiceTable.tsx");
+  const row = {
+    id: "9",
+    number: "26000000000000007703",
+    date: "2026-10-10",
+    seller: "供应商",
+    sellerTaxNo: "",
+    type: "数电发票",
+    businessType: "",
+    status: "作废",
+    sourceStatus: "void",
+    displayStatus: "void",
+    statusNotice: "",
+    currency: "CNY",
+    net: "8.00",
+    tax: "1.04",
+    gross: "9.04",
+    lineCount: 1,
+    importedAt: "2026-10-27T01:00:00Z",
+    source: "Excel导入",
+  };
+  const summary = {
+    invoiceId: "9",
+    status: "excluded",
+    label: "不参与比对",
+    tier: null,
+    proposed: 0,
+    confirmed: 0,
+  };
+  const html = renderToStaticMarkup(
+    createElement(InvoiceTable, {
+      rows: [row],
+      matching: { 9: summary },
+      matchingError: "",
+      onMatch() {},
+      onDetail() {},
+    }),
+  );
+  assert.match(html, /不参与比对/);
+  assert.match(html, /invoice-list__match-state--neutral/);
+});
