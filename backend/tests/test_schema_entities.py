@@ -20,6 +20,7 @@ MODULES = [
     "backend.modules.invoice.entity",
     "backend.modules.matching.entity",
     "backend.modules.sync.entity",
+    "backend.modules.identity.entity",
 ]
 
 

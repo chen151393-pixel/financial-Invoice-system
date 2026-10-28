@@ -2,9 +2,11 @@ import { useEffect, useRef, useState } from "react";
 import { HttpError, onUnauthorized } from "../../../shared/api/http";
 import { getSession, login, logout } from "../api";
 import type { SessionPhase, SessionState } from "../session-context";
+import type { SessionUser } from "../types";
 
 export function useSessionState(): SessionState {
   const [phase, setPhase] = useState<SessionPhase>("loading");
+  const [user, setUser] = useState<SessionUser | null>(null);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [attempt, setAttempt] = useState(0);
@@ -13,8 +15,10 @@ export function useSessionState(): SessionState {
   useEffect(() => {
     let active = true;
     getSession()
-      .then(() => {
-        if (active) setPhase("ready");
+      .then((session) => {
+        if (!active) return;
+        setUser(session.user ?? null);
+        setPhase("ready");
       })
       .catch((failure: unknown) => {
         if (!active) return;
@@ -44,6 +48,8 @@ export function useSessionState(): SessionState {
     setError("");
     try {
       await login(username, password);
+      const session = await getSession();
+      setUser(session.user ?? null);
       setPhase("ready");
     } catch (failure) {
       setError(failure instanceof Error ? failure.message : "登录失败");
@@ -60,6 +66,7 @@ export function useSessionState(): SessionState {
     setError("");
     try {
       await logout();
+      setUser(null);
       setPhase("login");
     } catch (failure) {
       if (failure instanceof HttpError && failure.status === 401) setPhase("login");
@@ -76,5 +83,5 @@ export function useSessionState(): SessionState {
     setAttempt((value) => value + 1);
   }
 
-  return { phase, error, busy, signIn, signOut, retry };
+  return { phase, user, error, busy, signIn, signOut, retry };
 }

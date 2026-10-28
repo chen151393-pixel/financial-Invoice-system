@@ -4,7 +4,7 @@ import pytest
 from backend.app import create_app
 from backend.core.config import load_settings
 from backend.core.errors import ApiError
-from backend.modules.identity.service import IdentityService
+from backend.modules.identity.service.session_service import IdentityService
 from fastapi.testclient import TestClient
 
 

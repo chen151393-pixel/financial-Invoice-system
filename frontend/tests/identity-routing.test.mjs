@@ -6,7 +6,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { matchRoutes, MemoryRouter } from "react-router";
 import { createServer } from "vite";
 
-let server, navigation, identityRoutes, LoginPage, SessionContext;
+let server, navigation, identityRoutes, LoginPage, PasswordLoginForm, SessionContext;
 before(async () => {
   server = await createServer({
     configFile: fileURLToPath(new URL("../vite.config.ts", import.meta.url)),
@@ -17,6 +17,9 @@ before(async () => {
   navigation = await server.ssrLoadModule("/src/modules/identity/login-navigation.ts");
   ({ identityRoutes } = await server.ssrLoadModule("/src/modules/identity/routes.tsx"));
   ({ LoginPage } = await server.ssrLoadModule("/src/modules/identity/pages/LoginPage.tsx"));
+  ({ PasswordLoginForm } = await server.ssrLoadModule(
+    "/src/modules/identity/components/PasswordLoginForm.tsx",
+  ));
   ({ SessionContext } = await server.ssrLoadModule("/src/modules/identity/session-context.ts"));
 });
 after(async () => {
@@ -80,16 +83,25 @@ test("登录回跳拒绝外部地址、登录循环和无效地址", () => {
   }
 });
 
-test("登录表单保留标签、密码自动填充与后端错误，提交中禁用控件", () => {
-  const markup = render({ error: "用户名或密码错误", busy: true });
+test("应急登录表单保留标签、密码自动填充，提交中禁用控件", () => {
+  const markup = renderToStaticMarkup(
+    createElement(PasswordLoginForm, { busy: true, error: "用户名或密码错误", onSubmit() {} }),
+  );
   assert.match(markup, /for="identity-username">用户名<\/label>/);
   assert.match(markup, /for="identity-password">密码<\/label>/);
   assert.match(markup, /autoComplete="current-password"/);
-  assert.match(markup, /role="alert">用户名或密码错误/);
+  assert.match(markup, /aria-describedby="identity-feedback"/);
   assert.match(markup, /正在登录/);
   assert.match(markup, /aria-label="显示密码"/);
   assert.match(markup, /aria-controls="identity-password"/);
   assert.equal((markup.match(/disabled=""/g) ?? []).length, 4);
+});
+
+test("登录页先读取后端登录方式，读取完成前不展示可提交表单，并显示后端错误", () => {
+  const markup = render({ error: "用户名或密码错误" });
+  assert.match(markup, /role="alert">用户名或密码错误/);
+  assert.match(markup, /正在读取登录方式/);
+  assert.doesNotMatch(markup, /<form/);
 });
 
 test("检查会话的加载与失败状态不展示可提交表单", () => {

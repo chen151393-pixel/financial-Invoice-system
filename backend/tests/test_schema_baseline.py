@@ -61,6 +61,15 @@ TABLES = {
     "sync_ns_runs",
     "sync_lemon_plans",
     "sync_lemon_jobs",
+    "identity_departments",
+    "identity_sync_scopes",
+    "identity_department_roles",
+    "identity_users",
+    "identity_user_departments",
+    "identity_user_roles",
+    "identity_login_flows",
+    "identity_sync_runs",
+    "identity_audit",
 }
 NOW = "2026-10-10 00:00:00"
 

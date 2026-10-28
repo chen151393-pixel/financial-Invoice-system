@@ -84,6 +84,12 @@ export const navigation: readonly SidebarGroup<View>[] = [
         icon: <MenuIcon path="M4 12h12 M12 6l6 6-6 6 M20 4v16" />,
       },
       {
+        // 只有系统管理员可见，由 WorkspaceFrame 按会话过滤
+        id: "access",
+        label: "人员与权限",
+        icon: <MenuIcon path="M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8z M2 21v-1a7 7 0 0 1 14 0v1 M17 11l2 2 4-4" />,
+      },
+      {
         id: "ui-kit",
         label: "界面组件库",
         icon: <MenuIcon path="M4 4h7v7H4z M13 4h7v7h-7z M4 13h7v7H4z M16.5 13v7 M13 16.5h7" />,

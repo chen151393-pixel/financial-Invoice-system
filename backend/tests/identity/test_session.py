@@ -3,7 +3,7 @@
 import pytest
 from backend.app import create_app
 from backend.core.errors import ApiError
-from backend.modules.identity.service import IdentityService
+from backend.modules.identity.service.session_service import IdentityService
 from fastapi.testclient import TestClient
 
 
@@ -31,7 +31,7 @@ def test_custom_account_login_rotation_logout_and_replay(context):
 
 def test_expired_session_and_throttle_window(context, monkeypatch):
     clock = [1000.0]
-    monkeypatch.setattr("backend.modules.identity.service.time.monotonic", lambda: clock[0])
+    monkeypatch.setattr("backend.modules.identity.service.session_service.time.monotonic", lambda: clock[0])
     identity = IdentityService(context.settings)
     args = {"origin": context.settings.origin, "ip": "127.0.0.1"}
     for _ in range(10):

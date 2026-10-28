@@ -1,0 +1,62 @@
+/* 人员与权限页：只做排布，颜色、字号沿用组件库与设计变量 */
+.identity-access-page {
+  display: grid;
+  gap: var(--space-layout);
+}
+.identity-access-sync {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-small) var(--space-control);
+  font-size: 13px;
+}
+.identity-access-muted {
+  margin: 0;
+  color: var(--color-muted);
+  font-size: 13px;
+}
+.identity-access-roles {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.identity-access-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+}
+.identity-role-dialog {
+  display: grid;
+  gap: var(--space-control);
+  min-width: min(420px, 100%);
+}
+.identity-role-dialog p {
+  margin: 0;
+  color: var(--color-muted);
+  font-size: 13px;
+}
+.identity-role-dialog fieldset {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: var(--space-control);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-control);
+}
+.identity-role-dialog legend {
+  padding: 0 4px;
+  font-size: 13px;
+  font-weight: 600;
+}
+.identity-role-dialog label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+}
+.identity-role-dialog__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-small);
+}

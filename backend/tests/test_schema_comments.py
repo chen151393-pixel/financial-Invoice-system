@@ -33,6 +33,15 @@ TABLES = ALL_TABLES - {
     "review_calculation_jobs",
     "review_declaration_snapshots",
     "review_snapshot_suppliers",
+    "identity_departments",
+    "identity_sync_scopes",
+    "identity_department_roles",
+    "identity_users",
+    "identity_user_departments",
+    "identity_user_roles",
+    "identity_login_flows",
+    "identity_sync_runs",
+    "identity_audit",
 }
 COMMENT_HEAD = "0015_sync_comments"
 

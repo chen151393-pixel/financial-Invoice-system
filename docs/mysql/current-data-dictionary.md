@@ -1499,3 +1499,206 @@ NS 来源按批后台保存记录与结果，不保存令牌。
 | `updated_at` | `DATETIME` | 本地记录最后更新时间，UTC；由 DAO 更新 |
 
 队列按 `ns_account` 唯一，快照按 `customs_declaration_id` 唯一，供应商关联按 `declaration_id + supplier_id` 唯一。快照到队列、供应商关联到快照设本模块外键；来源 ID 不设跨模块外键。列表按账套／审核状态／申报日期／来源 ID 索引分页，另设异常、自动审核、供应商筛选索引。
+
+## 飞书登录与人员权限（0033，2026-10-27）
+
+人员与部门以飞书为准，本地只保存副本；部门默认角色与个人角色由系统管理员在“权限管理”页配置。会话仍在 API 进程内存中。方案见 [飞书登录、部门同步与权限方案](../feishu-identity-plan.md)，结构依据：[identity 表定义](../../backend/modules/identity/entity/)。
+
+<a id="identity_departments"></a>
+
+### identity_departments｜飞书部门副本
+
+飞书部门副本，用于选择同步范围与配置部门默认角色
+
+| 字段                 | MySQL 类型        | 可空 | 默认                 | 中文含义                                               |
+| -------------------- | ----------------- | ---- | -------------------- | ------------------------------------------------------ |
+| `id`                 | `BIGINT UNSIGNED` | 否   | 自增                 | 部门本地主键                                           |
+| `open_department_id` | `VARCHAR(64)`     | 否   | —                    | 飞书部门 ID（open_department_id，od- 开头）            |
+| `parent_open_id`     | `VARCHAR(64)`     | 是   | —                    | 上级飞书部门 ID；0 表示企业根部门，空表示未知          |
+| `name`               | `VARCHAR(200)`    | 否   | —                    | 部门名称，以飞书为准                                   |
+| `active`             | `BOOL`            | 否   | 1                    | 是否仍在飞书通讯录权限范围内且未删除；否时不再同步成员 |
+| `synced_at`          | `DATETIME(6)`     | 否   | —                    | 最近一次从飞书读到该部门的时间，UTC                    |
+| `created_at`         | `DATETIME(6)`     | 否   | CURRENT_TIMESTAMP(6) | 本地记录创建时间，UTC                                  |
+| `updated_at`         | `DATETIME(6)`     | 否   | CURRENT_TIMESTAMP(6) | 本地记录最后更新时间，UTC；由 DAO 更新                 |
+
+**关联与约束**
+
+- 主键：`id`。
+- 唯一约束 `uq_identity_department_open`：`(open_department_id)`。
+- 查询索引 `ix_identity_department_parent`：`(parent_open_id)`。
+
+<a id="identity_sync_scopes"></a>
+
+### identity_sync_scopes｜成员同步范围
+
+成员同步范围：只同步这些部门及其下级部门的成员，范围外的人不能登录
+
+| 字段            | MySQL 类型        | 可空 | 默认                 | 中文含义                                             |
+| --------------- | ----------------- | ---- | -------------------- | ---------------------------------------------------- |
+| `id`            | `BIGINT UNSIGNED` | 否   | 自增                 | 同步范围主键                                         |
+| `department_id` | `BIGINT UNSIGNED` | 否   | —                    | 同步根部门，指向 identity_departments.id；含全部下级 |
+| `created_by`    | `VARCHAR(200)`    | 否   | —                    | 设置该范围的认证操作者                               |
+| `created_at`    | `DATETIME(6)`     | 否   | CURRENT_TIMESTAMP(6) | 本地记录创建时间，UTC                                |
+| `updated_at`    | `DATETIME(6)`     | 否   | CURRENT_TIMESTAMP(6) | 本地记录最后更新时间，UTC；由 DAO 更新               |
+
+**关联与约束**
+
+- 主键：`id`。
+- 唯一约束 `uq_identity_sync_scope`：`(department_id)`。
+
+<a id="identity_department_roles"></a>
+
+### identity_department_roles｜部门默认角色
+
+部门默认角色：该部门及其下级部门的成员自动获得
+
+| 字段            | MySQL 类型        | 可空 | 默认                 | 中文含义                                    |
+| --------------- | ----------------- | ---- | -------------------- | ------------------------------------------- |
+| `id`            | `BIGINT UNSIGNED` | 否   | 自增                 | 部门默认角色主键                            |
+| `department_id` | `BIGINT UNSIGNED` | 否   | —                    | 部门，指向 identity_departments.id          |
+| `role`          | `VARCHAR(40)`     | 否   | —                    | 角色代码，见 identity/policy/role_policy.py |
+| `granted_by`    | `VARCHAR(200)`    | 否   | —                    | 授予该角色的认证操作者                      |
+| `created_at`    | `DATETIME(6)`     | 否   | CURRENT_TIMESTAMP(6) | 本地记录创建时间，UTC                       |
+| `updated_at`    | `DATETIME(6)`     | 否   | CURRENT_TIMESTAMP(6) | 本地记录最后更新时间，UTC；由 DAO 更新      |
+
+**关联与约束**
+
+- 主键：`id`。
+- 唯一约束 `uq_identity_department_role`：`(department_id, role)`。
+
+<a id="identity_users"></a>
+
+### identity_users｜飞书人员副本
+
+飞书人员副本：同步范围内的成员，登录时按此校验在职与角色
+
+| 字段              | MySQL 类型        | 可空 | 默认                 | 中文含义                                                   |
+| ----------------- | ----------------- | ---- | -------------------- | ---------------------------------------------------------- |
+| `id`              | `BIGINT UNSIGNED` | 否   | 自增                 | 人员本地主键                                               |
+| `user_id`         | `VARCHAR(64)`     | 否   | —                    | 飞书企业内用户 ID（user_id）；操作者记为 user:fs:<user_id> |
+| `open_id`         | `VARCHAR(64)`     | 是   | —                    | 飞书应用内用户 ID（open_id）                               |
+| `union_id`        | `VARCHAR(64)`     | 是   | —                    | 飞书开发者维度用户 ID（union_id）                          |
+| `name`            | `VARCHAR(200)`    | 否   | —                    | 姓名，以飞书为准                                           |
+| `avatar_url`      | `VARCHAR(1024)`   | 是   | —                    | 头像地址（72×72）                                          |
+| `active`          | `BOOL`            | 否   | 1                    | 是否可登录：在职、未冻结且在同步范围内；否时其会话立即失效 |
+| `inactive_reason` | `VARCHAR(200)`    | 是   | —                    | 不可登录的原因，例如已离职、已移出同步范围                 |
+| `custom_roles`    | `BOOL`            | 否   | 0                    | 是否只按个人角色授权；否时为部门默认角色与个人角色的并集   |
+| `synced_at`       | `DATETIME(6)`     | 否   | —                    | 最近一次从飞书读到该人员的时间，UTC                        |
+| `last_login_at`   | `DATETIME(6)`     | 是   | —                    | 最近一次飞书登录时间，UTC                                  |
+| `created_at`      | `DATETIME(6)`     | 否   | CURRENT_TIMESTAMP(6) | 本地记录创建时间，UTC                                      |
+| `updated_at`      | `DATETIME(6)`     | 否   | CURRENT_TIMESTAMP(6) | 本地记录最后更新时间，UTC；由 DAO 更新                     |
+
+**关联与约束**
+
+- 主键：`id`。
+- 唯一约束 `uq_identity_user_id`：`(user_id)`。
+
+<a id="identity_user_departments"></a>
+
+### identity_user_departments｜人员所属部门
+
+人员所属部门，以飞书为准；每次同步整体替换
+
+| 字段            | MySQL 类型        | 可空 | 默认                 | 中文含义                               |
+| --------------- | ----------------- | ---- | -------------------- | -------------------------------------- |
+| `id`            | `BIGINT UNSIGNED` | 否   | 自增                 | 人员部门关系主键                       |
+| `user_id`       | `BIGINT UNSIGNED` | 否   | —                    | 人员，指向 identity_users.id           |
+| `department_id` | `BIGINT UNSIGNED` | 否   | —                    | 部门，指向 identity_departments.id     |
+| `created_at`    | `DATETIME(6)`     | 否   | CURRENT_TIMESTAMP(6) | 本地记录创建时间，UTC                  |
+| `updated_at`    | `DATETIME(6)`     | 否   | CURRENT_TIMESTAMP(6) | 本地记录最后更新时间，UTC；由 DAO 更新 |
+
+**关联与约束**
+
+- 主键：`id`。
+- 唯一约束 `uq_identity_user_department`：`(user_id, department_id)`。
+
+<a id="identity_user_roles"></a>
+
+### identity_user_roles｜个人角色
+
+管理员给个人追加的角色；人员 custom_roles 为是时只按这些角色授权
+
+| 字段         | MySQL 类型        | 可空 | 默认                 | 中文含义                                    |
+| ------------ | ----------------- | ---- | -------------------- | ------------------------------------------- |
+| `id`         | `BIGINT UNSIGNED` | 否   | 自增                 | 个人角色主键                                |
+| `user_id`    | `BIGINT UNSIGNED` | 否   | —                    | 人员，指向 identity_users.id                |
+| `role`       | `VARCHAR(40)`     | 否   | —                    | 角色代码，见 identity/policy/role_policy.py |
+| `granted_by` | `VARCHAR(200)`    | 否   | —                    | 授予该角色的认证操作者                      |
+| `created_at` | `DATETIME(6)`     | 否   | CURRENT_TIMESTAMP(6) | 本地记录创建时间，UTC                       |
+| `updated_at` | `DATETIME(6)`     | 否   | CURRENT_TIMESTAMP(6) | 本地记录最后更新时间，UTC；由 DAO 更新      |
+
+**关联与约束**
+
+- 主键：`id`。
+- 唯一约束 `uq_identity_user_role`：`(user_id, role)`。
+
+<a id="identity_login_flows"></a>
+
+### identity_login_flows｜飞书登录流程
+
+飞书登录流程：state 只能使用一次
+
+| 字段           | MySQL 类型        | 可空 | 默认                 | 中文含义                                                                   |
+| -------------- | ----------------- | ---- | -------------------- | -------------------------------------------------------------------------- |
+| `id`           | `BIGINT UNSIGNED` | 否   | 自增                 | 登录流程主键                                                               |
+| `state_hash`   | `CHAR(64)`        | 否   | —                    | state 的 SHA-256；原文只发给飞书，不入库                                   |
+| `browser_hash` | `CHAR(64)`        | 否   | —                    | 登录流程 Cookie 的 SHA-256；回调时须一致，防止把他人的授权码登录到本浏览器 |
+| `return_to`    | `VARCHAR(500)`    | 否   | —                    | 登录成功后回到的站内路径                                                   |
+| `status`       | `VARCHAR(20)`     | 否   | —                    | pending 待回调；checking 正在向飞书核实；success 已登录；failed 失败       |
+| `reason`       | `VARCHAR(300)`    | 是   | —                    | 失败原因，登录页展示                                                       |
+| `user_id`      | `VARCHAR(64)`     | 是   | —                    | 完成登录的飞书 user_id                                                     |
+| `expires_at`   | `DATETIME(6)`     | 否   | —                    | state 过期时间，UTC；创建后 10 分钟                                        |
+| `finished_at`  | `DATETIME(6)`     | 是   | —                    | 回调处理完成时间，UTC                                                      |
+| `created_at`   | `DATETIME(6)`     | 否   | CURRENT_TIMESTAMP(6) | 本地记录创建时间，UTC                                                      |
+| `updated_at`   | `DATETIME(6)`     | 否   | CURRENT_TIMESTAMP(6) | 本地记录最后更新时间，UTC；由 DAO 更新                                     |
+
+**关联与约束**
+
+- 主键：`id`。
+- 唯一约束 `uq_identity_login_state`：`(state_hash)`。
+
+<a id="identity_sync_runs"></a>
+
+### identity_sync_runs｜飞书同步记录
+
+飞书部门与成员同步记录
+
+| 字段                | MySQL 类型        | 可空 | 默认                 | 中文含义                                    |
+| ------------------- | ----------------- | ---- | -------------------- | ------------------------------------------- |
+| `id`                | `BIGINT UNSIGNED` | 否   | 自增                 | 同步记录主键                                |
+| `trigger`           | `VARCHAR(20)`     | 否   | —                    | manual 手动；schedule 定时                  |
+| `started_by`        | `VARCHAR(200)`    | 否   | —                    | 发起的认证操作者；定时为 system             |
+| `status`            | `VARCHAR(20)`     | 否   | —                    | running 进行中；succeeded 成功；failed 失败 |
+| `departments`       | `INTEGER`         | 否   | 0                    | 读取到的部门数                              |
+| `users_added`       | `INTEGER`         | 否   | 0                    | 新增人员数                                  |
+| `users_updated`     | `INTEGER`         | 否   | 0                    | 信息或部门有变化的人员数                    |
+| `users_deactivated` | `INTEGER`         | 否   | 0                    | 改为不可登录的人员数                        |
+| `error`             | `VARCHAR(500)`    | 是   | —                    | 失败原因；失败时不停用任何人员              |
+| `started_at`        | `DATETIME(6)`     | 否   | —                    | 开始时间，UTC                               |
+| `finished_at`       | `DATETIME(6)`     | 是   | —                    | 结束时间，UTC                               |
+| `created_at`        | `DATETIME(6)`     | 否   | CURRENT_TIMESTAMP(6) | 本地记录创建时间，UTC                       |
+| `updated_at`        | `DATETIME(6)`     | 否   | CURRENT_TIMESTAMP(6) | 本地记录最后更新时间，UTC；由 DAO 更新      |
+
+**关联与约束**
+
+- 主键：`id`。
+
+<a id="identity_audit"></a>
+
+### identity_audit｜身份与权限审计
+
+身份与权限审计记录，只追加
+
+| 字段         | MySQL 类型        | 可空 | 默认 | 中文含义                                                                                              |
+| ------------ | ----------------- | ---- | ---- | ----------------------------------------------------------------------------------------------------- |
+| `id`         | `BIGINT UNSIGNED` | 否   | 自增 | 审计主键                                                                                              |
+| `actor`      | `VARCHAR(200)`    | 否   | —    | 操作者；登录失败时为飞书 user_id 或 anonymous                                                         |
+| `action`     | `VARCHAR(40)`     | 否   | —    | login 登录成功；login_failed 登录失败；scope 同步范围；department_roles 部门角色；user_roles 个人角色 |
+| `target`     | `VARCHAR(200)`    | 是   | —    | 操作对象，例如部门或人员本地 ID                                                                       |
+| `detail`     | `JSON`            | 是   | —    | 变更前后或失败原因                                                                                    |
+| `created_at` | `DATETIME(6)`     | 否   | —    | 发生时间，UTC                                                                                         |
+
+**关联与约束**
+
+- 主键：`id`。
+- 查询索引 `ix_identity_audit_created`：`(created_at)`。

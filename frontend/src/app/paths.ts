@@ -15,6 +15,7 @@ export const paths = {
   syncBatches: "/sync/batches",
   writeback: "/writeback",
   uiKit: "/ui-kit",
+  access: "/settings/access",
 } as const;
 
 // 旧地址，路由中重定向到新地址；保留一个版本后删除。
@@ -60,7 +61,8 @@ export type View =
   | "invoice-followup"
   | "writeback"
   | "supplier-profiles"
-  | "ui-kit";
+  | "ui-kit"
+  | "access";
 
 const viewPaths: Record<View, string> = {
   workbench: paths.workbench,
@@ -73,6 +75,7 @@ const viewPaths: Record<View, string> = {
   writeback: paths.writeback,
   "supplier-profiles": paths.supplierGroups,
   "ui-kit": paths.uiKit,
+  access: paths.access,
 };
 
 export function viewPath(view: View): string {

@@ -13,6 +13,7 @@ from .core.events import EventBus
 from .core.frontend import create_router as frontend_router
 from .core.middleware import RequestGuard, register_error_handlers
 from .integrations.contract_archive import ContractArchive
+from .integrations.feishu import FeishuClient
 from .integrations.lemon.existing_account import LemonExistingAccount
 from .integrations.lemon.invoice_client import LemonInvoiceClient
 from .integrations.netsuite.client import NetSuite
@@ -20,8 +21,15 @@ from .integrations.netsuite.subpo_contract import connection_settings
 from .integrations.wecom import WeComGroups
 from .integrations.wecom_messaging import WeComMessaging
 from .manage import verify_database
-from .modules.identity.controller import create_router as identity_router
-from .modules.identity.service import IdentityService
+from .modules.identity.controller.access_controller import create_router as identity_access_router
+from .modules.identity.controller.feishu_controller import create_router as feishu_login_router
+from .modules.identity.controller.session_controller import create_router as identity_router
+from .modules.identity.service.access_reader import AccessReader
+from .modules.identity.service.access_service import AccessService
+from .modules.identity.service.directory_sync_service import DirectorySyncService
+from .modules.identity.service.directory_sync_worker import DirectorySyncWorker
+from .modules.identity.service.feishu_login_service import FeishuLoginService
+from .modules.identity.service.session_service import IdentityService
 from .modules.invoice.controller.invoice_controller import create_router as invoice_router
 from .modules.invoice.public import InvoiceChanged, InvoiceChanging, InvoicesImported, LemonInvoicesStored
 from .modules.invoice.service.import_service import ImportService
@@ -98,7 +106,7 @@ from .modules.task.service.task_generation_service import on_review_approved
 from .modules.task.service.task_service import TaskService
 
 
-def create_app(settings=None, ns=None, engine=None, wecom=None, lemon=None, lemon_invoices=None):
+def create_app(settings=None, ns=None, engine=None, wecom=None, lemon=None, lemon_invoices=None, feishu=None):
     settings = settings or load_settings()
     owns_engine = engine is None
     if engine is None:
@@ -109,7 +117,8 @@ def create_app(settings=None, ns=None, engine=None, wecom=None, lemon=None, lemo
     lemon = lemon or LemonExistingAccount(settings)
     owns_lemon_invoices = lemon_invoices is None
     lemon_invoices = lemon_invoices or LemonInvoiceClient(settings, lemon)
-    owns_ns, owns_wecom = ns is None, wecom is None
+    owns_ns, owns_wecom, owns_feishu = ns is None, wecom is None, feishu is None
+    feishu = feishu or FeishuClient(settings)
     wecom = wecom or WeComGroups(settings)
     ns = ns or NetSuite(settings)
     contract_ns = NetSuite(connection_settings(settings)) if settings.subpo_connection_file else ns
@@ -122,8 +131,11 @@ def create_app(settings=None, ns=None, engine=None, wecom=None, lemon=None, lemo
             app.state.signed_upload_worker.start()
             app.state.lemon_worker.start()
             app.state.review_calculation_worker.start()
+            app.state.directory_sync_worker.start()
             yield
         finally:
+            if hasattr(app.state, "directory_sync_worker"):
+                await asyncio.to_thread(app.state.directory_sync_worker.stop)
             if hasattr(app.state, "review_calculation_worker"):
                 await asyncio.to_thread(app.state.review_calculation_worker.stop)
             if hasattr(app.state, "signed_upload_worker"):
@@ -140,6 +152,8 @@ def create_app(settings=None, ns=None, engine=None, wecom=None, lemon=None, lemo
                 lemon.close()
             if owns_wecom:
                 await asyncio.to_thread(wecom.close)
+            if owns_feishu:
+                feishu.close()
             if owns_ns:
                 ns.close()
             if contract_ns is not ns:
@@ -148,13 +162,21 @@ def create_app(settings=None, ns=None, engine=None, wecom=None, lemon=None, lemo
                 engine.dispose()
 
     app = FastAPI(title="NS 发票对账后端", lifespan=lifespan, docs_url=None, redoc_url=None, openapi_url=None)
-    identity = IdentityService(settings)
+    identity = IdentityService(settings, AccessReader(engine))
     app.state.identity = identity
     app.add_middleware(
         RequestGuard, secure=settings.origin.startswith("https://"), json_body_limits=JSON_BODY_LIMITS
     )
     register_error_handlers(app)
-    app.include_router(identity_router(identity, settings))
+    app.include_router(identity_router(identity, settings, feishu))
+    app.include_router(
+        feishu_login_router(FeishuLoginService(engine, feishu, identity, identity.access, settings), settings)
+    )
+    directory_sync = DirectorySyncService(engine, feishu)
+    app.state.directory_sync_worker = DirectorySyncWorker(directory_sync)
+    app.include_router(
+        identity_access_router(AccessService(engine, identity, feishu), directory_sync, identity)
+    )
     app.state.lemon_binding = LemonBindingService(settings, engine, lemon)
     app.include_router(lemon_binding_router(app.state.lemon_binding))
     _register_business(app, settings, ns, contract_ns, wecom, engine, lemon_invoices)

@@ -8,3 +8,45 @@
   gap: var(--space-small);
   overflow-wrap: anywhere;
 }
+.identity-session-menu__user {
+  display: flex;
+  align-items: center;
+  gap: var(--space-small);
+  width: 100%;
+  min-width: 0;
+}
+/* 飞书头像为外部图片，页面安全策略只允许本站图片，这里用姓名首字代替 */
+.identity-session-menu__avatar {
+  display: inline-grid;
+  flex: none;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: var(--color-primary-soft);
+  color: var(--color-primary-strong);
+  font-size: 13px;
+  font-weight: 600;
+}
+.identity-session-menu__text {
+  display: grid;
+  min-width: 0;
+  line-height: 1.4;
+}
+/* 侧栏为深色底：姓名用白色，角色沿用侧栏次要文字色 */
+.identity-session-menu__text strong {
+  color: var(--color-surface);
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+.identity-session-menu__text span {
+  font-size: 12px;
+}
+@media (max-width: 760px) {
+  .identity-session-menu__text {
+    display: none;
+  }
+  .identity-session-menu__user {
+    justify-content: center;
+  }
+}

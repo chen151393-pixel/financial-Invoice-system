@@ -3,7 +3,7 @@
 > 本文件由 `npm.cmd run db:map` 根据迁移链离线 MySQL DDL、实体定义和字段字典生成，请勿手工修改；迁移或实体变化后重新生成，`backend/tests/test_schema_map.py` 会检查是否过期。
 > “修改”含加列、改列、索引与中文备注；数据回填仅在线执行，不在离线 DDL 中体现。
 
-当前最新迁移：`0032_review_calculations`；共 32 个迁移、43 张实体表。
+当前最新迁移：`0033_identity_directory`；共 33 个迁移、52 张实体表。
 
 ## 1. 按模块查表
 
@@ -82,6 +82,20 @@
 | `sync_ns_runs` | NS 来源按批后台保存记录与结果，不保存令牌 | `0024` | — | [查看](current-data-dictionary.md#sync_ns_runs) |
 | `sync_runs` | 同步运行记录 | `0001` | `0015`、`0023`、`0025` | [查看](current-data-dictionary.md#sync_runs) |
 
+### identity
+
+| 表 | 中文说明 | 新建 | 后续修改 | 字段字典 |
+| --- | --- | --- | --- | --- |
+| `identity_audit` | 身份与权限审计记录，只追加 | `0033` | — | [查看](current-data-dictionary.md#identity_audit) |
+| `identity_department_roles` | 部门默认角色：该部门及其下级部门的成员自动获得 | `0033` | — | [查看](current-data-dictionary.md#identity_department_roles) |
+| `identity_departments` | 飞书部门副本，用于选择同步范围与配置部门默认角色 | `0033` | — | [查看](current-data-dictionary.md#identity_departments) |
+| `identity_login_flows` | 飞书登录流程：state 只能使用一次 | `0033` | — | [查看](current-data-dictionary.md#identity_login_flows) |
+| `identity_sync_runs` | 飞书部门与成员同步记录 | `0033` | — | [查看](current-data-dictionary.md#identity_sync_runs) |
+| `identity_sync_scopes` | 成员同步范围：只同步这些部门及其下级部门的成员，范围外的人不能登录 | `0033` | — | [查看](current-data-dictionary.md#identity_sync_scopes) |
+| `identity_user_departments` | 人员所属部门，以飞书为准；每次同步整体替换 | `0033` | — | [查看](current-data-dictionary.md#identity_user_departments) |
+| `identity_user_roles` | 管理员给个人追加的角色；人员 custom_roles 为是时只按这些角色授权 | `0033` | — | [查看](current-data-dictionary.md#identity_user_roles) |
+| `identity_users` | 飞书人员副本：同步范围内的成员，登录时按此校验在职与角色 | `0033` | — | [查看](current-data-dictionary.md#identity_users) |
+
 ## 2. 按迁移查表
 
 | 迁移 | 新建表 | 修改表 | 说明 |
@@ -118,3 +132,4 @@
 | [`0030_task_signed_upload_jobs`](../../backend/migrations/versions/0030_task_signed_upload_jobs.py) | `task_signed_upload_jobs` | — | task：回签合同分片上传与持久归档队列，不保存文件正文。 |
 | [`0031_matching_invoice_files`](../../backend/migrations/versions/0031_matching_invoice_files.py) | `matching_invoice_files` | — | matching：发票文件归档记录（2026-10-26）。 |
 | [`0032_review_calculations`](../../backend/migrations/versions/0032_review_calculations.py) | `review_calculation_jobs`、`review_declaration_snapshots`、`review_snapshot_suppliers` | — | review：后台申报幅度计算队列与数据库分页快照。 |
+| [`0033_identity_directory`](../../backend/migrations/versions/0033_identity_directory.py) | `identity_audit`、`identity_department_roles`、`identity_departments`、`identity_login_flows`、`identity_sync_runs`、`identity_sync_scopes`、`identity_user_departments`、`identity_user_roles`、`identity_users` | — | identity：飞书登录、部门与人员同步、角色（2026-10-27）。 |

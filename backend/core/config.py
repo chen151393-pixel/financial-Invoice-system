@@ -41,6 +41,12 @@ class Settings:
     origin: str = "http://localhost:3000"
     admin_user: str = "admin"
     admin_password: str = field(default="", repr=False)
+    # 应急管理员账号密码登录；日常使用飞书登录（docs/feishu-identity-plan.md）
+    admin_password_login: bool = True
+    feishu_app_id: str = ""
+    feishu_app_secret: str = field(default="", repr=False)
+    # 填写后飞书登录只接受该企业的账号
+    feishu_tenant_key: str = ""
     service_key: str = field(default="", repr=False)
     business_database_url: str = field(default="", repr=False)
     review_unit_price_tolerance_cny: Decimal = Decimal("0.10")
@@ -58,6 +64,11 @@ class Settings:
     lemon_app_secret: str = field(default="", repr=False)
     lemon_host: str = "https://open2.ningmengyun.com"
     lemon_redirect_uri: str = ""
+
+    @property
+    def feishu_redirect_uri(self):
+        """须与飞书开放平台“重定向 URL”中登记的地址完全一致。"""
+        return f"{self.origin}/api/session/feishu/callback"
 
     @property
     def token_url(self):
@@ -185,6 +196,14 @@ def load_settings(source=None):
         raise ValueError("子采购合同接口的脚本和部署编号须同时填写")
     if bool(declaration_script) != bool(declaration_deploy):
         raise ValueError("报关资料接口的脚本和部署编号须同时填写")
+    password_login = get("ADMIN_PASSWORD_LOGIN_ENABLED", "true").lower()
+    if password_login not in {"true", "false"}:
+        raise ValueError("ADMIN_PASSWORD_LOGIN_ENABLED 须为 true 或 false")
+    feishu_app_id = get("FEISHU_APP_ID").strip()
+    if feishu_app_id and not re.fullmatch(r"cli_[A-Za-z0-9]{1,64}", feishu_app_id):
+        raise ValueError("FEISHU_APP_ID 格式错误，应以 cli_ 开头")
+    if bool(feishu_app_id) != bool(get("FEISHU_APP_SECRET")):
+        raise ValueError("FEISHU_APP_ID 与 FEISHU_APP_SECRET 须同时填写")
     wecom_send = get("WECOM_SEND_ENABLED", "false").lower()
     wecom_limit = get("WECOM_GROUP_DAILY_LIMIT", "1")
     if wecom_send not in {"true", "false"}:
@@ -222,6 +241,10 @@ def load_settings(source=None):
         origin=origin,
         admin_user=get("ADMIN_USERNAME", "admin"),
         admin_password=get("ADMIN_PASSWORD"),
+        admin_password_login=password_login == "true",
+        feishu_app_id=feishu_app_id,
+        feishu_app_secret=get("FEISHU_APP_SECRET"),
+        feishu_tenant_key=get("FEISHU_TENANT_KEY").strip(),
         service_key=get("SERVICE_API_KEY"),
         business_database_url=business_url,
         review_unit_price_tolerance_cny=Decimal(review_tolerance),

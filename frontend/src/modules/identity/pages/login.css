@@ -134,6 +134,37 @@
   line-height: 1.7;
   overflow-wrap: anywhere;
 }
+.identity-login__feishu.ui-button {
+  width: 100%;
+}
+.identity-login__notice {
+  margin: 0 0 var(--space-layout);
+  color: var(--color-muted);
+  font-size: 13px;
+  line-height: 1.7;
+}
+/* 管理员应急登录：折叠在飞书登录下方，展开后为原账号密码表单 */
+.identity-login__fallback {
+  margin-top: var(--space-layout);
+  border-top: 1px solid var(--color-border);
+  padding-top: var(--space-control);
+}
+.identity-login__fallback summary {
+  cursor: pointer;
+  color: var(--color-muted);
+  font-size: 13px;
+  line-height: 32px;
+}
+.identity-login__fallback summary:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+  border-radius: var(--radius-control);
+}
+.identity-login__fallback > p {
+  margin: 0 0 var(--space-control);
+  color: var(--color-muted);
+  font-size: 12px;
+}
 .identity-login__help {
   margin-top: var(--space-layout);
   padding-top: var(--space-layout);

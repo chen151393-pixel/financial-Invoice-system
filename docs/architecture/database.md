@@ -1075,3 +1075,24 @@ API 发票默认版使用 `source=lemon_open2`、`lemon_account=open2:` 加 `SHA
 来源同步与审核通过的事务只登记账套重算代次，后台读取已提交数据并复用原 Decimal 计算规则。全部行幅度、人民币单价、原因及完整展示数据存入快照 JSON；统计与筛选列独立存储，列表用 SQL 聚合与 LIMIT/OFFSET，避免每次查询读取全部来源。共享销售汇率更新覆盖账套内相关单据；版本／容差变化触发补算。
 
 后台写入前锁定队列行并校验代次，旧计算不能覆盖新同步；同一事务替换快照与供应商投影并推进已完成代次。更新中不能使用旧幅度和自动审核预判。失败保留持久队列、中文原因和退避时间，重启接续；审核确认仍实时核对来源。`python -m backend.manage rebuild-review` 可重建已有数据，不调用 NS、不改变审核记录。
+
+## 飞书登录与人员权限（0033，2026-10-28）
+
+新增 9 张 `identity_*` 表，属于 identity 模块，结构见[字段字典](../mysql/current-data-dictionary.md#identity_departments)，方案见[飞书登录、部门同步与权限方案](../feishu-identity-plan.md)。
+
+| 表 | 用途 |
+| --- | --- |
+| `identity_departments` | 飞书部门副本 |
+| `identity_users` | 飞书人员副本 |
+| `identity_user_departments` | 人员所属部门 |
+| `identity_sync_scopes` | 成员同步范围，含下级部门 |
+| `identity_department_roles` | 部门默认角色，下级部门成员继承 |
+| `identity_user_roles` | 个人角色；`identity_users.custom_roles` 为是时只按个人角色 |
+| `identity_login_flows` | 飞书登录一次性 state，只存哈希 |
+| `identity_sync_runs` | 同步记录 |
+| `identity_audit` | 登录与权限变更审计 |
+
+- 人员与部门以飞书为准：同步只更新副本；本次未读到的部门、范围外人员标为不可用，不删除记录。读取失败时不停用任何人员。
+- 不保存手机号、邮箱、飞书令牌；会话仍在 API 进程内存中，未落库。
+- 跨模块只存操作者字符串 `user:fs:<飞书 user_id>`，不建外键。
+- 迁移只新增表，禁止降级删除。
