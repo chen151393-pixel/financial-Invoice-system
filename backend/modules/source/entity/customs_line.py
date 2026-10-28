@@ -39,6 +39,12 @@ customs_lines = Table(
         "declared_quantity", Numeric(26, 8), comment="报关数量；与 declared_unit 配套，不直接代替采购开票数量"
     ),
     Column("declared_unit", String(50), comment="报关数量单位"),
+    Column(
+        "declared_unit_price",
+        Numeric(24, 8),
+        comment="申报单价（NS custrecord_swc_grossamountzj），与 declared_quantity / declared_unit 配套；"
+        "申报幅度与发票单价校验使用它",
+    ),
     Column("unit_price", Numeric(24, 8), comment="来源单价；税口径以对应来源映射为准，不能据此覆盖来源金额"),
     Column(
         "amount",

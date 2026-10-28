@@ -286,6 +286,7 @@ CREATE TABLE source_customs_lines (
   unit                   VARCHAR(50) NULL,
   declared_quantity      DECIMAL(26,8) NULL,
   declared_unit          VARCHAR(50) NULL,
+  declared_unit_price    DECIMAL(24,8) NULL,
   unit_price             DECIMAL(24,8) NULL,
   amount                 DECIMAL(24,6) NULL,
   currency               VARCHAR(20) NULL,

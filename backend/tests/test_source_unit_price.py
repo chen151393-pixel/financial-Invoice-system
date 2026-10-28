@@ -92,10 +92,14 @@ def set_precise_prices(source):
 
 
 def assert_saved_values(engine, ns):
-    for table, expected_amount in (("source_purchase_order_lines", "100.50"), ("source_customs_lines", "15")):
+    # 报关夹具：custrecord_swc_quantity 为 5（与 custrecord_swc_unit 配套），报关数量另为 10。
+    for table, expected_quantity, expected_amount in (
+        ("source_purchase_order_lines", "10", "100.50"),
+        ("source_customs_lines", "5", "15"),
+    ):
         line = rows(engine, f"SELECT unit_price, quantity, amount FROM {table} ORDER BY id")[0]
         assert Decimal(str(line["unit_price"])) == Decimal("1.12345679")
-        assert Decimal(str(line["quantity"])) == Decimal("10")
+        assert Decimal(str(line["quantity"])) == Decimal(expected_quantity)
         assert Decimal(str(line["amount"])) == Decimal(expected_amount)
     head = rows(engine, "SELECT total_amount, currency FROM source_purchase_orders")[0]
     assert Decimal(str(head["total_amount"])) == Decimal("120.50") and head["currency"] == "CNY"

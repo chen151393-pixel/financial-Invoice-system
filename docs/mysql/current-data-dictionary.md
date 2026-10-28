@@ -401,6 +401,7 @@ flowchart LR
 | `unit`                   | `VARCHAR(50)`     | 是   | —                    | 该表所属业务口径的单位，与本行 quantity 配套                                     |
 | `declared_quantity`      | `DECIMAL(26, 8)`  | 是   | —                    | 报关数量；与 declared_unit 配套，不直接代替采购开票数量                          |
 | `declared_unit`          | `VARCHAR(50)`     | 是   | —                    | 报关数量单位                                                                     |
+| `declared_unit_price`    | `DECIMAL(24, 8)`  | 是   | —                    | 申报单价（NS custrecord_swc_grossamountzj），与 declared_quantity / declared_unit 配套；申报幅度与发票单价校验使用它（`0034` 新增） |
 | `unit_price`             | `DECIMAL(24, 8)`  | 是   | —                    | 来源单价；税口径以对应来源映射为准，不能据此覆盖来源金额                         |
 | `amount`                 | `DECIMAL(24, 6)`  | 是   | —                    | 报关来源行金额，按配置映射；与本行 currency 配套，不能直接代替子采购应开含税金额 |
 | `currency`               | `VARCHAR(20)`     | 是   | —                    | 业务币种代码，例如 CNY；不是汇率                                                 |

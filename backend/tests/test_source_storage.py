@@ -109,11 +109,13 @@ def customs(customs_id="870", modified="2026-09-02T10:00:00Z"):
                     "custrecord_swc_goods_place": {"id": "10", "refName": "深圳"},
                     "custrecord_swc_delare_name": name,
                     "custrecord_swc_huge": "型号",
-                    "custrecord_swc_quantity": Decimal("10"),
-                    "custrecord_swc_unit": "个",
-                    "custrecord_swc_delare_quantity": Decimal("5"),
-                    "custrecord_swc_delare_unit": "千克",
-                    "custrecord_swc_unitprice": Decimal("1.5"),
+                    "custrecord_swc_quantity": Decimal("5"),
+                    "custrecord_swc_unit": "千克",
+                    "custrecord_swc_delare_quantity": Decimal("10"),
+                    "custrecord_swc_delare_unit": "个",
+                    # 申报单价与报关数量、报关单位配套，申报幅度与发票单价校验使用它
+                    "custrecord_swc_grossamountzj": Decimal("1.5"),
+                    "custrecord_swc_unitprice": Decimal("3"),
                     "custrecord_swc_grossamount": Decimal("15"),
                     "custrecord_swc_currency": "USD",
                     "custrecord_swc_packing_no": {"id": "783"},
@@ -238,6 +240,10 @@ def test_first_save_maps_rows_master_data_links_and_digest(ns, engine):
     assert [line["unit"] for line in lines] == ["个", "个"]  # 采购口径
     assert [line["declared_unit"] for line in lines] == ["千克", "千克"]
     assert Decimal(str(lines[0]["amount"])) == Decimal("100.50")
+    customs_lines = rows(engine, "SELECT * FROM source_customs_lines ORDER BY source_line_key")
+    assert [(c["declared_unit"], c["unit"]) for c in customs_lines] == [("个", "千克"), ("个", "千克")]
+    assert Decimal(str(customs_lines[0]["declared_unit_price"])) == Decimal("1.5")
+    assert Decimal(str(customs_lines[0]["unit_price"])) == Decimal("3")
     assert lines[0]["item_name_normalized"] == "墨水" and lines[0]["amount_status"] == "matched"
 
     head = declaration(engine)

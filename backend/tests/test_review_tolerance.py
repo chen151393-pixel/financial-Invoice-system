@@ -26,7 +26,12 @@ from fastapi.testclient import TestClient
 def test_unit_price_tolerance_boundary(difference, status):
     difference = Decimal(difference)
     result = declared_margin(
-        {"unit": "片", "unit_price": Decimal("35.45"), "currency": "USD", "sales_order_no": "SO1"},
+        {
+            "declared_unit": "片",
+            "declared_unit_price": Decimal("35.45"),
+            "currency": "USD",
+            "sales_order_no": "SO1",
+        },
         [
             {
                 "unit": "片",

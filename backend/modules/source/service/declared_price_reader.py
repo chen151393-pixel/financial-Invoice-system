@@ -25,14 +25,15 @@ def declared_prices(connection, purchase_line_ids):
         head = own[0]
         candidates = [sales.get(orders.get(row["purchase_order_id"])) for row in own]
         sales_order, sales_reason = pick_sales_order(head["sales_order_no"], candidates)
+        # 单价校验按报关数量、报关单位和申报单价（与 NS 报关单打印口径一致），不用 custrecord_swc_unitprice。
         amount, unit_price, reason = declared_cny(
-            head["amount"], head["unit_price"], head["currency"], sales_order, sales_reason
+            head["amount"], head["declared_unit_price"], head["currency"], sales_order, sales_reason
         )
         for row in own:
             result[row["purchase_line_id"]] = {
                 "customs_line_id": customs_line_id,
-                "unit": unit_label(head["unit"], names),
-                "quantity": head["quantity"],
+                "unit": unit_label(head["declared_unit"], names),
+                "quantity": head["declared_quantity"],
                 "amount_cny": amount,
                 "unit_price_cny": unit_price,
                 "reason": reason,

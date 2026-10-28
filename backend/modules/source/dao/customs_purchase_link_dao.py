@@ -16,7 +16,7 @@ def active(connection, declaration_id):
 
 
 def declared_lines(connection, purchase_line_ids):
-    """子采购行的有效行级报关关联及报关行申报信息（单位、数量、单价、金额、币种、销售订单号）。"""
+    """子采购行的有效行级报关关联及报关行申报信息（报关单位、报关数量、申报单价、金额、币种、销售订单号）。"""
     if not purchase_line_ids:
         return []
     query = (
@@ -25,9 +25,9 @@ def declared_lines(connection, purchase_line_ids):
             links.c.purchase_order_id,
             links.c.customs_line_id,
             customs_lines.c.sales_order_no,
-            customs_lines.c.unit,
-            customs_lines.c.quantity,
-            customs_lines.c.unit_price,
+            customs_lines.c.declared_unit,
+            customs_lines.c.declared_quantity,
+            customs_lines.c.declared_unit_price,
             customs_lines.c.amount,
             customs_lines.c.currency,
         )

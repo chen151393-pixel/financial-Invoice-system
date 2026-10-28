@@ -52,6 +52,6 @@ def declared_cny(amount, unit_price, currency, sales_order, sales_reason=""):
 def declared_unit_price_cny(unit_price, currency, sales_order, sales_reason=""):
     """单价独立换算，不要求报关总金额存在，也不从金额和数量倒算单价。"""
     if unit_price is None:
-        return None, "报关单价缺失"
+        return None, "申报单价缺失（重新同步报关单后补齐）"
     converted, _, reason = declared_cny(unit_price, None, currency, sales_order, sales_reason)
     return converted, reason

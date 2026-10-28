@@ -36,6 +36,7 @@ CUSTOMS_VALUES = {
     "custrecord_swc_delare_quantity",
     "custrecord_swc_delare_unit",
     "custrecord_swc_unitprice",
+    "custrecord_swc_grossamountzj",
     "custrecord_swc_grossamount",
 }
 

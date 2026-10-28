@@ -87,6 +87,7 @@
       "unit_name": "custrecord_swc_unit",
       "declared_quantity": "custrecord_swc_delare_quantity",
       "declared_unit": "custrecord_swc_delare_unit",
+      "declared_unit_price": "custrecord_swc_grossamountzj",
       "unit_price": "custrecord_swc_unitprice",
       "amount": "custrecord_swc_grossamount",
       "currency_code": "custrecord_swc_currency"

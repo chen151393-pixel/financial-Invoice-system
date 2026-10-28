@@ -194,5 +194,6 @@
 - 报关行对应的销售单：其关联子采购单的销售单中单号与报关行销售订单号一致的；没有一致的且只有一个时取该销售单（`policy/declared_price_policy.py`）。
 - 换算前复用币种规则识别明确名称与代码：`US Dollar`／美元与 `USD` 等价，人民币／`Chinese Yuan` 与 `CNY` 等价。原始展示值不变；未知币种、内部 ID、模糊简称仍待核实，真实币种不一致仍拒绝换算。使用已同步销售单汇率，不另取实时汇率。
 - 2026-10-26 财务核对改为单价幅度：人民币报关单价 = 报关单价 × 销售单汇率；合并采购单价 = 关联采购行含税总金额 ÷ 总数量；幅度 =（人民币报关单价 − 合并采购单价）÷ 人民币报关单价。通过 `declared_unit_price_cny` 独立换算报关单价，不依赖报关总金额；规则及异常提示见 [review 说明](../review/README.md)。汇率不参与摘要；matching 继续通过 `declared_cny` 使用原金额／单价校验。
+- 2026-10-28 报关明细新增 `declared_unit_price`（迁移 `0034`）：配置键 `customs_line.storage_fields.declared_unit_price` 映射 NS `custrecord_swc_grossamountzj`（申报单价，与 `declared_quantity`／`declared_unit` 配套）。review 申报幅度与 matching 单价校验（`declared_prices` 返回的 `unit`、`quantity`、`unit_price_cny`）改用报关数量、报关单位与申报单价；总价校验仍用 `amount`。该键为可选键，部署时须在 `NETSUITE_PL_LOOKUP` 中加入并重新同步报关单，未配置或未同步时为 NULL，按“申报单价缺失”处理。超过 8 位小数时与 `unit_price` 同样四舍五入并提示。不参与内容摘要。
 - 门面：`declared_cny`、`pick_sales_order`（review 申报幅度）；`declared_prices(connection, purchase_line_ids)`（matching 价格校验）；`purchase_lines` 上下文新增 `declared`（不参与摘要）；报关单 `snapshot` 新增 `sales_orders`（不参与摘要）。
 - 验证：`backend/tests/test_declared_price.py`。

@@ -28,9 +28,10 @@ def normalize(value, precision, scale):
 
 def warnings(documents, config):
     result = []
-    for kind, spec_name, key, label in (
-        ("customs", "customs_line", "unit_price", "报关单"),
-        ("purchase", "purchase_line", "tax_inclusive_price", "子采购单"),
+    for kind, spec_name, key, column, label in (
+        ("customs", "customs_line", "unit_price", "unit_price", "报关单"),
+        ("customs", "customs_line", "declared_unit_price", "declared_unit_price", "报关单（申报单价）"),
+        ("purchase", "purchase_line", "tax_inclusive_price", "unit_price", "子采购单"),
     ):
         field = getattr(config, spec_name).storage_fields.get(key)
         if not field:
@@ -39,8 +40,8 @@ def warnings(documents, config):
             count = 0
             for raw, line in zip(document["raw"]["lines"], document["lines"], strict=True):
                 saved = line["row"] if kind == "customs" else line
-                original = raw["record"][field]
-                if original not in (None, "") and Decimal(str(original)) != saved["unit_price"]:
+                original = raw["record"].get(field)
+                if original not in (None, "") and Decimal(str(original)) != saved[column]:
                     count += 1
             if count:
                 number = document["head"].get("order_no" if kind == "purchase" else "record_no")

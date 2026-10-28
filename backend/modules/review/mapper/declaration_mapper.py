@@ -161,7 +161,8 @@ def declaration(
             model=text(row["specification"]),
             quantity=text(row["declared_quantity"]),
             unit=unit_label(row["declared_unit"], content.get("unit_names")),
-            price=text(row["unit_price"]),
+            # 与报关数量、报关单位配套的申报单价，和申报幅度使用同一口径。
+            price=text(row["declared_unit_price"]),
             amount=text(row["amount"]),
             currency=text(row["currency"]),
             purchaseCount=len(by_customs[row["id"]]),

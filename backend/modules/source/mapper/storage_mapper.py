@@ -1,7 +1,8 @@
 """把完整读取的 NS 记录映射为新表的行；不查询数据库、不按展示文本反推金额。
 
 服务器配置（NETSUITE_PL_LOOKUP 的 storage_fields）沿用原有键名，键名到新表列的对应见 FIELDS；
-部署环境无需修改配置键。
+部署环境无需修改原有配置键。报关明细的申报单价 declared_unit_price 为 2026-10-28 新增的可选键，
+未配置时该列保持 NULL，申报幅度与发票单价校验显示“申报单价缺失”。
 """
 
 import re
@@ -73,6 +74,7 @@ FIELDS = {
         "unit_name": "unit",
         "declared_quantity": "declared_quantity",
         "declared_unit": "declared_unit",
+        "declared_unit_price": "declared_unit_price",
         "unit_price": "unit_price",
         "amount": "amount",
         "currency_code": "currency",
@@ -167,7 +169,7 @@ def project(record, kind, spec):
         else:
             value = record[source]
             column = table.c[target]
-            if target == "unit_price" and kind in ("purchase_line", "customs_line"):
+            if target in ("unit_price", "declared_unit_price") and kind in ("purchase_line", "customs_line"):
                 value = normalize_unit_price(value, column.type.precision, column.type.scale)
             columns[target] = column_value(value, column)
     return columns, references

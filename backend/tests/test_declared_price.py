@@ -48,9 +48,12 @@ def test_sales_order_choice_and_cny_conversion():
 @pytest.mark.parametrize("currency", ["USD", "US Dollar", "美元", " us dollar "])
 def test_margin_uses_unit_prices_and_skips_unit_mismatch(currency):
     customs_row = {
-        "unit": "个",
+        "declared_unit": "个",
         "amount": Decimal("15"),
-        "unit_price": Decimal("1.5"),
+        "declared_unit_price": Decimal("1.5"),
+        # 另一套口径的单位与单价不参与申报幅度
+        "unit": "千克",
+        "unit_price": Decimal("3"),
         "currency": currency,
         "sales_order_no": "SO1",
     }
@@ -81,7 +84,10 @@ def test_margin_uses_unit_prices_and_skips_unit_mismatch(currency):
         declared_margin(customs_row, [line], orders, sales)
     )
     for value in (None, Decimal(0)):
-        assert declared_margin({**customs_row, "unit_price": value}, [line], orders, sales)["margin"] is None
+        assert (
+            declared_margin({**customs_row, "declared_unit_price": value}, [line], orders, sales)["margin"]
+            is None
+        )
     for field, value in (("amount", None), ("quantity", None), ("quantity", Decimal(0))):
         assert declared_margin(customs_row, [{**line, field: value}], orders, sales)["margin"] is None
     mismatch = declared_margin(customs_row, [{**line, "unit": "千克"}], orders, sales)
@@ -115,9 +121,9 @@ def test_customs_currency_name_uses_synced_sales_rate():
 def test_margin_does_not_display_negative_zero():
     result = declared_margin(
         {
-            "unit": "片",
+            "declared_unit": "片",
             "amount": Decimal("2127.27"),
-            "unit_price": Decimal("35.45"),
+            "declared_unit_price": Decimal("35.45"),
             "currency": "US Dollar",
             "sales_order_no": "SO1",
         },

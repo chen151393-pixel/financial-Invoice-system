@@ -3,7 +3,7 @@
 > 本文件由 `npm.cmd run db:map` 根据迁移链离线 MySQL DDL、实体定义和字段字典生成，请勿手工修改；迁移或实体变化后重新生成，`backend/tests/test_schema_map.py` 会检查是否过期。
 > “修改”含加列、改列、索引与中文备注；数据回填仅在线执行，不在离线 DDL 中体现。
 
-当前最新迁移：`0033_identity_directory`；共 33 个迁移、52 张实体表。
+当前最新迁移：`0034_source_customs_declared_unit_price`；共 34 个迁移、52 张实体表。
 
 ## 1. 按模块查表
 
@@ -13,7 +13,7 @@
 | --- | --- | --- | --- | --- |
 | `source_companies` | 采购公司（NS 子公司），与发票购买方比对 | `0001` | `0010` | [查看](current-data-dictionary.md#source_companies) |
 | `source_customs_declarations` | 报关单 | `0001` | `0010`、`0027` | [查看](current-data-dictionary.md#source_customs_declarations) |
-| `source_customs_lines` | 报关明细 | `0001` | `0010` | [查看](current-data-dictionary.md#source_customs_lines) |
+| `source_customs_lines` | 报关明细 | `0001` | `0010`、`0034` | [查看](current-data-dictionary.md#source_customs_lines) |
 | `source_customs_purchase_links` | 报关单与子采购单的关联，支持多对多与行级 | `0001` | `0010` | [查看](current-data-dictionary.md#source_customs_purchase_links) |
 | `source_parent_order_lines` | 母采购行 | `0001` | `0010` | [查看](current-data-dictionary.md#source_parent_order_lines) |
 | `source_parent_orders` | 母采购单 | `0001` | `0004`、`0005`、`0010` | [查看](current-data-dictionary.md#source_parent_orders) |
@@ -133,3 +133,4 @@
 | [`0031_matching_invoice_files`](../../backend/migrations/versions/0031_matching_invoice_files.py) | `matching_invoice_files` | — | matching：发票文件归档记录（2026-10-26）。 |
 | [`0032_review_calculations`](../../backend/migrations/versions/0032_review_calculations.py) | `review_calculation_jobs`、`review_declaration_snapshots`、`review_snapshot_suppliers` | — | review：后台申报幅度计算队列与数据库分页快照。 |
 | [`0033_identity_directory`](../../backend/migrations/versions/0033_identity_directory.py) | `identity_audit`、`identity_department_roles`、`identity_departments`、`identity_login_flows`、`identity_sync_runs`、`identity_sync_scopes`、`identity_user_departments`、`identity_user_roles`、`identity_users` | — | identity：飞书登录、部门与人员同步、角色（2026-10-27）。 |
+| [`0034_source_customs_declared_unit_price`](../../backend/migrations/versions/0034_source_customs_declared_unit_price.py) | — | `source_customs_lines` | source：报关明细保存申报单价（2026-10-28）。 |

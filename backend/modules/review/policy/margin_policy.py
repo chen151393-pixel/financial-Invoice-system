@@ -1,9 +1,11 @@
 """申报幅度（2026-10-23 业务确认），纯函数。
 
 申报幅度 =（人民币报关单价 − 合并采购单价）÷ 人民币报关单价：
-- 报关单价按对应销售单汇率换算为人民币（source 规则），不先舍入；
+- 报关单价取报关行的申报单价 declared_unit_price（NS custrecord_swc_grossamountzj，与报关数量、
+  报关单位配套；2026-10-28 用户确认，不用 custrecord_swc_unitprice），按对应销售单汇率换算为人民币
+  （source 规则），不先舍入；
 - 合并采购单价 = 关联采购行含税总金额 ÷ 总数量，不先舍入；
-- 单位不一致、采购币种不是人民币、金额数量或报关单价汇率缺失时不计算，不显示 0；
+- 报关单位与子采购单位不一致、采购币种不是人民币、金额数量或申报单价汇率缺失时不计算，不显示 0；
 - 采购单价超过人民币报关单价且差额大于配置容差时才标异常；容差内保留真实幅度。
 """
 
@@ -32,7 +34,7 @@ def declared_margin(
     sales_orders：{销售单 ID: 单头}。返回 {status, margin, declared, purchase, note}。"""
     if not purchase_rows:
         return unavailable("没有行级关联的子采购行")
-    customs_unit = unit_label(customs_row["unit"], unit_names)
+    customs_unit = unit_label(customs_row["declared_unit"], unit_names)
     if any(unit_label(row["unit"], unit_names) != customs_unit for row in purchase_rows):
         return unavailable("报关行与子采购行单位不一致，不计算申报幅度")
     currencies = {(orders[row["purchase_order_id"]]["currency"] or "") for row in purchase_rows}
@@ -53,7 +55,7 @@ def declared_margin(
     ]
     sales_order, sales_reason = pick_sales_order(customs_row["sales_order_no"], candidates)
     declared, reason = declared_unit_price_cny(
-        customs_row["unit_price"], customs_row["currency"], sales_order, sales_reason
+        customs_row["declared_unit_price"], customs_row["currency"], sales_order, sales_reason
     )
     if declared is None:
         return unavailable(f"{reason}，无法计算")
