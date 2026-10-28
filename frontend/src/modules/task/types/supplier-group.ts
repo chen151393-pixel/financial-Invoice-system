@@ -74,6 +74,9 @@ export interface SupplierProfile extends SupplierOption {
 }
 // 上线只同步 NS 正式环境，档案查询不再按 NS 环境筛选（后端参数保留为可选）
 export interface SupplierProfileQuery extends Omit<GroupQuery, "status" | "account"> {
+  supplierName?: string;
+  groupName?: string;
+  owner?: string;
   status: GroupQuery["status"] | "unbound";
 }
 export interface SupplierProfileList extends GroupPage<SupplierProfile> {

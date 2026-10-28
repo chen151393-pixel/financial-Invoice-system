@@ -104,3 +104,7 @@ def replace_roles(connection, user_pk, roles, custom, actor, now):
 
 def touch_login(connection, user_pk, now):
     connection.execute(update(users).where(users.c.id == user_pk).values(last_login_at=now))
+
+
+def set_enabled(connection, user_pk, enabled, now):
+    connection.execute(update(users).where(users.c.id == user_pk).values(enabled=enabled, updated_at=now))

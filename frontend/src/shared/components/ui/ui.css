@@ -933,6 +933,17 @@ button.ui-metric:focus-visible {
   outline: 2px solid var(--color-primary);
   outline-offset: -2px;
 }
+.ui-table-scroll[data-bounded] {
+  overflow: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+  scrollbar-color: var(--color-input-border) var(--color-canvas);
+}
+.ui-table-scroll[data-bounded] th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
 .ui-table {
   width: 100%;
   border-collapse: collapse;

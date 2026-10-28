@@ -6,6 +6,8 @@
 
 验证：`npm.cmd run test:api` 中的签名、缓存、重定向与超时用例。
 
+`client.vendor_bill_query` 使用主连接与服务端固定配置 `NETSUITE_VENDOR_BILL_QUERY_SCRIPT/DEPLOY`，只发送 `action=bills`、NS 供应商 ID `vendorId` 和母采购内部 ID 列表 `purchaseOrderIds`，复用限长、禁止重定向和不自动重试的 RESTlet 读取。source 校验版本 3 分组响应，不接受旧 `vendorCode`、`purchaseOrderNo` 请求或版本 2 响应。未配置返回 503，不转调旧保存脚本；业务契约与核验在 source，详见[供应商账单查询](../../../docs/ns-vendor-bill-query.md)。
+
 ## 原件只读下载
 
 - `restlet_file.py`：子采购合同与报关资料共用的 RESTlet 读取步骤（GET 显式声明 JSON Content-Type、限长读取 JSON、兼容二次 JSON 字符串、解码并校验 PDF）。

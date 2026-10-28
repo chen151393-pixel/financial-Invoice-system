@@ -21,6 +21,7 @@ from ..dto.matching_dto import (
     SummaryBody,
 )
 from ..vo.invoice_list_vo import InvoiceListResult
+from ..vo.invoice_queue_vo import InvoiceQueue
 from ..vo.invoice_totals_vo import InvoiceTotals
 from ..vo.matching_vo import BatchResult, Candidates, GenerateResult, InvoiceMatching, Queue, Summaries
 
@@ -46,6 +47,10 @@ def create_router(queries, allocations, proposals, invoice_lists):
     @router.post("/queue", response_model=Queue)
     def queue(body: QueueQuery, owner: Owner):
         return queries.queue(body)
+
+    @router.post("/invoice-queue/query", response_model=InvoiceQueue)
+    def invoice_queue(body: QueueQuery, owner: Owner):
+        return queries.invoice_queue(body)
 
     @router.post("/summaries", response_model=Summaries)
     def summaries(body: SummaryBody, owner: Owner):

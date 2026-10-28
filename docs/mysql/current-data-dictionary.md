@@ -1573,6 +1573,8 @@ NS 来源按批后台保存记录与结果，不保存令牌。
 
 飞书人员副本：同步范围内的成员，登录时按此校验在职与角色
 
+0035 新增 `enabled BOOL NOT NULL DEFAULT 0`：管理员是否启用。升级时为已有人员设为 1 保留原登录行为；新导入为 0，只有在职、处于范围内、有角色且 enabled 为 1 才能登录。同步不覆盖此字段。
+
 | 字段              | MySQL 类型        | 可空 | 默认                 | 中文含义                                                   |
 | ----------------- | ----------------- | ---- | -------------------- | ---------------------------------------------------------- |
 | `id`              | `BIGINT UNSIGNED` | 否   | 自增                 | 人员本地主键                                               |
@@ -1703,3 +1705,95 @@ NS 来源按批后台保存记录与结果，不保存令牌。
 
 - 主键：`id`。
 - 查询索引 `ix_identity_audit_created`：`(created_at)`。
+
+### identity_directory_previews｜飞书组织预览
+
+0035 新增，归属 identity；只保存授权管理员本次读取的必要字段。预览十分钟有效，下次创建时清理过期记录。
+
+| 字段 | 类型 | 含义 |
+| --- | --- | --- |
+| `id` | VARCHAR(64)，主键 | 随机预览标识 |
+| `actor` | VARCHAR(200)，非空 | 预览所属认证管理员 |
+| `version` | VARCHAR(64)，非空 | 读取前人员、范围与角色的摘要 |
+| `payload` | JSON，非空 | 部门及成员不可变快照，不含令牌、手机号、邮箱 |
+| `expires_at` | DATETIME(6)，非空 | UTC 过期时间 |
+| `result` | JSON，可空 | 确认范围与返回结果，用于重复提交幂等 |
+| `created_at`、`updated_at` | DATETIME(6)，非空 | 创建与更新 UTC 时间 |
+
+### identity_user_sync_scopes｜个人同步范围
+
+0035 新增，归属 identity。与整部门及全部下级范围取并集；以稳定用户 ID 跟踪人员，不随新增同事扩大。
+
+| 字段 | 类型 | 含义 |
+| --- | --- | --- |
+| `user_id` | VARCHAR(64)，主键 | 单独选择的飞书 user_id，非本地人员主键 |
+| `created_by` | VARCHAR(200)，非空 | 设置范围的认证管理员 |
+| `created_at`、`updated_at` | DATETIME(6)，非空 | 创建与更新 UTC 时间 |
+
+
+## 回写准备（0036）
+
+只读准备任务与不可变方案；未实现 NS 写操作。
+
+### writeback_tasks｜发票回写准备任务，不执行 NS 写操作
+
+| 字段 | 类型 | 可空 | 说明 |
+| --- | --- | --- | --- |
+| id | BIGINT | 否 | 回写任务主键 |
+| task_no | VARCHAR(40) | 否 | 唯一任务编号 |
+| invoice_id | BIGINT | 否 | 发票逻辑引用 |
+| fingerprint | VARCHAR(64) | 否 | 审核快照摘要 |
+| ns_account | VARCHAR(100) | 否 | 目标账套 |
+| vendor_id | VARCHAR(20) | 否 | 供应商内部编号 |
+| vendor_name | VARCHAR(255) | 否 | 供应商名称 |
+| invoice_no | VARCHAR(100) | 否 | 发票号码 |
+| amount | NUMERIC(18, 2) | 否 | 整票含税金额 |
+| state | VARCHAR(32) | 否 | 准备任务状态 |
+| reason | VARCHAR(500) | 否 | 当前状态原因 |
+| historical | BOOLEAN | 否 | 是否历史扫描入队 |
+| snapshot | JSON | 否 | 不可变审核快照 |
+| candidates | JSON | 是 | 最近完整候选查询结果 |
+| revision | INTEGER | 否 | 乐观并发版本 |
+| current_plan_id | BIGINT | 是 | 当前目标方案逻辑引用 |
+| lease_token | VARCHAR(36) | 是 | 只读查询租约标识 |
+| lease_until | DATETIME | 是 | 只读查询租约到期时间 |
+| next_query_at | DATETIME | 是 | 下次只读查询时间 |
+| queried_at | DATETIME | 是 | 最近完成查询时间 |
+| created_at | DATETIME | 否 | 本地记录创建时间，UTC |
+| updated_at | DATETIME | 否 | 本地记录最后更新时间，UTC；由 DAO 更新 |
+
+### writeback_invoice_guards｜同一发票当前准备任务
+
+| 字段 | 类型 | 可空 | 说明 |
+| --- | --- | --- | --- |
+| id | BIGINT | 否 | 整票指针主键 |
+| invoice_id | BIGINT | 否 | 唯一发票逻辑引用 |
+| task_id | BIGINT | 否 | 当前任务 |
+| created_at | DATETIME | 否 | 本地记录创建时间，UTC |
+| updated_at | DATETIME | 否 | 本地记录最后更新时间，UTC；由 DAO 更新 |
+
+### writeback_plans｜仅追加的账单分配方案
+
+| 字段 | 类型 | 可空 | 说明 |
+| --- | --- | --- | --- |
+| id | BIGINT | 否 | 方案主键 |
+| task_id | BIGINT | 否 | 所属准备任务 |
+| revision | INTEGER | 否 | 确认时任务版本 |
+| request_id | VARCHAR(36) | 否 | 幂等确认请求编号 |
+| request_hash | VARCHAR(64) | 否 | 确认正文与操作者摘要 |
+| body | JSON | 否 | 不可变目标和候选证据 |
+| confirmed_by | VARCHAR(200) | 否 | 确认身份 |
+| created_at | DATETIME | 否 | 本地记录创建时间，UTC |
+| updated_at | DATETIME | 否 | 本地记录最后更新时间，UTC；由 DAO 更新 |
+
+### writeback_audit｜回写准备审计
+
+| 字段 | 类型 | 可空 | 说明 |
+| --- | --- | --- | --- |
+| id | BIGINT | 否 | 审计主键 |
+| task_id | BIGINT | 否 | 所属任务 |
+| action | VARCHAR(40) | 否 | 操作类型 |
+| actor | VARCHAR(200) | 否 | 操作身份 |
+| detail | JSON | 否 | 审计事实，不含密钥 |
+| created_at | DATETIME | 否 | 本地记录创建时间，UTC |
+| updated_at | DATETIME | 否 | 本地记录最后更新时间，UTC；由 DAO 更新 |

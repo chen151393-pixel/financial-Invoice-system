@@ -7,6 +7,7 @@ from .session_vo import RoleItem
 
 class DepartmentItem(StrictModel):
     id: int
+    openDepartmentId: str
     name: str
     path: str
     # 是否被直接选为同步范围；covered 表示因上级部门被选中而在范围内
@@ -20,6 +21,8 @@ class UserItem(StrictModel):
     name: str
     departments: list[str]
     active: bool
+    enabled: bool
+    directoryActive: bool
     inactiveReason: str | None
     customRoles: bool
     personalRoles: list[str]
@@ -45,5 +48,15 @@ class AccessOverview(StrictModel):
     feishuConfigured: bool
     roles: list[RoleItem]
     departments: list[DepartmentItem]
+    # 本部门或下级部门有已导入员工；包含未启用、已停用账号，与人员列表口径一致。
+    importedDepartments: list[DepartmentItem]
     users: list[UserItem]
     lastSync: SyncRun | None
+
+
+class UserList(StrictModel):
+    items: list[UserItem]
+    total: int
+    page: int
+    pageSize: int
+    pageCount: int

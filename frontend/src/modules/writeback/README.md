@@ -1,63 +1,12 @@
-# NS 回写（前端）
+# NS 回写准备页面
 
-## 职责
+`/writeback` 为真实任务列表，`/writeback/:requestId` 显示准备任务详情。沿用既有路由参数名，值为后端任务 ID。
 
-把已确认分配的进项发票登记到 NS“供应商发票勾选平台”对应的记录：选择发票 → 生成不可变预览 → 勾选核对后确认写入 → 查看结果或核实。页面只展示后端结果与 `allowed/reason`，不计算金额、不判断能否写入。
+- 列表由后端搜索、筛选和分页；状态、原因和允许动作由后端返回。
+- 详情展示审核分配、候选账单、目标方案和审计记录。金额保持十进制字符串。
+- 人工确认支持多账单拆分、归属依据和实际 NS 子公司核实。请求携带当前 revision 与稳定 requestId；失败不伪装成功、不自动重试确认。
+- 匹配发票详情通过公开 API 显示整票就绪原因和当前任务链接；可重新检查历史发票。
+- 已删除原手工预览/执行演示 API、demo1/demo2 数据与不再引用的旧组件和样式。历史演示 URL 不再有模拟成功行为。
+- NS 写入尚未实现，方案确认不代表回写成功。页面无 execute/apply 按钮或调用。
 
-**当前状态：仅前端已实现，后端 `/api/writeback/*` 与 NS 端写入脚本尚未实现。** 接口返回 404“接口不存在”或 405 时，页面显示“NS 回写尚未接入”及限制说明，不提供任何写入入口；需要看效果时使用下方“演示数据”，演示内容始终带醒目标识。
-
-## 演示数据（看页面效果用）
-
-后端接入前，可在登录后访问以下地址，用模拟数据查看完整页面与交互；页面顶部显示“当前为演示数据”横幅，未接入页也提供这两个入口：
-
-| 地址                | 内容                                                                                       |
-| ------------------- | ------------------------------------------------------------------------------------------ |
-| `/writeback?demo=1` | 演示数据一：每种回写状态各一张发票，确认后演示写入成功                                     |
-| `/writeback?demo=2` | 演示数据二：多账单、外币、校验未通过与红字发票，确认后演示 NS 超时待核实，核实后转为已回写 |
-| `/writeback?demo=0` | 退出演示，恢复读取真实接口                                                                 |
-
-- 只在地址带 `demo` 参数时启用，本标签页内记住所选数据集；正常访问不受影响。
-- 演示数据源 `demo/` 按需加载，不打进正常页面的脚本；所有应答在浏览器内存中完成，不发请求、不写 NS，刷新页面恢复初始数据。
-- 文件：`demo/demo-mode.ts`（开关）、`demo/demo-api.ts`（按接口契约应答）、`demo/demo-store.ts`（内存状态）、`demo/demo-builders.ts`（记录组装）、`demo/demo-set-1.ts`、`demo/demo-set-2.ts`（两套数据）；横幅为 `components/DemoBanner.tsx`。
-- 接入真实后端后，若不再需要演示，删除 `demo/`、`DemoBanner` 及 `api.ts` 中的演示分支即可。
-
-## 页面与路由
-
-| 路径                    | 页面                             | 内容                                                                             |
-| ----------------------- | -------------------------------- | -------------------------------------------------------------------------------- |
-| `/writeback`            | `pages/WritebackListPage.tsx`    | 写入开关、查询条件、按状态筛选、发票列表与行操作、分页                           |
-| `/writeback/:requestId` | `pages/WritebackRequestPage.tsx` | 状态头与操作；待确认时显示校验与明细，执行后显示 NS 记录、账单回读核实；执行记录 |
-
-确认弹窗 `components/ConfirmDialog.tsx` 使用原生 `<dialog>`，打开聚焦、关闭返回触发按钮；勾选“我已核对”前不能提交。
-
-## 主要文件
-
-- `types.ts`：接口契约类型、状态筛选项、北京时间格式化。
-- `api.ts`：经 `shared/api/http.ts` 调用；`isNotConnected` 区分“接口未登记”和“记录不存在”。
-- `hooks/useWritebackList.ts`：按提交的条件读取列表，忽略过期响应。
-- `hooks/useCreatePreview.ts`：生成预览；同一发票重试沿用同一请求编号。
-- `hooks/useWritebackRequest.ts`：读取记录，执行中按后端 `poll` 轮询；执行、核实各提交一次，失败不自动重发。
-- `components/`：状态标签、列表、查询条件、写入开关、状态头、概况、校验、明细、结果、执行记录、未接入说明。
-- 样式：`writeback.css`（公共）、`writeback-list.css`、`writeback-request.css`、`writeback-dialog.css`，均限定 `wb-` 前缀。
-
-## 计划中的接口契约（后端待实现）
-
-| 方法与路径                                         | 请求                                                                     | 响应                                                                                    |
-| -------------------------------------------------- | ------------------------------------------------------------------------ | --------------------------------------------------------------------------------------- |
-| GET `/api/writeback/invoices`                      | `page`、`pageSize`、`phase`、`vendor`、`invoiceNo`、`dateFrom`、`dateTo` | `WritebackList`：`items`、分页、`counts`（各状态数量）、`write`（写入开关、账套、说明） |
-| POST `/api/writeback/previews`                     | `{invoiceId, requestId}`                                                 | `WritebackRequest`；同一 `requestId` 重复提交返回原预览                                 |
-| GET `/api/writeback/requests/{requestId}`          | —                                                                        | `WritebackRequest`                                                                      |
-| POST `/api/writeback/requests/{requestId}/execute` | `{confirm: true}`                                                        | `WritebackRequest`；后端重新校验开关、有效期与账单锁                                    |
-| POST `/api/writeback/requests/{requestId}/verify`  | `{}`                                                                     | `WritebackRequest`；按请求编号查询 NS，不重新提交                                       |
-
-状态 `phase`：`ready` 可回写、`blocked` 不可回写、`pending` 待确认、`executing` 执行中、`unknown` 结果待核实、`failed` 失败（NS 未写入）、`succeeded` 已回写。字段定义见 `types.ts`；金额均为后端十进制字符串。
-
-## 关键规则
-
-- 能否生成预览、执行、核实、重新预览，全部以后端 `preview/execute/verify/refresh` 的 `allowed/reason` 为准，禁用时就近显示原因。
-- 结果待核实时只提供“核实 NS 结果”，不提供重试；执行请求失败或响应丢失时提示刷新查看，不自动重发。
-- “写入后已收”缺失显示“未回读”，不显示为 0；时间缺失显示“—”。
-
-## 验证
-
-在 `frontend/` 下运行 `npm.cmd run build`、`npm.cmd run lint`、`npm.cmd run typecheck`、`npm.cmd test`（含 `tests/writeback.test.mjs`）。接入后端前，只能验证“未接入”状态及组件在给定数据下的渲染。
+接口与部署见 [后端模块](../../../../backend/modules/writeback/README.md)、[部署说明](../../../../docs/ns-writeback-prepare.md)。验证：前端 lint、typecheck、build，`tests/writeback.test.mjs` 覆盖实际接口参数、错误与关键状态展示。

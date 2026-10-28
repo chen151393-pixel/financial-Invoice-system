@@ -16,6 +16,10 @@ from sqlalchemy.engine import make_url
 from sqlalchemy.exc import IntegrityError, OperationalError
 
 TABLES = {
+    "writeback_tasks",
+    "writeback_plans",
+    "writeback_audit",
+    "writeback_invoice_guards",
     "source_suppliers",
     "source_companies",
     "source_raw_records",
@@ -70,6 +74,8 @@ TABLES = {
     "identity_login_flows",
     "identity_sync_runs",
     "identity_audit",
+    "identity_directory_previews",
+    "identity_user_sync_scopes",
 }
 NOW = "2026-10-10 00:00:00"
 

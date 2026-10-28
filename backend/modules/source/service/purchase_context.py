@@ -44,9 +44,9 @@ def line_digest(context):
     ).hexdigest()
 
 
-def supplier_line_ids(connection, supplier_id):
-    """该供应商的子采购行 ID，供比对队列按供应商筛选。"""
-    return purchase_order_dao.line_ids_by_supplier(connection, supplier_id)
+def supplier_line_ids(connection, supplier_id=None, *, name_terms=()):
+    """按供应商 ID 或名称部分匹配获取子采购行 ID；多名称取并集，与 ID 取交集。"""
+    return purchase_order_dao.line_ids_by_supplier(connection, supplier_id, name_terms=name_terms)
 
 
 def purchase_lines(connection, line_ids, *, lock=False):

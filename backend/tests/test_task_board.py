@@ -72,6 +72,42 @@ def test_node_filter_and_keyword(board, approved):
     assert board.browse(TaskBoardQuery(keyword="CD870")).total == 1
 
 
+def test_independent_search_combines_filters_and_counts(ns, engine, board, app_services, approved):
+    other = purchase("300", "871")
+    other[1]["custrecord_swc_subpo_vendor"] = {"id": "88", "refName": "北京供应商"}
+    save(ns, engine, bundle([other], [customs("871")]))
+    approve(app_services, "CD871")
+    assert board.browse(TaskBoardQuery(supplierName="供应商")).total == 2
+    page = board.browse(TaskBoardQuery(supplierName="供应商", pageSize=1, page=2))
+    assert page.total == 2 and page.pages == 2 and len(page.items) == 1
+    assert page.openTotal == 2 and counts(page)["documents"] == 2
+    hit = board.browse(TaskBoardQuery(supplierName=" 上海 ", recordNo="870", purchaseOrderNo="200"))
+    assert hit.total == 1 and hit.openTotal == 1 and counts(hit)["documents"] == 1
+    assert hit.items[0].task.id == str(approved["id"])
+    for fields in [
+        {"supplierName": "北京", "recordNo": "870"},
+        {"supplierName": "上海", "purchaseOrderNo": "300"},
+        {"supplierName": "不存在"},
+        {"recordNo": "不存在"},
+        {"purchaseOrderNo": "不存在"},
+        {"recordNo": "%"},
+        {"supplierName": "%"},
+        {"purchaseOrderNo": "_"},
+    ]:
+        result = board.browse(TaskBoardQuery(**fields))
+        assert result.total == result.openTotal == 0 and not result.items, fields
+        assert all(node.count == 0 for node in result.nodes), fields
+
+
+def test_search_validates_text_and_whitespace():
+    assert TaskBoardQuery(supplierName="  ", recordNo=" CD870 ").recordNo == "CD870"
+    assert TaskBoardQuery(supplierName="  ").supplierName == ""
+    for field in ("supplierName", "recordNo", "purchaseOrderNo"):
+        for value in ("字" * 121, 123, None):
+            with pytest.raises(ValidationError):
+                TaskBoardQuery(**{field: value})
+
+
 def test_completion_node_lists_missing_documents_then_done(engine, board, app_services, approved):
     task_id = approved["id"]
     prepare_all(app_services, task_id)
@@ -131,12 +167,13 @@ def test_board_scope_rejects_incomplete_or_reversed_dates():
         TaskBoardQuery(stage="pending_review")
 
 
-def test_http_board_route(context, ns, engine):
+@pytest.mark.parametrize("route", ["/api/task/board/query", "/api/tasks/board/query"])
+def test_http_board_route(context, ns, engine, route):
     save(ns, engine, bundle([purchase()], [customs("870")]))
     app = create_app(context.settings, context.ns, engine, wecom=FakeWecom())
     app.state.review_calculations.rebuild()
     with TestClient(app) as client:
-        assert client.post("/api/tasks/board/query", json={}).status_code == 401
+        assert client.post(route, json={}).status_code == 401
         headers = {"Origin": context.settings.origin}
         client.post(
             "/api/session",
@@ -149,10 +186,14 @@ def test_http_board_route(context, ns, engine):
             json={"contentSha256": item["contentSha256"]},
             headers=headers,
         )
-        response = client.post("/api/tasks/board/query", json={"node": "documents"}, headers=headers)
+        response = client.post(
+            route,
+            json={"node": "documents", "supplierName": "上海", "recordNo": "870", "purchaseOrderNo": "200"},
+            headers=headers,
+        )
         assert response.status_code == 200
         body = response.json()
         assert body["total"] == 1 and body["items"][0]["currentNode"] == "documents"
         assert [node["key"] for node in body["nodes"]][-1] == "done" and "accounts" not in body
-        bad = client.post("/api/tasks/board/query", json={"node": "unknown"}, headers=headers)
+        bad = client.post(route, json={"node": "unknown"}, headers=headers)
         assert bad.status_code in (400, 422)

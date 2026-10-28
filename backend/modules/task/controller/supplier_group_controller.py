@@ -59,4 +59,14 @@ def create_router(service, profiles):
     def save(body: GroupSave, owner: Owner):
         return service.save(body, owner)
 
-    return router
+    combined = APIRouter()
+    combined.add_api_route(
+        "/api/task/supplier-groups/profiles/query",
+        profile_list,
+        methods=["POST"],
+        response_model=SupplierProfileList,
+        tags=["供应商群配置"],
+    )
+    # 兼容旧前端一个版本；当前前端已切换到 task 模块路径。
+    combined.include_router(router)
+    return combined

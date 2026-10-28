@@ -3,8 +3,9 @@ import { after, before, test } from "node:test";
 import { fileURLToPath } from "node:url";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
+import { MemoryRouter } from "react-router";
 import { createServer } from "vite";
-let server, api, Table, Picker, DirectoryStatus, navigation, paths;
+let server, api, Table, Picker, DirectoryStatus, navigation, paths, Search;
 before(async () => {
   server = await createServer({
     configFile: fileURLToPath(new URL("../vite.config.ts", import.meta.url)),
@@ -13,6 +14,9 @@ before(async () => {
     logLevel: "error",
   });
   api = await server.ssrLoadModule("/src/modules/task/api/supplier-group.ts");
+  ({ SupplierProfileSearch: Search } = await server.ssrLoadModule(
+    "/src/modules/task/components/SupplierProfileSearch.tsx",
+  ));
   ({ SupplierProfilesTable: Table } = await server.ssrLoadModule(
     "/src/modules/task/components/SupplierProfilesTable.tsx",
   ));
@@ -27,6 +31,58 @@ before(async () => {
 });
 after(async () => {
   await server?.close();
+});
+
+test("供应商查询拆分三个独立输入并保留批量值与隐藏标签", () => {
+  const html = renderToStaticMarkup(
+    createElement(
+      MemoryRouter,
+      null,
+      createElement(Search, {
+        query: {
+          keyword: "",
+          supplierName: "甲,乙",
+          groupName: "采购群;开票群",
+          owner: "张三",
+          status: "all",
+          page: 1,
+          pageSize: 20,
+        },
+        busy: false,
+        onSearch() {},
+        onRefresh() {},
+      }),
+    ),
+  );
+  assert.equal((html.match(/type="search"/g) || []).length, 3);
+  for (const label of ["供应商", "外部群", "群主"])
+    assert.ok(html.includes(`<span class="ui-sr-only">${label}</span>`));
+  assert.match(html, /value="甲,乙"/);
+  assert.match(html, /value="采购群;开票群"/);
+  assert.match(html, /清空/);
+});
+
+test("供应商组合条件原样传给新模块接口，由后端搜索", async () => {
+  const previous = globalThis.fetch;
+  const query = {
+    keyword: "",
+    supplierName: "甲,乙",
+    groupName: "群一;群二",
+    owner: "张三\n李四",
+    status: "enabled",
+    page: 2,
+    pageSize: 10,
+  };
+  globalThis.fetch = async (url, options) => {
+    assert.equal(url, "/api/task/supplier-groups/profiles/query");
+    assert.deepEqual(JSON.parse(options.body), query);
+    return new Response(JSON.stringify({ items: [], total: 0 }), { status: 200 });
+  };
+  try {
+    await api.querySupplierProfiles(query);
+  } finally {
+    globalThis.fetch = previous;
+  }
 });
 
 test("外部群初始展示待查询，输入与查找可用，说明留空自动匹配", () => {

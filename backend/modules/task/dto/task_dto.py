@@ -46,10 +46,18 @@ class TaskBoardQuery(TaskScopeQuery):
     """
 
     keyword: str = Field(default="", max_length=120)
+    supplierName: str = Field(default="", max_length=120)
+    recordNo: str = Field(default="", max_length=120)
+    purchaseOrderNo: str = Field(default="", max_length=120)
     supplierId: str = Field(default="", max_length=20, pattern=r"^([1-9][0-9]*)?$")
     node: Literal["", "documents", "notification", "invoices", "comparison", "completion", "done"] = ""
     page: int = Field(default=1, ge=1, le=100000)
     pageSize: int = Field(default=20, ge=1, le=50)
+
+    @field_validator("supplierName", "recordNo", "purchaseOrderNo", mode="before")
+    @classmethod
+    def trim_search(cls, value):
+        return value.strip() if isinstance(value, str) else value
 
 
 class ClosureRequest(StrictModel):

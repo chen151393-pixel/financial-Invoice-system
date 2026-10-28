@@ -6,7 +6,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { MemoryRouter as Router } from "react-router";
 import { createServer } from "vite";
 
-let server, BoardTaskItem, boardApi, money;
+let server, BoardTaskItem, BoardSearch, boardQuery, boardApi, money;
 before(async () => {
   server = await createServer({
     configFile: fileURLToPath(new URL("../vite.config.ts", import.meta.url)),
@@ -15,6 +15,8 @@ before(async () => {
     logLevel: "error",
   });
   boardApi = await server.ssrLoadModule("/src/modules/task/api/board.ts");
+  boardQuery = await server.ssrLoadModule("/src/modules/task/hooks/board-query.ts");
+  ({ BoardSearch } = await server.ssrLoadModule("/src/modules/task/components/BoardSearch.tsx"));
   ({ money } = await server.ssrLoadModule("/src/shared/format/money.ts"));
   ({ BoardTaskItem } = await server.ssrLoadModule("/src/modules/task/components/BoardTaskItem.tsx"));
 });
@@ -32,6 +34,9 @@ test("跟进查询保留工作台范围，日期为空交给后端按不限处�
     boardApi.queryTaskBoard({
       keyword: "",
       supplierId: "7",
+      supplierName: "供应商甲",
+      recordNo: "CD100",
+      purchaseOrderNo: "SUB-200",
       node: "",
       stage: "documents",
       createdFrom: "",
@@ -41,11 +46,57 @@ test("跟进查询保留工作台范围，日期为空交给后端按不限处�
     }),
     /测试错误/,
   );
-  assert.equal(calls[0].url, "/api/tasks/board/query");
+  assert.equal(calls[0].url, "/api/task/board/query");
+  assert.equal(calls[0].body.supplierName, "供应商甲");
+  assert.equal(calls[0].body.recordNo, "CD100");
+  assert.equal(calls[0].body.purchaseOrderNo, "SUB-200");
   assert.equal(calls[0].body.stage, "documents");
   assert.equal(calls[0].body.supplierId, "7");
   assert.equal(calls[0].body.createdFrom, null);
   assert.equal(calls[0].body.createdTo, null);
+});
+
+test("组合查询地址保留中文、特殊字符、节点与分页，清空条件不残留旧参数", () => {
+  const query = {
+    keyword: "",
+    supplierId: "",
+    supplierName: "甲&乙",
+    recordNo: "CD100",
+    purchaseOrderNo: "SUB/200",
+    node: "done",
+    page: 3,
+    pageSize: 10,
+  };
+  assert.deepEqual(boardQuery.readBoardQuery(boardQuery.writeBoardQuery(query)), query);
+  const cleared = boardQuery.writeBoardQuery({
+    ...query,
+    supplierName: "",
+    recordNo: "",
+    purchaseOrderNo: "",
+    node: "",
+    page: 1,
+    pageSize: 20,
+  });
+  assert.equal(cleared.toString(), "");
+});
+
+test("查询栏展示三个独立可访问输入框，加载时禁止重复查询", () => {
+  const html = renderToStaticMarkup(
+    createElement(BoardSearch, {
+      values: { supplierName: "上海", recordNo: "CD870", purchaseOrderNo: "SUB-200" },
+      busy: true,
+      filtered: true,
+      onSearch() {},
+      onClear() {},
+      onRefresh() {},
+    }),
+  );
+  for (const name of ["supplierName", "recordNo", "purchaseOrderNo"])
+    assert.match(html, new RegExp(`name="${name}"`));
+  assert.equal((html.match(/<label/g) || []).length, 3);
+  assert.equal((html.match(/disabled=""/g) || []).length, 3);
+  assert.match(html, /查询中/);
+  assert.doesNotMatch(html, /<select/);
 });
 
 test("任务金额格式化保留零值、高精度与未知值", () => {

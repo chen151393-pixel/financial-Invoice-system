@@ -2,9 +2,9 @@ import { CurrencyEvidenceForm } from "./CurrencyEvidenceForm";
 import { Link } from "react-router";
 import { paths } from "../../../app/paths";
 import { useState } from "react";
-import { Button, DataTable } from "../../../shared/components/ui";
+import { Button } from "../../../shared/components/ui";
 import { useDialog } from "../hooks/useDialog";
-import type { ComparisonGroup, PurchaseLine, CurrencyEvidence } from "../types";
+import type { ComparisonGroup, CurrencyEvidence } from "../types";
 
 export function ReviewDialog({
   group,
@@ -169,81 +169,6 @@ export function ReviewDialog({
             {busy ? "保存中…" : "整单审核通过"}
           </Button>
         )}
-      </footer>
-    </dialog>
-  );
-}
-
-export function PurchaseDialog({ line, onClose }: { line: PurchaseLine; onClose: () => void }) {
-  const ref = useDialog();
-  const fields = [
-    ["子采购单", line.child],
-    ["母采购单", line.parent],
-    ["供应商", line.supplier],
-    ["采购品名", line.name],
-    ["型号", line.model],
-    [line.scope === "order" ? "子单数量" : "本次数量", `${line.quantity} ${line.unit}`],
-    ["采购单价", line.price],
-    [line.scope === "order" ? "订单金额（未分摊）" : "本次采购金额", line.amount],
-    ["采购币种", line.currency],
-    ["销售订单汇率", line.salesOrderExchangeRate],
-    ["来源说明", line.note],
-  ];
-  return (
-    <dialog ref={ref} className="fr-dialog" onCancel={onClose} aria-labelledby="purchase-detail-title">
-      <header>
-        <div>
-          <h2 id="purchase-detail-title">子采购明细</h2>
-          <p>审核在所属报关单统一进行。</p>
-        </div>
-        <button className="fr-close" aria-label="关闭采购明细" onClick={onClose}>
-          ×
-        </button>
-      </header>
-      <div className="fr-dialog__body">
-        <dl className="fr-detail">
-          {fields.map(([label, value]) => (
-            <div key={label}>
-              <dt>{label}</dt>
-              <dd>{value || "来源未提供"}</dd>
-            </div>
-          ))}
-        </dl>
-        {Boolean(line.members?.length) && (
-          <DataTable
-            label="合并前采购明细"
-            rows={line.members ?? []}
-            rowKey={(member) => member.id}
-            density="compact"
-            minWidth={620}
-            columns={[
-              { key: "name", header: "采购品名", render: (member) => member.name },
-              { key: "model", header: "规格型号", render: (member) => member.model || "—" },
-              {
-                key: "quantity",
-                header: "原始数量",
-                align: "right",
-                render: (member) => member.quantity || "未提供",
-              },
-              { key: "unit", header: "单位", render: (member) => member.unit },
-              {
-                key: "price",
-                header: "原含税单价",
-                align: "right",
-                render: (member) => member.price || "未提供",
-              },
-              {
-                key: "amount",
-                header: "原含税金额",
-                align: "right",
-                render: (member) => member.amount || "未提供",
-              },
-            ]}
-          />
-        )}
-      </div>
-      <footer>
-        <Button onClick={onClose}>关闭</Button>
       </footer>
     </dialog>
   );

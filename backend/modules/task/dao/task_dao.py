@@ -57,12 +57,35 @@ def set_status(connection, task_id, status, now, *, completed_at=None):
     )
 
 
-def conditions(*, scope, account, keyword, supplier_ids, order_ids, supplier_id=None, declaration_ids=None):
+def conditions(
+    *,
+    scope,
+    account,
+    keyword,
+    supplier_ids,
+    order_ids,
+    supplier_id=None,
+    declaration_ids=None,
+    record_no="",
+    matching_supplier_ids=None,
+    matching_order_ids=None,
+):
     """scope：current（未被替代）/ superseded / all；关键字匹配 CD 编号、供应商或子采购单；可按供应商筛选。
 
     declaration_ids：业务状态、报关单创建日期等条件预先算出的报关单 ID 集合；None 为不限，空集合无结果。
     """
     result = []
+    # 独立条件取交集；空匹配集合必须返回空结果，不能按未筛选处理。
+    if record_no:
+        result.append(tasks.c.record_no.contains(record_no, autoescape=True))
+    if matching_supplier_ids is not None:
+        result.append(tasks.c.supplier_id.in_(matching_supplier_ids))
+    if matching_order_ids is not None:
+        result.append(
+            tasks.c.id.in_(
+                select(task_lines.c.task_id).where(task_lines.c.purchase_order_id.in_(matching_order_ids))
+            )
+        )
     if declaration_ids is not None:
         result.append(
             tasks.c.customs_declaration_id.in_(sorted(declaration_ids)) if declaration_ids else false()

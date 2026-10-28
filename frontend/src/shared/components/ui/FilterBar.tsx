@@ -38,11 +38,21 @@ export function FilterBar({
   );
 }
 
-/** 条件字段：持续可见的中文标签；grow 用于关键字等需要更宽的输入。 */
-export function Field({ label, children, grow }: { label: string; children: ReactNode; grow?: boolean }) {
+/** 条件字段：默认显示中文标签；hideLabel 仅视觉隐藏，保留读屏名称。 */
+export function Field({
+  label,
+  children,
+  grow,
+  hideLabel = false,
+}: {
+  label: string;
+  children: ReactNode;
+  grow?: boolean;
+  hideLabel?: boolean;
+}) {
   return (
     <label className={grow ? "ui-field ui-field--grow" : "ui-field"}>
-      <span>{label}</span>
+      <span className={hideLabel ? "ui-sr-only" : undefined}>{label}</span>
       {children}
     </label>
   );

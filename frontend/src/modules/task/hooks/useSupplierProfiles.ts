@@ -16,7 +16,10 @@ export function useSupplierProfiles() {
     return Number.isSafeInteger(value) && value > 0 ? value : fallback;
   };
   const query: SupplierProfileQuery = {
-    keyword: params.get("keyword") || "",
+    keyword: "",
+    supplierName: params.get("supplierName") || params.get("keyword") || "",
+    groupName: params.get("groupName") || "",
+    owner: params.get("owner") || "",
     status: (params.get("status") || "all") as SupplierProfileQuery["status"],
     page: positive("page", 1),
     pageSize: positive("pageSize", 20),

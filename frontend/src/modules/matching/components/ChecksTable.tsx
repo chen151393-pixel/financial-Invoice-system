@@ -1,43 +1,42 @@
+import { Badge, DataTable, EmptyState } from "../../../shared/components/ui";
 import { resultLabels, type Check } from "../types/matching";
 
 export function ChecksTable({ checks, caption }: { checks: Check[]; caption: string }) {
-  if (!checks.length) return <p className="matching-help">人工新建的分配没有系统比对记录。</p>;
+  if (!checks.length)
+    return <EmptyState title="没有系统比对记录" description="人工新建的分配请核对原始发票和子采购资料。" />;
   return (
-    <div
-      className="matching-table-wrap"
-      role="region"
-      aria-label={`${caption}，可横向滚动`}
-      // eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex -- 宽表容器支持键盘聚焦滚动。
-      tabIndex={0}
-    >
-      <table className="matching-table">
-        <caption className="matching-help">{caption}</caption>
-        <thead>
-          <tr>
-            <th scope="col">比对项</th>
-            <th scope="col">发票</th>
-            <th scope="col">子采购</th>
-            <th scope="col">结果</th>
-            <th scope="col">差额 / 说明</th>
-          </tr>
-        </thead>
-        <tbody>
-          {checks.map((check) => (
-            <tr key={check.key}>
-              <th scope="row">{check.label}</th>
-              <td>{check.invoiceValue ?? "—"}</td>
-              <td>{check.purchaseValue ?? "—"}</td>
-              <td className={check.result === "match" ? "matching-ok" : "matching-warning"}>
-                {resultLabels[check.result]}
-              </td>
-              <td>
-                {check.difference ?? ""}
-                {check.note && <small>{check.note}</small>}
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
+    <DataTable
+      label={caption}
+      rows={checks}
+      rowKey={(row) => row.key}
+      minWidth={520}
+      density="compact"
+      columns={[
+        { key: "label", header: "比对项", width: "18%", render: (row) => row.label },
+        { key: "invoice", header: "发票", width: "26%", render: (row) => row.invoiceValue ?? "—" },
+        { key: "purchase", header: "子采购", width: "26%", render: (row) => row.purchaseValue ?? "—" },
+        {
+          key: "result",
+          header: "结果",
+          render: (row) => (
+            <div className="matching-cell">
+              <span>
+                <Badge tone={row.result === "match" ? "info" : "warning"}>{resultLabels[row.result]}</Badge>
+              </span>
+              {row.difference && <span>{row.difference}</span>}
+              {row.note &&
+                (row.result === "match" ? (
+                  <details className="matching-check-note">
+                    <summary>查看说明</summary>
+                    <small>{row.note}</small>
+                  </details>
+                ) : (
+                  <small>{row.note}</small>
+                ))}
+            </div>
+          ),
+        },
+      ]}
+    />
   );
 }

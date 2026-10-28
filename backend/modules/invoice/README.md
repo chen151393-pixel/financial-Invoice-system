@@ -101,3 +101,6 @@ API 业务类型支持多选，默认“采购固定资产”和“采购支出�
 ## 供 matching 按匹配状态筛选的门面（2026-10-27）
 
 `public.py` 新增：`read_invoice_status_scope(connection, query, before_id=None)` 按列表条件从新到旧每批 500 张返回 `{id, display_status, active_item_count}`；`read_invoice_page(connection, query, include_ids=None)` 与列表相同的排序、分页和汇总，`include_ids` 不为空时只在这些发票内分页（空集合直接返回空结果）；`invoice_display_status(header)`；以及 `InvoiceQuery`、`InvoiceList` 结构。列表分页 SQL 与映射（`invoice_mapper.invoice_list`）由 `GET /api/invoices` 和上述门面共用。invoice 不依赖 matching。
+
+
+2026-10-28：只读门面 `invoice_ids_between(connection, start, end, *, number_terms=())` 增加可选票面号码部分匹配，多个号码取并集，与可选日期范围取交集。筛选由本模块 DAO 执行，供 matching 审核队列使用，不查询销售方或发票备注。

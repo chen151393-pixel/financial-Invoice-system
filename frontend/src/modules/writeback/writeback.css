@@ -1,155 +1,67 @@
-/* NS 回写模块公共样式：面板、表格、状态标签，全部限定在 wb- 前缀内，颜色取自 tokens.css。 */
-.wb-stack {
-  display: flex;
-  flex-direction: column;
+.wb-prepare {
+  display: grid;
+  gap: var(--space-layout);
+}
+.wb-secondary {
+  display: block;
+  margin-top: 4px;
+  color: var(--color-muted);
+  overflow-wrap: anywhere;
+}
+.wb-prepare .wb-plan-fields {
+  display: grid;
   gap: 16px;
 }
-
-.wb-panel {
-  background: var(--color-surface);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-panel);
-  padding: 16px 20px;
-  margin: 0;
-}
-
-.wb-panel--flush {
-  padding: 0;
-  overflow: hidden;
-}
-
-.wb-inline {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--space-small);
-}
-
-.wb-muted {
-  color: var(--color-muted);
-  font-size: 12px;
-}
-
-.wb-mono {
-  font-variant-numeric: tabular-nums;
-}
-
-.wb-strong {
-  font-weight: 700;
-}
-
-.wb-nowrap {
-  white-space: nowrap;
-}
-
-.wb-error {
-  color: var(--color-danger-text);
-  margin: 0;
-}
-
-.wb-state {
-  padding: 24px 20px;
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
+.wb-prepare .wb-plan-row {
+  display: grid;
+  grid-template-columns: minmax(160px, 1fr) minmax(180px, 1fr) 140px auto;
   gap: 12px;
-  margin: 0;
-  color: var(--color-muted);
+  align-items: end;
 }
-
-.wb-tag {
-  display: inline-flex;
-  align-items: center;
-  padding: 3px 10px;
-  border-radius: 999px;
-  font-size: 12px;
-  font-weight: 600;
-  white-space: nowrap;
-  background: var(--color-inactive-surface);
-  color: var(--color-inactive-text);
-}
-
-.wb-tag--pending {
-  background: var(--color-progress-surface);
-  color: var(--color-progress-text);
-}
-
-.wb-tag--executing {
-  background: color-mix(in srgb, var(--color-primary) 10%, var(--color-surface));
-  color: var(--color-primary);
-}
-
-.wb-tag--unknown {
-  background: var(--color-danger-surface);
-  color: var(--color-danger-text);
-}
-
-.wb-tag--failed {
-  background: var(--color-warning-surface);
-  color: var(--color-feedback);
-}
-
-.wb-tag--succeeded {
-  background: var(--color-success-surface);
-  color: var(--color-success-text);
-}
-
-.wb-note {
-  font-size: 12px;
-  color: var(--color-muted);
-}
-
-.wb-note--blocked,
-.wb-note--failed {
-  color: var(--color-feedback);
-}
-
-.wb-note--unknown {
-  color: var(--color-danger-text);
-}
-
-.wb-note--succeeded {
-  color: var(--color-success-text);
-  font-weight: 600;
-}
-
-@media (max-width: 760px) {
-  .wb-panel {
-    padding: 14px 16px;
-  }
-  .wb-panel--flush {
-    padding: 0;
-  }
-}
-
-/* 演示数据标识：使用公共演示配色，与真实数据明显区分。 */
-.wb-demo {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: 4px 12px;
-  padding: 10px 16px;
-  border-radius: var(--radius-control);
-  background: var(--color-demo-bg);
-  color: var(--color-demo-text);
-  font-size: 13px;
-}
-.wb-demo a,
-.wb-not-connected__demo a {
-  color: inherit;
-  font-weight: 600;
-}
-.wb-not-connected__demo a {
-  color: var(--color-primary);
-  margin-right: 12px;
-}
-.wb-demo__links {
-  display: inline-flex;
-  flex-wrap: wrap;
-  gap: 12px;
-}
-.wb-not-connected .wb-not-connected__demo {
-  margin: 12px 0 0;
+.wb-prepare .wb-plan-fields input:not([type="checkbox"]),
+.wb-prepare .wb-plan-fields select,
+.wb-prepare .wb-plan-fields textarea {
+  width: 100%;
+  min-height: 38px;
+  border: 1px solid var(--color-input-border);
+  border-radius: 6px;
+  padding: 8px;
   color: var(--color-text);
-  font-size: 13px;
+  background: var(--color-surface);
+  font: inherit;
+}
+.wb-prepare .wb-check {
+  display: flex;
+  align-items: start;
+  gap: 8px;
+}
+.wb-prepare .wb-audit {
+  padding: 0;
+  list-style: none;
+}
+.wb-prepare .wb-audit li {
+  padding: 10px 0;
+  border-bottom: 1px solid var(--color-input-border);
+}
+@media (max-width: 700px) {
+  .wb-prepare .ui-card__header {
+    flex-wrap: wrap;
+  }
+  .wb-prepare .ui-card__actions {
+    flex-wrap: wrap;
+    width: 100%;
+  }
+  .wb-prepare .ui-card__title {
+    overflow-wrap: anywhere;
+  }
+  .wb-prepare .wb-plan-row {
+    grid-template-columns: 1fr;
+  }
+}
+
+.wb-prepare fieldset.wb-plan-fields {
+  border: 0;
+  padding: 0;
+  margin: 0;
+  min-width: 0;
 }

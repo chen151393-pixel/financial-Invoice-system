@@ -5,9 +5,9 @@ from decimal import Decimal
 from sqlalchemy.exc import SQLAlchemyError
 
 from backend.core.errors import ApiError
-from backend.modules.invoice.public import invoice_display_status, invoice_ids_between, read_invoices
+from backend.modules.invoice.public import invoice_display_status, read_invoices
 from backend.modules.review.public import current_bases
-from backend.modules.source.public import purchase_lines, supplier_line_ids, unit_label, unit_names
+from backend.modules.source.public import purchase_lines, unit_label, unit_names
 from backend.modules.task.public import open_lines
 
 from ..dao import allocation_dao
@@ -28,7 +28,9 @@ from ..vo.matching_vo import (
     Summaries,
     SupplierOption,
 )
+from .invoice_queue_service import invoice_queue
 from .invoice_totals_service import InvoiceTotalsService
+from .queue_scope import queue_scope
 
 READ_ERROR = "发票比对读取失败，请检查业务数据库及迁移状态"
 TIERS = {"all": (None, None), "high": (HIGH, None), "medium": (MEDIUM, HIGH), "low": (None, MEDIUM)}
@@ -170,16 +172,14 @@ class MatchingQueryService:
 
         return self._read(action)
 
+    def invoice_queue(self, query):
+        return self._read(
+            lambda connection: invoice_queue(connection, query, self._queue_rows, _supplier_options)
+        )
+
     def queue(self, query):
         def action(connection):
-            scope = {
-                "line_ids": set(supplier_line_ids(connection, int(query.supplierId)))
-                if query.supplierId
-                else None,
-                "invoice_ids": set(invoice_ids_between(connection, query.invoiceFrom, query.invoiceTo))
-                if query.invoiceFrom
-                else None,
-            }
+            scope = queue_scope(connection, query)
             notice = ""
             if query.anomaly == "all":
                 total, rows = allocation_dao.queue(

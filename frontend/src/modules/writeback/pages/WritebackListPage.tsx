@@ -1,93 +1,152 @@
-import { useState } from "react";
-import { useNavigate } from "react-router";
+import { useEffect, useState } from "react";
+import { Link } from "react-router";
 import { writebackRequestPath } from "../../../app/paths";
-import { Button, Pagination, Tabs } from "../../../shared/components/ui";
-import { DemoBanner } from "../components/DemoBanner";
-import { NotConnected } from "../components/NotConnected";
-import { WriteSwitchStatus } from "../components/WriteSwitchStatus";
-import { WritebackFilters } from "../components/WritebackFilters";
-import { WritebackTable } from "../components/WritebackTable";
-import { useCreatePreview } from "../hooks/useCreatePreview";
-import { useWritebackList } from "../hooks/useWritebackList";
-import { PHASE_TABS, type WritebackQuery } from "../types";
+import {
+  Alert,
+  Badge,
+  Button,
+  Card,
+  CardHeader,
+  DataTable,
+  EmptyState,
+  ErrorState,
+  Field,
+  FilterBar,
+  Pagination,
+  Skeleton,
+} from "../../../shared/components/ui";
+import { listTasks } from "../api";
+import type { TaskList } from "../types";
 import "../writeback.css";
-import "../writeback-list.css";
-
-const initial: WritebackQuery = {
-  phase: "",
-  vendor: "",
-  invoiceNo: "",
-  dateFrom: "",
-  dateTo: "",
-  page: 1,
-  pageSize: 20,
-};
 
 export function WritebackListPage() {
-  const [query, setQuery] = useState(initial);
-  const { status, data, error, refresh } = useWritebackList(query);
-  const navigate = useNavigate();
-  const preview = useCreatePreview((requestId) => navigate(writebackRequestPath(requestId)));
-  if (status === "notConnected") return <NotConnected scope="回写列表暂无可用数据。" />;
+  const [query, setQuery] = useState({ keyword: "", state: "", page: 1, pageSize: 20 });
+  const [data, setData] = useState<TaskList | null>(null);
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [refresh, setRefresh] = useState(0);
+  useEffect(() => {
+    let active = true;
+    listTasks(query)
+      .then((result) => {
+        if (active) {
+          setData(result);
+          setError("");
+          setLoading(false);
+        }
+      })
+      .catch((e: unknown) => {
+        if (active) {
+          setError(e instanceof Error ? e.message : "任务加载失败");
+          setLoading(false);
+        }
+      });
+    return () => {
+      active = false;
+    };
+  }, [query, refresh]);
+  function change(patch: Partial<typeof query>) {
+    setLoading(true);
+    setQuery({ ...query, ...patch });
+  }
   return (
-    <div className="wb-stack">
-      <DemoBanner />
-      {data && <WriteSwitchStatus write={data.write} />}
-      <WritebackFilters
-        value={query}
-        disabled={status === "loading"}
-        onSubmit={(filters) => setQuery({ ...query, ...filters, page: 1 })}
-      />
-      <section className="wb-panel wb-panel--flush" aria-label="回写记录">
-        <div className="wb-phase-tabs">
-          <Tabs
-            label="按回写状态筛选"
-            value={query.phase}
-            onChange={(phase) => setQuery({ ...query, phase, page: 1 })}
-            items={PHASE_TABS.map((tab) => ({
-              key: tab.value,
-              label: tab.label,
-              count: data?.counts[tab.key],
-            }))}
+    <div className="wb-prepare">
+      <Alert title="回写准备">
+        整张发票完整审核后自动生成任务。当前可查询和确认账单方案，尚不执行 NS 写入。
+      </Alert>
+      <Card>
+        <CardHeader
+          title="回写任务"
+          description="按发票保留审核快照；历史扫描任务须人工核实。"
+          actions={
+            <Button
+              disabled={loading}
+              onClick={() => {
+                setLoading(true);
+                setRefresh((n) => n + 1);
+              }}
+            >
+              刷新列表
+            </Button>
+          }
+        />
+        <FilterBar
+          embedded
+          onSubmit={(form) => {
+            const values = new FormData(form);
+            change({
+              keyword: String(values.get("keyword") || ""),
+              state: String(values.get("state") || ""),
+              page: 1,
+            });
+          }}
+          actions={
+            <Button type="submit" variant="primary" disabled={loading}>
+              查询
+            </Button>
+          }
+        >
+          <Field label="任务、发票或供应商" grow>
+            <input name="keyword" placeholder="输入任务号、发票号码或供应商" maxLength={100} />
+          </Field>
+          <Field label="状态">
+            <select name="state">
+              <option value="">全部状态</option>
+              <option value="queued">待匹配账单</option>
+              <option value="waiting_bill">等待账单</option>
+              <option value="needs_confirmation">待确认账单</option>
+              <option value="ready">方案已确认</option>
+              <option value="blocked">待处理</option>
+              <option value="stale">审核已失效</option>
+            </select>
+          </Field>
+        </FilterBar>
+        {loading ? (
+          <Skeleton label="正在加载回写任务" />
+        ) : error ? (
+          <ErrorState title="任务加载失败" message={error} />
+        ) : data?.items.length ? (
+          <DataTable
+            label="回写任务"
+            rows={data.items}
+            rowKey={(row) => row.id}
+            columns={[
+              {
+                key: "invoice",
+                header: "发票 / 任务",
+                render: (row) => (
+                  <>
+                    <Link to={writebackRequestPath(row.id)}>{row.invoiceNo}</Link>
+                    <small className="wb-secondary">{row.taskNo}</small>
+                  </>
+                ),
+              },
+              { key: "vendor", header: "供应商", render: (row) => row.vendorName },
+              { key: "amount", header: "含税金额（元）", align: "right", render: (row) => row.amount },
+              { key: "state", header: "状态", render: (row) => <Badge>{row.stateLabel}</Badge> },
+              { key: "reason", header: "处理说明", render: (row) => row.reason },
+            ]}
           />
-        </div>
-        {status === "loading" && (
-          <p role="status" className="wb-state">
-            正在读取回写记录…
-          </p>
+        ) : (
+          <EmptyState
+            title="暂无回写任务"
+            description="完成整票分配审核后自动生成任务；历史发票可在匹配详情重新检查。"
+          />
         )}
-        {status === "error" && (
-          <div className="wb-state">
-            <p role="alert" className="wb-error">
-              {error}
-            </p>
-            <Button onClick={refresh}>重新读取</Button>
-          </div>
+        {data && (
+          <Pagination
+            label="回写任务分页"
+            total={data.total}
+            page={data.page}
+            pageCount={data.pages}
+            pageSize={data.pageSize}
+            pageSizes={[20, 50, 100]}
+            disabled={loading}
+            onPageChange={(page) => change({ page })}
+            onPageSizeChange={(pageSize) => change({ pageSize, page: 1 })}
+          />
         )}
-        {status === "ready" && data && data.items.length === 0 && (
-          <p className="wb-state">当前条件下没有回写记录，可修改条件后重新查询。</p>
-        )}
-        {status === "ready" && data && data.items.length > 0 && (
-          <>
-            <WritebackTable
-              items={data.items}
-              busyInvoice={preview.busyInvoice}
-              error={preview.error}
-              onPreview={(invoiceId) => void preview.create(invoiceId)}
-            />
-            <Pagination
-              label="回写记录"
-              total={data.total}
-              page={data.page}
-              pageCount={data.pages}
-              pageSize={data.pageSize}
-              pageSizes={[20, 50, 100]}
-              onPageChange={(page) => setQuery({ ...query, page })}
-              onPageSizeChange={(pageSize) => setQuery({ ...query, pageSize, page: 1 })}
-            />
-          </>
-        )}
-      </section>
+      </Card>
     </div>
   );
 }

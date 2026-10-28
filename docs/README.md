@@ -42,12 +42,14 @@
 | 文档 | 用途与状态 |
 | --- | --- |
 | [NS 适配器](../backend/integrations/netsuite/README.md) | M2M 与 HTTP 适配层 |
+| [供应商账单只读查询](ns-vendor-bill-query.md) | 版本 3 按母采购内部 ID 批量查询的后端接口与样本核对工具；NS 部署及联调待完成 |
 | [PL 共用脚本接入](pl-script-integration.md)、[最新部署说明](../outputs/pl-lookup-example/PL联查最新部署说明.md) | 共用查询服务累计部署清单，含采购行真实报关单号补齐 |
 | [财务来源读取](finance-source-reader.md) | 报关原始行、Packing、采购关系及同步完整性 |
 | [字段映射](netsuite-pl-lookup.json) | NS 来源读取的字段配置依据 |
 | [PL 来源保存](pl-storage.md) | 既有本地保存用例与边界 |
 | [NS 权限](netsuite-vendor-invoice-permissions.md) | 记录访问权限专题 |
-| [NS 供应商账单回写方案](ns-vendor-bill-writeback-plan.md)、[按母单查询账单](ns-vendor-bill-query-api.md) | 回写方案与第 0 期统计（待评审）；只读查询 RESTlet（已实现，未部署） |
+| [NS 回写准备部署](ns-writeback-prepare.md) | 已实现整票审核入队、候选查询和方案确认；无 NS 写入 |
+| [NS 供应商账单回写方案](ns-vendor-bill-writeback-plan.md)、[按母单查询账单](ns-vendor-bill-query-api.md) | 后续写入方案与第 0 期统计；只读查询 RESTlet 已部署（线上修订号须部署时核实） |
 | [MySQL 资料入口](mysql/README.md) | 当前迁移导读与历史基础建表说明 |
 | [八张来源表](mysql/eight-table-relations.md) | 母采购、子采购、报关和发票来源关系 |
 | [报关关联结果表](mysql/customs-reconciliation-results.md) | 当前独立依据与关联结果表 |

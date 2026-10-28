@@ -103,7 +103,7 @@ class IdentityService:
         if self.access is None:
             return False
         user, roles = self.access.current(user_id)
-        return bool(user and user["active"] and roles)
+        return bool(user and user["active"] and user["enabled"] and roles)
 
     def roles_of(self, actor):
         """当前生效角色代码；服务身份没有角色。"""
@@ -113,7 +113,7 @@ class IdentityService:
         if user_id is None or self.access is None:
             return []
         user, roles = self.access.current(user_id)
-        return roles if user and user["active"] else []
+        return roles if user and user["active"] and user["enabled"] else []
 
     def describe(self, actor):
         """GET /api/session 的当前身份说明；只含展示所需字段。"""

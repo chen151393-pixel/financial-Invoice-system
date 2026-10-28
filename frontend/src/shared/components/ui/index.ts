@@ -11,6 +11,7 @@ export { Field, FilterBar } from "./FilterBar";
 export { Icon, type IconName } from "./Icon";
 export { MetricCard, MetricGrid, type MetricDelta } from "./MetricCard";
 export { Progress } from "./Progress";
+export { ProgressRing } from "./ProgressRing";
 export { Segmented } from "./Segmented";
 export { StageTabs, type StageItem } from "./StageTabs";
 export { StatCard, StatGrid, type StatTone } from "./StatCard";
@@ -25,3 +26,4 @@ export { TrendChart, type ChartSeries } from "./charts/TrendChart";
 // 已有公共组件同样从此处导出，页面只需一个导入来源
 export { Button } from "../Button";
 export { Pagination } from "../Pagination";
+export { SearchInput } from "./SearchInput";

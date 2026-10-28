@@ -57,4 +57,6 @@ def login_denial(user, roles):
         return f"你的账号当前不可用（{user['inactive_reason'] or '已停用'}），请联系系统管理员"
     if not roles:
         return "你还没有分配角色，请联系系统管理员开通权限"
+    if not user["enabled"]:
+        return "你的账号尚未启用，请联系系统管理员授权"
     return None

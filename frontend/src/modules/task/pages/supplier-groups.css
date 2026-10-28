@@ -176,3 +176,15 @@
     grid-template-columns: minmax(0, 1fr);
   }
 }
+.sg-page .sg-panel .ui-field--grow {
+  flex: 1 1 220px;
+}
+.sg-page .sg-panel .ui-filter-bar__actions {
+  flex-wrap: wrap;
+}
+.sg-page .sg-panel .ui-field--grow {
+  flex: 1 1 220px;
+}
+.sg-page .sg-panel .ui-filter-bar__actions {
+  flex-wrap: wrap;
+}

@@ -17,7 +17,7 @@ from backend.core.schema import schema_metadata
 from backend.manage import OFFLINE_MYSQL_URL, SCHEMA_INI
 from backend.migrations.version_table import VERSION_TABLE
 
-MODULES = ("source", "review", "task", "invoice", "matching", "sync", "identity")
+MODULES = ("source", "review", "task", "invoice", "matching", "sync", "identity", "writeback")
 DICTIONARY = ROOT / "docs" / "mysql" / "current-data-dictionary.md"
 OUTPUT = ROOT / "docs" / "mysql" / "schema-map.md"
 # 已执行的历史迁移不改名不拆分：基线一次建全部表；0003 早于“一个迁移只改一个模块”的规则。

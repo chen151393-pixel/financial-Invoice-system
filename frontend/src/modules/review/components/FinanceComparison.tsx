@@ -2,7 +2,7 @@ import { useState, type ReactNode } from "react";
 import { Button, EmptyState, ErrorState, Skeleton } from "../../../shared/components/ui";
 import type { ComparisonGroup, ComparisonState, PurchaseLine } from "../types";
 import { DeclarationRow } from "./DeclarationRow";
-import { PurchaseDialog } from "./ReviewDialog";
+import { PurchaseDialog } from "./PurchaseDialog";
 import "./review.css";
 
 // 主行列宽（不含勾选列）；批量模式在最前加 3% 的勾选列，从销售单号列让出

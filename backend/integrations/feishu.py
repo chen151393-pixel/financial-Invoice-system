@@ -141,7 +141,9 @@ class FeishuClient:
         params = {**params, "page_size": 50}
         items = []
         for _ in range(MAX_PAGES):
-            data = self._request("GET", path, token=self._tenant_token(), params=params).get("data") or {}
+            data = self._request("GET", path, token=self._tenant_token(), params=params).get("data")
+            if not isinstance(data, dict):
+                raise ApiError(502, "飞书返回的分页数据缺失，未能读取完整列表")
             page = data.get(key) or []
             if not isinstance(page, list):
                 raise ApiError(502, "飞书返回的列表格式异常")
@@ -172,11 +174,11 @@ class FeishuClient:
             raise ApiError(502, "飞书返回的部门信息格式异常")
         return department
 
-    def child_departments(self, open_department_id):
-        """全部下级部门（递归）。"""
+    def child_departments(self, open_department_id, *, recursive=True):
+        """下级部门；非递归模式用于从直属关系还原组织树。"""
         return self._pages(
             f"contact/v3/departments/{quote(open_department_id, safe='')}/children",
-            {"department_id_type": "open_department_id", "fetch_child": "true"},
+            {"department_id_type": "open_department_id", "fetch_child": "true" if recursive else "false"},
             "items",
         )
 

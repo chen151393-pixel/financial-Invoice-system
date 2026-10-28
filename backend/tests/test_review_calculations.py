@@ -259,3 +259,41 @@ def test_busy_ledger_defers_without_failure_or_rebuild(review, ns, engine, monke
         connection.execute(text("UPDATE review_calculation_jobs SET retry_at=NULL"))
     CalculationWorker(calculations).run_once()
     assert review.browse(query()).groups[0].calculationStatus == "ready"
+
+
+def test_split_bulk_search_uses_snapshot_fields_and_filtered_counts(review, ns, engine, monkeypatch):
+    seed(ns, engine)
+    save(ns, engine, bundle([purchase("201", "871")], [customs("871")]))
+    CalculationService(review).rebuild()
+    supplier = review.browse(query()).suppliers[0].name
+
+    def forbidden(*args, **kwargs):
+        raise AssertionError("搜索必须使用快照，不能读取实时来源")
+
+    monkeypatch.setattr(review.declarations, "details", forbidden)
+    both = review.browse(query(recordNo="CD870，CD871;CD870", pageSize=1, page=2))
+    assert both.total == 2 and both.counts["all"] == 2 and both.pages == 2
+    assert len(both.groups) == 1
+    found = review.browse(
+        query(supplierName="不存在;" + supplier, recordNo="870,871", purchaseOrderNo="不存在\nSUB-201")
+    )
+    assert found.total == 1 and found.counts["all"] == 1
+    assert found.groups[0].recordNumber == "CD871"
+    assert review.browse(query(recordNo="870", purchaseOrderNo="SUB-201")).total == 0
+    assert review.browse(query(recordNo="SUB-201")).total == 0
+    assert review.browse(query(purchaseOrderNo="清洗液")).total == 0
+    assert review.browse(query(supplierName="不存在")).total == 0
+    for field in ("supplierName", "recordNo", "purchaseOrderNo"):
+        assert review.browse(query(**{field: "%"})).total == 0
+    assert review.browse(query(recordNo="，；\n ")).total == 2
+
+
+def test_bulk_input_limits_and_literal_spaces():
+    from backend.core.search_terms import search_terms
+    from pydantic import ValidationError
+
+    assert search_terms(" ACME LTD，乙; ACME LTD\n丙 ") == ("ACME LTD", "乙", "丙")
+    assert query(recordNo=";".join(str(i) for i in range(50))).recordNo
+    for value in ("x" * 121, ";".join(str(i) for i in range(51)), "x" * 6501):
+        with pytest.raises(ValidationError):
+            query(recordNo=value)

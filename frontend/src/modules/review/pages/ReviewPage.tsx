@@ -30,8 +30,11 @@ export function ReviewPage() {
   const [searchParams] = useSearchParams();
   const [state, setState] = useState<ComparisonState>({ kind: "loading" });
   const [query, setQuery] = useState<DeclarationListQuery>({
-    keyword: searchParams.get("keyword") || "",
+    keyword: "",
     supplierId: "",
+    supplierName: searchParams.get("supplierName") || "",
+    recordNo: searchParams.get("recordNo") || searchParams.get("keyword") || "",
+    purchaseOrderNo: searchParams.get("purchaseOrderNo") || "",
     // 工作台"待审批"分区跳转时带 status=pending
     status: searchParams.get("status") === "pending" ? "pending" : "all",
     page: 1,
@@ -40,7 +43,6 @@ export function ReviewPage() {
   const [refresh, setRefresh] = useState(0);
   // 每次加载成功递增，用于重置列表的展开状态。
   const [loads, setLoads] = useState(0);
-  const [suppliers, setSuppliers] = useState<ComparisonResult["suppliers"]>([]);
   // 最近一次成功结果的计数；重新查询时保留，概况卡与状态切换不闪烁
   const [counts, setCounts] = useState<ComparisonResult["counts"] | null>(null);
   const [review, setReview] = useState<ComparisonGroup | null>(null);
@@ -60,7 +62,6 @@ export function ReviewPage() {
         if (active) {
           setState({ kind: "ready", result });
           setLoads((value) => value + 1);
-          setSuppliers(result.suppliers || []);
           setCounts(result.counts);
         }
       } catch (error) {
@@ -150,12 +151,15 @@ export function ReviewPage() {
           }
         />
         <FinanceSearchForm
-          initial={{ keyword: query.keyword, supplierId: query.supplierId }}
+          initial={{
+            supplierName: query.supplierName || "",
+            recordNo: query.recordNo || "",
+            purchaseOrderNo: query.purchaseOrderNo || "",
+          }}
           busy={busy}
-          suppliers={suppliers}
           onSearch={(criteria) => {
             setNotice("");
-            setQuery((current) => ({ ...current, ...criteria, page: 1 }));
+            setQuery((current) => ({ ...current, ...criteria, keyword: "", supplierId: "", page: 1 }));
           }}
         />
         {notice && (

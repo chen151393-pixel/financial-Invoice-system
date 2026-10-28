@@ -1,30 +1,14 @@
 /* 人员与权限页：只做排布，颜色、字号沿用组件库与设计变量 */
 .identity-access-page {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  min-width: 0;
   gap: var(--space-layout);
-}
-.identity-access-sync {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--space-small) var(--space-control);
-  font-size: 13px;
 }
 .identity-access-muted {
   margin: 0;
   color: var(--color-muted);
   font-size: 13px;
-}
-.identity-access-roles {
-  display: inline-flex;
-  flex-wrap: wrap;
-  gap: 4px;
-}
-.identity-access-check {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  cursor: pointer;
 }
 .identity-role-dialog {
   display: grid;
@@ -59,4 +43,148 @@
   display: flex;
   justify-content: flex-end;
   gap: var(--space-small);
+}
+
+.identity-directory-layout {
+  display: grid;
+  grid-template-columns: 240px minmax(0, 1fr);
+}
+.identity-directory-tree {
+  padding: var(--space-layout) var(--space-control);
+  border-right: 1px solid var(--color-border);
+  background: var(--color-canvas);
+}
+.identity-directory-tree h3 {
+  margin: 0 0 4px;
+  padding-inline: var(--space-control);
+  font-size: 15px;
+}
+.identity-directory-tree > p {
+  padding-inline: var(--space-control);
+}
+.identity-directory-branches {
+  display: grid;
+  gap: 4px;
+  margin-top: var(--space-control);
+  max-height: 640px;
+  overflow: auto;
+}
+.identity-directory-branches button {
+  width: 100%;
+  justify-content: space-between;
+  text-align: left;
+  white-space: normal;
+}
+.identity-directory-branches button span:first-child {
+  overflow-wrap: anywhere;
+}
+.identity-directory-members {
+  min-width: 0;
+}
+.identity-directory-modes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-layout);
+  margin-bottom: var(--space-small);
+}
+.identity-directory-modes label {
+  display: flex;
+  align-items: center;
+  gap: var(--space-small);
+  font-size: 14px;
+}
+.identity-access-page input[type="checkbox"],
+.identity-access-page input[type="radio"] {
+  accent-color: var(--color-primary);
+  width: 16px;
+  height: 16px;
+}
+.identity-directory-footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-control);
+}
+.identity-directory-layout + .identity-directory-footer {
+  position: sticky;
+  bottom: 0;
+  z-index: 2;
+  background: var(--color-surface);
+  border-top: 1px solid var(--color-border);
+}
+.identity-member-departments {
+  max-width: 360px;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.identity-member-departments summary {
+  cursor: pointer;
+}
+.identity-member-departments span {
+  display: block;
+  margin-top: var(--space-small);
+  color: var(--color-muted);
+}
+.identity-directory-footer strong {
+  color: var(--color-primary);
+}
+.identity-directory-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-small);
+}
+.identity-member-name {
+  display: flex;
+  align-items: center;
+  gap: var(--space-control);
+}
+.identity-member-name strong {
+  font-weight: 500;
+}
+.identity-member-avatar {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: var(--color-primary-soft);
+  color: var(--color-primary);
+}
+.identity-directory-summary {
+  margin: 0 0 var(--space-layout);
+}
+.identity-directory-summary > div {
+  display: grid;
+  grid-template-columns: 150px minmax(0, 1fr);
+  gap: var(--space-control);
+  padding-block: var(--space-control);
+  border-bottom: 1px solid var(--color-border);
+}
+.identity-directory-summary dt {
+  color: var(--color-muted);
+}
+.identity-directory-summary dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.identity-directory-summary ~ .ui-alert {
+  margin-top: var(--space-control);
+}
+@media (max-width: 760px) {
+  .identity-directory-layout {
+    grid-template-columns: 1fr;
+  }
+  .identity-directory-tree {
+    border-right: 0;
+    border-bottom: 1px solid var(--color-border);
+  }
+  .identity-directory-branches {
+    max-height: 200px;
+  }
+  .identity-directory-summary > div {
+    grid-template-columns: 1fr;
+    gap: 4px;
+  }
 }

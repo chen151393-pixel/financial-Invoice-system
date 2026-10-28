@@ -1,5 +1,11 @@
 # task 模块：开票跟进
 
+## 组合搜索（2026-10-28）
+
+正式节点查询为 `POST /api/task/board/query`，新增 `supplierName`（供应商名称）、`recordNo`（CD 号）、`purchaseOrderNo`（子采购单号）。均为可选字符串，去除首尾空白后最多 120 字符，空值不限；按包含文字匹配，多个条件取交集，`%`、`_` 按普通字符搜索。子采购单命中任一任务行即返回完整任务。节点计数、总数和分页共用过滤条件。
+
+供应商和单号经 `SourceDirectory.search_task_filters` 只读门面获取完整匹配 ID，避免旧关键词的 500 条截断。旧 `keyword`、`supplierId` 继续兼容；`/api/tasks/board/query` 保留一版本，复用相同 DTO、身份校验与 Service，旧调用方升级后移除。下文旧路径描述保留兼容入口语义。
+
 架构 v2 第 4c 步新建。财务审核通过后按 供应商 × 采购公司 × 币种 生成开票任务，跟进合同归档、供应商通知与收票进度。表结构见[数据库设计](../../../docs/architecture/database.md)第 4.3、6 节。
 
 4d 补强已接入全局依据、任务后继与差异结束。包括已完成任务在内，依据变化时整体替代并按台账重算；兼容分配承接，口径不兼容保留待复核占用。
@@ -256,3 +262,9 @@ MySQL 命名锁保证多实例单消费者，并对同一任务的同一子采�
 - 判定当前节点所需的事实读取从 `TaskBoardService` 抽出为 `service/board_facts.py`（`board_facts`），任务台与工作台共用，节点计数一致。
 - 2026-10-28 `public.py` 新增 `unbound_notify_suppliers(connection, tasks)`：入参为 `workbench_tasks` 结果（调用方可先按账套筛选），返回“待通知供应商”节点中供应商未绑定企微开票群的家数、任务数与前 5 家名称，供工作台提醒；“未绑定”与供应商档案筛选同一口径。
 - `workbench_tasks` 每个任务新增 `node` / `node_label`（未完成任务按事实判定，已完成为 done）、`status_reason`、`waiting_days`（未完成任务自生成起的天数）；原拼接等待天数的 `reason` 移除。`public.py` 新增暴露 `NODES`、`NODE_LABELS`。
+
+## 供应商档案分字段搜索（2026-10-28）
+
+`POST /api/task/supplier-groups/profiles/query` 接收 `supplierName`、`groupName`、`owner`，分别搜索供应商名称、已绑定外部群名称、群主姓名或账号。支持部分匹配和批量输入：中英文逗号、分号、换行分隔，最多 50 条，每条最多 120 字符；框内 OR、框间 AND，空项忽略、重复项去重，通配符作为普通字符。绑定状态与群条件一并过滤；无匹配 ID 不能退化为不限制。source 门面按名称和 ID 范围过滤后分页。顶部供应商概况仍为全量，不随搜索变化。
+
+旧 `/api/tasks/supplier-groups/profiles/query` 和 `keyword` 保留一个版本兼容旧前端；正式前端已切换新路径，旧调用方升级后删除该别名。其余群维护接口不变。

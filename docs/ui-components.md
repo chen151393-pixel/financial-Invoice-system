@@ -1,25 +1,32 @@
 # 统一组件库（shared/components/ui）
 
+## 单值环形展示与分页计量单位（2026-10-28）
+
+- `ProgressRing`：传 `value`（后端 0–100 字符串）、`text` 与 `label`，显示完整圆环和中心文本，不计算业务比例。用于发票比对置信度；样式独立在 `progress-ring.css`，不改变已有图表。
+- `Pagination` 新增可选 `unit`，默认“条”；整票审核队列传“张”，同步用于总数及每页选项。其他页面保持原来的默认单位。
+
 状态：2026-10-25 建立。新页面和改版页面的界面**只从本组件库组合**；旧页面在被修改时逐步迁移，不为迁移单独重写。视觉基准见 [design.md](../design.md)，工程规范见 [前端统一规范](frontend-conventions.md)。
 
 - 代码位置：`frontend/src/shared/components/ui/`，唯一入口 `index.ts`。
-- 展示页：系统内 `/ui-kit`（侧栏“基础资料 → 界面组件库”），演示全部组件与组合方式；数据为虚构演示数据，不调用接口。
+- 2026-10-28 已移除“界面组件库”展示页及侧栏入口；共享组件继续供业务页面复用，使用方式以本文和组件类型定义为准。
 - 风格参考：ProBoost 后台（白底卡片、浅灰画布、主色图标块、左侧竖条分区标题、堆叠柱 + 折线趋势图、环形占比图）。颜色、圆角、字体仍使用本项目 `tokens.css`，保持与其他页面一致；未引入 Tailwind、shadcn CLI 或图表依赖，图表为 SVG 实现。
 
 ## 使用方式
+
+`Field` 默认显示上方标签；仅需输入框内提示时传 `hideLabel`，标签仍为读屏提供名称，不影响其他页面默认布局。
 
 ```tsx
 import { Card, CardHeader, CardContent, MetricCard, MetricGrid, Badge } from "../../../shared/components/ui";
 ```
 
-1. 先在本库中找组件；确实缺少时**在本库新增**（带中文注释、加入 `index.ts` 和展示页），不在业务页面里自造同类样式。
+1. 先在本库中找组件；确实缺少时**在本库新增**（带中文注释、加入 `index.ts` 并更新本文），不在业务页面里自造同类样式。
 2. 业务页面 CSS 只做排布（grid、间距、列宽），不覆盖 `.ui-*` 的颜色、字号、圆角。
 3. 业务状态到颜色的映射写在业务模块（如任务台 `NODE_TONES`），组件只接收 `tone`。
 4. 组件不计算金额、占比、差额，不判断业务是否允许；数值与文案来自后端。图表的 `values` 只用于绘图位置，提示与图例显示后端给出的文本。
 
 ## 组件清单
 
-`HorizontalBarChart` 展示非负计数的横向条形图：`items` 提供 `key/label/value/text`，可选 `color/note`。统一零刻度，零值不画色条，数量显示在条末；小屏将附注置于条形下方。`/ui-kit` 提供演示。
+`HorizontalBarChart` 展示非负计数的横向条形图：`items` 提供 `key/label/value/text`，可选 `color/note`。统一零刻度，零值不画色条，数量显示在条末；小屏将附注置于条形下方。
 
 | 组件                                                 | 用途                         | 要点                                                                                                                                         |
 | ---------------------------------------------------- | ---------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -54,18 +61,26 @@ import { Card, CardHeader, CardContent, MetricCard, MetricGrid, Badge } from "..
 
 ## 紧凑表格与行底色
 
-`DataTable` 默认外观不变；`density="compact"` 使用 12px 正文与紧凑单元格留白，`rowTone(row)` 返回 `"accent"` 时使用项目浅蓝对照底色。调用方同时提供来源文字，不能只用底色区分。列宽与数值对齐仍由 `columns` 控制，顺序由后端数据决定。`/ui-kit` 已增加紧凑表格示例。
+`DataTable` 默认外观不变；`density="compact"` 使用 12px 正文与紧凑单元格留白，`rowTone(row)` 返回 `"accent"` 时使用项目浅蓝对照底色。调用方同时提供来源文字，不能只用底色区分。列宽与数值对齐仍由 `columns` 控制，顺序由后端数据决定。
 
 ## 首个使用者
+
+`DataTable` 可选 `maxHeight` 接受 CSS 最大高度（数字按 px 或 CSS 字符串），开启表内纵向滚动和固定表头；横向与纵向共用一个可键盘聚焦的滚动区域。不传时沿用原有布局。
 
 开票跟进 `/tasks`（原采购开票任务台，`frontend/src/modules/task/pages/TaskBoardPage.tsx`）：`StatCard`（节点卡，2026-10-27 起替代 `StageTabs`）、`Card`+`CardHeader`+`FilterBar embedded`（列表卡片）、`Badge`+`Stepper`+`Progress`+`Alert`（每个任务的状态与默认展开流程）、`Skeleton`/`EmptyState`/`ErrorState`、`Pagination`。旧 `/tasks/board` 重定向到 `/tasks`。
 
 ## 验证
 
+以下为历史验证记录，涉及的组件展示页已于 2026-10-28 移除。
+
 2026-10-25 在本地隔离 SQLite（合成数据）预览：`/ui-kit` 与 `/tasks/board` 在 1440px 与 375px 下检查，无页面横向溢出；任务台节点筛选与地址同步、来源变化提示、已完成分区可用。未做浏览器以外的视觉回归基线；暗色模式未适配（项目当前无暗色主题）。
 
 ## 2026-10-27 补充
 
-- `TrendChart` 新增 `grouped`（并排柱）与 `lineAxis="percent"`（折线按右侧 0–100% 轴绘制并在点上显示 `texts`，“—”不标注）；系列可传 `color`（设计变量）。展示页新增“应开与已收票金额趋势”示例。
+- `TrendChart` 新增 `grouped`（并排柱）与 `lineAxis="percent"`（折线按右侧 0–100% 轴绘制并在点上显示 `texts`，“—”不标注）；系列可传 `color`（设计变量）。
 - `Sparkline` 新增 `warning`、`inverse`（实底卡片上反白）色调。
 - 设计变量新增 `--color-warning`：超期、需关注等小面积标记（条形、走势线），不用于大面积底色。
+
+### SearchInput 批量查询输入
+
+`SearchInput` 复用查询栏原生输入样式，使用 `value` / `onValueChange` 管理草稿；粘贴换行或制表符时转换为分号保留条目边界，后端负责拆分、去重和数量限制。配合 `<Field label="供应商" hideLabel grow>` 仅显示框内提示，同时保留读屏标签。当前用于供应商档案和财务报关单搜索；输入框回车提交所属 `FilterBar`。

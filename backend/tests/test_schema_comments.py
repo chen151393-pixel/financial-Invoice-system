@@ -14,6 +14,10 @@ from backend.tests.test_schema_baseline import schema_engine as schema_engine
 from sqlalchemy import inspect, text
 
 TABLES = ALL_TABLES - {
+    "writeback_tasks",
+    "writeback_plans",
+    "writeback_audit",
+    "writeback_invoice_guards",
     "sync_lemon_bindings",
     "sync_lemon_runs",
     "sync_ns_runs",
@@ -42,11 +46,13 @@ TABLES = ALL_TABLES - {
     "identity_login_flows",
     "identity_sync_runs",
     "identity_audit",
+    "identity_directory_previews",
+    "identity_user_sync_scopes",
 }
 COMMENT_HEAD = "0015_sync_comments"
 
 INITIAL_REVISION = "0009_matching_ledger_versions"
-MODULES = ("source", "review", "task", "invoice", "matching", "sync")
+MODULES = ("source", "review", "task", "invoice", "matching", "sync", "writeback")
 
 
 def test_entity_comments_cover_all_columns():

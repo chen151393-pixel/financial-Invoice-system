@@ -4,17 +4,18 @@
 
 ## 文件
 
-| 文件                                              | 说明                                                                                                    |
-| ------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
-| `pages/ReviewPage.tsx`                            | 打开即读取已入库报关单；搜索、账套、供应商、状态筛选、分页、刷新；单张与批量审核；忽略过期响应          |
-| `components/FinanceSearchForm.tsx`                | 关键字、账套与供应商查询（供应商选项由后端返回）                                                        |
-| `components/FinanceComparison.tsx`                | 报关单列表工具条（全部展开/收起、刷新、批量审核）与主行表格；点击“批量审核通过”后才出现勾选列           |
-| `components/DeclarationRow.tsx`                   | 第一层报关单行：勾选（仅后端允许审核的）、状态、单张审核入口                                            |
-| `components/CustomsRows.tsx`、`review-levels.css` | 报关行与子采购行共用 DataTable 列头，连续紧凑对照，无内层折叠                                           |
-| `components/BatchApproveDialog.tsx`               | 批量审核确认（范围为当前页已选）与逐张结果                                                              |
-| `components/ReviewDialog.tsx`                     | 整单审核确认、审核备注、审核记录与子采购只读详情                                                        |
-| `api.ts`                                          | `POST /api/review/declarations/query`；`/{id}/approve`（提交 `contentSha256` 与备注）；`/approve-batch` |
-| `types.ts`                                        | 后端 VO；数量与金额为十进制字符串，前端不重算                                                           |
+| 文件                                                   | 说明                                                                                                    |
+| ------------------------------------------------------ | ------------------------------------------------------------------------------------------------------- |
+| `pages/ReviewPage.tsx`                                 | 打开即读取已入库报关单；分字段搜索、状态筛选、分页、刷新；单张与批量审核；忽略过期响应                  |
+| `components/FinanceSearchForm.tsx`                     | 供应商、CD 号、子采购单号分字段批量搜索                                                                 |
+| `components/FinanceComparison.tsx`                     | 报关单列表工具条（全部展开/收起、刷新、批量审核）与主行表格；点击“批量审核通过”后才出现勾选列           |
+| `components/DeclarationRow.tsx`                        | 第一层报关单行：勾选（仅后端允许审核的）、状态、单张审核入口                                            |
+| `components/CustomsRows.tsx`、`review-levels.css`      | 报关行与子采购行共用 DataTable 列头，连续紧凑对照，无内层折叠                                           |
+| `components/BatchApproveDialog.tsx`                    | 批量审核确认（范围为当前页已选）与逐张结果                                                              |
+| `components/ReviewDialog.tsx`                          | 整单审核确认、审核备注与审核记录                                                                        |
+| `components/PurchaseDialog.tsx`、`purchase-dialog.css` | 子采购只读详情、对应字段与原始订单行独立滚动                                                            |
+| `api.ts`                                               | `POST /api/review/declarations/query`；`/{id}/approve`（提交 `contentSha256` 与备注）；`/approve-batch` |
+| `types.ts`                                             | 后端 VO；数量与金额为十进制字符串，前端不重算                                                           |
 
 外壳复用 AppFrame、Button、Pagination；路由在 `app/router.tsx`，路径在 `app/paths.ts`。
 
@@ -22,6 +23,7 @@
 
 - 子采购行显示开票口径：采购数量、采购单位、含税金额；报关数量在说明中显示。
 - 点击“查看”打开的子采购明细弹窗展示“销售订单汇率”（`salesOrderExchangeRate`），直接显示后端十进制字符串；缺失时显示“来源未提供”，不默认填 0 或 1。
+- 子采购详情复用统一 `Dialog`，桌面最大宽度 1040px；数量与单位分开，来源说明跨整行。原始订单行在 `DataTable` 内独立上下滚动、固定表头；窄屏允许表格内横向滚动，短屏允许正文滚动，关闭按钮保持可见。
 - 能否审核、状态、计数、筛选和分页均由后端返回；按钮使用后端 `allowed/reason`，点击后后端重新校验。
 - 2026-10-27 起，列表读取后台持久化的计算快照。同步、审核或容差变化后，`notices` 提示后台计算中／失败重试；未更新账套暂时展示上次完成的单据快照和状态统计，后端清空幅度结论、关闭审核按钮并从异常及可自动审核计数中排除。完成后点击“刷新列表”读取新结果。`calculationStatus` 为 ready / pending / failed，`calculatedAt` 是上次完成的 UTC 时间；前端不计算、不回退到旧结论。
 - 来源在页面打开后变化时，后端拒绝审核并提示刷新；页面显示真实错误，不自动重发。
@@ -54,3 +56,7 @@
 ## 去掉 NS 环境筛选（2026-10-26）
 
 上线只同步 NS 正式环境，财务核对查询栏不再提供 NS 环境 / 账套筛选，地址里的 `account` 参数也不再读取（旧链接带 `?account=` 时按不限处理）。后端查询参数保留为可选，不传即不限；列表行内的 NS 环境文字仍照常显示。
+
+## 报关单搜索（2026-10-28）
+
+搜索栏拆为供应商、CD 号、子采购单号三个输入框；只展示框内提示，保留隐藏的可访问标签。复用 `SearchInput`，支持部分内容、逗号/分号分隔及粘贴多行。查询或回车提交给后端，清空恢复三个空条件并回到第一页；计数、筛选、分页仍由后端完成。旧混合关键词和供应商下拉已从搜索栏移除，响应供应商选项保留兼容旧调用。

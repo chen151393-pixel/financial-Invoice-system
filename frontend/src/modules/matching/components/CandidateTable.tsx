@@ -1,76 +1,81 @@
-import { tierLabels, type Candidate } from "../types/matching";
+import { Badge, Button, DataTable, Progress } from "../../../shared/components/ui";
+import type { Candidate } from "../types/matching";
 
-/** 手动关联的候选子采购行；不可关联的原因由后端 block 给出，对应行不可选。 */
+/** 候选行只能由用户选择；限制与置信度全部来自后端。 */
 export function CandidateTable({
   rows,
-  name,
   chosenId,
   onChoose,
+  busy = false,
 }: {
   rows: Candidate[];
   name: string;
   chosenId: string | null;
   onChoose: (candidate: Candidate) => void;
+  busy?: boolean;
 }) {
   return (
-    <div
-      className="matching-table-wrap"
-      role="region"
-      aria-label="候选子采购行，可横向滚动"
-      // eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex -- 宽表容器支持键盘聚焦滚动。
-      tabIndex={0}
-    >
-      <table className="matching-table">
-        <thead>
-          <tr>
-            <th scope="col">选择</th>
-            <th scope="col">子采购单 / 品名</th>
-            <th scope="col">供应商</th>
-            <th scope="col">报关单</th>
-            <th scope="col" className="matching-number">
-              剩余应开（数量 / 含税）
-            </th>
-            <th scope="col">置信度</th>
-            <th scope="col">限制</th>
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((candidate) => {
-            const purchase = candidate.purchase;
-            return (
-              <tr key={purchase.purchaseLineId}>
-                <td>
-                  <input
-                    type="radio"
-                    name={name}
-                    aria-label={`选择 ${purchase.orderNo} ${purchase.item}`}
-                    disabled={Boolean(candidate.block)}
-                    checked={chosenId === purchase.purchaseLineId}
-                    onChange={() => onChoose(candidate)}
-                  />
-                </td>
-                <td>
-                  {purchase.orderNo || "—"}
-                  <small>
-                    {purchase.item || "—"} · {purchase.unit || "单位缺失"}
-                  </small>
-                </td>
-                <td>{purchase.supplier || "—"}</td>
-                <td>{purchase.recordNumber || "—"}</td>
-                <td className="matching-number">
-                  {purchase.remainingQuantity ?? "—"} / {purchase.remainingAmount ?? "金额缺失"}
-                </td>
-                <td>
-                  <span className="matching-badge" data-tier={candidate.tier}>
-                    {candidate.confidence} · {tierLabels[candidate.tier]}
-                  </span>
-                </td>
-                <td className={candidate.block ? "matching-warning" : undefined}>{candidate.block || "—"}</td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
-    </div>
+    <DataTable
+      label="候选子采购行"
+      rows={rows}
+      rowKey={(row) => row.purchase.purchaseLineId}
+      minWidth={580}
+      density="compact"
+      columns={[
+        {
+          key: "purchase",
+          header: "子采购单 / 品名",
+          render: ({ purchase }) => (
+            <div className="matching-cell">
+              <strong>{purchase.orderNo || "—"}</strong>
+              <small>
+                {purchase.item || "—"} · {purchase.unit || "单位缺失"}
+              </small>
+              <small>
+                {purchase.supplier} · {purchase.recordNumber}
+              </small>
+            </div>
+          ),
+        },
+        {
+          key: "remaining",
+          header: "剩余应开数量 / 含税",
+          align: "right",
+          render: ({ purchase }) => (
+            <div className="matching-cell">
+              <span>{purchase.remainingQuantity ?? "—"}</span>
+              <strong>
+                {purchase.remainingAmount ?? "—"} {purchase.currency}
+              </strong>
+            </div>
+          ),
+        },
+        {
+          key: "confidence",
+          header: "置信度",
+          width: "130px",
+          render: (row) => (
+            <Progress
+              width={row.confidence}
+              text={`${row.confidence}%`}
+              label={`${row.purchase.orderNo}置信度`}
+            />
+          ),
+        },
+        {
+          key: "choose",
+          header: "操作",
+          render: (row) => (
+            <div className="matching-cell">
+              <Button size="sm" disabled={busy || Boolean(row.block)} onClick={() => onChoose(row)}>
+                {chosenId === row.purchase.purchaseLineId ? "已选择" : "选用此行"}
+              </Button>
+              {row.block && <small>{row.block}</small>}
+              {chosenId === row.purchase.purchaseLineId && <Badge tone="info">待确认分配</Badge>}
+            </div>
+          ),
+        },
+      ]}
+    />
   );
 }

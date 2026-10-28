@@ -55,6 +55,6 @@ def replace(service, allocation_id, body, actor):
         allocation_dao.update_status(connection, created["id"], {"verification_history": history}, stamp)
         for line_id in sorted({old["purchase_line_id"], created["purchase_line_id"]}):
             service._publish(connection, line_id, actor, "原分配已原子替换")
-        return invoice_id
+        return invoice_id, old["invoice_id"]
 
-    return service.queries.invoice(service._run(action))
+    return service.queries.invoice(service._run(action, actor))

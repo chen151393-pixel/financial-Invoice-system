@@ -5,6 +5,7 @@ from sqlalchemy import and_, case, delete, func, insert, select
 from ..entity.calculation_job import calculation_jobs as jobs
 from ..entity.declaration_snapshot import declaration_snapshots as snapshots
 from ..entity.snapshot_supplier import snapshot_suppliers as suppliers
+from .snapshot_search import conditions as search_conditions
 
 
 def replace_account(connection, account, rows, supplier_rows):
@@ -23,7 +24,7 @@ def browse(connection, query, key, month_start):
     approved = snapshots.c.review_status == "approved"
     alert = and_(pending, fresh, snapshots.c.margin_alert.is_(True))
     auto = and_(pending, fresh, snapshots.c.auto_eligible.is_(True))
-    conditions = []
+    conditions = search_conditions(query, connection.dialect.name)
     if query.account:
         conditions.append(snapshots.c.ns_account == query.account)
     if query.keyword:

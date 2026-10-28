@@ -1,32 +1,28 @@
-/* 单张发票比对：发票行导航 + 选中行详情。颜色、间距只用 tokens.css 中的变量。 */
-.matching-facts--strip {
-  padding: 14px 20px;
-}
+/* 单票核对工作区：左侧明细导航，右侧核对与候选。 */
 .matching-detail {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: flex-start;
-  gap: 18px;
+  display: grid;
+  grid-template-columns: 280px minmax(0, 1fr);
+  align-items: start;
+  gap: var(--space-layout);
   min-width: 0;
 }
 .matching-lines {
-  flex: 1 1 260px;
-  max-width: 320px;
-}
-.matching-line-panel {
-  flex: 999 1 560px;
+  position: sticky;
+  top: var(--space-control);
   min-width: 0;
 }
 .matching-lines__list {
   display: grid;
-  gap: 2px;
-  padding: 8px;
+  gap: 4px;
+  padding: var(--space-small);
+  max-height: 70vh;
+  overflow-y: auto;
 }
 .matching-line {
   display: grid;
-  gap: 4px;
-  padding: 12px;
-  border: 0;
+  gap: var(--space-small);
+  padding: var(--space-control);
+  border: 1px solid transparent;
   border-radius: var(--radius-control);
   background: none;
   color: var(--color-text);
@@ -34,57 +30,118 @@
   font-size: 13px;
   text-align: left;
   cursor: pointer;
+  overflow-wrap: anywhere;
 }
 .matching-line:hover {
   background: var(--color-canvas);
 }
 .matching-line[aria-current="true"] {
-  background: var(--color-table-purchase);
-  box-shadow: inset 2px 0 0 var(--color-primary);
+  border-color: var(--color-primary);
+  background: var(--color-primary-soft);
+}
+.matching-line:disabled {
+  cursor: wait;
 }
 .matching-line__title {
   display: flex;
+  flex-wrap: wrap;
   justify-content: space-between;
-  align-items: flex-start;
+  align-items: start;
   gap: var(--space-small);
 }
 .matching-line small {
   color: var(--color-muted);
   font-size: 12px;
 }
-.matching-line-sum {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: var(--space-control);
-  margin: 0;
-  padding: 14px 20px;
-  background: var(--color-canvas);
-  border-bottom: 1px solid var(--color-border);
-}
-.matching-line-sum dt {
-  color: var(--color-muted);
-  font-size: 12px;
-}
-.matching-line-sum dd {
-  margin: 2px 0 0;
+.matching-line__amount {
   font-weight: 600;
   font-variant-numeric: tabular-nums;
 }
-.matching-subhead {
-  margin: 8px 0 0;
-  font-size: 14px;
+.matching-line-panel {
+  display: grid;
+  gap: var(--space-layout);
+  min-width: 0;
 }
-.matching-manual {
+.matching-comparison-content {
   display: grid;
   gap: var(--space-control);
-  padding: 16px;
-  border: 1px solid var(--color-primary);
-  border-radius: var(--radius-control);
 }
-.matching-manual h3 {
+.matching-comparison-sides {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-control);
+}
+.matching-source-side {
+  background: var(--color-canvas);
+}
+.matching-source-side--purchase {
+  background: var(--color-primary-soft);
+}
+.matching-source-side .ui-card__header {
+  padding: var(--space-control) var(--space-control) 0;
+}
+.matching-source-side .ui-card__content {
+  padding: var(--space-control);
+  display: grid;
+  gap: var(--space-small);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+.matching-source-side p {
   margin: 0;
-  font-size: 14px;
-  color: var(--color-primary);
+}
+.matching-source-side .ui-card__description {
+  font-weight: 600;
+  color: var(--color-text);
+  overflow-wrap: anywhere;
+}
+.matching-confidence {
+  display: flex;
+  align-items: center;
+  gap: var(--space-control);
+  white-space: nowrap;
+}
+.matching-confidence > span:last-child {
+  display: grid;
+  gap: 4px;
+}
+.matching-confidence small {
+  color: var(--color-muted);
+}
+.matching-review-actions {
+  justify-content: flex-end;
+  border-top: 1px solid var(--color-border);
+  padding-top: var(--space-control);
+}
+.matching-invoice-remark {
+  margin: 0;
+  padding: 0 20px var(--space-control);
+  color: var(--color-muted);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+.matching-invoice-header .ui-card__header,
+.matching-comparison .ui-card__header,
+.matching-line-panel > .ui-card > .ui-card__header {
+  flex-wrap: wrap;
+}
+.matching-invoice-header .ui-card__title {
+  overflow-wrap: anywhere;
+}
+.matching-line-panel .matching-form label {
+  min-width: 0;
+  max-width: 100%;
+}
+.matching-line-panel .matching-form input,
+.matching-line-panel .matching-form textarea,
+.matching-line-panel .matching-form select {
+  min-width: 0;
+  max-width: 100%;
+}
+.matching-check-note summary {
+  cursor: pointer;
+  color: var(--color-muted);
+  font-size: 12px;
 }
 .matching-confirm {
   background: var(--color-danger-surface);
@@ -98,18 +155,33 @@
   color: var(--color-surface);
 }
 .matching-history summary {
-  padding: 4px 0;
+  padding: var(--space-control);
   color: var(--color-primary);
   cursor: pointer;
 }
 .matching-history > * + * {
   margin-top: var(--space-small);
 }
-@media (max-width: 760px) {
-  .matching-lines {
-    max-width: none;
+@media (max-width: 1100px) {
+  .matching-detail {
+    grid-template-columns: 230px minmax(0, 1fr);
+    gap: var(--space-control);
   }
-  .matching-line-sum {
+  .matching-comparison-sides {
+    grid-template-columns: 1fr;
+  }
+}
+@media (max-width: 760px) {
+  .matching-detail {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .matching-lines {
+    position: static;
+  }
+  .matching-lines__list {
+    max-height: 260px;
+  }
+  .matching-comparison-sides {
     grid-template-columns: 1fr;
   }
 }

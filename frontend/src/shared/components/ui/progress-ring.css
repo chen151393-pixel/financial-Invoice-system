@@ -1,0 +1,25 @@
+.ui-progress-ring {
+  position: relative;
+  display: inline-grid;
+  place-items: center;
+  width: 64px;
+  height: 64px;
+  flex: 0 0 64px;
+}
+.ui-progress-ring svg {
+  width: 100%;
+  height: 100%;
+  fill: none;
+  stroke-width: 5;
+}
+.ui-progress-ring__track {
+  stroke: var(--color-border);
+}
+.ui-progress-ring__value {
+  stroke: var(--color-primary);
+}
+.ui-progress-ring strong {
+  position: absolute;
+  font-size: 15px;
+  font-variant-numeric: tabular-nums;
+}

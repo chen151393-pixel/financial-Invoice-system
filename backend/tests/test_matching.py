@@ -283,6 +283,7 @@ def test_http_matching_routes(context, ns, engine):
     app.state.review_calculations.rebuild()
     with TestClient(app) as client:
         assert client.post("/api/matching/queue", json={}).status_code == 401
+        assert client.post("/api/matching/invoice-queue/query", json={}).status_code == 401
         headers = {"Origin": context.settings.origin}
         login = client.post(
             "/api/session",
@@ -303,6 +304,9 @@ def test_http_matching_routes(context, ns, engine):
         client.post("/api/invoices/import/confirm", json={**body, "previewToken": token}, headers=headers)
         queue = client.post("/api/matching/queue", json={"tier": "high"}, headers=headers).json()
         assert queue["total"] == 2
+        grouped = client.post("/api/matching/invoice-queue/query", json={}, headers=headers)
+        assert grouped.status_code == 200
+        assert grouped.json()["total"] == 1 and grouped.json()["rows"][0]["proposalCount"] == 2
         ids = [row["allocation"]["id"] for row in queue["rows"]]
         batch = client.post("/api/matching/allocations/confirm-batch", json={"ids": ids}, headers=headers)
         assert batch.status_code == 200 and batch.json()["confirmed"] == 2

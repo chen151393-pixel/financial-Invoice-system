@@ -20,7 +20,7 @@
 
 ## 3. 公共组件目录
 
-目标目录：`frontend/src/shared/components/`。2026-10-25 起统一组件库位于 `shared/components/ui/`（入口 `index.ts`），新页面固定从中组合，规范与清单见 [统一组件库](ui-components.md)。库外不再新建同类基础组件；缺少时在库内新增并补充展示页 `/ui-kit`。
+目标目录：`frontend/src/shared/components/`。2026-10-25 起统一组件库位于 `shared/components/ui/`（入口 `index.ts`），新页面固定从中组合，规范与清单见 [统一组件库](ui-components.md)。库外不再新建同类基础组件；缺少时在库内新增并补充组件文档。
 
 | 组件 | 统一的内容 |
 | --- | --- |

@@ -37,6 +37,9 @@ export interface TaskBoardQuery {
   createdFrom?: string;
   createdTo?: string;
   keyword: string;
+  supplierName?: string;
+  recordNo?: string;
+  purchaseOrderNo?: string;
   supplierId: string;
   // 空为全部进行中的任务
   node: "" | BoardNodeKey;

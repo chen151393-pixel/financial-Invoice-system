@@ -14,7 +14,6 @@ export const paths = {
   syncLemon: "/sync/lemon",
   syncBatches: "/sync/batches",
   writeback: "/writeback",
-  uiKit: "/ui-kit",
   access: "/settings/access",
 } as const;
 
@@ -61,7 +60,6 @@ export type View =
   | "invoice-followup"
   | "writeback"
   | "supplier-profiles"
-  | "ui-kit"
   | "access";
 
 const viewPaths: Record<View, string> = {
@@ -74,7 +72,6 @@ const viewPaths: Record<View, string> = {
   "invoice-followup": paths.tasks,
   writeback: paths.writeback,
   "supplier-profiles": paths.supplierGroups,
-  "ui-kit": paths.uiKit,
   access: paths.access,
 };
 

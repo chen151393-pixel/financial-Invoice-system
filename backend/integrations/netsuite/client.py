@@ -60,6 +60,21 @@ class NetSuite:
             {"declarationIds": declaration_ids},
         )
 
+    def vendor_bill_query(self, criteria):
+        """固定版本 3 只读查询动作；部署编号及账套仅来自服务端配置。"""
+        settings = self.settings
+        if not settings.vendor_bill_query_script or not settings.vendor_bill_query_deploy:
+            raise ApiError(503, "NS 供应商账单查询接口尚未配置，请部署只读 RESTlet 后填写编号")
+        return self._read_restlet(
+            settings.vendor_bill_query_script,
+            settings.vendor_bill_query_deploy,
+            {
+                "action": "bills",
+                "vendorId": criteria["vendorId"],
+                "purchaseOrderIds": criteria["purchaseOrderIds"],
+            },
+        )
+
     def relation_rows(self, kind, ids):
         return read_relation_rows(self, kind, ids)
 

@@ -1,5 +1,13 @@
 # matching 模块：发票比对
 
+## 整票审核队列（2026-10-28）
+
+新增 `POST /api/matching/invoice-queue/query`，请求沿用 `QueueQuery`：`tier`、`anomaly`、`supplierId`、成对日期 `invoiceFrom/invoiceTo`、`page/pageSize`。响应 `rows` 每张发票一项，包含 `invoice` 票头、`proposalCount`、`purchaseOrders`、最低 `confidence/tier`、`anomalies`、`batch.allowed/reason` 和 `batchIds`；`total/counts/page/pages` 均以发票计数。超出末页回到最后一页，空结果为第 1 页。
+
+供应商与日期先召回发票，再核对该票全部待审核建议；最低置信度分档和异常分类不隐藏同票其他建议。普通查询从 DAO 读取整票分组摘要，Service 筛选、分页后读取本页详细视图；异常筛选因依赖当前来源与审核能力，按每批 100 张完整核对后再分页，不截断单票或返回近似总数，大范围异常查询耗时可能较长。
+
+旧 `/queue` 保留逐建议契约用于兼容与现有验证；正式审核队列页面改用整票接口。单票详情、逐条审核及批量确认接口与事务语义不变，批量仍逐建议事务，不表示整票原子通过。无需数据库迁移，不触发 NS 写入。
+
 架构 v2 第 4d 步在原地重建：读写新表 `matching_allocations`（[数据库设计](../../../docs/architecture/database.md)第 4.5、5 节）。旧表 `invoice_purchase_allocations`、`invoice_purchase_link_*` 不再读写，旧的整票关联与数量分配不迁移。
 
 4d 补强已实现：确认绑定发票版本与开票依据，双数量和换算证据随核实历史保存；待复核仍占用额度，不计入有效收票。过期建议自动驳回，原确认保留，通过 `reverify` 核实或 `replace` 原子替换。差异结束由 task 单独记录。
@@ -152,3 +160,13 @@ MySQL 的 `SUM(CASE ...)` 返回 Decimal，待审核建议非空时曾导致队�
 - `suppliers` 每币种前 6 名、人民币在前，新增 `longestDays` / `overdue`（> 15 天）；待办新增 `role`（finance / purchase）与 `waitingDays`，CSV 增加“等待天数”列，任务原因不再拼接等待天数。
 - 移除 `stages`、`month`、`trend`、`trendStart`、`trendEnd`、`latestInvoiceDate` 与请求参数 `trendStart` / `trendEnd`；`stage_counts`、`month_report`、`invoice_trend` 一并删除，invoice 门面的 `invoice_daily_amounts`、`latest_invoice_date` 及其读取器、DAO 已无调用方，同时删除。
 - 验证：`backend/tests/test_workbench.py`。
+
+## 整票回写准备（2026-10-28）
+
+确认、人工分配、重新核实、取消及原子替换在完整用例最后发布 `InvoiceMatchingChanged`，writeback 在同一事务内调用公开 `read_writeback_snapshot` 判定整票就绪并入队。原 `AllocationChanged` 继续只负责开票任务进度；不从收齐标签反推完整审核。发票及采购依据变化会使旧任务失效。详见[准备模块](../writeback/README.md)。
+
+## 发票比对搜索（2026-10-28）
+
+`POST /api/matching/invoice-queue/query` 与兼容的 `/queue` 新增 `invoiceNo`、`supplierName` 字符串。发票号码按票面号码、供应商按关联子采购单供应商名称部分匹配；中英文逗号、分号、换行可分隔多条，同框 OR、跨框 AND，最多 50 条且每条 120 字符，通配符按字面匹配。日期、建议类型、置信度继续与搜索条件取交集；旧 `supplierId` 仍兼容。
+
+`queue_scope.py` 经 invoice/source 公共门面读取完整 ID 范围，空结果保持空集合；整票队列先筛选命中发票，再读取该票全部待审核建议，计数与分页保持整票口径，不隐藏同票其他异常。不改审核规则，不需要数据库迁移。

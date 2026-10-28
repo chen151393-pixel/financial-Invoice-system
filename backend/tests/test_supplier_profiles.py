@@ -158,6 +158,18 @@ def test_http_profiles_and_match(context, engine, setup):
             client.post(root + "/profiles/query", headers=headers, json={"status": "unbound"}).json()["total"]
             == 2
         )
+        split = client.post(
+            "/api/task/supplier-groups/profiles/query",
+            headers=headers,
+            json={"supplierName": "江川，清泉", "pageSize": 1},
+        )
+        assert split.status_code == 200 and split.json()["total"] == 2
+        invalid = client.post(
+            "/api/task/supplier-groups/profiles/query",
+            headers=headers,
+            json={"owner": ";".join(str(i) for i in range(51))},
+        )
+        assert invalid.status_code == 400
         result = client.post(root + "/wecom/match", headers=headers, json={"supplierId": supplier.supplierId})
         assert result.status_code == 200 and result.json()["total"] == 4
         assert (
@@ -172,3 +184,24 @@ def test_http_profiles_and_match(context, engine, setup):
             client.post(root + "/profiles/query", headers=headers, json={"status": "unknown"}).status_code
             == 400
         )
+
+
+def test_split_bulk_filters_are_or_within_and_between_fields(setup):
+    groups, profiles, supplier, _ = setup
+    groups.save(GroupSave(supplierId=supplier.supplierId, chatId="exact2", revision=0), USER)
+
+    def browse(**values):
+        return profiles.browse(SupplierProfileQuery(**values), USER)
+
+    both = browse(supplierName=" 江川，清泉；江川\n", pageSize=1, page=2)
+    assert both.total == 2 and both.pages == 2 and len(both.items) == 1
+    matched = browse(supplierName="清泉,江川", groupName="不存在;印花", owner="owner2\n不存在")
+    assert matched.total == 1 and matched.items[0].supplierId == supplier.supplierId
+    assert browse(supplierName="清泉", groupName="印花").total == 0
+    assert browse(owner="owner2", status="unbound").total == 0
+    assert browse(owner="owner2", status="disabled").total == 0
+    assert browse(groupName="不存在").total == 0
+    for field in ("supplierName", "groupName", "owner"):
+        assert browse(**{field: "%_"}).total == 0
+    assert browse(supplierName=" ；，\n ").total == 2
+    assert matched.counts == {"all": 2, "bound": 1, "unbound": 1, "notifyOff": 0}

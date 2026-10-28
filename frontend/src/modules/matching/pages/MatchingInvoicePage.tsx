@@ -1,8 +1,18 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router";
 import { paths } from "../../../app/paths";
-import { Button } from "../../../shared/components/Button";
+import {
+  Alert,
+  Badge,
+  Button,
+  Card,
+  CardHeader,
+  EmptyState,
+  ErrorState,
+  Skeleton,
+} from "../../../shared/components/ui";
 import { openLocalSession } from "../../identity/api";
+import { InvoiceWritebackStatus } from "../components/InvoiceWritebackStatus";
 import {
   cancelAllocation,
   confirmAllocation,
@@ -83,26 +93,26 @@ export function MatchingInvoicePage({ invoiceId }: { invoiceId: string }) {
     }
   }
 
-  if (state.kind === "loading")
-    return (
-      <p role="status" className="matching-panel">
-        正在读取发票比对…
-      </p>
-    );
+  if (state.kind === "loading") return <Skeleton label="正在读取发票比对" rows={4} />;
   if (state.kind === "error")
     return (
-      <div className="matching-panel" role="alert">
-        <p>{state.message}</p>
-        <Button
-          onClick={() => {
-            setState({ kind: "loading" });
-            setRefresh((value) => value + 1);
-          }}
-        >
-          重新加载
-        </Button>
-        <Link to={paths.matching}>返回审核队列</Link>
-      </div>
+      <ErrorState
+        title="发票比对暂时无法加载"
+        message={state.message}
+        action={
+          <>
+            <Button
+              onClick={() => {
+                setState({ kind: "loading" });
+                setRefresh((value) => value + 1);
+              }}
+            >
+              重新加载
+            </Button>
+            <Link to={paths.matching}>返回审核队列</Link>
+          </>
+        }
+      />
     );
   const { invoice, items, generate } = state.data;
   // 默认选中第一条有待处理事项的发票行，否则选第一行；仅是展示选择，不改变业务数据。
@@ -117,47 +127,37 @@ export function MatchingInvoicePage({ invoiceId }: { invoiceId: string }) {
   );
   return (
     <div className="matching-page">
-      <section className="matching-panel matching-panel--flush" aria-label="发票信息">
-        <div className="matching-panel__head">
-          <div className="matching-row">
-            <h2>发票 {invoice.number}</h2>
-            <span className="matching-tag">{invoice.statusLabel}</span>
-          </div>
-          <Button
-            disabled={busy || !generate.allowed}
-            title={generate.reason}
-            onClick={() => void regenerate()}
-          >
-            重新生成建议
-          </Button>
-        </div>
-        <dl className="matching-facts matching-facts--strip">
-          {[
-            ["销售方", invoice.seller],
-            ["购买方", invoice.buyer ?? "导入文件未提供"],
-            ["开票日期", invoice.date],
-            ["价税合计", `${invoice.gross ?? "—"} ${invoice.currency}`],
-            ["备注", invoice.remark],
-          ].map(([label, value]) => (
-            <div key={label}>
-              <dt>{label}</dt>
-              <dd>{value || "—"}</dd>
-            </div>
-          ))}
-        </dl>
+      <InvoiceWritebackStatus invoiceId={invoiceId} version={state.data} />
+      <Card className="matching-invoice-header" aria-label="发票信息">
+        <CardHeader
+          title={
+            <span className="matching-row">
+              发票 {invoice.number}
+              <Badge tone="info">{invoice.statusLabel}</Badge>
+            </span>
+          }
+          description={`${invoice.seller || "销售方未提供"} · ${invoice.date || "开票日期未提供"} · 价税合计 ${invoice.gross ?? "—"} ${invoice.currency}`}
+          actions={
+            <Button
+              disabled={busy || !generate.allowed}
+              title={generate.reason}
+              onClick={() => void regenerate()}
+            >
+              重新生成建议
+            </Button>
+          }
+        />
+        {invoice.remark && <p className="matching-invoice-remark">备注：{invoice.remark}</p>}
         {!generate.allowed && <p className="matching-help matching-body">{generate.reason}</p>}
-      </section>
-      {feedback && (
-        <p className="matching-feedback" role={feedback.error ? "alert" : "status"}>
-          {feedback.text}
-        </p>
-      )}
+      </Card>
+      {feedback && <Alert tone={feedback.error ? "danger" : "success"}>{feedback.text}</Alert>}
       {selected ? (
         <div className="matching-detail">
-          <InvoiceLineNav items={items} selectedId={selected.id} onSelect={setSelectedId} />
+          <InvoiceLineNav items={items} selectedId={selected.id} onSelect={setSelectedId} busy={busy} />
           <InvoiceLinePanel
             key={selected.id}
             item={selected}
+            invoice={invoice}
             invoiceId={invoiceId}
             invoiceVersionId={invoice.versionId}
             replacements={replacements}
@@ -180,7 +180,7 @@ export function MatchingInvoicePage({ invoiceId }: { invoiceId: string }) {
           />
         </div>
       ) : (
-        <p className="matching-panel matching-empty">这张发票没有可比对的发票行。</p>
+        <EmptyState title="这张发票没有可比对的明细" description="请先在进项发票中补齐商品明细。" />
       )}
     </div>
   );

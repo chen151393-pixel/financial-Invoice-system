@@ -1,0 +1,65 @@
+.fr-purchase-dialog {
+  width: min(1040px, calc(100vw - 32px));
+  overflow: hidden;
+  padding: var(--space-layout);
+}
+.fr-purchase-dialog[open] {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-control);
+}
+.fr-purchase-dialog > .ui-dialog__header {
+  flex: none;
+}
+.fr-purchase-dialog__body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-layout);
+  min-height: 0;
+  overflow: auto;
+}
+.fr-purchase-dialog__hint {
+  margin: 0;
+  color: var(--color-muted);
+}
+.fr-purchase-dialog__fields {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-control) var(--space-layout);
+  margin: 0;
+  flex: none;
+}
+.fr-purchase-dialog__fields dt {
+  color: var(--color-muted);
+  font-size: 12px;
+}
+.fr-purchase-dialog__fields dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+  font-variant-numeric: tabular-nums;
+}
+.fr-purchase-dialog__note {
+  grid-column: 1 / -1;
+}
+.fr-purchase-dialog__lines {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-control);
+  min-height: 140px;
+}
+.fr-purchase-dialog__lines > .ui-section-title {
+  flex: none;
+}
+@media (max-width: 760px), (max-height: 680px) {
+  .fr-purchase-dialog__lines {
+    flex: none;
+  }
+}
+@media (max-width: 760px) {
+  .fr-purchase-dialog {
+    padding: var(--space-control);
+  }
+  .fr-purchase-dialog__fields {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}

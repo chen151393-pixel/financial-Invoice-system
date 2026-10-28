@@ -3,6 +3,8 @@
 from dataclasses import dataclass
 from decimal import Decimal
 
+from .service.writeback_reader import read_writeback_snapshot, writeback_invoice_ids
+
 
 @dataclass(frozen=True)
 class LineReceipt:
@@ -28,4 +30,19 @@ class AllocationChanged:
     reason: str
 
 
-__all__ = ["AllocationChanged", "LineReceipt"]
+@dataclass(frozen=True)
+class InvoiceMatchingChanged:
+    """完整用例末尾发布；订阅方在同一事务冻结审核快照，不调用 NS。"""
+
+    invoice_ids: tuple[int, ...]
+    actor: str
+    reason: str
+
+
+__all__ = [
+    "AllocationChanged",
+    "LineReceipt",
+    "InvoiceMatchingChanged",
+    "read_writeback_snapshot",
+    "writeback_invoice_ids",
+]

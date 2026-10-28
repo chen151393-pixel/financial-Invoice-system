@@ -13,8 +13,10 @@ from .service.directory_service import SourceDirectory, china_day_range
 from .service.pl_comparison_service import PlScriptService
 from .service.purchase_context import line_declarations, purchase_lines, supplier_line_ids
 from .service.workbench_reader import workbench_declarations
+from .service.writeback_context import writeback_context
 
 __all__ = [
+    "writeback_context",
     # 报关单准入（已出库）：有真实报关单号且有关联子采购单
     "admission_issues",
     "admission_reason",

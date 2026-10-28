@@ -30,6 +30,7 @@ export interface FeishuOutcome {
 
 export interface AccessDepartment {
   id: number;
+  openDepartmentId: string;
   name: string;
   path: string;
   /** 被直接选为同步范围 */
@@ -44,6 +45,8 @@ export interface AccessUser {
   name: string;
   departments: string[];
   active: boolean;
+  enabled: boolean;
+  directoryActive: boolean;
   inactiveReason: string | null;
   customRoles: boolean;
   personalRoles: string[];
@@ -68,6 +71,61 @@ export interface AccessOverview {
   feishuConfigured: boolean;
   roles: RoleItem[];
   departments: AccessDepartment[];
+  /** 新后端返回有已导入员工的部门；旧版本缺失时兼容展示 departments。 */
+  importedDepartments?: AccessDepartment[];
   users: AccessUser[];
   lastSync: SyncRun | null;
+}
+
+export interface DirectorySelection {
+  departmentIds: string[];
+  userIds: string[];
+}
+export interface PreviewDepartment {
+  id: string;
+  name: string;
+  path: string;
+  depth: number;
+  memberCount: number;
+}
+export interface DirectoryPreview {
+  id: string;
+  expiresAt: string;
+  departments: PreviewDepartment[];
+  selection: DirectorySelection;
+}
+export interface PreviewMember {
+  id: string;
+  name: string;
+  departments: string[];
+  selected: boolean;
+  selectable: boolean;
+  reason: string | null;
+  imported: boolean;
+  coveredByDepartment: boolean;
+}
+export interface DirectoryMembers {
+  items: PreviewMember[];
+  total: number;
+  page: number;
+  pageSize: number;
+  selectedCount: number;
+  coveredDepartmentIds: string[];
+}
+export interface DirectoryPlan {
+  selection: DirectorySelection;
+  selectedCount: number;
+  addedCount: number;
+  retainedCount: number;
+  removedNames: string[];
+  departmentNames: string[];
+  userNames: string[];
+  unavailableCount: number;
+}
+export interface UserList {
+  items: AccessUser[];
+  total: number;
+  page: number;
+  pageCount: number;
+  pageSize: number;
 }

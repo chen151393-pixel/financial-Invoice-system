@@ -5,6 +5,7 @@ from datetime import datetime, timedelta, timezone
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 
 from backend.core.errors import ApiError
+from backend.core.search_terms import search_terms
 from backend.core.write_lock import transaction
 
 from ..dao import event_dao, supplier_group_dao, supplier_setting_dao
@@ -26,8 +27,15 @@ class SupplierProfileService:
         try:
             with self.engine.connect() as connection:
                 included = (
-                    supplier_group_dao.supplier_ids(connection, enabled=query.status == "enabled")
-                    if query.status in ("enabled", "disabled")
+                    supplier_group_dao.supplier_ids(
+                        connection,
+                        enabled=query.status == "enabled"
+                        if query.status in ("enabled", "disabled")
+                        else None,
+                        group_names=search_terms(query.groupName),
+                        owners=search_terms(query.owner),
+                    )
+                    if query.status in ("enabled", "disabled") or query.groupName or query.owner
                     else None
                 )
                 excluded = supplier_group_dao.supplier_ids(connection) if query.status == "unbound" else []
@@ -44,6 +52,7 @@ class SupplierProfileService:
                 include_ids=included,
                 exclude_ids=excluded,
                 matching_ids=matched,
+                name_terms=search_terms(query.supplierName),
             )
             with self.engine.connect() as connection:
                 ids = [row["id"] for row in found["items"]]

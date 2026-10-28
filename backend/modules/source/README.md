@@ -1,10 +1,16 @@
 # source 模块：NS 来源数据
 
+## 任务组合搜索门面（2026-10-28）
+
+`SourceDirectory.search_task_filters(supplier_name="", purchase_order_no="")` 分别返回名称匹配的 `supplier_ids` 和单号匹配的 `order_ids`；未填写返回 `None`，无匹配返回空列表，不使用旧关键词查询的 500 条上限。由本模块 DAO 查询，SQL 通配符按普通字符转义；task 使用这些 ID 与自身 CD 号等条件取交集，不跨模块访问来源表。
+
 架构 v2 第 4a 步新建。负责从 NS 读取报关单、子采购单及关联依据，保存到新表 `source_*`，并向其他模块提供只读门面。表结构见[数据库设计](../../../docs/architecture/database.md)第 4.1 节。
 
 **2026-10-15 已实现补强**：现有 `0004` 母单币种继承保留；已补继承所依据的原始版本引用、真实无母单与查询失败的区分，以及母单变化对全部相关审核的失效传播，详见数据库第 10.1、10.2 节。异常人工核实归 review，不向 source 或 NS 回写人工选定币种。
 
 ## 职责
+
+- 供应商账单只读查询：`POST /api/source/vendor-bills/query` 接收 `vendorId`（NS 供应商内部 ID）和 `purchaseOrderIds`（1–20 个不重复的母采购内部 ID），调用独立版本 3 RESTlet，按母单返回全部可见账单、金额、有效明细合计及中文问题提示。不再依赖 `VendorInvoice.getData`，不接受旧 `vendorCode`、`purchaseOrderNo` 参数。`vendor_bill_query_service.py` 不连接业务库、不生成分配或审核结论，始终返回 `writeback.allowed=false`。身份应分别取 `source_suppliers.ns_internal_id` 与 `source_parent_orders.ns_internal_id`，不能传本地主键或单号；policy 负责账套、分组完整性、账单身份及 Decimal 金额核验。接口、配置与抽样工具见[接入说明](../../../docs/ns-vendor-bill-query.md)。NS 只读查询已用帝奇母单通过端到端样本校验；远程脚本修订 `2026-10-28.3` 已合入，本次未核实线上修订号。
 
 - 采购报关联查：实时调用 NS 共用脚本，只读不入库（`POST /api/source/pl-comparison`）。
 - 来源保存：同步页按页读取 NS，完整补齐基础明细、关联子采购和 PL 名称后，在一个短事务内保存；精确追溯缺失单独标记。2026-10-16 取消本地累计 300 条详情及单类关联记录限制，超过后继续分页读取；详情任务保持固定并发，整批全部读取成功后才入库。
@@ -133,7 +139,7 @@
 
 ### 供应商档案只读查询
 
-`SourceDirectory.suppliers(account, keyword, page, page_size, *, include_ids=None, exclude_ids=(), matching_ids=())` 支持 task 供应商档案：包含/排除 ID 先过滤再分页；关键词匹配名称、NS 内部 ID 或调用方提供的匹配 ID。返回 NS 内部 ID，用于区分同名供应商；source DAO 只查询本模块表。
+`SourceDirectory.suppliers(account, keyword, page, page_size, *, include_ids=None, exclude_ids=(), matching_ids=(), name_terms=())` 支持 task 供应商档案：包含/排除 ID 先过滤再分页；关键词匹配名称、NS 内部 ID 或调用方提供的匹配 ID。`name_terms` 按名称部分匹配取并集，与其余条件取交集。返回 NS 内部 ID，用于区分同名供应商；source DAO 只查询本模块表。
 
 
 同步页读取优化：`ns_reader.py` 合并同类父引用查询，复用 `integrations/netsuite/read_batch.py` 的批内详情缓存与有界只读并发；子采购入口仍逐报关复核已有子采购归属。来源读取器、关联读取器及保存服务通过可选回调报告真实阶段，不依赖 sync 私有实现。保存范围、币种规则、完整性校验、锁和短事务未改变；缓存不跨保存批次使用。
@@ -197,3 +203,10 @@
 - 2026-10-28 报关明细新增 `declared_unit_price`（迁移 `0034`）：配置键 `customs_line.storage_fields.declared_unit_price` 映射 NS `custrecord_swc_grossamountzj`（申报单价，与 `declared_quantity`／`declared_unit` 配套）。review 申报幅度与 matching 单价校验（`declared_prices` 返回的 `unit`、`quantity`、`unit_price_cny`）改用报关数量、报关单位与申报单价；总价校验仍用 `amount`。该键为可选键，部署时须在 `NETSUITE_PL_LOOKUP` 中加入并重新同步报关单，未配置或未同步时为 NULL，按“申报单价缺失”处理。超过 8 位小数时与 `unit_price` 同样四舍五入并提示。不参与内容摘要。
 - 门面：`declared_cny`、`pick_sales_order`（review 申报幅度）；`declared_prices(connection, purchase_line_ids)`（matching 价格校验）；`purchase_lines` 上下文新增 `declared`（不参与摘要）；报关单 `snapshot` 新增 `sales_orders`（不参与摘要）。
 - 验证：`backend/tests/test_declared_price.py`。
+
+
+2026-10-28：`supplier_line_ids(connection, supplier_id=None, *, name_terms=())` 支持按多个供应商名称部分匹配子采购行 ID（框内 OR，与可选 ID 取 AND）。保留停用行以显示历史待审核建议，供 matching 两种审核队列复用。
+
+### 回写准备的来源上下文
+
+公开 `writeback_context(connection, line_ids)` 返回已关联子采购行的供应商、公司、母采购与 NS 账套身份，由 matching 整票就绪策略读取；仅访问 source 自有表。查询服务提供 `query_ids` 适配入口，由 app 注入 writeback；实际候选仍复用现有版本 3 校验，不创建第二套 NS 搜索。

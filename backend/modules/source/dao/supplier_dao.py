@@ -54,15 +54,28 @@ def names(connection, ids):
 
 def ids_like(connection, keyword, limit):
     """名称包含关键字的供应商 ID（任务搜索用）。"""
-    query = select(suppliers.c.id).where(suppliers.c.name.like(f"%{keyword}%")).limit(limit)
+    query = select(suppliers.c.id).where(suppliers.c.name.contains(keyword, autoescape=True)).limit(limit)
     return list(connection.execute(query).scalars())
 
 
-def page(connection, account, keyword, offset, limit, *, include_ids=None, exclude_ids=(), matching_ids=()):
+def page(
+    connection,
+    account,
+    keyword,
+    offset,
+    limit,
+    *,
+    include_ids=None,
+    exclude_ids=(),
+    matching_ids=(),
+    name_terms=(),
+):
     """有效供应商分页（供应商群配置选择用）。"""
     conditions = [suppliers.c.is_active.is_(True)]
     if account:
         conditions.append(suppliers.c.ns_account == account)
+    if name_terms:
+        conditions.append(or_(*(suppliers.c.name.contains(term, autoescape=True) for term in name_terms)))
     if keyword:
         conditions.append(
             or_(

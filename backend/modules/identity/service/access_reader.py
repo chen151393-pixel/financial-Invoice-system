@@ -7,8 +7,8 @@ from sqlalchemy.exc import SQLAlchemyError
 
 from backend.core.errors import ApiError
 
-from ..dao import department_dao, user_dao
-from ..policy.department_policy import ancestors
+from ..dao import department_dao, directory_preview_dao, user_dao
+from ..policy.department_policy import ancestors, subtree
 from ..policy.role_policy import effective_roles
 
 
@@ -62,7 +62,10 @@ class AccessReader:
             return None, []
         departments = user_dao.departments_by_user(connection, [user["id"]]).get(user["id"], set())
         personal = user_dao.roles_by_user(connection, [user["id"]]).get(user["id"], set())
-        return user, roles_for(load_index(connection), user, departments, personal)
+        index = load_index(connection)
+        if not in_scope(connection, index, user, departments):
+            user = {**user, "active": False, "inactive_reason": "已不在同步范围内"}
+        return user, roles_for(index, user, departments, personal)
 
     def current(self, user_id):
         """会话校验用：返回 (人员, 生效角色)；数据库不可用时拒绝，而不是放行。"""
@@ -71,3 +74,14 @@ class AccessReader:
                 return self.principal(connection, user_id)
         except SQLAlchemyError:
             raise ApiError(503, "人员权限读取失败，请检查业务数据库") from None
+
+
+def in_scope(connection, index, user, department_ids):
+    if user["user_id"] in directory_preview_dao.user_ids(connection):
+        return True
+    roots = department_dao.scope_ids(connection)
+    covered = subtree(
+        [d["open_department_id"] for d in index.by_id.values() if d["id"] in roots and d["active"]],
+        index.parent_of,
+    )
+    return any(index.by_id.get(pk, {}).get("open_department_id") in covered for pk in department_ids)

@@ -73,11 +73,12 @@ class FakeFeishu:
     def department(self, open_id):
         return {"open_department_id": open_id, **self.departments[open_id]}
 
-    def child_departments(self, open_id):
+    def child_departments(self, open_id, *, recursive=True):
         found = [
             key
             for key, value in self.departments.items()
-            if key in subtree([open_id], self.parents()) and key != open_id
+            if (key in subtree([open_id], self.parents()) and key != open_id)
+            and (recursive or value["parent_department_id"] == open_id)
         ]
         return [self.department(key) for key in found]
 
@@ -124,6 +125,17 @@ def setup_directory(client, settings, *, scopes=("采购部", "财务部"), role
         assert response.status_code == 200
     # 设置范围后再同步一次，才会拉取范围内成员
     assert client.post("/api/identity/sync", json={}, headers=headers).status_code == 200
+    # 新导入人员必须明确授权启用；旧测试仍验证启用后的登录与继承规则。
+    for user in client.get("/api/identity/access").json()["users"]:
+        if user["directoryActive"] and user["roles"]:
+            assert (
+                client.put(
+                    f"/api/identity/users/{user['id']}/access",
+                    json={"roles": [], "customRoles": False, "enabled": True},
+                    headers=headers,
+                ).status_code
+                == 200
+            )
     return departments
 
 

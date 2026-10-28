@@ -7,6 +7,21 @@ from ..entity import allocations
 ACTIVE = ("proposed", "confirmed")
 
 
+def confirmed_invoice_ids(connection, after_id, limit):
+    return list(
+        connection.execute(
+            select(allocations.c.invoice_id)
+            .where(
+                allocations.c.status == "confirmed",
+                allocations.c.invoice_id > after_id,
+            )
+            .distinct()
+            .order_by(allocations.c.invoice_id)
+            .limit(limit)
+        ).scalars()
+    )
+
+
 def insert_allocation(connection, values, now):
     return connection.execute(
         insert(allocations).values(created_at=now, updated_at=now, **values)

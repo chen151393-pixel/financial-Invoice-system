@@ -5,9 +5,13 @@ from typing import Literal
 from pydantic import Field, field_validator
 
 from backend.core.dto import StrictModel
+from backend.core.search_terms import SearchText
 
 
 class DeclarationListQuery(StrictModel):
+    supplierName: SearchText = ""
+    recordNo: SearchText = ""
+    purchaseOrderNo: SearchText = ""
     keyword: str = Field(default="", max_length=120)
     account: str = Field(default="", max_length=80, pattern=r"^[a-zA-Z0-9_-]*$")
     # margin_alert：待审核且申报幅度异常；auto：待审核且满足可自动审核条件

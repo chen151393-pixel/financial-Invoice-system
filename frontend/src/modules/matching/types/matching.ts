@@ -125,6 +125,8 @@ export type Queue = {
   notice?: string;
 };
 export type QueueQuery = {
+  invoiceNo: string;
+  supplierName: string;
   tier: "all" | "high" | "medium" | "low";
   // 只看异常 / 只看正常：异常为需要填写说明或当前不能通过的建议
   anomaly: "all" | "abnormal" | "normal";
@@ -135,6 +137,17 @@ export type QueueQuery = {
   page: number;
   pageSize: number;
 };
+export type InvoiceQueueRow = {
+  invoice: InvoiceMatching["invoice"];
+  proposalCount: number;
+  purchaseOrders: string[];
+  confidence: string;
+  tier: Tier;
+  anomalies: string[];
+  batch: Capability;
+  batchIds: string[];
+};
+export type InvoiceQueue = Omit<Queue, "rows"> & { rows: InvoiceQueueRow[] };
 
 // 发票匹配状态（后端 invoice_match_policy 判定）；excluded 为红字、已被红冲、作废等不参与比对的发票
 export type MatchStatus = "confirmed" | "partial" | "proposed" | "needs_review" | "none" | "excluded";

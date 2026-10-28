@@ -85,8 +85,30 @@ class SourceDirectory:
 
         return self._read(read)
 
+    def search_task_filters(self, *, supplier_name="", purchase_order_no=""):
+        """任务组合查询：分别匹配供应商名称与子采购单号，不截断匹配 ID；None 表示不限。"""
+        return self._read(
+            lambda connection: {
+                "supplier_ids": supplier_dao.ids_like(connection, supplier_name, None)
+                if supplier_name
+                else None,
+                "order_ids": purchase_order_dao.ids_like(connection, purchase_order_no, None)
+                if purchase_order_no
+                else None,
+            }
+        )
+
     def suppliers(
-        self, account, keyword, page, page_size, *, include_ids=None, exclude_ids=(), matching_ids=()
+        self,
+        account,
+        keyword,
+        page,
+        page_size,
+        *,
+        include_ids=None,
+        exclude_ids=(),
+        matching_ids=(),
+        name_terms=(),
     ):
         """有效供应商分页；可按 ID 集合包含/排除，matching_ids 与名称关键词取并集。
 
@@ -103,6 +125,7 @@ class SourceDirectory:
                 include_ids=include_ids,
                 exclude_ids=exclude_ids,
                 matching_ids=matching_ids,
+                name_terms=name_terms,
             )
             return {"total": total, "items": rows}
 

@@ -27,6 +27,13 @@ users = Table(
     ),
     Column("inactive_reason", String(200), comment="不可登录的原因，例如已离职、已移出同步范围"),
     Column(
+        "enabled",
+        Boolean,
+        nullable=False,
+        server_default=text("0"),
+        comment="管理员是否启用；新导入默认待授权，同步不覆盖",
+    ),
+    Column(
         "custom_roles",
         Boolean,
         nullable=False,

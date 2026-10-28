@@ -6,7 +6,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { MemoryRouter } from "react-router";
 import { createServer } from "vite";
 
-let server, api, http, demo, Table, Header, Records, Dialog, NotConnected;
+let server, api, Content, Form;
 before(async () => {
   server = await createServer({
     configFile: fileURLToPath(new URL("../vite.config.ts", import.meta.url)),
@@ -14,184 +14,165 @@ before(async () => {
     appType: "custom",
     logLevel: "error",
   });
-  const load = (path) => server.ssrLoadModule(`/src/modules/writeback/${path}`);
-  api = await load("api.ts");
-  http = await server.ssrLoadModule("/src/shared/api/http.ts");
-  ({ WritebackTable: Table } = await load("components/WritebackTable.tsx"));
-  ({ RequestHeader: Header } = await load("components/RequestHeader.tsx"));
-  ({ ResultRecords: Records } = await load("components/ResultRecords.tsx"));
-  ({ ConfirmDialog: Dialog } = await load("components/ConfirmDialog.tsx"));
-  ({ NotConnected } = await load("components/NotConnected.tsx"));
-  demo = await load("demo/demo-api.ts");
+  api = await server.ssrLoadModule("/src/modules/writeback/api.ts");
+  ({ TaskContent: Content } = await server.ssrLoadModule(
+    "/src/modules/writeback/pages/WritebackRequestPage.tsx",
+  ));
+  ({ PlanForm: Form } = await server.ssrLoadModule("/src/modules/writeback/components/PlanForm.tsx"));
 });
 after(async () => {
   await server?.close();
 });
-
 const render = (component, props) =>
   renderToStaticMarkup(createElement(MemoryRouter, null, createElement(component, props)));
-const allowed = { allowed: true, reason: "" };
-const item = (changes) => ({
-  invoiceId: "1",
-  invoiceNo: "26332000000412805519",
-  invoiceDate: "2026-10-12",
+const allocation = {
+  allocationId: "1",
+  orderNo: "SUB-1",
+  parentOrderNo: "PO-1",
+  parentOrderId: "100",
+  amount: "100.50",
+};
+const task = (changes = {}) => ({
+  id: "1",
+  taskNo: "NSWB-test",
+  invoiceId: "8",
+  invoiceNo: "TEST-INVOICE",
   vendorName: "测试供应商",
-  amount: "20,800.00",
-  currency: "CNY",
-  purchaseOrders: "PO-1",
-  allocation: "2 / 2 已确认",
-  phase: "ready",
-  label: "可回写",
-  requestId: null,
-  note: null,
-  preview: allowed,
-  ...changes,
-});
-const request = (changes) => ({
-  requestId: "WB-1",
-  invoiceId: "1",
-  invoiceNo: "26332000000412805519",
-  invoiceDate: "2026-10-12",
-  vendorName: "测试供应商",
-  vendorRef: "NS 供应商 #1",
-  invoiceAmount: "20,800.00",
-  totalAmount: "20,800.00",
-  currency: "CNY",
-  account: "测试账套",
-  phase: "pending",
-  label: "待确认",
-  message: "预览已生成，等待确认",
-  createdAt: "2026-10-19T06:20:00Z",
-  createdBy: "管理员",
-  expiresAt: "2026-10-19T06:35:00Z",
-  readAt: "2026-10-19T06:20:08Z",
-  checks: [],
-  lines: [],
-  totalLabel: "合计",
-  operations: ["新建 1 条供应商发票主记录"],
-  execute: allowed,
-  refresh: allowed,
-  verify: allowed,
-  records: [],
-  bills: [],
-  poll: false,
-  events: [],
-  ...changes,
-});
-
-test("只有后端未登记接口才算未接入，业务上的记录不存在不算", () => {
-  assert.equal(api.isNotConnected(new http.HttpError("接口不存在", 404)), true);
-  assert.equal(api.isNotConnected(new http.HttpError("不支持的请求方式", 405)), true);
-  assert.equal(api.isNotConnected(new http.HttpError("未找到回写记录", 404)), false);
-  assert.equal(api.isNotConnected(new Error("网络中断")), false);
-});
-
-test("未接入页说明限制且不显示任何记录", () => {
-  const html = render(NotConnected, { scope: "回写列表暂无可用数据。" });
-  assert.match(html, /NS 回写尚未接入/);
-  assert.match(html, /不显示示例数据/);
-  assert.doesNotMatch(html, /<table/);
-});
-
-test("列表按后端 allowed 禁用生成预览并就近显示原因", () => {
-  const html = render(Table, {
-    items: [
-      item({ invoiceId: "1", preview: { allowed: false, reason: "还有 1 条分配待复核" }, phase: "blocked" }),
-      item({ invoiceId: "2", phase: "unknown", label: "结果待核实", requestId: "WB-9", note: "NS 响应超时" }),
+  amount: "100.50",
+  state: "needs_confirmation",
+  stateLabel: "待确认账单",
+  reason: "归属需要核实",
+  revision: 3,
+  historical: true,
+  updatedAt: "2026-10-28",
+  writeback: { allowed: false, reason: "NS 写入尚未接入" },
+  allocations: [allocation],
+  candidates: {
+    queryId: "q1",
+    readCompletedAt: "2026-10-28",
+    purchaseOrders: [
+      {
+        id: "100",
+        reason: "已查询",
+        bills: [
+          {
+            billId: "9",
+            billNumber: "TEST-BILL",
+            purchaseOrderId: "100",
+            subPurchaseOrderId: "",
+            subsidiaryId: "1",
+            currency: "CNY",
+            availableInvoiceAmount: "1000.00",
+            issues: ["缺少子采购关联"],
+          },
+        ],
+      },
     ],
-    busyInvoice: "",
-    error: null,
-    onPreview: () => {},
-  });
-  assert.match(
-    html,
-    /disabled=""[^>]*aria-describedby="wb-reason-1"|aria-describedby="wb-reason-1"[^>]*disabled=""/,
-  );
-  assert.match(html, /还有 1 条分配待复核/);
-  assert.match(html, /href="\/writeback\/WB-9"[^>]*>核实结果/);
-  assert.equal((html.match(/生成预览/g) ?? []).length, 1);
+  },
+  plan: null,
+  actions: { refresh: true, confirm: true },
+  querying: false,
+  audit: [],
+  ...changes,
 });
 
-test("待确认时执行按钮服从后端原因；待核实只提供核实，不提供重新提交", () => {
-  const props = {
-    action: "",
-    creating: false,
-    onConfirm() {},
-    onVerify() {},
-    onRefresh() {},
-    onRepreview() {},
+test("调用真实准备接口并原样发送金额、版本和幂等编号", async () => {
+  const original = globalThis.fetch;
+  const calls = [];
+  globalThis.fetch = async (url, options) => {
+    calls.push({ url, options });
+    return new Response(JSON.stringify(task()), { status: 200 });
   };
-  const pending = render(Header, {
-    ...props,
-    data: request({ execute: { allowed: false, reason: "NS 写入未启用，只能查看预览" } }),
-  });
-  assert.match(pending, /<button[^>]*disabled=""[^>]*>确认回写 NS/);
-  assert.match(pending, /NS 写入未启用，只能查看预览/);
-  const unknown = render(Header, {
-    ...props,
-    data: request({ phase: "unknown", label: "结果待核实", message: "NS 响应超时" }),
-  });
-  assert.match(unknown, /核实 NS 结果/);
-  assert.doesNotMatch(unknown, /重新生成预览|确认回写 NS/);
+  try {
+    await api.listTasks({ keyword: "供应商", state: "ready", page: 2, pageSize: 20 });
+    await api.refreshTask("1", 3);
+    const body = {
+      revision: 3,
+      requestId: "request-fixed",
+      confirmScope: true,
+      evidence: "核实依据",
+      allocations: [{ allocationId: "1", billId: "9", amount: "100.50" }],
+    };
+    await api.confirmPlan("1", body);
+    assert.match(calls[0].url, /\/api\/writeback\/tasks\?/);
+    assert.match(calls[0].url, /page=2/);
+    assert.equal(calls[1].url, "/api/writeback/tasks/1/refresh");
+    assert.deepEqual(JSON.parse(calls[1].options.body), { revision: 3 });
+    assert.deepEqual(JSON.parse(calls[2].options.body), body);
+    assert.equal(
+      calls.some((call) => /execute|preview|apply/.test(call.url)),
+      false,
+    );
+  } finally {
+    globalThis.fetch = original;
+  }
 });
 
-test("未回读的写入后金额显示为未回读，不显示为 0", () => {
-  const html = render(Records, {
-    data: request({
-      phase: "unknown",
-      bills: [
-        {
-          billNo: "VB-1",
-          subPoNo: "SUB-1",
-          before: "0.00",
-          amount: "4,200.00",
-          after: null,
-          status: "待核实",
-          passed: false,
-        },
-      ],
+test("保留后端版本冲突错误，不伪装成功", async () => {
+  const original = globalThis.fetch;
+  globalThis.fetch = async () => new Response(JSON.stringify({ error: "候选版本已变化" }), { status: 409 });
+  try {
+    await assert.rejects(() => api.refreshTask("1", 2), /候选版本已变化/);
+  } finally {
+    globalThis.fetch = original;
+  }
+});
+
+test("候选、历史风险与不写入状态明确展示", () => {
+  const html = render(Content, { task: task(), busy: false, onRefresh() {}, onConfirm() {} });
+  assert.match(html, /历史发票，须人工核实/);
+  assert.match(html, /NS 写入尚未接入/);
+  assert.match(html, /未明确关联/);
+  assert.match(html, /确认并冻结方案/);
+  assert.doesNotMatch(html, /确认执行|模拟成功|执行回写/);
+});
+
+test("失效任务保留历史方案，隐藏确认入口", () => {
+  const html = render(Content, {
+    task: task({
+      state: "stale",
+      stateLabel: "审核已失效",
+      actions: { refresh: false, confirm: false },
+      plan: {
+        allocations: [{ allocationId: "1", billId: "9", amount: "100.50" }],
+        evidence: "原归属凭据",
+        confirmedBy: "财务",
+        confirmedAt: "2026-10-28",
+      },
     }),
+    busy: false,
+    onRefresh() {},
+    onConfirm() {},
   });
-  assert.match(html, /未回读/);
-  assert.doesNotMatch(html, />0<\/td>/);
+  assert.match(html, /历史冻结方案（当前不可用）/);
+  assert.match(html, /原归属凭据/);
+  assert.doesNotMatch(html, /确认并冻结方案/);
 });
 
-test("确认弹窗在勾选核对前不能提交", () => {
-  const html = render(Dialog, { data: request(), busy: false, onCancel() {}, onConfirm() {} });
-  assert.match(html, /写入后不能在本系统撤销/);
-  assert.match(html, /<button[^>]*disabled=""[^>]*>确认回写<\/button>/);
+test("未查询和空结果独立展示", () => {
+  for (const [candidates, expected] of [
+    [null, /尚未查询账单/],
+    [
+      { readCompletedAt: "today", purchaseOrders: [{ id: "100", reason: "无账单", bills: [] }] },
+      /未取得可用账单/,
+    ],
+  ]) {
+    assert.match(
+      render(Content, {
+        task: task({ candidates, actions: { refresh: true, confirm: false } }),
+        busy: false,
+        onRefresh() {},
+        onConfirm() {},
+      }),
+      expected,
+    );
+  }
 });
 
-test("未接入页提供两套演示数据入口，并说明不会写入 NS", () => {
-  const html = render(NotConnected, { scope: "回写列表暂无可用数据。" });
-  assert.match(html, /href="\/writeback\?demo=1"/);
-  assert.match(html, /href="\/writeback\?demo=2"/);
-  assert.match(html, /不会写入 NS/);
-});
-
-const query = { phase: "", vendor: "", invoiceNo: "", dateFrom: "", dateTo: "", page: 1, pageSize: 20 };
-
-test("两套演示数据覆盖各回写状态，按状态筛选由数据源完成", async () => {
-  const first = await demo.demoList("1", query);
-  assert.deepEqual(
-    new Set(first.items.map((item) => item.phase)),
-    new Set(["ready", "blocked", "pending", "executing", "unknown", "failed", "succeeded"]),
-  );
-  const second = await demo.demoList("2", { ...query, phase: "ready" });
-  assert.ok(second.items.length >= 2 && second.items.every((item) => item.phase === "ready"));
-  assert.ok(second.items.some((item) => item.currency === "USD"));
-});
-
-test("演示数据二：校验未通过不能执行；确认后超时待核实，核实后转为已回写", async () => {
-  await assert.rejects(demo.demoExecute("2", "WB-D2-BLOCKED"), /超过 NS 未收/);
-  const created = await demo.demoCreatePreview("2", "d2-1", "aaaaaaaa-0000-4000-8000-000000000001");
-  assert.equal(created.lines.length, 3);
-  const unknown = await demo.demoExecute("2", created.requestId);
-  assert.equal(unknown.phase, "unknown");
-  assert.ok(unknown.bills.every((bill) => bill.after === null));
-  const done = await demo.demoVerify("2", created.requestId);
-  assert.equal(done.phase, "succeeded");
-  assert.equal(done.events.filter((event) => event.action === "确认回写").length, 1);
-  const list = await demo.demoList("2", query);
-  assert.equal(list.items.find((item) => item.invoiceId === "d2-1").phase, "succeeded");
+test("确认表单保留十进制文本，提交中禁用编辑", () => {
+  const html = render(Form, { task: task(), busy: true, onConfirm() {} });
+  assert.match(html, /fieldset disabled/);
+  assert.match(html, /value="100.50"/);
+  assert.match(html, /采购子公司/);
+  assert.match(html, /新增分配行/);
 });

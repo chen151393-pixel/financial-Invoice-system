@@ -31,6 +31,10 @@ class Settings:
     pl_restlet_deploy: str = ""
     finance_source_script: str = ""
     finance_source_deploy: str = ""
+    vendor_bill_query_script: str = ""
+    vendor_bill_query_deploy: str = ""
+    writeback_query_enabled: bool = False
+    writeback_queue_enabled: bool = True
     subpo_contract_script: str = ""
     subpo_contract_deploy: str = ""
     declaration_doc_script: str = ""
@@ -171,6 +175,8 @@ def load_settings(source=None):
     pl_deploy = get("NETSUITE_PL_RESTLET_DEPLOY").strip()
     finance_script = get("NETSUITE_FINANCE_SOURCE_SCRIPT").strip()
     finance_deploy = get("NETSUITE_FINANCE_SOURCE_DEPLOY").strip()
+    bill_script = get("NETSUITE_VENDOR_BILL_QUERY_SCRIPT").strip()
+    bill_deploy = get("NETSUITE_VENDOR_BILL_QUERY_DEPLOY").strip()
     contract_script = get("NETSUITE_SUBPO_CONTRACT_SCRIPT").strip()
     contract_deploy = get("NETSUITE_SUBPO_CONTRACT_DEPLOY").strip()
     declaration_script = get("NETSUITE_DECLARATION_DOC_SCRIPT").strip()
@@ -183,6 +189,8 @@ def load_settings(source=None):
         (pl_deploy, "customdeploy"),
         (finance_script, "customscript"),
         (finance_deploy, "customdeploy"),
+        (bill_script, "customscript"),
+        (bill_deploy, "customdeploy"),
         (contract_script, "customscript"),
         (contract_deploy, "customdeploy"),
         (declaration_script, "customscript"),
@@ -192,6 +200,8 @@ def load_settings(source=None):
             raise ValueError("RESTlet 脚本或部署编号无效")
     if bool(finance_script) != bool(finance_deploy):
         raise ValueError("原始报关行接口的脚本和部署编号须同时填写")
+    if bool(bill_script) != bool(bill_deploy):
+        raise ValueError("供应商账单查询接口的脚本和部署编号须同时填写")
     if bool(contract_script) != bool(contract_deploy):
         raise ValueError("子采购合同接口的脚本和部署编号须同时填写")
     if bool(declaration_script) != bool(declaration_deploy):
@@ -210,6 +220,12 @@ def load_settings(source=None):
         raise ValueError("WECOM_SEND_ENABLED 须为 true 或 false")
     if not wecom_limit.isdigit() or not 1 <= int(wecom_limit) <= 31:
         raise ValueError("WECOM_GROUP_DAILY_LIMIT 须为 1 至 31 的整数")
+    prepare_enabled = get("WRITEBACK_QUERY_ENABLED", "false").lower()
+    if prepare_enabled not in {"true", "false"}:
+        raise ValueError("WRITEBACK_QUERY_ENABLED 须为 true 或 false")
+    queue_enabled = get("WRITEBACK_QUEUE_ENABLED", "true").lower()
+    if queue_enabled not in {"true", "false"}:
+        raise ValueError("WRITEBACK_QUEUE_ENABLED 须为 true 或 false")
     return Settings(
         account=account,
         client_id=get("NETSUITE_CLIENT_ID"),
@@ -227,6 +243,10 @@ def load_settings(source=None):
         pl_restlet_deploy=pl_deploy,
         finance_source_script=finance_script,
         finance_source_deploy=finance_deploy,
+        vendor_bill_query_script=bill_script,
+        vendor_bill_query_deploy=bill_deploy,
+        writeback_query_enabled=prepare_enabled == "true",
+        writeback_queue_enabled=queue_enabled == "true",
         subpo_contract_script=contract_script,
         subpo_contract_deploy=contract_deploy,
         declaration_doc_script=declaration_script,

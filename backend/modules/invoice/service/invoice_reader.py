@@ -6,6 +6,12 @@ from ..mapper import invoice_mapper
 from ..policy.invoice_status_policy import display_status
 
 HEADER_FIELDS = (
+    "invoice_code",
+    "invoice_key",
+    "lemon_account",
+    "seller_tax_no",
+    "buyer_tax_no",
+    "tax_amount",
     "current_version_id",
     "detail_status",
     "id",
@@ -35,9 +41,9 @@ ITEM_FIELDS = (
 )
 
 
-def invoice_ids_between(connection, start, end):
-    """开票日期在 start—end（含）之间的发票 ID，供比对队列按开票日期筛选。"""
-    return header_dao.ids_between(connection, start, end)
+def invoice_ids_between(connection, start, end, *, number_terms=()):
+    """比对队列的发票 ID：可选起止日期与票面号码部分匹配，多号码取并集。"""
+    return header_dao.ids_between(connection, start, end, number_terms=number_terms)
 
 
 def read_invoice_accounts(connection):

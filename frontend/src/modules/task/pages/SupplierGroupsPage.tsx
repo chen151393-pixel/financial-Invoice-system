@@ -1,6 +1,4 @@
 import { useEffect, useRef, useState } from "react";
-import { Link } from "react-router";
-import { paths } from "../../../app/paths";
 import {
   Button,
   Card,
@@ -8,8 +6,6 @@ import {
   CardHeader,
   EmptyState,
   ErrorState,
-  Field,
-  FilterBar,
   Pagination,
   Skeleton,
   StatCard,
@@ -18,9 +14,10 @@ import {
 import { matchWecomGroups, saveSupplierGroup, saveSupplierNotify } from "../api/supplier-group";
 import { InvoicingSpeedCard } from "../components/InvoicingSpeedCard";
 import { SupplierGroupEditor } from "../components/SupplierGroupEditor";
+import { SupplierProfileSearch } from "../components/SupplierProfileSearch";
 import { SupplierProfilesTable } from "../components/SupplierProfilesTable";
 import { useSupplierProfiles } from "../hooks/useSupplierProfiles";
-import type { SupplierProfile, SupplierProfileList, SupplierProfileQuery } from "../types/supplier-group";
+import type { SupplierProfile, SupplierProfileList } from "../types/supplier-group";
 import "./task.css";
 import "./supplier-groups.css";
 
@@ -120,48 +117,13 @@ export function SupplierGroupsPage() {
               ) : undefined
             }
           />
-          <FilterBar
-            embedded
+          <SupplierProfileSearch
             key={JSON.stringify(query)}
-            onSubmit={(element) => {
-              const form = new FormData(element);
-              change({
-                keyword: String(form.get("keyword") || ""),
-                status: String(form.get("status")) as SupplierProfileQuery["status"],
-              });
-            }}
-            actions={
-              <>
-                <Button type="submit" variant="primary" disabled={busy}>
-                  查询
-                </Button>
-                <Button disabled={busy} onClick={reload}>
-                  刷新
-                </Button>
-                {/* 外部群导入是供应商档案的下级功能，入口放在本页查询栏，不放页头 */}
-                <Link className="ui-button ui-button--secondary" to={paths.externalGroups}>
-                  外部群导入与关联
-                </Link>
-              </>
-            }
-          >
-            <Field label="供应商 / 外部群 / 群主" grow>
-              <input
-                type="search"
-                name="keyword"
-                defaultValue={query.keyword}
-                placeholder="输入供应商名称、群名或群主"
-              />
-            </Field>
-            <Field label="绑定状态">
-              <select name="status" defaultValue={query.status}>
-                <option value="all">全部供应商</option>
-                <option value="unbound">未绑定</option>
-                <option value="enabled">已绑定 · 启用</option>
-                <option value="disabled">已绑定 · 停用</option>
-              </select>
-            </Field>
-          </FilterBar>
+            query={query}
+            busy={busy}
+            onSearch={change}
+            onRefresh={reload}
+          />
           {state.kind === "loading" && <Skeleton label="正在读取供应商档案" />}
           {state.kind === "error" && (
             <ErrorState

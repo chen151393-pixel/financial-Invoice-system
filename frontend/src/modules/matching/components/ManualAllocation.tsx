@@ -1,6 +1,6 @@
 import { ConversionFields, defaultConversion } from "./ConversionFields";
-import { useState } from "react";
-import { Button } from "../../../shared/components/Button";
+import { useEffect, useRef, useState } from "react";
+import { Button, EmptyState, ErrorState, Skeleton } from "../../../shared/components/ui";
 import type { Candidate, InvoiceItem, ManualBody } from "../types/matching";
 import { CandidateTable } from "./CandidateTable";
 import { ChecksTable } from "./ChecksTable";
@@ -18,6 +18,8 @@ export function ManualAllocation({
   search,
   onCreate,
   replacements,
+  showForm = true,
+  onShowForm,
 }: {
   invoiceId: string;
   invoiceVersionId: string | null;
@@ -26,12 +28,30 @@ export function ManualAllocation({
   search: (keyword: string) => Promise<{ rows: Candidate[]; total: number }>;
   replacements: { id: string; label: string }[];
   onCreate: (body: ManualBody, replaceId: string, reason: string) => Promise<boolean>;
+  showForm?: boolean;
+  onShowForm?: () => void;
 }) {
   const [replaceId, setReplaceId] = useState("");
   const [reason, setReason] = useState("");
   const [conversion, setConversion] = useState(defaultConversion);
   const [keyword, setKeyword] = useState("");
-  const [state, setState] = useState<Search>({ kind: "idle" });
+  const [state, setState] = useState<Search>({ kind: "loading" });
+  const initialSearch = useRef(search);
+  useEffect(() => {
+    let active = true;
+    void initialSearch
+      .current("")
+      .then((result) => {
+        if (active) setState({ kind: "ready", ...result });
+      })
+      .catch((error: unknown) => {
+        if (active)
+          setState({ kind: "error", message: error instanceof Error ? error.message : "候选查询失败" });
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
   const [chosen, setChosen] = useState<Candidate | null>(null);
   const [form, setForm] = useState({
     quantity: item.quantity ?? "",
@@ -51,7 +71,7 @@ export function ManualAllocation({
   }
   return (
     <div className="matching-form">
-      {replacements.length > 0 && (
+      {showForm && replacements.length > 0 && (
         <label>
           关联方式
           <select
@@ -89,33 +109,41 @@ export function ManualAllocation({
           void find();
         }}
       >
-        <input
-          aria-label="按子采购单号、供应商、品名或报关单号查询"
-          placeholder="子采购单号 / 供应商 / 品名 / 报关单号"
-          maxLength={100}
-          value={keyword}
-          onChange={(event) => setKeyword(event.target.value)}
-        />
-        <Button type="submit" disabled={state.kind === "loading"}>
+        <label>
+          查询子采购行
+          <input
+            aria-label="按子采购单号、供应商、品名或报关单号查询"
+            placeholder="子采购单号 / 供应商 / 品名 / 报关单号"
+            maxLength={100}
+            value={keyword}
+            disabled={busy || state.kind === "loading"}
+            onChange={(event) => setKeyword(event.target.value)}
+          />
+        </label>
+        <Button type="submit" disabled={busy || state.kind === "loading"}>
           查询候选
         </Button>
       </form>
-      {state.kind === "loading" && <p role="status">正在查询…</p>}
+      {state.kind === "loading" && <Skeleton label="正在查询候选子采购行" rows={2} />}
       {state.kind === "error" && (
-        <p role="alert" className="matching-feedback">
-          {state.message}
-        </p>
+        <ErrorState
+          title="候选查询失败"
+          message={state.message}
+          action={<Button onClick={() => void find()}>重新查询</Button>}
+        />
       )}
       {state.kind === "ready" && !state.rows.length && (
-        <p className="matching-empty">没有符合条件的子采购行。</p>
+        <EmptyState title="没有符合条件的子采购行" description="可以修改关键字后重新查询。" />
       )}
       {state.kind === "ready" && state.rows.length > 0 && (
         <CandidateTable
           rows={state.rows}
+          busy={busy}
           name={`candidate-${item.id}`}
           chosenId={chosen?.purchase.purchaseLineId ?? null}
           onChoose={(candidate) => {
             setChosen(candidate);
+            onShowForm?.();
             setRequestId(crypto.randomUUID());
           }}
         />
@@ -125,7 +153,7 @@ export function ManualAllocation({
           共 {state.total} 条，仅显示置信度最高的 {state.rows.length} 条，请输入关键字缩小范围。
         </p>
       )}
-      {chosen && (
+      {chosen && showForm && (
         <form
           className="matching-form"
           onSubmit={(event) => {
@@ -155,7 +183,7 @@ export function ManualAllocation({
             });
           }}
         >
-          <details>
+          <details open>
             <summary>与所选子采购行逐项比对</summary>
             <ChecksTable checks={chosen.checks} caption="与所选子采购行逐项比对" />
           </details>

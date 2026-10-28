@@ -29,6 +29,13 @@ class TaskBoardService:
             self.directory.search(query.keyword) if query.keyword else {"supplier_ids": [], "order_ids": []}
         )
         offset = (query.page - 1) * query.pageSize
+        filters = (
+            self.directory.search_task_filters(
+                supplier_name=query.supplierName, purchase_order_no=query.purchaseOrderNo
+            )
+            if query.supplierName or query.purchaseOrderNo
+            else {"supplier_ids": None, "order_ids": None}
+        )
         declaration_ids = (
             set(self.directory.declaration_ids_created(query.createdFrom, query.createdTo))
             if query.createdFrom
@@ -48,6 +55,9 @@ class TaskBoardService:
                     order_ids=found["order_ids"],
                     supplier_id=int(query.supplierId) if query.supplierId else None,
                     declaration_ids=declaration_ids,
+                    record_no=query.recordNo,
+                    matching_supplier_ids=filters["supplier_ids"],
+                    matching_order_ids=filters["order_ids"],
                 )
                 open_rows = task_dao.by_statuses(connection, where, OPEN_STATUSES)
                 done_total = task_dao.status_counts(connection, where).get("completed", 0)

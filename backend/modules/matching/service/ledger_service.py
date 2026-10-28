@@ -10,27 +10,12 @@ from backend.modules.review.public import basis_versions, current_bases
 from backend.modules.task.public import open_lines, related_line_ids
 
 from ..dao import allocation_dao, ledger_dao
-from ..public import AllocationChanged, LineReceipt
+from ..policy.approval_version import effective_basis, effective_invoice
+from ..public import AllocationChanged, InvoiceMatchingChanged, LineReceipt
 
 
 def now():
     return datetime.now(timezone.utc).replace(tzinfo=None)
-
-
-def effective_basis(row):
-    history = row["verification_history"] or []
-    return next(
-        (h["purchaseBasisId"] for h in reversed(history) if h.get("purchaseBasisId")),
-        row["purchase_basis_id"],
-    )
-
-
-def effective_invoice(row):
-    history = row["verification_history"] or []
-    return next(
-        (h["invoiceVersionId"] for h in reversed(history) if h.get("invoiceVersionId")),
-        row["invoice_version_id"],
-    )
 
 
 def history_entry(row, action, actor, basis_id, invoice_version_id, stamp):
@@ -148,6 +133,10 @@ def on_basis_invalidated(connection, event, *, events):
     prepare(connection, event.purchase_line_ids, [r["invoice_id"] for r in rows])
     invalidate(connection, rows, {"kind": "basis", "reason": event.reason})
     publish(connection, event.purchase_line_ids, events, "system", event.reason)
+    events.publish(
+        connection,
+        InvoiceMatchingChanged(tuple(sorted({r["invoice_id"] for r in rows})), "system", event.reason),
+    )
 
 
 def on_invoice_changing(connection, event):
@@ -164,6 +153,7 @@ def on_invoice_changed(connection, event, *, events):
         event.status in ("void", "red_offset"),
     )
     publish(connection, [r["purchase_line_id"] for r in rows], events, "system", "发票版本变化，收票进度重算")
+    events.publish(connection, InvoiceMatchingChanged((event.invoice_id,), "system", "发票版本变化"))
 
 
 def on_review_approved(connection, event, *, events):
@@ -218,3 +208,9 @@ def on_review_approved(connection, event, *, events):
                 connection, [row], {"kind": "basis", "reason": "新旧开票口径不兼容，须核实或取消后重新分配"}
             )
     publish(connection, ids, events, event.approved_by, "审核依据换版，按分配台账重算收票")
+    events.publish(
+        connection,
+        InvoiceMatchingChanged(
+            tuple(sorted({r["invoice_id"] for r in rows})), event.approved_by, "审核依据换版"
+        ),
+    )

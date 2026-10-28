@@ -15,7 +15,6 @@ const InvoiceWorkspacePage = lazy(() => import("./InvoiceWorkspacePage"));
 const MatchingWorkspacePage = lazy(() => import("./MatchingWorkspacePage"));
 const TaskWorkspacePage = lazy(() => import("./TaskWorkspacePage"));
 const WritebackWorkspacePage = lazy(() => import("./WritebackWorkspacePage"));
-const UiKitWorkspacePage = lazy(() => import("./UiKitWorkspacePage"));
 const AccessWorkspacePage = lazy(() => import("./AccessWorkspacePage"));
 
 function page(label: string, element: ReactNode) {
@@ -65,7 +64,6 @@ export const router = createBrowserRouter([
           },
           { path: paths.writeback, element: page("NS 回写", <WritebackWorkspacePage />) },
           { path: `${paths.writeback}/:requestId`, element: page("NS 回写", <WritebackWorkspacePage />) },
-          { path: paths.uiKit, element: page("界面组件库", <UiKitWorkspacePage />) },
           { path: paths.access, element: page("人员与权限", <AccessWorkspacePage />) },
           // 首页及未知地址进入工作台；已有业务地址保持独立访问。
           { path: "*", element: <Navigate to={paths.workbench} replace /> },

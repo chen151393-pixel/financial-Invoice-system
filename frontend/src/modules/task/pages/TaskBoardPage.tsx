@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router";
 import { paths } from "../../../app/paths";
 import {
@@ -9,8 +9,6 @@ import {
   CardHeader,
   EmptyState,
   ErrorState,
-  Field,
-  FilterBar,
   Pagination,
   Skeleton,
 } from "../../../shared/components/ui";
@@ -19,39 +17,18 @@ import { queryTaskBoard } from "../api/board";
 import { BoardNodeCards } from "../components/BoardNodeCards";
 import { BoardTaskItem } from "../components/BoardTaskItem";
 import { SignedContractUpload } from "../components/SignedContractUpload";
-import type { BoardNodeKey, TaskBoard, TaskBoardQuery } from "../types/board";
+import { BoardSearch } from "../components/BoardSearch";
+import { readBoardQuery, writeBoardQuery } from "../hooks/board-query";
+import type { TaskBoard, TaskBoardQuery } from "../types/board";
 import { stageLabels } from "../types/task";
 import "./task-board.css";
 
-const NODE_KEYS: readonly BoardNodeKey[] = [
-  "documents",
-  "notification",
-  "invoices",
-  "comparison",
-  "completion",
-  "done",
-];
 type Remote = { kind: "loading" } | { kind: "error"; message: string } | { kind: "ready"; data: TaskBoard };
-
-function readNode(value: string | null): TaskBoardQuery["node"] {
-  return NODE_KEYS.find((key) => key === value) ?? "";
-}
 
 /** 开票跟进：节点卡片筛选，列表卡片内含查询栏与任务卡片；单项处理进入详情，回签合同支持批量上传。 */
 export function TaskBoardPage() {
   const [searchParams, setSearchParams] = useSearchParams();
-  const [query, setQuery] = useState<TaskBoardQuery>({
-    keyword: "",
-    supplierId: searchParams.get("supplierId") || "",
-    ...(searchParams.has("stage") ? { stage: searchParams.get("stage") || "" } : {}),
-    ...(searchParams.has("createdFrom") ? { createdFrom: searchParams.get("createdFrom") || "" } : {}),
-    ...(searchParams.has("createdTo") ? { createdTo: searchParams.get("createdTo") || "" } : {}),
-    node: readNode(searchParams.get("node")),
-    page: 1,
-    pageSize: 20,
-  });
-  const [keyword, setKeyword] = useState("");
-  const [supplierId, setSupplierId] = useState(query.supplierId);
+  const query = useMemo(() => readBoardQuery(searchParams), [searchParams]);
   const [state, setState] = useState<Remote>({ kind: "loading" });
   // 最近一次成功结果的分区与供应商选项；重新查询时保留，避免分区闪烁
   const [last, setLast] = useState<TaskBoard | null>(null);
@@ -84,24 +61,25 @@ export function TaskBoardPage() {
   function change(patch: Partial<TaskBoardQuery>) {
     setState({ kind: "loading" });
     const next = { ...query, page: 1, ...patch };
-    setQuery(next);
-    // 节点与供应商写入地址，刷新或分享链接后保持同一视图
-    const params = new URLSearchParams();
-    if (next.node) params.set("node", next.node);
-    if (next.supplierId) params.set("supplierId", next.supplierId);
-    if (next.stage) params.set("stage", next.stage);
-    if (next.createdFrom) params.set("createdFrom", next.createdFrom);
-    if (next.createdTo) params.set("createdTo", next.createdTo);
-    setSearchParams(params, { replace: true });
+    setSearchParams(writeBoardQuery(next), { replace: true });
+    setRefresh((n) => n + 1);
   }
   function reload() {
     setState({ kind: "loading" });
     setRefresh((n) => n + 1);
   }
   function showAll() {
-    setKeyword("");
-    setSupplierId("");
-    change({ keyword: "", supplierId: "", node: "", stage: "", createdFrom: "", createdTo: "" });
+    change({
+      supplierName: "",
+      recordNo: "",
+      purchaseOrderNo: "",
+      keyword: "",
+      supplierId: "",
+      node: "",
+      stage: "",
+      createdFrom: "",
+      createdTo: "",
+    });
   }
 
   const busy = state.kind === "loading";
@@ -111,9 +89,15 @@ export function TaskBoardPage() {
     : query.stage
       ? "当前业务状态的任务"
       : "全部进行中";
-  const scoped = Boolean(query.stage || query.createdFrom || query.createdTo);
-  const filtered = Boolean(query.keyword || query.supplierId || scoped);
-  const edited = keyword !== query.keyword || supplierId !== query.supplierId;
+  const scoped = Boolean(
+    query.stage || query.createdFrom || query.createdTo || query.supplierId || query.keyword,
+  );
+  const searchValues = {
+    supplierName: query.supplierName || "",
+    recordNo: query.recordNo || "",
+    purchaseOrderNo: query.purchaseOrderNo || "",
+  };
+  const filtered = Boolean(scoped || Object.values(searchValues).some(Boolean));
 
   return (
     <div className="tb">
@@ -143,55 +127,39 @@ export function TaskBoardPage() {
             </Button>
           }
         />
-        <FilterBar
-          embedded
-          onSubmit={() => change({ keyword, supplierId })}
-          pending={edited ? "条件已修改，点击「查询」生效" : undefined}
-          actions={
-            <>
-              <Button variant="primary" type="submit" disabled={busy}>
-                {busy ? "查询中…" : "查询"}
-              </Button>
-              <Button
-                disabled={busy || (!filtered && !keyword && !supplierId)}
-                onClick={() => {
-                  setKeyword("");
-                  setSupplierId("");
-                  change({ keyword: "", supplierId: "", stage: "", createdFrom: "", createdTo: "" });
-                }}
-              >
-                清除
-              </Button>
-              <Button disabled={busy} onClick={reload}>
-                刷新
-              </Button>
-            </>
+        <BoardSearch
+          values={searchValues}
+          busy={busy}
+          filtered={filtered}
+          onSearch={(values) =>
+            change({ ...values, supplierId: values.supplierName ? "" : query.supplierId, keyword: "" })
           }
-        >
-          <Field label="报关单 / 供应商 / 子采购单" grow>
-            <input
-              type="search"
-              maxLength={120}
-              placeholder="CD 编号、供应商名称或子采购单号"
-              value={keyword}
-              onChange={(event) => setKeyword(event.target.value)}
-            />
-          </Field>
-          <Field label="供应商">
-            <select value={supplierId} onChange={(event) => setSupplierId(event.target.value)}>
-              <option value="">全部供应商</option>
-              {(board?.suppliers ?? []).map((item) => (
-                <option key={item.id} value={item.id}>
-                  {item.name}
-                </option>
-              ))}
-            </select>
-          </Field>
-        </FilterBar>
+          onClear={() =>
+            change({
+              supplierName: "",
+              recordNo: "",
+              purchaseOrderNo: "",
+              keyword: "",
+              supplierId: "",
+              stage: "",
+              createdFrom: "",
+              createdTo: "",
+            })
+          }
+          onRefresh={reload}
+        />
 
         {scoped && (
           <div className="tb-scope">
-            <Alert tone="info" title="已应用报关单范围">
+            <Alert tone="info" title="已应用筛选范围">
+              {query.supplierId && (
+                <span>
+                  供应商：
+                  {board?.suppliers.find((item) => item.id === query.supplierId)?.name || query.supplierId}
+                  。{" "}
+                </span>
+              )}
+              {query.keyword && <span>旧版关键词：{query.keyword}。 </span>}
               {query.stage && (
                 <span>
                   业务状态：
@@ -206,7 +174,9 @@ export function TaskBoardPage() {
               )}
               <Button
                 size="sm"
-                onClick={() => change({ stage: "", createdFrom: "", createdTo: "", node: "" })}
+                onClick={() =>
+                  change({ stage: "", createdFrom: "", createdTo: "", supplierId: "", keyword: "", node: "" })
+                }
               >
                 清除范围
               </Button>

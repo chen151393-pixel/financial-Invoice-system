@@ -1,81 +1,210 @@
-import { useState } from "react";
-import { useNavigate } from "react-router";
-import { writebackRequestPath } from "../../../app/paths";
-import { Button } from "../../../shared/components/Button";
-import { ConfirmDialog } from "../components/ConfirmDialog";
-import { DemoBanner } from "../components/DemoBanner";
-import { EventLog } from "../components/EventLog";
-import { NotConnected } from "../components/NotConnected";
-import { PreviewChecks } from "../components/PreviewChecks";
-import { PreviewLines } from "../components/PreviewLines";
-import { PreviewSummary } from "../components/PreviewSummary";
-import { RequestHeader } from "../components/RequestHeader";
-import { ResultRecords } from "../components/ResultRecords";
-import { useCreatePreview } from "../hooks/useCreatePreview";
-import { useWritebackRequest } from "../hooks/useWritebackRequest";
+import { useEffect, useState } from "react";
+import { Link } from "react-router";
+import { matchingInvoicePath } from "../../../app/paths";
+import {
+  Alert,
+  Button,
+  Card,
+  CardContent,
+  CardHeader,
+  DataTable,
+  EmptyState,
+  ErrorState,
+  Skeleton,
+} from "../../../shared/components/ui";
+import { confirmPlan, getTask, refreshTask } from "../api";
+import { PlanForm } from "../components/PlanForm";
+import type { ConfirmBody, TaskDetail } from "../types";
 import "../writeback.css";
-import "../writeback-request.css";
 
-/** 一条回写记录：待确认时展示预览与确认入口，执行后展示后端记录的结果与核实信息。 */
-export function WritebackRequestPage({ requestId }: { requestId: string }) {
-  const { data, error, notConnected, action, refresh, execute, verify } = useWritebackRequest(requestId);
-  const [confirming, setConfirming] = useState(false);
-  const navigate = useNavigate();
-  const repreview = useCreatePreview((next) => navigate(writebackRequestPath(next)));
-  if (notConnected) return <NotConnected scope="无法读取这条回写记录。" />;
-  if (!data)
-    return (
-      <section className="wb-panel wb-state" aria-label="回写记录">
-        {error ? (
-          <>
-            <p role="alert" className="wb-error">
-              {error}
-            </p>
-            <Button onClick={refresh}>重新读取</Button>
-          </>
-        ) : (
-          <p role="status">正在读取回写记录…</p>
-        )}
-      </section>
-    );
-  const createError = repreview.error?.invoiceId === data.invoiceId ? repreview.error.message : "";
+const actionLabels: Record<string, string> = {
+  queued: "生成任务",
+  invalidated: "审核失效",
+  queried: "查询完成",
+  query_failed: "查询失败",
+  plan_confirmed: "确认方案",
+};
+export function TaskContent({
+  task,
+  busy,
+  onRefresh,
+  onConfirm,
+}: {
+  task: TaskDetail;
+  busy: boolean;
+  onRefresh: () => void;
+  onConfirm: (body: ConfirmBody) => void;
+}) {
+  const bills = task.candidates?.purchaseOrders.flatMap((order) => order.bills) ?? [];
   return (
-    <div className="wb-stack">
-      <DemoBanner />
-      <RequestHeader
-        data={data}
-        action={action}
-        creating={repreview.busyInvoice === data.invoiceId}
-        onConfirm={() => setConfirming(true)}
-        onVerify={() => void verify()}
-        onRefresh={refresh}
-        onRepreview={() => void repreview.create(data.invoiceId)}
-      />
-      {(error || createError) && (
-        <p role="alert" className="wb-panel wb-error">
-          {error || createError}
-        </p>
-      )}
-      <PreviewSummary data={data} />
-      {data.phase === "pending" ? (
-        <>
-          <PreviewChecks checks={data.checks} />
-          <PreviewLines data={data} />
-        </>
-      ) : (
-        <ResultRecords data={data} />
-      )}
-      <EventLog events={data.events} />
-      {confirming && (
-        <ConfirmDialog
-          data={data}
-          busy={action === "execute"}
-          onCancel={() => setConfirming(false)}
-          onConfirm={() => {
-            // 无论成功与否都关闭弹窗：结果以页面上后端返回的状态为准，避免在弹窗内重复提交。
-            void execute().finally(() => setConfirming(false));
-          }}
+    <>
+      <Alert title={task.stateLabel}>
+        {task.reason}
+        <br />
+        {task.writeback.reason}
+      </Alert>
+      <Card>
+        <CardHeader
+          title={`发票 ${task.invoiceNo}`}
+          description={`${task.vendorName} · 含税 ${task.amount} 元${task.historical ? " · 历史发票，须人工核实" : ""}`}
+          actions={
+            <>
+              <Link to={matchingInvoicePath(task.invoiceId)}>查看匹配审核</Link>
+              <Button disabled={busy || !task.actions.refresh} onClick={onRefresh}>
+                {task.querying ? "正在查询" : "重新查询账单"}
+              </Button>
+            </>
+          }
         />
+        <DataTable
+          label="已审核分配"
+          rows={task.allocations}
+          rowKey={(row) => row.allocationId}
+          minWidth={580}
+          columns={[
+            { key: "id", header: "分配编号", render: (row) => row.allocationId },
+            { key: "subpo", header: "子采购", render: (row) => row.orderNo },
+            { key: "parent", header: "母采购", render: (row) => row.parentOrderNo },
+            { key: "amount", header: "含税金额（元）", align: "right", render: (row) => row.amount },
+          ]}
+        />
+      </Card>
+      <Card>
+        <CardHeader
+          title="NS 候选账单"
+          description={
+            task.candidates
+              ? `读取完成：${task.candidates.readCompletedAt}；该额度仅为查询结果，尚未预留。`
+              : "先查询账单，再确认归属和金额。"
+          }
+        />
+        {bills.length ? (
+          <DataTable
+            label="候选账单"
+            rows={bills}
+            rowKey={(row) => row.billId}
+            columns={[
+              { key: "bill", header: "账单", render: (row) => row.billNumber },
+              { key: "parent", header: "母采购 ID", render: (row) => row.purchaseOrderId },
+              { key: "subpo", header: "子采购 ID", render: (row) => row.subPurchaseOrderId || "未明确关联" },
+              { key: "company", header: "实际子公司 ID", render: (row) => row.subsidiaryId },
+              {
+                key: "available",
+                header: "可收金额",
+                align: "right",
+                render: (row) => `${row.availableInvoiceAmount} ${row.currency}`,
+              },
+              { key: "issues", header: "核实事项", render: (row) => row.issues.join("；") || "归属仍需核实" },
+            ]}
+          />
+        ) : (
+          <EmptyState
+            title={task.candidates ? "未取得可用账单" : "尚未查询账单"}
+            description={
+              task.candidates?.purchaseOrders.map((order) => order.reason).join("；") || task.reason
+            }
+          />
+        )}
+      </Card>
+      {task.actions.confirm && <PlanForm key={task.revision} task={task} busy={busy} onConfirm={onConfirm} />}
+      {task.plan && (
+        <Card>
+          <CardHeader
+            title={task.state === "ready" ? "已冻结方案" : "历史冻结方案（当前不可用）"}
+            description={`${task.plan.confirmedBy} · ${task.plan.confirmedAt}`}
+          />
+          <DataTable
+            label="冻结方案"
+            rows={task.plan.allocations}
+            rowKey={(row) => `${row.allocationId}-${row.billId}`}
+            minWidth={480}
+            columns={[
+              { key: "allocation", header: "分配编号", render: (row) => row.allocationId },
+              { key: "bill", header: "账单 ID", render: (row) => row.billId },
+              { key: "amount", header: "金额（元）", align: "right", render: (row) => row.amount },
+            ]}
+          />
+          <CardContent>{task.plan.evidence}</CardContent>
+        </Card>
+      )}
+      <Card>
+        <CardHeader title="处理记录" />
+        <CardContent>
+          <ol className="wb-audit">
+            {task.audit.map((item, index) => (
+              <li key={`${item.at}-${index}`}>
+                <strong>{actionLabels[item.action] || "任务处理"}</strong> · {item.actor}
+                <small className="wb-secondary">
+                  {item.at} {item.detail.reason || item.detail.evidence}
+                </small>
+              </li>
+            ))}
+          </ol>
+        </CardContent>
+      </Card>
+    </>
+  );
+}
+
+export function WritebackRequestPage({ requestId }: { requestId: string }) {
+  const [task, setTask] = useState<TaskDetail | null>(null);
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [reload, setReload] = useState(0);
+  useEffect(() => {
+    let active = true;
+    getTask(requestId)
+      .then((data) => {
+        if (active) {
+          setTask(data);
+          setError("");
+        }
+      })
+      .catch((e: unknown) => {
+        if (active) setError(e instanceof Error ? e.message : "任务加载失败");
+      });
+    return () => {
+      active = false;
+    };
+  }, [requestId, reload]);
+  async function run(operation: () => Promise<TaskDetail>) {
+    setBusy(true);
+    setError("");
+    try {
+      setTask(await operation());
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "操作失败，请刷新后核对");
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <div className="wb-prepare">
+      <div>
+        <Button disabled={busy} onClick={() => setReload((value) => value + 1)}>
+          刷新任务状态
+        </Button>
+      </div>
+      {error && (
+        <ErrorState
+          title="操作未完成"
+          message={error}
+          action={
+            <Button disabled={busy} onClick={() => setReload((n) => n + 1)}>
+              重新加载
+            </Button>
+          }
+        />
+      )}
+      {task ? (
+        <TaskContent
+          task={task}
+          busy={busy}
+          onRefresh={() => void run(() => refreshTask(requestId, task.revision))}
+          onConfirm={(body) => void run(() => confirmPlan(requestId, body))}
+        />
+      ) : (
+        !error && <Skeleton label="正在加载回写任务" />
       )}
     </div>
   );

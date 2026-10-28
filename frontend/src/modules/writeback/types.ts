@@ -1,142 +1,74 @@
-/**
- * NS 回写接口契约（计划中的 /api/writeback/*）。金额、状态文字、能否操作及原因全部来自后端，
- * 前端只展示，不计算金额或推断是否允许写入。
- */
-
-export type WritebackPhase =
-  | "ready"
-  | "blocked"
-  | "pending"
-  | "executing"
-  | "unknown"
-  | "failed"
-  | "succeeded";
-
-export interface Allowed {
-  allowed: boolean;
-  reason: string;
-}
-
-export interface WriteSwitch {
-  enabled: boolean;
-  account: string;
-  reason: string;
-}
-
-export interface WritebackItem {
+export interface TaskSummary {
+  id: string;
+  taskNo: string;
   invoiceId: string;
   invoiceNo: string;
-  invoiceDate: string;
   vendorName: string;
   amount: string;
-  currency: string;
-  purchaseOrders: string;
-  allocation: string;
-  phase: WritebackPhase;
-  label: string;
-  requestId: string | null;
-  note: string | null;
-  preview: Allowed;
+  state: string;
+  stateLabel: string;
+  reason: string;
+  revision: number;
+  historical: boolean;
+  updatedAt: string;
+  writeback: { allowed: false; reason: string };
 }
-
-export interface WritebackList {
-  items: WritebackItem[];
+export interface TaskList {
+  items: TaskSummary[];
   total: number;
   page: number;
   pageSize: number;
   pages: number;
-  counts: Partial<Record<WritebackPhase | "all", number>>;
-  write: WriteSwitch;
 }
-
-export interface WritebackQuery {
-  phase: WritebackPhase | "";
-  vendor: string;
-  invoiceNo: string;
-  dateFrom: string;
-  dateTo: string;
-  page: number;
-  pageSize: number;
-}
-
-export interface PreviewLine {
-  billNo: string;
-  poNo: string;
-  subPoNo: string;
-  due: string;
-  received: string;
-  remaining: string;
+export interface SourceAllocation {
+  allocationId: string;
+  orderNo: string;
+  parentOrderNo: string;
+  parentOrderId: string;
   amount: string;
-  receivedAfter: string;
-  check: { passed: boolean; label: string };
 }
-
-export interface ResultBill {
-  billNo: string;
-  subPoNo: string;
-  before: string;
-  amount: string;
-  after: string | null;
-  status: string;
-  passed: boolean;
-}
-
-export interface WritebackEvent {
-  at: string;
-  action: string;
-  actor: string;
-  detail: string;
-}
-
-export interface WritebackRequest {
-  requestId: string;
-  invoiceId: string;
-  invoiceNo: string;
-  invoiceDate: string;
-  vendorName: string;
-  vendorRef: string;
-  invoiceAmount: string;
-  totalAmount: string;
+export interface Bill {
+  billId: string;
+  billNumber: string;
+  purchaseOrderId: string;
+  subPurchaseOrderId: string;
+  subsidiaryId: string;
   currency: string;
-  account: string;
-  phase: Exclude<WritebackPhase, "ready" | "blocked">;
-  label: string;
-  message: string;
-  createdAt: string;
-  createdBy: string;
-  expiresAt: string | null;
-  readAt: string | null;
-  checks: { label: string; passed: boolean; detail: string | null }[];
-  lines: PreviewLine[];
-  totalLabel: string;
-  operations: string[];
-  execute: Allowed;
-  refresh: Allowed;
-  verify: Allowed;
-  records: { label: string; url: string | null }[];
-  bills: ResultBill[];
-  poll: boolean;
-  events: WritebackEvent[];
+  availableInvoiceAmount: string;
+  issues: string[];
 }
-
-export const PHASE_TABS: readonly {
-  value: WritebackQuery["phase"];
-  label: string;
-  key: WritebackPhase | "all";
-}[] = [
-  { value: "", label: "全部", key: "all" },
-  { value: "ready", label: "可回写", key: "ready" },
-  { value: "pending", label: "待确认", key: "pending" },
-  { value: "executing", label: "执行中", key: "executing" },
-  { value: "unknown", label: "结果待核实", key: "unknown" },
-  { value: "failed", label: "失败", key: "failed" },
-  { value: "succeeded", label: "已回写", key: "succeeded" },
-];
-
-/** 后端返回 UTC ISO 时间，页面按北京时间展示；缺失时显示“—”，不显示虚构时间。 */
-export function writebackTime(value: string | null) {
-  if (!value) return "—";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return value;
-  return date.toLocaleString("zh-CN", { timeZone: "Asia/Shanghai", hour12: false });
+export interface TargetLine {
+  allocationId: string;
+  billId: string;
+  amount: string;
+}
+export interface Plan {
+  allocations: TargetLine[];
+  evidence: string;
+  confirmedBy: string;
+  confirmedAt: string;
+}
+export interface TaskDetail extends TaskSummary {
+  allocations: SourceAllocation[];
+  candidates: {
+    queryId: string;
+    readCompletedAt: string;
+    purchaseOrders: { id: string; number?: string; reason: string; bills: Bill[] }[];
+  } | null;
+  plan: Plan | null;
+  actions: { refresh: boolean; confirm: boolean };
+  querying: boolean;
+  audit: { action: string; actor: string; detail: { reason?: string; evidence?: string }; at: string }[];
+}
+export interface InvoiceReadiness {
+  ready: boolean;
+  reason: string;
+  task: TaskSummary | null;
+}
+export interface ConfirmBody {
+  revision: number;
+  requestId: string;
+  confirmScope: true;
+  evidence: string;
+  allocations: TargetLine[];
 }

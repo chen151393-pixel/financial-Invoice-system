@@ -33,7 +33,7 @@
 
 ## 关键规则
 
-- **人员以飞书为准**：本地只保存副本，不能新增人员或修改姓名、部门。只有同步范围内、在职、未冻结且至少有一个角色的人才能登录。同步失败时不停用任何人员。
+- **人员以飞书为准**：本地只保存副本，不能新增人员或修改姓名、部门。只有同步范围内、在职、未冻结、有角色且管理员已启用的人才能登录。新导入默认待授权；同步失败时不停用任何人员，同步成功也不覆盖手工启用开关。
 - **飞书登录**：
   - state 一次性、10 分钟有效，并与发起登录的浏览器绑定（流程 Cookie 的哈希）；
   - 飞书用户令牌用完即丢，不保存；
@@ -55,4 +55,31 @@
 
 - `backend/tests/identity/`：模拟飞书的完整登录、同步、权限测试，以及用模拟 HTTP 传输测试飞书适配器。
 - 在项目根目录运行 `npm.cmd run test:api`、`npm.cmd run lint:api`、`npm.cmd run check:architecture`。
-- 真实飞书授权尚未联调。
+- 登录授权与本次通讯录只读联调分开验收，后者见下文。
+
+## 选择导入与启用（2026-10-28）
+
+迁移 `0035_identity_member_selection` 新增个人范围和短期组织预览表、人员 `enabled` 字段。现有账号保留启用状态，新账号默认待授权。上线先执行 `npm.cmd run db:upgrade` 并重启；本次开发未迁移生产库。
+
+| 接口 | 请求与响应 |
+| --- | --- |
+| `POST /api/identity/directory/previews` | 无正文业务字段；读取真实飞书，返回 `{id, expiresAt, departments, selection}`。部门使用 `open_department_id`，个人使用飞书 `user_id` |
+| `POST /api/identity/directory/previews/{id}/members` | `{departmentId, query, page, departmentIds, userIds}`；服务端搜索分页、计算成员选中状态、继承覆盖范围和去重人数 |
+| `POST /api/identity/directory/previews/{id}/plan` | `{departmentIds, userIds}`；返回新增、更新、移出人员及不可启用人数供确认 |
+| `POST /api/identity/directory/previews/{id}/sync` | 提交确认过的范围；原子替换同步范围并导入所选人员，返回 `{run, userIds}`（此处结果 userIds 为本地主键） |
+| `GET /api/identity/users` | `query`、`department_id`、`page`；服务端筛选已导入人员，含下级部门，每页 50 人 |
+| `PUT /api/identity/users/{id}/access` | `{roles, customRoles, enabled}`；原子保存角色与启用状态；拒绝无角色、离职或范围外人员启用，以及当前管理员停用自己 |
+
+所有接口都需要认证系统管理员，预览还绑定创建者，十分钟过期。确认与权限修改使用现有数据库账本锁；旧预览不能覆盖后来的角色／范围变化，相同预览与范围重试返回原确认结果。前端不提交姓名、部门关系、在职状态或统计作为可信数据。
+
+`GET /api/identity/access` 的 `importedDepartments` 专用于默认组织树：仅返回本部门或下级部门有已导入账号的部门，包含未启用、已停用账号，与 `/users` 列表一致。原 `departments` 保留完整部门配置，隐藏空部门不删除本地或飞书数据，飞书预览仍可选择空部门进行导入。
+
+整部门包含全部下级和后续新增人员；单人范围只跟踪所选 ID；两者取并集、跨部门去重。完整读取成功后才保存部门与成员。手动确认和每日定时共用 `directory_reader`、`directory_snapshot.persist`。旧 `/sync`、`/scopes`、`/users/{id}/roles` 暂留一个版本兼容旧客户端；当前页面改用预览流程，旧角色接口不隐式启用账号。
+
+飞书未返回 parent_department_id 时，通过已授权的直属 children 接口（fetch_child=false）逐层获取父子关系；不猜测部门层级。缺姓名、user_id、激活状态或分页数据时拒绝生成预览，避免不完整数据改变权限。授权范围为空时，自动同步保留现有人员，须管理员核实。
+
+人员页默认读取本地 `/access` 与 `/users`，只有点击“同步飞书”才创建组织预览；确认导入后只刷新本地数据。组织读取按层获取部门、按部门获取成员，最多 3 路并发；任何分支或分页失败都会拒绝整个预览，不保存部分人员。同一预览服务实例同时收到的刷新共享一次外部读取，完成后不缓存结果，每位操作者仍获得独立且绑定身份的预览。跨进程或与定时任务之间不合并请求；现阶段仍按单 API 进程部署。`test_directory_performance.py` 验证并发上限、完整结果、请求合并及失败恢复。
+
+真实应用只读验证返回 32 个部门、133 名成员、24 条父子关系；未写生产账号。隔离 API 测试覆盖单人导入、整部门未来新增、移部门、去重、待授权、会话失效、失败保护、过期和篡改。MySQL 多连接并发及生产迁移仍需部署环境验收。
+
+本期角色继续控制登录和人员管理资格；其他业务接口的细粒度操作权限仍属于第 2 期，本次未扩大改动范围。

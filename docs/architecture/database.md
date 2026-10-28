@@ -1097,3 +1097,25 @@ API 发票默认版使用 `source=lemon_open2`、`lemon_account=open2:` 加 `SHA
 - 不保存手机号、邮箱、飞书令牌；会话仍在 API 进程内存中，未落库。
 - 跨模块只存操作者字符串 `user:fs:<飞书 user_id>`，不建外键。
 - 迁移只新增表，禁止降级删除。
+
+## 飞书按人员同步与启用（0035，2026-10-28）
+
+- `identity_users.enabled`：独立于飞书在职状态的管理员启用开关。迁移前人员保留原登录行为，新导入默认 `false`；同步不能覆盖它。
+- `identity_user_sync_scopes`：以飞书 `user_id` 保存单独选择的人员，与整部门及下级范围取并集；调部门后仍跟踪该人员。
+- `identity_directory_previews`：保存管理员绑定、十分钟有效的不可变部门与成员快照、读取时权限摘要、幂等确认结果；下次建立预览时清理过期记录。只保存页面必要字段，不保存飞书令牌、手机号或邮箱。
+- 组织读取在事务外；确认在现有账本命名锁保护的短事务内复核权限版本，再原子保存范围、成员、同步记录和审计。重复确认相同范围返回原结果，换范围或旧权限版本返回 409。
+- 生产升级执行 `npm.cmd run db:upgrade`，再重启服务。既有迁移文件保持不变，不自动执行生产库升级。
+
+
+## 2026-10-28：回写准备阶段 A/B
+
+新增 writeback 模块四张表，迁移 `0036_writeback_prepare`：
+
+| 表 | 归属与关键约束 |
+| --- | --- |
+| writeback_tasks | 不可变审核快照，唯一 `(invoice_id, fingerprint)`；包含候选查询租约、版本和当前方案指针 |
+| writeback_invoice_guards | `invoice_id` 唯一，逻辑引用 invoice；task_id 为模块内外键 |
+| writeback_plans | 只追加目标快照；唯一 `(task_id, revision)` 及 `(task_id, request_id)` |
+| writeback_audit | 准备阶段审计，任务外键；保留生成、失效、查询、确认事实 |
+
+跨模块不建外键，不复用旧 `ns_previews/ns_target_locks/ns_audit`。任务的只读查询租约可到期重查，不是 NS 写入锁。本阶段没有 executing/unknown/succeeded 状态或真实写调用。准备记录不自动降级删除。金额列使用 DECIMAL(18,2)，快照金额使用十进制字符串，时间统一 UTC。字段见[当前字典](../mysql/current-data-dictionary.md)，部署见[准备操作说明](../ns-writeback-prepare.md)。

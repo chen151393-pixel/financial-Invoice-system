@@ -8,6 +8,7 @@ from uuid import UUID
 from pydantic import Field, StringConstraints, field_validator, model_validator
 
 from backend.core.dto import StrictModel
+from backend.core.search_terms import SearchText
 
 Id = Annotated[str, StringConstraints(pattern=r"^[1-9][0-9]{0,18}$")]
 Note = Annotated[str, StringConstraints(max_length=300)]
@@ -85,6 +86,8 @@ class SummaryBody(StrictModel):
 
 
 class QueueQuery(StrictModel):
+    invoiceNo: SearchText = ""
+    supplierName: SearchText = ""
     tier: Literal["all", "high", "medium", "low"] = "all"
     # 只看异常 / 只看正常：异常为需要填写说明或当前不能通过的建议
     anomaly: Literal["all", "abnormal", "normal"] = "all"

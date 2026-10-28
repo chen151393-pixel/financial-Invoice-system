@@ -9,6 +9,7 @@ export function RoleDialog({
   roles,
   initial,
   customRoles,
+  enabled,
   onSave,
   onClose,
 }: {
@@ -18,11 +19,13 @@ export function RoleDialog({
   initial: string[];
   /** 传入时显示“角色来源”选择（个人角色） */
   customRoles?: boolean;
-  onSave: (roles: string[], customRoles: boolean) => Promise<void>;
+  enabled?: boolean;
+  onSave: (roles: string[], customRoles: boolean, enabled: boolean) => Promise<void>;
   onClose: () => void;
 }) {
   const [selected, setSelected] = useState(new Set(initial));
   const [custom, setCustom] = useState(customRoles ?? false);
+  const [enable, setEnable] = useState(enabled ?? false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
@@ -42,6 +45,7 @@ export function RoleDialog({
       await onSave(
         roles.map((role) => role.code).filter((code) => selected.has(code)),
         custom,
+        enable,
       );
       onClose();
     } catch (failure) {
@@ -54,6 +58,9 @@ export function RoleDialog({
     <Dialog title={title} busy={busy} onClose={onClose}>
       <div className="identity-role-dialog">
         <p>{description}</p>
+        <Alert>
+          角色当前用于登录资格和人员管理权限；财务、采购等业务操作的细分权限尚未接入，“只读”角色暂不能限制所有业务写操作。
+        </Alert>
         {customRoles !== undefined && (
           <fieldset>
             <legend>角色来源</legend>
@@ -81,6 +88,24 @@ export function RoleDialog({
             </label>
           ))}
         </fieldset>
+        {enabled !== undefined && (
+          <fieldset>
+            <legend>平台访问</legend>
+            <label>
+              <input
+                type="checkbox"
+                checked={enable}
+                disabled={busy}
+                onChange={(event) => setEnable(event.target.checked)}
+              />
+              启用此成员
+            </label>
+            <p>启用需要在职、处于同步范围内且有生效角色；关闭后现有会话立即失效。</p>
+          </fieldset>
+        )}
+        {selected.has("admin") && (
+          <Alert tone="warning">系统管理员可以修改所有人员的角色、启用状态和同步范围，请确认授权对象。</Alert>
+        )}
         {error && (
           <Alert tone="danger" title="未保存">
             {error}
@@ -91,7 +116,7 @@ export function RoleDialog({
             取消
           </Button>
           <Button variant="primary" disabled={busy} onClick={() => void save()}>
-            {busy ? "保存中…" : "保存角色"}
+            {busy ? "保存中…" : enabled !== undefined ? "保存角色与启用状态" : "保存角色"}
           </Button>
         </div>
       </div>

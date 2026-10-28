@@ -3,6 +3,12 @@
   gap: 20px;
   min-width: 0;
 }
+.fr-page .ui-filter-bar .ui-field--grow {
+  flex: 1 1 220px;
+}
+.fr-page .ui-filter-bar .ui-field--grow {
+  flex: 1 1 220px;
+}
 .fr-panel {
   overflow: hidden;
 }
@@ -321,19 +327,11 @@
   color: var(--color-muted);
   line-height: 1.7;
 }
-.fr-detail {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 18px 20px;
-  margin: 0 0 24px;
-}
-.fr-detail dt,
 .fr-record dt {
   color: var(--color-muted);
   font-size: 12px;
   margin-bottom: 5px;
 }
-.fr-detail dd,
 .fr-record dd {
   margin: 0;
   line-height: 1.6;
@@ -384,9 +382,6 @@
   .fr-scope-heading {
     align-items: flex-start;
     flex-direction: column;
-  }
-  .fr-detail {
-    grid-template-columns: 1fr;
   }
   .fr-dialog header,
   .fr-dialog__body {

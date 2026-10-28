@@ -5,6 +5,7 @@ import "./pagination.css";
 interface PaginationProps {
   label: string;
   total: number;
+  unit?: string;
   page: number;
   pageCount: number;
   pageSize: number;
@@ -60,6 +61,7 @@ function PageJump({
 export function Pagination({
   label,
   total,
+  unit = "条",
   page,
   pageCount,
   pageSize,
@@ -73,16 +75,19 @@ export function Pagination({
   return (
     <nav className="ui-pagination" aria-label={label}>
       <div className="ui-pagination__size">
-        <span>共 {total} 条</span>
+        <span>
+          共 {total} {unit}
+        </span>
         <select
-          aria-label="每页条数"
+          aria-label={`每页${unit}数`}
           value={pageSize}
           disabled={disabled}
           onChange={(event) => onPageSizeChange(Number(event.target.value))}
         >
           {pageSizes.map((size) => (
             <option key={size} value={size}>
-              {size}条/页
+              {size}
+              {unit}/页
             </option>
           ))}
         </select>

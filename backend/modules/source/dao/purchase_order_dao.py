@@ -1,6 +1,6 @@
 """子采购单与子采购行。"""
 
-from sqlalchemy import String, func, literal, select, update
+from sqlalchemy import String, func, literal, or_, select, update
 
 from ..entity import (
     companies,
@@ -121,19 +121,31 @@ def sales_order_ids(connection, order_ids):
     return {row.id: row.sales_order_id for row in connection.execute(query)}
 
 
-def line_ids_by_supplier(connection, supplier_id):
+def line_ids_by_supplier(connection, supplier_id=None, *, name_terms=()):
     """该供应商子采购单下的子采购行 ID（含已停用，供比对队列按供应商筛选）。"""
-    query = (
-        select(purchase_order_lines.c.id)
-        .join(purchase_orders, purchase_orders.c.id == purchase_order_lines.c.purchase_order_id)
-        .where(purchase_orders.c.supplier_id == supplier_id)
+    query = select(purchase_order_lines.c.id).join(
+        purchase_orders, purchase_orders.c.id == purchase_order_lines.c.purchase_order_id
     )
+    if supplier_id is not None:
+        query = query.where(purchase_orders.c.supplier_id == supplier_id)
+    if name_terms:
+        query = query.where(
+            purchase_orders.c.supplier_id.in_(
+                select(suppliers.c.id).where(
+                    or_(*(suppliers.c.name.contains(term, autoescape=True) for term in name_terms))
+                )
+            )
+        )
     return list(connection.execute(query).scalars())
 
 
 def ids_like(connection, keyword, limit):
     """单号包含关键字的子采购单 ID（任务搜索用）。"""
-    query = select(purchase_orders.c.id).where(purchase_orders.c.order_no.like(f"%{keyword}%")).limit(limit)
+    query = (
+        select(purchase_orders.c.id)
+        .where(purchase_orders.c.order_no.contains(keyword, autoescape=True))
+        .limit(limit)
+    )
     return list(connection.execute(query).scalars())
 
 

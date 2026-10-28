@@ -172,6 +172,7 @@ def declaration(
         for index, row in enumerate(content["customs_lines"])
     ]
     return Declaration(
+        purchaseOrderNumbers=list(dict.fromkeys(o["order_no"] for o in content["orders"] if o["order_no"])),
         id=str(head["id"]),
         currencyEvidenceSummary=_currency_evidence(content, orders),
         currencyChecks=[

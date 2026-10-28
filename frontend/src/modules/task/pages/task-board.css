@@ -160,6 +160,10 @@
   }
 }
 @media (max-width: 760px) {
+  .tb-panel > .ui-filter-bar .ui-field {
+    flex: 1 1 100%;
+    max-width: none;
+  }
   .tb-list {
     padding: 12px;
   }

@@ -7,6 +7,7 @@ import { MemoryRouter } from "react-router";
 import { createServer } from "vite";
 
 let server, Todos, Page, Metrics, Kpis, api, paths, Queue, Filters, Nodes, WbQueue, Suppliers, Unbound;
+let Checks, Candidates, LineNav, matchingApi;
 before(async () => {
   server = await createServer({
     configFile: fileURLToPath(new URL("../vite.config.ts", import.meta.url)),
@@ -39,6 +40,14 @@ before(async () => {
   ));
   paths = await server.ssrLoadModule("/src/app/paths.ts");
   ({ QueueTable: Queue } = await server.ssrLoadModule("/src/modules/matching/components/QueueTable.tsx"));
+  ({ ChecksTable: Checks } = await server.ssrLoadModule("/src/modules/matching/components/ChecksTable.tsx"));
+  ({ CandidateTable: Candidates } = await server.ssrLoadModule(
+    "/src/modules/matching/components/CandidateTable.tsx",
+  ));
+  ({ InvoiceLineNav: LineNav } = await server.ssrLoadModule(
+    "/src/modules/matching/components/InvoiceLineNav.tsx",
+  ));
+  matchingApi = await server.ssrLoadModule("/src/modules/matching/api/index.ts");
   ({ QueueFilters: Filters } = await server.ssrLoadModule(
     "/src/modules/matching/components/QueueFilters.tsx",
   ));
@@ -47,6 +56,94 @@ after(async () => {
   await server?.close();
 });
 const counts = { all: 3, review: 1, matching: 1, task: 1, blocked: 0, reverify: 0, preparation: 1 };
+
+test("审核队列请求整票接口并保留后端分页与日期条件", async (t) => {
+  let seen;
+  t.mock.method(globalThis, "fetch", async (url, options) => {
+    seen = { url, body: JSON.parse(options.body) };
+    return Response.json({ rows: [], total: 0 });
+  });
+  await matchingApi.getMatchingQueue({
+    invoiceNo: "001,002",
+    supplierName: "上海;杭州",
+    tier: "low",
+    anomaly: "abnormal",
+    supplierId: "7",
+    invoiceFrom: "",
+    invoiceTo: "",
+    page: 3,
+    pageSize: 10,
+  });
+  assert.equal(seen.url, "/api/matching/invoice-queue/query");
+  assert.deepEqual(seen.body, {
+    invoiceNo: "001,002",
+    supplierName: "上海;杭州",
+    tier: "low",
+    anomaly: "abnormal",
+    supplierId: "7",
+    invoiceFrom: null,
+    invoiceTo: null,
+    page: 3,
+    pageSize: 10,
+  });
+});
+
+test("逐项比对默认展示原始金额和差异，异常说明可见", () => {
+  const html = render(Checks, {
+    caption: "逐项比对",
+    checks: [
+      {
+        key: "amount",
+        label: "含税金额",
+        invoiceValue: "1234567890.12",
+        purchaseValue: "1234567890.10",
+        result: "mismatch",
+        difference: "0.02",
+        note: "金额需核实",
+      },
+    ],
+  });
+  assert.match(html, /1234567890.12/);
+  assert.match(html, /0.02/);
+  assert.match(html, /金额需核实/);
+  assert.doesNotMatch(html, /<details/);
+});
+
+test("明细导航保持选中行；提交期间禁止切换，候选限制取后端", () => {
+  const html = render(LineNav, {
+    items: [
+      {
+        id: "1",
+        lineNo: "1",
+        item: "墨水",
+        active: true,
+        amount: "100.50",
+        quantity: "10",
+        unit: "个",
+        allocations: [],
+      },
+    ],
+    selectedId: "1",
+    busy: true,
+    onSelect() {},
+  });
+  assert.match(html, /aria-current="true"/);
+  assert.match(html, /disabled=""/);
+  const candidates = render(Candidates, {
+    rows: [
+      {
+        purchase: { purchaseLineId: "3", orderNo: "SUB-3", item: "墨水", currency: "CNY" },
+        confidence: "60",
+        block: "币种待核实",
+      },
+    ],
+    name: "test",
+    chosenId: null,
+    onChoose() {},
+  });
+  assert.match(candidates, /币种待核实/);
+  assert.match(candidates, /disabled=""[^>]*>选用此行/);
+});
 const row = {
   key: "review:1",
   kind: "review",
@@ -209,36 +306,42 @@ test("列表地址只写入已填写的筛选条件", () => {
 });
 
 test("比对队列显示异常分类，异常建议不能勾选批量通过；筛选含只看异常", () => {
-  const allocation = {
-    id: "9",
+  const row = {
+    invoice: { id: "1", number: "2600", seller: "测试", date: "2026-10-28", gross: "100.5", currency: "CNY" },
+    proposalCount: 8,
+    purchaseOrders: ["SUB-200", "SUB-201"],
     tier: "high",
     confidence: "90",
-    quantity: "10",
-    amount: "100.5",
-    noteReasons: ["发票不含税价格高于申报价"],
-    confirm: { allowed: true, reason: "通过时需填写说明" },
-    purchase: { orderNo: "SUB-200", item: "墨水" },
-  };
-  const row = {
-    allocation,
-    invoiceId: "1",
-    invoiceNumber: "2600",
-    seller: "测试",
-    itemName: "墨水",
+    batch: { allowed: false, reason: "请进入详情逐行核对" },
+    batchIds: [],
     anomalies: ["价格"],
   };
   const html = render(Queue, { rows: [row], selected: [], onToggle() {}, onToggleAll() {} });
   assert.match(html, /aria-label="异常：价格"/);
-  assert.match(html, /需说明：发票不含税价格高于申报价/);
-  assert.match(html, /<input type="checkbox" aria-label="选择建议 9" disabled=""/);
+  assert.match(html, /请进入详情逐行核对/);
+  assert.match(html, /<input type="checkbox" aria-label="选择发票 2600" disabled=""/);
+  assert.equal((html.match(/>2600<\/strong>/g) || []).length, 1);
+  assert.match(html, /8 条/);
+  assert.match(html, /href="\/matching\/1"/);
   const filters = render(Filters, {
-    value: { anomaly: "abnormal", supplierId: "", invoiceFrom: "", invoiceTo: "" },
-    suppliers: [],
+    value: {
+      anomaly: "abnormal",
+      invoiceNo: "001,002",
+      supplierName: "甲;乙",
+      invoiceFrom: "",
+      invoiceTo: "",
+    },
     busy: false,
     onApply() {},
   });
   assert.match(filters, /<option value="abnormal" selected="">只看异常/);
   assert.match(filters, /只看正常/);
+  assert.equal((filters.match(/type="search"/g) || []).length, 2);
+  assert.match(filters, /value="001,002"/);
+  assert.match(filters, /value="甲;乙"/);
+  assert.match(filters, /<span class="ui-sr-only">发票号码<\/span>/);
+  assert.match(filters, /<span class="ui-sr-only">供应商<\/span>/);
+  assert.doesNotMatch(filters, /全部供应商/);
 });
 
 test("漏斗上一环节为 0 时说明暂无通过率，只有第一步标为起点", () => {

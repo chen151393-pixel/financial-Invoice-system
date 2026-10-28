@@ -19,6 +19,7 @@ from ..dao import allocation_dao
 from ..dto.matching_dto import ConfirmBody
 from ..policy import allocation_policy as rules
 from ..policy.comparison_policy import HIGH
+from ..public import InvoiceMatchingChanged
 from . import approval_service, ledger_service
 
 
@@ -35,10 +36,13 @@ class AllocationService:
     def __init__(self, engine, events, queries):
         self.engine, self.events, self.queries = engine, events, queries
 
-    def _run(self, action):
+    def _run(self, action, actor):
         try:
             with transaction(self.engine) as connection:
-                return action(connection)
+                result = action(connection)
+                invoice_ids = result if isinstance(result, tuple) else (result,)
+                self.events.publish(connection, InvoiceMatchingChanged(invoice_ids, actor, "分配操作已完成"))
+                return invoice_ids[0]
         except IntegrityError:
             raise ApiError(409, "该发票行与子采购行已有有效记录，请刷新后核对") from None
         except SQLAlchemyError:
@@ -65,7 +69,7 @@ class AllocationService:
             self._approve(connection, current, body, actor, _now(), reverify=True)
             return current["invoice_id"]
 
-        return self.queries.invoice(self._run(action))
+        return self.queries.invoice(self._run(action, actor))
 
     def confirm(self, allocation_id, body, actor):
         _require_user(actor)
@@ -82,7 +86,7 @@ class AllocationService:
             self._approve(connection, current, body, actor, _now())
             return current["invoice_id"]
 
-        return self.queries.invoice(self._run(action))
+        return self.queries.invoice(self._run(action, actor))
 
     def reject(self, allocation_id, body, actor):
         _require_user(actor)
@@ -101,7 +105,7 @@ class AllocationService:
                 raise ApiError(409, f"该记录{rules.STATUS_LABELS[current['status']]}，不能驳回")
             return current["invoice_id"]
 
-        return self.queries.invoice(self._run(action))
+        return self.queries.invoice(self._run(action, actor))
 
     def cancel(self, allocation_id, body, actor):
         _require_user(actor)
@@ -129,13 +133,15 @@ class AllocationService:
             self._publish(connection, current["purchase_line_id"], actor, f"取消分配：{body.reason.strip()}")
             return current["invoice_id"]
 
-        return self.queries.invoice(self._run(action))
+        return self.queries.invoice(self._run(action, actor))
 
     def create_manual(self, body, actor):
         """人工新建分配并直接通过（置信度为空）；requestId 保证重复提交只生效一次。"""
         _require_user(actor)
 
-        return self.queries.invoice(self._run(lambda connection: self._manual(connection, body, actor)))
+        return self.queries.invoice(
+            self._run(lambda connection: self._manual(connection, body, actor), actor)
+        )
 
     def _manual(self, connection, body, actor):
         fingerprint = hashlib.sha256((actor + body.model_dump_json()).encode()).hexdigest()
@@ -195,9 +201,10 @@ class AllocationService:
                     actor,
                     _now(),
                 )
+                return current["invoice_id"]
 
             try:
-                self._run(action)
+                self._run(action, actor)
                 confirmed += 1
             except ApiError as error:
                 skipped.append({"id": str(allocation_id), "reason": error.message})

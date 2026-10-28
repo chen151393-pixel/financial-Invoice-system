@@ -125,3 +125,9 @@ npm.cmd run dev:api
 `rebuild-review` 从本地已入库来源与审核依据重建所有账套，可重复执行；不请求 NS、不写审核记录。错误会使命令失败并保留队列，不能将部分完成报告为补算成功。升级后直接启动新版服务也会后台补算已有数据；数据量大时可先运行管理命令，完成后再开放查询。
 
 验证：`test_review_calculations.py` 覆盖持久队列、初始补算、四条 SQL 分页、脏快照限制、事务回滚、失败重试、规则变化、审批更新、共享销售汇率及缺汇率。`test_review_calculations_mysql.py` 在随机隔离库验证新旧代次并发和单消费者命名锁；未提供专用 MySQL 连接时明确跳过。既有业务测试通过 `review_helpers.MaterializedReviewService` 显式模拟后台已完成，再调用真实数据库分页。
+
+## 分字段批量搜索（2026-10-28）
+
+`POST /api/review/declarations/query` 新增 `supplierName`、`recordNo`、`purchaseOrderNo` 字符串，分别匹配供应商名称、CD 编号和子采购单号。每框支持单条或用中英文逗号、分号、换行分隔的多条内容；忽略空项、去重，最多 50 条，每条最多 120 字符，保留词内空格。框内取任一部分匹配，框间同时满足；`%`、`_` 按普通字符查询。旧 `keyword`、`supplierId` 仍兼容原调用。
+
+所有条件在 review 快照 SQL 中过滤，列表、分页和概况计数使用同一范围，不读取实时 source。v3 查询投影新增响应字段 `purchaseOrderNumbers`，包含全部关联子单号（含无明细子单），启动时自动补算旧投影；补算期间显示现有后台计算状态，并兼容旧快照中的子单展示字段。无需数据库迁移，不触发 NS 写入。

@@ -80,6 +80,7 @@ class AutoReview(StrictModel):
 
 
 class Declaration(StrictModel):
+    purchaseOrderNumbers: list[str] = Field(default_factory=list)
     calculationStatus: Literal["ready", "pending", "failed"] = "ready"
     calculatedAt: str | None = None
     salesOrders: str = ""

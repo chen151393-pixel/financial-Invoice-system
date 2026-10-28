@@ -47,10 +47,24 @@ def page(connection, *, status, keyword, supplier_ids, offset, limit):
     return total, [dict(row) for row in connection.execute(query).mappings()]
 
 
-def supplier_ids(connection, *, enabled=None, keyword=""):
+def supplier_ids(connection, *, enabled=None, keyword="", group_names=(), owners=()):
     query = select(supplier_groups.c.supplier_id)
     if enabled is not None:
         query = query.where(supplier_groups.c.enabled.is_(enabled))
+    if group_names:
+        query = query.where(
+            or_(*(supplier_groups.c.group_name.contains(term, autoescape=True) for term in group_names))
+        )
+    if owners:
+        query = query.where(
+            or_(
+                *(
+                    column.contains(term, autoescape=True)
+                    for term in owners
+                    for column in (supplier_groups.c.owner_name, supplier_groups.c.owner_userid)
+                )
+            )
+        )
     if keyword:
         query = query.where(
             or_(

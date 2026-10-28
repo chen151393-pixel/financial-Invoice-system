@@ -1,28 +1,29 @@
 import { useState } from "react";
-import { Button, Field, FilterBar } from "../../../shared/components/ui";
+import { Button, Field, FilterBar, SearchInput } from "../../../shared/components/ui";
 
 export interface SearchCriteria {
-  keyword: string;
-  supplierId: string;
+  supplierName: string;
+  recordNo: string;
+  purchaseOrderNo: string;
 }
 
-const EMPTY: SearchCriteria = { keyword: "", supplierId: "" };
+const EMPTY: SearchCriteria = { supplierName: "", recordNo: "", purchaseOrderNo: "" };
+const FIELDS = [
+  ["supplierName", "供应商", "输入供应商名称，多条用逗号分隔"],
+  ["recordNo", "CD 号", "输入 CD 号，多条用逗号分隔"],
+  ["purchaseOrderNo", "子采购单号", "输入子采购单号，多条用逗号分隔"],
+] as const;
 
 export function FinanceSearchForm({
   busy,
-  suppliers,
   onSearch,
   initial = EMPTY,
 }: {
   busy: boolean;
-  // 供应商选项由后端按有效报关单关联的子采购单返回
-  suppliers: { id: string; name: string }[];
   onSearch: (criteria: SearchCriteria) => void;
   initial?: SearchCriteria;
 }) {
   const [criteria, setCriteria] = useState(initial);
-  const change = (field: keyof SearchCriteria, value: string) =>
-    setCriteria((current) => ({ ...current, [field]: value }));
   return (
     <FilterBar
       embedded
@@ -44,26 +45,16 @@ export function FinanceSearchForm({
         </>
       }
     >
-      <Field label="查找报关与采购单据" grow>
-        <input
-          id="finance-keyword"
-          type="search"
-          value={criteria.keyword}
-          maxLength={120}
-          placeholder="CD 编号 / 真实报关单号 / PL / 子采购单号 / 品名"
-          onChange={(event) => change("keyword", event.target.value)}
-        />
-      </Field>
-      <Field label="供应商">
-        <select value={criteria.supplierId} onChange={(event) => change("supplierId", event.target.value)}>
-          <option value="">全部供应商</option>
-          {suppliers.map((supplier) => (
-            <option key={supplier.id} value={supplier.id}>
-              {supplier.name}
-            </option>
-          ))}
-        </select>
-      </Field>
+      {FIELDS.map(([field, label, placeholder]) => (
+        <Field key={field} label={label} hideLabel grow>
+          <SearchInput
+            name={field}
+            value={criteria[field]}
+            placeholder={placeholder}
+            onValueChange={(value) => setCriteria((current) => ({ ...current, [field]: value }))}
+          />
+        </Field>
+      ))}
     </FilterBar>
   );
 }

@@ -8,7 +8,7 @@ import type {
   InvoiceMatchList,
   InvoiceMatching,
   ManualBody,
-  Queue,
+  InvoiceQueue,
   QueueQuery,
 } from "../types/matching";
 
@@ -32,7 +32,7 @@ export const getInvoiceMatching = (invoiceId: string) =>
   read<InvoiceMatching>(`/matching/invoices/${encodeURIComponent(invoiceId)}`);
 // 日期为空时提交 null，由后端按"不限"处理
 export const getMatchingQueue = (query: QueueQuery) =>
-  read<Queue>("/matching/queue", "POST", {
+  read<InvoiceQueue>("/matching/invoice-queue/query", "POST", {
     ...query,
     invoiceFrom: query.invoiceFrom || null,
     invoiceTo: query.invoiceTo || null,

@@ -27,12 +27,13 @@ React + TypeScript + Vite 前端，Python + FastAPI + SQLAlchemy + Alembic 后�
 | `/pl-reconciliation` | 通过 NS 共用脚本实时查询采购报关依据 | 只读对照，页面查询不自动入库或审核 |
 | `/review`（原 `/finance-reconciliation`） | NS 同步后后台计算并保存申报幅度，列表直接查询快照并在数据库分页；整单人工审核冻结开票口径 | 来源变化后需重新审核；后台更新中显示提示，部署补算见 [review 说明](backend/modules/review/README.md#后台计算与数据库分页2026-10-27) |
 | `/tasks`（原 `/invoice-followup`、`/tasks/board`） | 统一节点式开票跟进、合并任务面板且流程默认展开；审核通过自动按供应商×采购公司×币种生成任务、审核后自动下载合同并归档到共享盘、供应商群配置、通知版本和人工发送登记 | 收票进度由发票比对通过的分配自动汇总，完成后任务自动结束；已接入企微群发提交与回执，仍需群主确认；默认关闭，启用前须完成定向验收 |
-| `/ui-kit` | [统一组件库](docs/ui-components.md)展示页，新页面从组件库组合 | 演示数据，不调用接口 |
 | `/suppliers`、`/suppliers/external-groups` | 供应商档案、七列外部群 Excel 导入预览、确认绑定及后续人工关联 | 群资料来自文件或企微查询；导入文件不代表实时核验，不发送通知 |
 | `/sync`、`/sync/lemon`、`/invoices` | 全授权账套后台拉票、持久任务记录、每日计划、Excel 导入及发票查询 | [后台同步说明](docs/lemon-background-sync.md)；全部范围限当前已发现财务服务，计划默认关闭；专业版已接商品明细，默认版明细仍待补齐 |
 | `/matching`、`/matching/:invoiceId` | 比对建议审核队列、逐项比对、人工通过 / 驳回 / 取消、人工分配、版本复核与原子替换；通过后自动更新任务收票进度 | 子采购币种待核实时不能通过；不写 NS |
 
-审核、匹配、人工通知登记是不同状态。NS 回写（预览、执行、未知结果保护、`recover` 恢复命令）已移至 `archive/writeback` 分支；主线保留 `ns_previews`、`ns_target_locks`、`ns_audit` 的表和数据，不再有代码读写。当前缺口和建议衔接顺序统一维护在[系统链路](docs/system-chain.md)，各模块规则见[文档索引](docs/README.md)。
+审核、匹配、人工通知登记是不同状态。旧 NS 通用回写执行器已移至 `archive/writeback` 分支；旧库的 `ns_previews`、`ns_target_locks`、`ns_audit` 表和数据继续保留。主线现已实现专用[回写准备阶段 A/B](docs/ns-writeback-prepare.md)：整票审核入队、只读查询、不可变账单分配方案；尚无 NS 写入能力。当前缺口和建议衔接顺序统一维护在[系统链路](docs/system-chain.md)，各模块规则见[文档索引](docs/README.md)。
+
+供应商账单只读查询第一阶段已在本地实现：`POST /api/source/vendor-bills/query` 按 NS 供应商内部 ID（`vendorId`）和母采购内部 ID 列表（`purchaseOrderIds`，最多 20 个）查询，契约版本为 3，按母单返回全部可见账单、金额及明细一致性。不依赖现网平台查询函数；NS 新 RESTlet 的部署与真实对照尚未完成，不保存分配、不改变审核或写入 NS，配置及核对工具见[接入说明](docs/ns-vendor-bill-query.md)。
 
 ## 目录速览
 

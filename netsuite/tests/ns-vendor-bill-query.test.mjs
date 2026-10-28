@@ -9,6 +9,7 @@ const code = await readFile(new URL("../vendor_bill_query_restlet.js", import.me
 function service(data = {}, options = {}) {
   let api;
   const calls = [];
+  const ranges = [];
   const logs = [];
   const fixtures = {
     vendor: [{ id: "88", values: { code: "V088", name: "测试供应商" } }],
@@ -22,6 +23,9 @@ function service(data = {}, options = {}) {
     createColumn: (input) => ({ ...input }),
     create(input) {
       calls.push(input);
+      if (input.columns.some((column) => column.name === "voided")) {
+        throw new Error("SSS_INVALID_SRCH_COL: voided");
+      }
       if (options.failType === input.type) throw new Error("private NS error");
       // 只模拟本脚本用到的 anyof 条件与作废筛选，其余条件由断言检查。
       const matchers = {
@@ -41,12 +45,20 @@ function service(data = {}, options = {}) {
       );
       return {
         run: () => ({
-          getRange: ({ start, end }) =>
-            rows.slice(start, end).map((row) => ({
+          getRange: ({ start, end }) => {
+            ranges.push({
+              type: input.type,
+              start,
+              end,
+              voided: input.filters.some((filter) => Array.isArray(filter) && filter[0] === "voided"),
+            });
+            if (end - start > 1000) throw new Error("SSS_SEARCH_RESULT_LIMIT_EXCEEDED");
+            return rows.slice(start, end).map((row) => ({
               id: row.id,
               getValue: (column) => row.values[column.label] ?? "",
               getText: (column) => row.texts?.[column.label] ?? "",
-            })),
+            }));
+          },
         }),
       };
     },
@@ -59,12 +71,15 @@ function service(data = {}, options = {}) {
           accountId: "5939865",
           getCurrentScript: () => ({ getRemainingUsage: () => options.usage ?? 1000 }),
         },
-        { audit: (entry) => logs.push(entry), error: (entry) => logs.push(entry) },
+        {
+          audit: (entry) => logs.push({ level: "audit", ...entry }),
+          error: (entry) => logs.push({ level: "error", ...entry }),
+        },
       );
     },
   });
   // RESTlet 结果按 JSON 返回给后端；序列化后比较，也避开 vm 跨上下文的原型差异。
-  return { api: { post: (input) => JSON.parse(JSON.stringify(api.post(input))) }, calls, logs };
+  return { api: { post: (input) => JSON.parse(JSON.stringify(api.post(input))) }, calls, logs, ranges };
 }
 
 function order(id, vendorId = "88") {
@@ -296,4 +311,86 @@ test("执行日志记录阶段与修订号，接口只返回固定错误码", ()
   const ok = service();
   assert.equal(ok.api.post(request()).complete, true);
   assert.equal(JSON.parse(ok.logs.at(-1).details).stage, "complete");
+});
+
+test("1000 行正常读取，1001 行分次探测后明确拒绝，单次不超过 NS 上限", () => {
+  for (const count of [999, 1000, 1001]) {
+    const { api, ranges } = service({
+      vendorbill: Array.from({ length: count }, () => bill("9001", "501")),
+    });
+    const result = api.post(request());
+    assert.equal(result.complete, count <= 1000);
+    if (count > 1000) assert.equal(result.error.code, "QUERY_LIMIT");
+    const billRanges = ranges.filter((range) => range.type === "vendorbill" && !range.voided);
+    assert.deepEqual(
+      billRanges.map(({ start, end }) => [start, end]),
+      count < 1000
+        ? [[0, 1000]]
+        : [
+            [0, 1000],
+            [1000, 1001],
+          ],
+    );
+    assert.ok(ranges.every(({ start, end }) => end - start <= 1000));
+  }
+});
+
+test("分阶段错误仅写 NS 后台日志，接口不泄露原始异常", () => {
+  for (const [type, stage] of [
+    ["vendor", "vendor_lookup"],
+    ["purchaseorder", "purchase_order_lookup"],
+    ["vendorbill", "bill_lookup"],
+    ["customrecord_swc_vendor_invoice_detail", "invoice_detail_lookup"],
+  ]) {
+    const { api, logs } = service({ vendorbill: [bill("9001", "501")] }, { failType: type });
+    const result = api.post(request());
+    assert.deepEqual(result.error, { code: "QUERY_FAILED" });
+    assert.equal(logs.length, 1);
+    assert.equal(logs[0].level, "error");
+    assert.equal(logs[0].title, "VENDOR_BILL_QUERY_FAILED");
+    const logged = JSON.parse(logs[0].details);
+    assert.equal(logged.stage, stage);
+    assert.equal(logged.vendorId, "88");
+    assert.equal(logged.message, "private NS error");
+    assert.ok(!JSON.stringify(result).includes("private NS error"));
+  }
+  const { api, logs } = service();
+  api.post({ secret: "never-log-this" });
+  assert.ok(!JSON.stringify(logs).includes("never-log-this"));
+  assert.equal(JSON.parse(logs[0].details).stage, "request_validation");
+  api.post(request());
+  assert.equal(logs[1].level, "audit");
+  assert.equal(JSON.parse(logs[1].details).stage, "complete");
+});
+
+test("帝奇母单样本：已付款但未收票，付款仍计入应收票额度", () => {
+  const { api, logs } = service({
+    vendor: [{ id: "8879", values: { code: "8879", name: "中山帝奇新材料有限公司" } }],
+    purchaseorder: [
+      {
+        ...order("308488", "8879"),
+        values: { ...order("308488", "8879").values, number: "YE-DQ20260624-Z010" },
+      },
+    ],
+    vendorbill: [
+      bill("395762", "308488", {
+        vendorId: "8879",
+        billNumber: "VENDBILL35675",
+        remaining: "0",
+        received: "0",
+        applyingType: "VendPymt",
+        applied: "11184.68",
+      }),
+    ],
+  });
+  const result = api.post({ action: "bills", vendorId: "8879", purchaseOrderIds: ["308488"] });
+  assert.equal(result.complete, true);
+  assert.equal(result.purchaseOrders[0].number, "YE-DQ20260624-Z010");
+  const found = result.purchaseOrders[0].bills[0];
+  assert.equal(found.billNumber, "VENDBILL35675");
+  assert.equal(found.amounts.payable, "11184.68");
+  assert.equal(found.amounts.available, "11184.68");
+  assert.deepEqual(found.details, { count: 0, total: "0.00" });
+  assert.equal(JSON.parse(logs[0].details).billCount, 1);
+  assert.equal(JSON.parse(logs[0].details).revision, "2026-10-28.3");
 });

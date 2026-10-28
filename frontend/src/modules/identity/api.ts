@@ -1,5 +1,12 @@
 import { http } from "../../shared/api/http";
 import type { AccessOverview, FeishuOutcome, LoginOptions, SessionInfo, SyncRun } from "./types";
+import type {
+  DirectoryMembers,
+  DirectoryPlan,
+  DirectoryPreview,
+  DirectorySelection,
+  UserList,
+} from "./types";
 
 export const getSession = () => http<SessionInfo>("/session");
 export const getLoginOptions = () => http<LoginOptions>("/session/options");
@@ -17,10 +24,30 @@ export const openLocalSession = getSession;
 
 // 人员与权限（仅系统管理员）
 export const getAccess = () => http<AccessOverview>("/identity/access");
-export const syncDirectory = () => http<SyncRun | null>("/identity/sync", "POST", {});
-export const saveScopes = (departmentIds: number[]) =>
-  http<{ saved: boolean }>("/identity/scopes", "PUT", { departmentIds });
 export const saveDepartmentRoles = (departmentId: number, roles: string[]) =>
   http<{ saved: boolean }>(`/identity/departments/${departmentId}/roles`, "PUT", { roles });
-export const saveUserRoles = (userId: number, roles: string[], customRoles: boolean) =>
-  http<{ saved: boolean }>(`/identity/users/${userId}/roles`, "PUT", { roles, customRoles });
+
+export const previewDirectory = () => http<DirectoryPreview>("/identity/directory/previews", "POST", {});
+export const queryDirectoryMembers = (
+  id: string,
+  selection: DirectorySelection,
+  departmentId: string,
+  query: string,
+  page: number,
+) =>
+  http<DirectoryMembers>(`/identity/directory/previews/${id}/members`, "POST", {
+    ...selection,
+    departmentId,
+    query,
+    page,
+  });
+export const planDirectory = (id: string, selection: DirectorySelection) =>
+  http<DirectoryPlan>(`/identity/directory/previews/${id}/plan`, "POST", selection);
+export const confirmDirectory = (id: string, selection: DirectorySelection) =>
+  http<{ run: SyncRun; userIds: number[] }>(`/identity/directory/previews/${id}/sync`, "POST", selection);
+export const queryAccessUsers = (query: string, departmentId: string, page: number) =>
+  http<UserList>(
+    `/identity/users?${new URLSearchParams({ query, page: String(page), ...(departmentId ? { department_id: departmentId } : {}) })}`,
+  );
+export const saveUserAccess = (id: number, roles: string[], customRoles: boolean, enabled: boolean) =>
+  http<{ saved: boolean }>(`/identity/users/${id}/access`, "PUT", { roles, customRoles, enabled });

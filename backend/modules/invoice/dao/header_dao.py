@@ -61,9 +61,17 @@ def _conditions(query):
     return conditions
 
 
-def ids_between(connection, start, end):
-    """开票日期在 start—end（含）之间的发票 ID。"""
-    query = select(headers.c.id).where(headers.c.invoice_date >= start, headers.c.invoice_date <= end)
+def ids_between(connection, start, end, *, number_terms=()):
+    """按可选日期范围及票面号码部分匹配查询 ID；多号码取并集。"""
+    query = select(headers.c.id)
+    if start:
+        query = query.where(headers.c.invoice_date >= start)
+    if end:
+        query = query.where(headers.c.invoice_date <= end)
+    if number_terms:
+        query = query.where(
+            or_(*(headers.c.invoice_no.contains(term, autoescape=True) for term in number_terms))
+        )
     return list(connection.execute(query).scalars())
 
 

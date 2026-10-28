@@ -1,6 +1,6 @@
 import { useState } from "react";
-import { Button } from "../../../shared/components/Button";
-import type { Candidate, ConfirmBody, InvoiceItem, ManualBody } from "../types/matching";
+import { Button, Card, CardContent, CardHeader, EmptyState } from "../../../shared/components/ui";
+import type { Candidate, ConfirmBody, InvoiceItem, InvoiceMatching, ManualBody } from "../types/matching";
 import { AllocationCard } from "./AllocationCard";
 import { groupAllocations } from "./allocation-groups";
 import { LinkedAllocations } from "./LinkedAllocations";
@@ -23,6 +23,7 @@ export function InvoiceLinePanel({
   replacements,
   busy,
   actions,
+  invoice,
 }: {
   item: InvoiceItem;
   invoiceId: string;
@@ -30,6 +31,7 @@ export function InvoiceLinePanel({
   replacements: { id: string; label: string }[];
   busy: boolean;
   actions: Actions;
+  invoice: InvoiceMatching["invoice"];
 }) {
   const [manual, setManual] = useState(false);
   const { linked, pending, history } = groupAllocations(item.allocations);
@@ -37,6 +39,8 @@ export function InvoiceLinePanel({
     <AllocationCard
       key={`${allocation.id}:${allocation.status}:${allocation.verificationStatus}:${allocation.currentInvoiceVersionId}`}
       allocation={allocation}
+      invoice={invoice}
+      item={item}
       busy={busy}
       onConfirm={(body) => actions.confirm(allocation.id, body)}
       onReverify={(body) => actions.reverify(allocation.id, body)}
@@ -45,74 +49,57 @@ export function InvoiceLinePanel({
     />
   );
   return (
-    <section className="matching-panel matching-panel--flush matching-line-panel" aria-label="发票行比对">
-      <div className="matching-panel__head">
-        <h2>
-          {!item.active && "【历史明细】"}
-          {item.lineNo}. {item.item ?? "—"} {item.specification && `· ${item.specification}`}
-        </h2>
-        <Button
-          variant={manual ? "secondary" : "primary"}
-          disabled={busy}
-          aria-expanded={manual}
-          onClick={() => setManual(!manual)}
-        >
-          {manual ? "收起手动关联" : "＋ 手动关联子采购行"}
-        </Button>
-      </div>
-      <dl className="matching-line-sum">
-        <div>
-          <dt>数量</dt>
-          <dd>
-            {item.quantity ?? "—"} {item.unit ?? ""}
-          </dd>
-        </div>
-        <div>
-          <dt>含税金额</dt>
-          <dd>{item.amount ?? "—"}</dd>
-        </div>
-        <div>
-          <dt>已占用（含待复核）</dt>
-          <dd>
-            {item.confirmedQuantity} / {item.confirmedAmount}
-          </dd>
-        </div>
-      </dl>
-      <div className="matching-body">
-        {manual && (
-          <section className="matching-manual" aria-label="手动关联子采购行">
-            <h3>手动关联子采购行</h3>
-            <ManualAllocation
-              invoiceId={invoiceId}
-              invoiceVersionId={invoiceVersionId}
-              item={item}
-              busy={busy}
-              search={actions.search}
-              replacements={replacements}
-              onCreate={(body, replaceId, reason) =>
-                actions.create(body, replaceId, reason).then((saved) => {
-                  if (saved) setManual(false);
-                  return saved;
-                })
-              }
-            />
-          </section>
-        )}
-        <h3 className="matching-subhead">已关联（{linked.length}）</h3>
-        <LinkedAllocations allocations={linked} busy={busy} onCancel={actions.cancel} />
-        <h3 className="matching-subhead">待处理（{pending.length}）</h3>
-        {pending.length === 0 ? (
-          <p className="matching-help">暂无待审核建议或需重新核实的分配。</p>
-        ) : (
-          pending.map(card)
-        )}
-        {history.length > 0 && (
-          <details className="matching-history">
-            <summary>已驳回或已取消的记录（{history.length}）</summary>
-            {history.map(card)}
-          </details>
-        )}
-      </div>
+    <section className="matching-line-panel" aria-label="发票行比对">
+      {pending.length > 0 ? (
+        pending.map(card)
+      ) : (
+        <Card>
+          <EmptyState
+            title="本行没有待审核建议"
+            description="可在下方查看已关联记录或选择子采购行手动关联。"
+          />
+        </Card>
+      )}
+      <Card aria-label="候选子采购行">
+        <CardHeader
+          title="候选子采购行"
+          description="已有待审核建议时，请先驳回再手动关联；已通过的关联可选择替换。"
+          actions={
+            <Button disabled={busy} aria-expanded={manual} onClick={() => setManual(!manual)}>
+              {manual ? "收起手动关联" : "手动关联"}
+            </Button>
+          }
+        />
+        <CardContent>
+          <ManualAllocation
+            key={item.allocations.map((row) => `${row.id}:${row.status}:${row.verificationStatus}`).join("|")}
+            invoiceId={invoiceId}
+            invoiceVersionId={invoiceVersionId}
+            item={item}
+            busy={busy}
+            search={actions.search}
+            replacements={replacements}
+            onCreate={actions.create}
+            showForm={manual}
+            onShowForm={() => setManual(true)}
+          />
+        </CardContent>
+      </Card>
+      <Card>
+        <CardHeader
+          title={`已关联（${linked.length}）`}
+          description={`已占用（含待复核）：数量 ${item.confirmedQuantity} · 含税 ${item.confirmedAmount}`}
+        />
+        <CardContent>
+          <LinkedAllocations allocations={linked} busy={busy} onCancel={actions.cancel} />
+        </CardContent>
+      </Card>
+      {history.length > 0 && (
+        <details className="matching-history">
+          <summary>已驳回或已取消的记录（{history.length}）</summary>
+          {history.map(card)}
+        </details>
+      )}
     </section>
   );
 }

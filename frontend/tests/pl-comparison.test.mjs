@@ -36,9 +36,8 @@ before(async () => {
   ({ BatchApproveDialog } = await server.ssrLoadModule(
     "/src/modules/review/components/BatchApproveDialog.tsx",
   ));
-  ({ ReviewDialog, PurchaseDialog } = await server.ssrLoadModule(
-    "/src/modules/review/components/ReviewDialog.tsx",
-  ));
+  ({ ReviewDialog } = await server.ssrLoadModule("/src/modules/review/components/ReviewDialog.tsx"));
+  ({ PurchaseDialog } = await server.ssrLoadModule("/src/modules/review/components/PurchaseDialog.tsx"));
   ({ PlSourceComparison } = await server.ssrLoadModule(
     "/src/modules/source/components/PlSourceComparison.tsx",
   ));
@@ -350,7 +349,7 @@ test("订单口径、缺失金额和缺失单位不冒充报关口径或零值",
   assert.doesNotMatch(html, /本次数量|本次采购金额/);
 });
 
-test("财务搜索使用单一关键字与供应商筛选，刷新在列表工具条；上线只有正式环境，不提供 NS 账套筛选", () => {
+test("财务搜索拆为三个批量输入框，仅显示框内提示并保留可访问名称", () => {
   const html = renderToStaticMarkup(
     createElement(FinanceSearchForm, {
       suppliers: [{ id: "77", name: "合成供应商" }],
@@ -358,11 +357,14 @@ test("财务搜索使用单一关键字与供应商筛选，刷新在列表工�
       onSearch() {},
     }),
   );
-  assert.match(html, /CD 编号 \/ 真实报关单号 \/ PL \/ 子采购单号 \/ 品名/);
+  assert.equal((html.match(/type="search"/g) || []).length, 3);
+  for (const label of ["供应商", "CD 号", "子采购单号"]) {
+    assert.ok(html.includes(`<span class="ui-sr-only">${label}</span>`));
+  }
   assert.match(render(), /刷新列表/);
   assert.doesNotMatch(html, /全部账套|来源账套|NS 环境/);
-  assert.match(html, /全部供应商/);
-  assert.match(html, /<option value="77">合成供应商<\/option>/);
+  assert.match(html, /多条用逗号分隔/);
+  assert.doesNotMatch(html, /<select|查找报关与采购单据/);
   assert.doesNotMatch(html, /查询方式|重置示例/);
 });
 
@@ -485,7 +487,23 @@ test("采购合并行展示后端合计，查看弹窗保留原始数量单价�
   assert.match(html, /合并前采购明细/);
   assert.match(html, /原始数量/);
   assert.match(html, /原含税金额/);
+  assert.match(html, /可上下及横向滚动/);
   for (const value of ["180", "160", "20", "18"]) assert.ok(html.includes(value));
+});
+
+test("采购详情字段独立对应，保留零值和缺失值，不虚构原始行", () => {
+  const original = group().customsLines[0].purchaseLines[0];
+  const html = renderToStaticMarkup(
+    createElement(PurchaseDialog, {
+      line: { ...original, scope: "order", quantity: "0", unit: "千克", price: "0", amount: "", members: [] },
+      onClose() {},
+    }),
+  );
+  assert.match(html, /<dt>子单数量<\/dt><dd>0<\/dd>/);
+  assert.match(html, /<dt>单位<\/dt><dd>千克<\/dd>/);
+  assert.match(html, /<dt>采购含税单价<\/dt><dd>0<\/dd>/);
+  assert.match(html, /<dt>订单含税金额（未分摊）<\/dt><dd>来源未提供<\/dd>/);
+  assert.doesNotMatch(html, /<table/);
 });
 
 test("单价异常由后端判定，舍入为零仍突出显示", () => {

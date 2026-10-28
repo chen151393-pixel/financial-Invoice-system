@@ -5,6 +5,7 @@ from typing import Annotated, Literal
 from pydantic import Field, StringConstraints
 
 from backend.core.dto import StrictModel
+from backend.core.search_terms import SearchText
 
 Name = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=200)]
 WecomId = Annotated[
@@ -23,6 +24,9 @@ class GroupQuery(StrictModel):
 
 
 class SupplierProfileQuery(StrictModel):
+    supplierName: SearchText = ""
+    groupName: SearchText = ""
+    owner: SearchText = ""
     keyword: Annotated[str, StringConstraints(strip_whitespace=True, max_length=120)] = ""
     account: str = Field(default="", max_length=100)
     status: Literal["all", "enabled", "disabled", "unbound"] = "all"
