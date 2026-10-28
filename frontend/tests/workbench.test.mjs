@@ -6,7 +6,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { MemoryRouter } from "react-router";
 import { createServer } from "vite";
 
-let server, Todos, Page, Metrics, Kpis, api, paths, Queue, Filters, Nodes, WbQueue, Suppliers;
+let server, Todos, Page, Metrics, Kpis, api, paths, Queue, Filters, Nodes, WbQueue, Suppliers, Unbound;
 before(async () => {
   server = await createServer({
     configFile: fileURLToPath(new URL("../vite.config.ts", import.meta.url)),
@@ -25,6 +25,9 @@ before(async () => {
   ));
   ({ WorkbenchSuppliers: Suppliers } = await server.ssrLoadModule(
     "/src/modules/matching/components/WorkbenchSuppliers.tsx",
+  ));
+  ({ WorkbenchUnboundNotify: Unbound } = await server.ssrLoadModule(
+    "/src/modules/matching/components/WorkbenchUnboundNotify.tsx",
   ));
   ({ WorkbenchPage: Page } = await server.ssrLoadModule("/src/modules/matching/pages/WorkbenchPage.tsx"));
   api = await server.ssrLoadModule("/src/modules/matching/api/workbench-api.ts");
@@ -342,4 +345,17 @@ test("节点分布、比对队列与供应商排行只展示后端计数和比�
   assert.match(suppliers, /¥ 286,400.00/);
   assert.match(suppliers, /is-overdue">最长 21 天/);
   assert.match(suppliers, /data-tone="warning"/);
+});
+
+test("未绑群提醒显示后端计数与名单，链接到供应商档案未绑定筛选；为 0 时不显示", () => {
+  const html = render(Unbound, {
+    data: { suppliers: 7, tasks: 12, names: ["甲公司", "乙公司", "丙公司", "丁公司", "戊公司"] },
+  });
+  assert.match(html, /7 家供应商未绑定企微开票群，12 个待通知任务无法发出/);
+  assert.match(html, /甲公司、乙公司、丙公司、丁公司、戊公司 等 7 家/);
+  assert.ok(html.includes(`href="${paths.paths.supplierGroups}?status=unbound"`));
+  assert.match(html, /data-tone="warning"/);
+  const exact = render(Unbound, { data: { suppliers: 1, tasks: 1, names: ["甲公司"] } });
+  assert.doesNotMatch(exact, /等 1 家/);
+  assert.equal(render(Unbound, { data: { suppliers: 0, tasks: 0, names: [] } }), "");
 });

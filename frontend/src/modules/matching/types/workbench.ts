@@ -103,6 +103,8 @@ export type Workbench = {
     low: number;
     anomalies: { label: string; count: number; percent: string }[];
   } | null;
+  // 待通知供应商节点中、供应商未绑定企微开票群的任务汇总（前 5 家名称）
+  unboundNotify: { suppliers: number; tasks: number; names: string[] } | null;
 };
 export const todoLabels: Record<TodoKind, string> = {
   all: "全部待办",

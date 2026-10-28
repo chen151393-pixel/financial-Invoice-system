@@ -17,7 +17,7 @@ from backend.modules.source.public import (
     purchase_lines,
     workbench_declarations,
 )
-from backend.modules.task.public import workbench_tasks
+from backend.modules.task.public import unbound_notify_suppliers, workbench_tasks
 
 from ..dao import allocation_dao, workbench_allocation_dao
 from ..mapper.workbench_mapper import matching_todo, review_todo, task_todo
@@ -166,6 +166,8 @@ class WorkbenchService:
                 **allocation_dao.proposal_counts(connection, HIGH, MEDIUM),
                 "anomalies": anomaly_counts(allocations),
             },
+            # 与“待通知供应商”指标同一任务范围（按账套筛选）
+            unboundNotify=unbound_notify_suppliers(connection, scoped_tasks),
         )
 
 

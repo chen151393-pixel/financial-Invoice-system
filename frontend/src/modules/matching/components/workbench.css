@@ -116,6 +116,17 @@
   margin: 0;
   color: var(--color-primary);
 }
+/* 未绑群提醒：名单可换行，跳转链接保持主色下划线以区别于提醒文字 */
+.wb-unbound-names {
+  margin: 2px 0 4px;
+  color: var(--color-text);
+  overflow-wrap: anywhere;
+}
+.wb-unbound-link {
+  color: var(--color-primary);
+  font-weight: 600;
+  text-decoration: underline;
+}
 .wb-definitions {
   color: var(--color-muted);
   font-size: 12px;

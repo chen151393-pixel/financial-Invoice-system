@@ -254,4 +254,5 @@ MySQL 命名锁保证多实例单消费者，并对同一任务的同一子采�
 ## 工作台节点事实（2026-10-27）
 
 - 判定当前节点所需的事实读取从 `TaskBoardService` 抽出为 `service/board_facts.py`（`board_facts`），任务台与工作台共用，节点计数一致。
+- 2026-10-28 `public.py` 新增 `unbound_notify_suppliers(connection, tasks)`：入参为 `workbench_tasks` 结果（调用方可先按账套筛选），返回“待通知供应商”节点中供应商未绑定企微开票群的家数、任务数与前 5 家名称，供工作台提醒；“未绑定”与供应商档案筛选同一口径。
 - `workbench_tasks` 每个任务新增 `node` / `node_label`（未完成任务按事实判定，已完成为 done）、`status_reason`、`waiting_days`（未完成任务自生成起的天数）；原拼接等待天数的 `reason` 移除。`public.py` 新增暴露 `NODES`、`NODE_LABELS`。

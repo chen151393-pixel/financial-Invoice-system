@@ -21,6 +21,7 @@ from backend.tests.test_matching import world as world
 from backend.tests.test_source_storage import ACCOUNT, bundle, customs, purchase, save
 from backend.tests.test_task import USER, approve
 from fastapi.testclient import TestClient
+from sqlalchemy import text
 
 
 def read(engine, **values):
@@ -258,3 +259,30 @@ def test_anomaly_counts_only_proposals_and_skip_missing_data():
         {"label": "单位", "count": 2, "percent": "100.0"},
         {"label": "价格", "count": 1, "percent": "50.0"},
     ]
+
+
+def test_unbound_supplier_reminder_counts_notify_tasks_without_group(engine, ns, world):
+    save(ns, engine, bundle([purchase()], [customs("870")]))
+    approve(world, "CD870")
+    complete_documents(engine)  # 资料齐全后任务停在“待通知供应商”节点
+    result = read(engine)
+    assert next(k for k in result.kpis if k.key == "notify").value == "1"
+    assert (result.unboundNotify.suppliers, result.unboundNotify.tasks) == (1, 1)
+    assert result.unboundNotify.names == ["上海 供应商（有限）公司"]
+    # 与供应商档案“未绑定”同一口径：有绑定记录（含停用）即不算未绑定
+    with engine.begin() as connection:
+        supplier_id = connection.execute(text("SELECT supplier_id FROM task_tasks")).scalar_one()
+        connection.execute(
+            text(
+                "INSERT INTO task_supplier_groups (supplier_id, group_name, chat_id, owner_name, owner_userid,"
+                " enabled, updated_by) VALUES (:s, '开票群', 'wr-chat', '群主', 'owner', 0, 'user:admin')"
+            ),
+            {"s": supplier_id},
+        )
+    result = read(engine)
+    assert (result.unboundNotify.suppliers, result.unboundNotify.tasks, result.unboundNotify.names) == (
+        0,
+        0,
+        [],
+    )
+    assert read(engine, account="other").unboundNotify.suppliers == 0

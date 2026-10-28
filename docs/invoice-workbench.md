@@ -4,13 +4,14 @@
 
 ## 页面布局（2026-10-27 按设计稿“财务 · 采购总体工作台”对齐）
 
-自上而下：更新时间与刷新 → 关键指标 → 业务流程漏斗（整行）→ 应开与已收票金额趋势 + 开票任务节点分布 → 供应商待收票排行 + 发票比对队列 → 优先处理（待办表格）→ 统计口径。
+自上而下：更新时间与刷新 → 关键指标 → 未绑群提醒（有时才显示）→ 业务流程漏斗（整行）→ 应开与已收票金额趋势 + 开票任务节点分布 → 供应商待收票排行 + 发票比对队列 → 优先处理（待办表格）→ 统计口径。
 
 按用户决定，不做设计稿中的“全部 / 财务视角 / 采购视角”切换、“近 6 / 12 个月”统计区间和页头“导出报表”；待办表格保留原有的分类、搜索、排序、分页和“导出全部结果”。原“已开票金额趋势”（按开票日期逐日）不在设计稿中，已移除，进项发票页的分布图仍可查看开票情况。
 
 | 区域                 | 组件                                                           | 内容                                                                                                                           |
 | -------------------- | -------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
 | 关键指标             | `WorkbenchKpis`（`MetricCard`，首张 `featured="solid"`）       | 本月应开金额、已收票金额、待收金额、待财务审核、待通知供应商；右上角标签区分财务 / 采购；每张附对比说明、提示与近 6 个月走势线 |
+| 未绑群提醒           | `WorkbenchUnboundNotify`（`Alert tone="warning"`）             | 待通知任务的供应商未绑定企微开票群时显示家数、任务数与前 5 家名称；链接到供应商档案 `/suppliers?status=unbound`；为 0 时不显示 |
 | 业务流程漏斗         | `WorkbenchMetrics`                                             | 六步报关单计数、上一环节通过率、整体完结率；卡点分项链接到财务核对（待审核）或开票跟进对应节点（`/tasks?node=…`）              |
 | 应开与已收票金额趋势 | `WorkbenchReceipts`（`TrendChart grouped lineAxis="percent"`） | 近 6 个月按任务生成月份的人民币应开、已收票并排柱，折线为收票率（右轴）                                                        |
 | 开票任务节点分布     | `WorkbenchNodes`（`DonutChart`）                               | 进行中任务按开票跟进节点计数与占比                                                                                             |
@@ -22,7 +23,7 @@
 
 - 前端归属 `matching`：`pages/WorkbenchPage.tsx`、`hooks/useWorkbench.ts`、`components/Workbench*.tsx`；应用层 `WorkbenchWorkspacePage.tsx` 装配外壳、查询 Hook 和标题操作区。
 - 后端归属 `matching`：`controller/workbench_controller.py`、`service/workbench_service.py`，口径在 `policy/workbench_kpis.py`（关键指标）、`policy/workbench_flow.py`（漏斗与节点分布）、`policy/workbench_reports.py`（按月应开已收、供应商排行）、`policy/anomaly_policy.py`（不一致分类，与比对队列共用）。跨模块只通过 `public.py` 读取 `review`、`source`、`task`、`invoice` 的事实。不新增表，不执行业务写入。
-- `POST /api/matching/workbench/query`：返回 `kpis`、`funnel`（`steps`、`completionRate`）、`nodes`、`monthly`、`queue`（含 `anomalies`）、`suppliers`、分页待办与计数。
+- `POST /api/matching/workbench/query`：返回 `kpis`、`funnel`（`steps`、`completionRate`）、`nodes`、`monthly`、`queue`（含 `anomalies`）、`unboundNotify`（`suppliers`、`tasks`、`names`）、`suppliers`、分页待办与计数。
 - `POST /api/matching/workbench/export`：返回 `filename`、UTF-8 CSV `content`、全量结果条数 `count`；沿用查询筛选与排序，不受页码限制，含“等待天数”列。外部名称及单号防止被表格软件解释成公式。
 - 两个接口都要求当前认证。参数为 `account`（NS 账套）、`supplierId`、`createdFrom` / `createdTo`（报关单创建日期，须成对）、`keyword`（最长 120 字）、`kind`（all/review/matching/task）、`sort`（priority/oldest/newest）、`page`、`pageSize`（1–50）。2026-10-27 起不再接收 `trendStart` / `trendEnd`，响应不再含 `month`、`stages`、`trend`、`trendStart`、`trendEnd`、`latestInvoiceDate`。金额为十进制字符串，未知金额为 `null`。
 
@@ -35,6 +36,7 @@
 | 待收金额     | 所有未完成的人民币任务待收含税金额（沿用跟进页逐行口径）；最长等待为其中最早生成任务的天数，超过 15 天标为需关注；走势线为近 6 个月各生成月份的待收合计                                                                                                                                               |
 | 待财务审核   | 已出库、待审核或来源变化需重审的报关单；走势线按报关单 NS 创建月份                                                                                                                                                                                                                                    |
 | 待通知供应商 | 当前节点为“待通知供应商”的任务；另报“待存合同”任务数                                                                                                                                                                                                                                                  |
+| 未绑群提醒   | “待通知供应商”节点的任务中，供应商在 `task_supplier_groups` 没有任何绑定（与供应商档案“未绑定”筛选同一口径，停用的绑定不算未绑定）；按供应商去重计家数，按任务最多取前 5 家名称；与“待通知供应商”指标同一账套范围（`task.public.unbound_notify_suppliers`，2026-10-28）                               |
 | 业务流程漏斗 | 按报关单：待审核的停在“财务审核”；其余取其当前任务中最慢的开票跟进节点（与开票跟进页同一判定，`task.public.workbench_tasks` 的 `node`），全部完成为“资料齐全完结”。六步依次为已入库待开票、财务审核通过、子采购合同归档、已通知供应商、已收到发票、资料齐全完结；没有开票任务的为“无需开票”，不进漏斗 |
 | 节点分布     | 未完成任务按开票跟进节点（待存合同、待通知供应商、待供应商开票、部分收票、待补资料）计数                                                                                                                                                                                                              |
 | 供应商待收票 | 未完成任务按供应商身份、账套和币种分组；金额或币种不完整的分组整体不纳入排名，提示组数                                                                                                                                                                                                                |
@@ -45,6 +47,6 @@
 
 ## 验证
 
-`backend/tests/test_workbench.py` 覆盖真实服务链路、认证与参数校验、全范围导出、账套筛选、来源变化、发票版本复核、币种隔离、按月应开已收，以及漏斗分项、节点分布、关键指标和不一致分类的纯函数口径。`frontend/tests/workbench.test.mjs` 覆盖待办链接与精确金额、标签与等待天数、加载与空态、漏斗链接、关键指标、节点分布、比对队列和供应商排行。
+`backend/tests/test_workbench.py` 覆盖真实服务链路、认证与参数校验、全范围导出、账套筛选、来源变化、发票版本复核、币种隔离、按月应开已收，以及漏斗分项、节点分布、关键指标和不一致分类的纯函数口径，以及未绑群提醒的计数口径（绑定后，含停用绑定，不再计入）。`frontend/tests/workbench.test.mjs` 覆盖待办链接与精确金额、标签与等待天数、加载与空态、漏斗链接、关键指标、节点分布、比对队列和供应商排行。
 
 运行中的 Python 后端需要重启才能返回新增字段；本次未变更数据库结构，不需要执行新迁移。

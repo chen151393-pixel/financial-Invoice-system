@@ -6,7 +6,7 @@ from decimal import Decimal
 
 from backend.modules.source.public import purchase_lines
 
-from ..dao import workbench_task_dao
+from ..dao import supplier_group_dao, workbench_task_dao
 from ..policy.board_policy import NODE_LABELS
 from ..policy.followup_policy import amounts
 from ..policy.task_policy import OPEN_STATUSES, STATUS_LABELS, STATUS_REASONS
@@ -16,6 +16,30 @@ from .board_facts import board_facts
 def waiting_days(created_at, now):
     created = created_at if created_at.tzinfo else created_at.replace(tzinfo=UTC)
     return max(0, (now - created).days)
+
+
+UNBOUND_NAME_LIMIT = 5
+
+
+def unbound_notify_suppliers(connection, tasks):
+    """tasks：workbench_tasks 的结果（调用方可先按账套筛选）。
+    处于“待通知供应商”节点、但供应商没有绑定任何企微开票群的任务，按供应商汇总：
+    {suppliers: 家数, tasks: 任务数, names: 任务最多的前 5 家名称}。
+    “未绑定”与供应商档案的“未绑定”筛选同一口径（没有任何绑定，停用的绑定不算未绑定）。"""
+    bound = set(supplier_group_dao.supplier_ids(connection))
+    found = defaultdict(lambda: {"tasks": 0, "name": ""})
+    for task in tasks:
+        if task["node"] != "notification" or task["supplier_id"] in bound:
+            continue
+        own = found[task["supplier_id"]]
+        own["tasks"] += 1
+        own["name"] = own["name"] or task["supplier"]
+    ranked = sorted(found.values(), key=lambda row: (-row["tasks"], row["name"]))
+    return {
+        "suppliers": len(found),
+        "tasks": sum(row["tasks"] for row in ranked),
+        "names": [row["name"] for row in ranked[:UNBOUND_NAME_LIMIT]],
+    }
 
 
 def workbench_tasks(connection, now):

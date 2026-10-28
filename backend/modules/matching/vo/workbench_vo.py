@@ -135,6 +135,15 @@ class QueueTiers(StrictModel):
     anomalies: list[AnomalyCount] = Field(default_factory=list)
 
 
+class UnboundNotify(StrictModel):
+    """待通知供应商节点中、供应商未绑定企微开票群的任务汇总；没绑群就无法通知开票。"""
+
+    suppliers: int
+    tasks: int
+    # 任务最多的前 5 家供应商名称
+    names: list[str] = Field(default_factory=list)
+
+
 class Workbench(StrictModel):
     generatedAt: str
     accounts: list[str]
@@ -157,6 +166,7 @@ class Workbench(StrictModel):
     nodes: NodeDistribution | None = None
     monthly: list[MonthlyReceipt] = Field(default_factory=list)
     queue: QueueTiers | None = None
+    unboundNotify: UnboundNotify | None = None
 
 
 class WorkbenchExport(StrictModel):

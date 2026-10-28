@@ -6,6 +6,7 @@ import { WorkbenchQueue } from "../components/WorkbenchQueue";
 import { WorkbenchReceipts } from "../components/WorkbenchReceipts";
 import { WorkbenchSuppliers } from "../components/WorkbenchSuppliers";
 import { WorkbenchTodos } from "../components/WorkbenchTodos";
+import { WorkbenchUnboundNotify } from "../components/WorkbenchUnboundNotify";
 import type { useWorkbench } from "../hooks/useWorkbench";
 import "../components/workbench.css";
 import "../components/workbench-reports.css";
@@ -32,6 +33,7 @@ export function WorkbenchPage({ state }: { state: ReturnType<typeof useWorkbench
       {state.data && (
         <>
           <WorkbenchKpis kpis={state.data.kpis} />
+          {state.data.unboundNotify && <WorkbenchUnboundNotify data={state.data.unboundNotify} />}
           {state.data.funnel && (
             <WorkbenchMetrics funnel={state.data.funnel} noTaskCount={state.data.noTaskCount} />
           )}
