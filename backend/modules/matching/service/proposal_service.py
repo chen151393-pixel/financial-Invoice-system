@@ -1,6 +1,6 @@
-"""生成比对建议（数据库设计第 7 节第 7 步）：每条发票行给出置信度最高的一个子采购行候选。
+"""生成比对建议：先定位备注订单范围，再为每条发票行选出范围内置信度最高的子采购行。
 
-- 候选只来自有效任务行（已审核的应开范围），且发票备注含子采购单号或销售方与供应商名称相同 / 包含。
+- 候选只来自有效任务行（已审核的应开范围）；优先备注命中的子单或母单所属子单，未命中才按供应商召回。
 - 已有待审核建议或已通过分配的发票行不再生成；作废、红冲发票不生成。
 - 建议只是候选，全部要人工审核；数量与金额默认取整条发票行。
 - on_invoices_imported 订阅 invoice 的 InvoicesImported，在导入事务中执行；generate_now 供页面重新生成。
@@ -21,7 +21,7 @@ from backend.modules.task.public import open_lines
 
 from ..dao import allocation_dao
 from ..policy.allocation_policy import SYSTEM, remaining
-from ..policy.comparison_policy import compare, name_result, order_in_remark
+from ..policy.comparison_policy import compare, name_result, order_reference
 
 
 def _now():
@@ -29,8 +29,8 @@ def _now():
 
 
 def recalled(invoice, line):
-    """候选召回：备注含子采购单号，或销售方与供应商名称相同 / 一方包含另一方。"""
-    if order_in_remark(invoice["remark"], line["order_no"]):
+    """订单命中不受供应商名称差异限制；无订单命中时允许名称相同 / 包含的候选。"""
+    if order_reference(invoice["remark"], line):
         return True
     return name_result(invoice["seller_name_normalized"], line["supplier_name_normalized"]) in (
         "match",
@@ -40,13 +40,17 @@ def recalled(invoice, line):
 
 def best_candidate(invoice, item, task_lines, contexts):
     best = None
+    best_rank = None
     for task_line in task_lines:
         line = contexts.get(task_line["purchase_line_id"])
         if line is None or not line["active"] or not recalled(invoice, line):
             continue
         checks, confidence = compare(invoice, item, line, *remaining(task_line))
-        if best is None or confidence > best[2]:
+        # 单号决定优先范围，不允许其他订单仅凭供应商等字段得分更高而抢占建议。
+        rank = (bool(order_reference(invoice["remark"], line)), confidence)
+        if best_rank is None or rank > best_rank:
             best = (task_line, line, confidence, checks)
+            best_rank = rank
     return best
 
 

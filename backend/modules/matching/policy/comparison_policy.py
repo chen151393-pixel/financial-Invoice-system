@@ -22,8 +22,8 @@ WEIGHTS = {
     "price": 0,
 }
 LABELS = {
-    "order": "子采购单号",
-    "seller": "销售方与供应商",
+    "order": "采购订单号",
+    "seller": "供应商名称",
     "buyer": "购买方与采购公司",
     "item": "品名",
     "unit": "单位",
@@ -63,12 +63,20 @@ def name_result(invoice_name, purchase_name):
 
 
 def order_in_remark(remark, order_no):
-    """备注中出现完整的子采购单号（PO100 不匹配 PO1001）。"""
+    """备注中出现完整订单号，不能把长单号或子单后缀误认为母单号。"""
     if not remark or not order_no:
         return False
     haystack = unicodedata.normalize("NFKC", remark).upper()
     needle = re.escape(unicodedata.normalize("NFKC", order_no).upper())
-    return re.search(rf"(?<![A-Z0-9]){needle}(?![A-Z0-9])", haystack) is not None
+    return re.search(rf"(?<![A-Z0-9_-]){needle}(?![A-Z0-9_-])", haystack) is not None
+
+
+def order_reference(remark, line):
+    """返回备注命中的订单类型、单号；母单仅召回来源明确关联的子采购行。"""
+    for kind, key in (("子采购单", "order_no"), ("母采购单", "parent_order_no")):
+        if order_in_remark(remark, line.get(key)):
+            return kind, line[key]
+    return None
 
 
 def _check(key, invoice_value, purchase_value, result, difference=None, note=""):
@@ -89,6 +97,14 @@ def _check(key, invoice_value, purchase_value, result, difference=None, note="")
 def compare(invoice, item, line, remaining_quantity, remaining_amount):
     """invoice、item 来自 invoice 门面；line 为子采购行上下文。返回 (checks, confidence)。"""
     purchase_item = line["declaration_name"] or line["item_name"]
+    reference = order_reference(invoice["remark"], line)
+    order_note = (
+        f"备注命中{reference[0]} {reference[1]}，对应子采购单 {line['order_no']}"
+        if reference
+        else "备注未命中该子采购单或其母采购单"
+        if invoice["remark"]
+        else "发票没有备注"
+    )
     unit_match = bool(
         item["unit"] and line["unit"] and normalize_name(item["unit"]) == normalize_name(line["unit"])
     )
@@ -96,9 +112,11 @@ def compare(invoice, item, line, remaining_quantity, remaining_amount):
         _check(
             "order",
             invoice["remark"],
-            line["order_no"],
-            "match" if order_in_remark(invoice["remark"], line["order_no"]) else "mismatch",
-            note="" if invoice["remark"] else "发票没有备注",
+            f"{line['order_no']}（母采购单 {line['parent_order_no']}）"
+            if line.get("parent_order_no")
+            else line["order_no"],
+            "match" if reference else "mismatch",
+            note=order_note,
         ),
         _check(
             "seller",

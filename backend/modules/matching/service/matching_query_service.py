@@ -264,7 +264,7 @@ class MatchingQueryService:
         return self._read(action)
 
     def candidates(self, query):
-        """人工分配候选：全部未结束的有效任务行，按关键字（子采购单号、供应商、品名、报关单号）筛选。"""
+        """人工候选保留其他订单，备注命中的子单 / 母单优先；支持订单、供应商、品名、报关单搜索。"""
         invoice_id, item_id, keyword = (
             int(query.invoiceId),
             int(query.invoiceItemId),
@@ -286,6 +286,7 @@ class MatchingQueryService:
                     continue
                 fields = (
                     line["order_no"],
+                    line.get("parent_order_no"),
                     line["supplier_name"],
                     line["declaration_name"],
                     line["item_name"],
@@ -303,7 +304,13 @@ class MatchingQueryService:
                         block=rules.hard_block(invoice, line, task_line),
                     )
                 )
-            rows.sort(key=lambda row: (-Decimal(row.confidence), int(row.purchase.purchaseLineId)))
+            rows.sort(
+                key=lambda row: (
+                    not any(check.key == "order" and check.result == "match" for check in row.checks),
+                    -Decimal(row.confidence),
+                    int(row.purchase.purchaseLineId),
+                )
+            )
             return Candidates(rows=rows[:50], total=len(rows))
 
         return self._read(action)

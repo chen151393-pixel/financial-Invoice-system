@@ -58,7 +58,7 @@ export function UserCard({
         }
       >
         <Field label="姓名" grow>
-          <input name="query" defaultValue={list.query} placeholder="搜索已导入成员" />
+          <input key={list.query} name="query" defaultValue={list.query} placeholder="搜索已导入成员" />
         </Field>
         {!selectedDepartment && !embedded && (
           <Field label="部门">

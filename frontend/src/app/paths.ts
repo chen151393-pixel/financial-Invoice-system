@@ -5,6 +5,7 @@ export const paths = {
   pl: "/pl-reconciliation",
   review: "/review",
   tasks: "/tasks",
+  taskWorkflowDemo: "/tasks/workflow-demo",
   supplierGroups: "/suppliers",
   externalGroups: "/suppliers/external-groups",
   invoices: "/invoices",

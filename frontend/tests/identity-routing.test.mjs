@@ -6,7 +6,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { matchRoutes, MemoryRouter } from "react-router";
 import { createServer } from "vite";
 
-let server, navigation, identityRoutes, LoginPage, PasswordLoginForm, SessionContext;
+let server, navigation, identityRoutes, LoginPage, PasswordLoginForm, SessionContext, ImportedDirectory;
 before(async () => {
   server = await createServer({
     configFile: fileURLToPath(new URL("../vite.config.ts", import.meta.url)),
@@ -21,9 +21,51 @@ before(async () => {
     "/src/modules/identity/components/PasswordLoginForm.tsx",
   ));
   ({ SessionContext } = await server.ssrLoadModule("/src/modules/identity/session-context.ts"));
+  ({ ImportedDirectory } = await server.ssrLoadModule(
+    "/src/modules/identity/components/ImportedDirectory.tsx",
+  ));
 });
 after(async () => {
   await server?.close();
+});
+
+test("旧后端缺少部门筛选字段时保留部门导航并明确提示，不冒充空部门", () => {
+  const departments = [{ id: 1, openDepartmentId: "finance", name: "财务部", path: "财务部", roles: [] }];
+  const markup = renderToStaticMarkup(
+    createElement(
+      MemoryRouter,
+      null,
+      createElement(ImportedDirectory, {
+        data: { departments, roles: [] },
+        department: "finance",
+        onSelect() {},
+        onSaved: async () => {},
+      }),
+    ),
+  );
+  assert.match(markup, /财务部/);
+  assert.match(markup, /后端版本尚未更新/);
+  assert.match(markup, /财务部 · 已导入员工/);
+});
+
+test("新后端明确返回空部门列表时不退回完整部门，也不提示版本错误", () => {
+  const departments = [
+    { id: 1, openDepartmentId: "empty", name: "未导入部门", path: "未导入部门", roles: [] },
+  ];
+  const markup = renderToStaticMarkup(
+    createElement(
+      MemoryRouter,
+      null,
+      createElement(ImportedDirectory, {
+        data: { departments, importedDepartments: [], roles: [] },
+        department: "",
+        onSelect() {},
+        onSaved: async () => {},
+      }),
+    ),
+  );
+  assert.doesNotMatch(markup, /未导入部门|后端版本尚未更新/);
+  assert.match(markup, /全部已导入员工/);
 });
 
 const render = (overrides = {}) =>
