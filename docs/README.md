@@ -47,6 +47,7 @@
 | [字段映射](netsuite-pl-lookup.json) | NS 来源读取的字段配置依据 |
 | [PL 来源保存](pl-storage.md) | 既有本地保存用例与边界 |
 | [NS 权限](netsuite-vendor-invoice-permissions.md) | 记录访问权限专题 |
+| [NS 供应商账单回写方案](ns-vendor-bill-writeback-plan.md)、[按母单查询账单](ns-vendor-bill-query-api.md) | 回写方案与第 0 期统计（待评审）；只读查询 RESTlet（已实现，未部署） |
 | [MySQL 资料入口](mysql/README.md) | 当前迁移导读与历史基础建表说明 |
 | [八张来源表](mysql/eight-table-relations.md) | 母采购、子采购、报关和发票来源关系 |
 | [报关关联结果表](mysql/customs-reconciliation-results.md) | 当前独立依据与关联结果表 |
