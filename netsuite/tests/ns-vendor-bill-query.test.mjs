@@ -9,6 +9,7 @@ const code = await readFile(new URL("../vendor_bill_query_restlet.js", import.me
 function service(data = {}, options = {}) {
   let api;
   const calls = [];
+  const logs = [];
   const fixtures = {
     vendor: [{ id: "88", values: { code: "V088", name: "测试供应商" } }],
     purchaseorder: [order("501"), order("502")],
@@ -22,19 +23,20 @@ function service(data = {}, options = {}) {
     create(input) {
       calls.push(input);
       if (options.failType === input.type) throw new Error("private NS error");
-      // 只模拟本脚本用到的 anyof 条件，其余条件由断言检查。
+      // 只模拟本脚本用到的 anyof 条件与作废筛选，其余条件由断言检查。
       const matchers = {
         internalid: (row) => row.id,
         createdfrom: (row) => row.values.purchaseOrderId,
         custrecord_swc_vid_bill: (row) => row.values.billId,
+        voided: (row) => row.values.voided,
       };
+      const matches = (filter, row) =>
+        filter[1] === "is"
+          ? matchers[filter[0]](row) === filter[2]
+          : [filter[2]].flat().includes(matchers[filter[0]](row));
       const rows = (fixtures[input.type] ?? []).filter((row) =>
         input.filters.every(
-          (filter) =>
-            !Array.isArray(filter) ||
-            filter[1] !== "anyof" ||
-            !matchers[filter[0]] ||
-            [filter[2]].flat().includes(matchers[filter[0]](row)),
+          (filter) => !Array.isArray(filter) || !matchers[filter[0]] || matches(filter, row),
         ),
       );
       return {
@@ -51,14 +53,18 @@ function service(data = {}, options = {}) {
   };
   vm.runInNewContext(code, {
     define: (_deps, factory) => {
-      api = factory(search, {
-        accountId: "5939865",
-        getCurrentScript: () => ({ getRemainingUsage: () => options.usage ?? 1000 }),
-      });
+      api = factory(
+        search,
+        {
+          accountId: "5939865",
+          getCurrentScript: () => ({ getRemainingUsage: () => options.usage ?? 1000 }),
+        },
+        { audit: (entry) => logs.push(entry), error: (entry) => logs.push(entry) },
+      );
     },
   });
   // RESTlet 结果按 JSON 返回给后端；序列化后比较，也避开 vm 跨上下文的原型差异。
-  return { api: { post: (input) => JSON.parse(JSON.stringify(api.post(input))) }, calls };
+  return { api: { post: (input) => JSON.parse(JSON.stringify(api.post(input))) }, calls, logs };
 }
 
 function order(id, vendorId = "88") {
@@ -92,8 +98,9 @@ function bill(id, purchaseOrderId, values = {}) {
   };
 }
 
-function detail(billId, total, count = "1") {
-  return { id: undefined, values: { billId, total, count } };
+// 明细逐行返回，脚本内按账单合计。
+function details(billId, ...amounts) {
+  return amounts.map((amount, index) => ({ id: `${billId}${index}`, values: { billId, amount } }));
 }
 
 const request = (purchaseOrderIds = ["501"]) => ({ action: "bills", vendorId: "88", purchaseOrderIds });
@@ -110,7 +117,7 @@ test("按母单返回全部账单，额度按平台口径用整数分计算", ()
       bill("9001", "501", { remaining: "200", received: "1100.5", applyingType: "VendCred", applied: "50" }),
       bill("9001", "501", { remaining: "200", received: "1100.5", applyingType: "VendPymt", applied: ".1" }),
     ],
-    customrecord_swc_vendor_invoice_detail: [detail("9001", "1100.50", "2")],
+    customrecord_swc_vendor_invoice_detail: details("9001", "1000.40", "100.1"),
   });
   const result = api.post(request());
   assert.equal(result.complete, true);
@@ -131,6 +138,11 @@ test("按母单返回全部账单，额度按平台口径用整数分计算", ()
   assert.equal(found.consistent, true);
   assert.equal(found.hasTax, true);
   assert.equal(found.voided, false);
+  // 明细不做 GROUP 汇总（NS 不允许按该字段分组），作废状态只作为筛选条件。
+  const detailSearch = calls.find((call) => call.type === "customrecord_swc_vendor_invoice_detail");
+  assert.ok(detailSearch.columns.every((item) => !item.summary));
+  const billColumns = calls.filter((call) => call.type === "vendorbill").flatMap((call) => call.columns);
+  assert.ok(billColumns.every((item) => item.name !== "voided"));
   // 查账单不按日期、税额或可收金额过滤，避免“查不到”含义混杂。
   const billSearch = calls.find((call) => call.type === "vendorbill");
   assert.ok(billSearch.filters.some((filter) => filter[0] === "createdfrom" && filter[2].includes("501")));
@@ -144,7 +156,7 @@ test("已登记满、税额为 0、未审批的账单照常返回，由后端判
       bill("9002", "501", { remaining: "0", received: "500", applyingType: "VendPymt", applied: "500" }),
       bill("9003", "501", { taxTotal: "0", approvalStatus: "1" }),
     ],
-    customrecord_swc_vendor_invoice_detail: [detail("9002", "480")],
+    customrecord_swc_vendor_invoice_detail: details("9002", "480"),
   });
   const bills = api.post(request()).purchaseOrders[0].bills;
   assert.deepEqual(
@@ -224,7 +236,6 @@ test("金额格式或检索结果异常时整单失败，不返回部分结果",
     { remaining: "1,000.00" },
     { received: "abc" },
     { approvalStatus: "9" },
-    { voided: "maybe" },
     { vendorId: "" },
   ]) {
     const result = service({ vendorbill: [bill("9001", "501", values)] }).api.post(request());
@@ -246,4 +257,43 @@ test("检索超限、额度不足或 NS 异常时返回固定错误码，不泄�
   const failed = service({}, { failType: "vendorbill" }).api.post(request());
   assert.deepEqual(failed.error, { code: "QUERY_FAILED" });
   assert.ok(!JSON.stringify(failed).includes("private"));
+});
+
+test("已作废账单单独筛出并照常返回", () => {
+  const { api, calls } = service({
+    vendorbill: [bill("9020", "501", { voided: "T" }), bill("9021", "501")],
+  });
+  const bills = api.post(request()).purchaseOrders[0].bills;
+  assert.deepEqual(
+    bills.map((item) => [item.billId, item.voided]),
+    [
+      ["9020", true],
+      ["9021", false],
+    ],
+  );
+  const voidSearch = calls.filter((call) => call.type === "vendorbill")[1];
+  assert.deepEqual([...voidSearch.filters.at(-1)], ["voided", "is", "T"]);
+});
+
+test("明细超过逐行上限时返回超限，不截断合计", () => {
+  const many = details("9001", ...Array.from({ length: 5001 }, () => "1"));
+  const result = service({
+    vendorbill: [bill("9001", "501")],
+    customrecord_swc_vendor_invoice_detail: many,
+  }).api.post(request());
+  assert.equal(result.error.code, "QUERY_LIMIT");
+});
+
+test("执行日志记录阶段与修订号，接口只返回固定错误码", () => {
+  const failed = service(
+    { vendorbill: [bill("9001", "501")] },
+    { failType: "customrecord_swc_vendor_invoice_detail" },
+  );
+  assert.deepEqual(failed.api.post(request()).error, { code: "QUERY_FAILED" });
+  const entry = JSON.parse(failed.logs.at(-1).details);
+  assert.equal(entry.stage, "invoice_detail_lookup");
+  assert.match(entry.revision, /^\d{4}-\d{2}-\d{2}\.\d+$/);
+  const ok = service();
+  assert.equal(ok.api.post(request()).complete, true);
+  assert.equal(JSON.parse(ok.logs.at(-1).details).stage, "complete");
 });

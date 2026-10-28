@@ -7,10 +7,13 @@
 // 按母单内部 ID 只读查询供应商账单，供回写前对应账单与核对额度。
 // 不依赖现网 VendorInvoice.js 的 getData：它跳过税额为 0、可收为 0 和 2025-07-01 以前的账单，
 // 查不到时无法区分“账单未生成”和“已登记满”。额度口径与其 handleJson 相同，但用整数分精确计算。
-define(["N/search", "N/runtime"], (search, runtime) => {
+define(["N/search", "N/runtime", "N/log"], (search, runtime, log) => {
+  const REVISION = "2026-10-28.3";
   const MAX_ORDERS = 20;
   const MAX_BILLS = 200;
   const MAX_ROWS = 1000;
+  // 现网单张账单最多约 10 条有效明细；明细逐行读取后在脚本内合计，上限按账单上限留余量。
+  const MAX_DETAILS = 5000;
   const DETAIL = "customrecord_swc_vendor_invoice_detail";
   const text = (value) => (value === null || value === undefined ? "" : String(value));
   const id = (input) => typeof input === "string" && /^[1-9][0-9]{0,19}$/.test(input);
@@ -32,10 +35,17 @@ define(["N/search", "N/runtime"], (search, runtime) => {
 
   function rows(type, filters, columns, limit) {
     budget();
-    const found = search
-      .create({ type, filters, columns })
-      .run()
-      .getRange({ start: 0, end: limit + 1 });
+    const resultSet = search.create({ type, filters, columns }).run();
+    const found = [];
+    // getRange 每次最多 1000 行；额外一行用于识别超限，必须分次探测。
+    while (found.length <= limit) {
+      budget();
+      const start = found.length;
+      const end = Math.min(start + 1000, limit + 1);
+      const page = resultSet.getRange({ start, end });
+      found.push(...page);
+      if (page.length < end - start) break;
+    }
     if (found.length > limit) fail("QUERY_LIMIT");
     return found;
   }
@@ -43,7 +53,6 @@ define(["N/search", "N/runtime"], (search, runtime) => {
   function reader(columns) {
     const byLabel = new Map(columns.map((item) => [item.label, item]));
     return {
-      raw: (row, label) => row.getValue(byLabel.get(label)),
       value: (row, label) => text(row.getValue(byLabel.get(label))),
       label: (row, label) => text(row.getText(byLabel.get(label))),
     };
@@ -65,12 +74,6 @@ define(["N/search", "N/runtime"], (search, runtime) => {
     const sign = value < 0 ? "-" : "";
     const absolute = Math.abs(value);
     return `${sign}${Math.floor(absolute / 100)}.${String(absolute % 100).padStart(2, "0")}`;
-  }
-
-  function flag(value) {
-    if (value === true || value === "T") return true;
-    if (value === false || value === "F" || value === "") return false;
-    return fail("INVALID_RESULT");
   }
 
   function queryInput(input) {
@@ -153,7 +156,6 @@ define(["N/search", "N/runtime"], (search, runtime) => {
       column("subsidiaryId", "subsidiary"),
       column("currencyId", "currency"),
       column("approvalStatus", "approvalstatus"),
-      column("voided", "voided"),
       formula("taxTotal", "NVL({taxtotal}, 0)"),
       formula("remaining", "NVL({amountremaining}, 0)"),
       formula("received", "NVL({custbody_swc_vendor_amount}, 0)"),
@@ -186,7 +188,6 @@ define(["N/search", "N/runtime"], (search, runtime) => {
         currencyId: read.value(row, "currencyId"),
         currencyName: read.label(row, "currencyId"),
         approvalStatus: read.value(row, "approvalStatus"),
-        voided: flag(read.raw(row, "voided")),
         hasTax: cents(read.value(row, "taxTotal")) !== 0,
         remaining: cents(read.value(row, "remaining")),
         received: cents(read.value(row, "received")),
@@ -213,33 +214,54 @@ define(["N/search", "N/runtime"], (search, runtime) => {
     return bills;
   }
 
+  // NS 检索不允许把 voided 作为结果列（SSS_INVALID_SRCH_COL），只能作为筛选条件，故单独查出已作废账单。
+  function findVoided(orderIds) {
+    const found = rows(
+      "vendorbill",
+      [
+        ["type", "anyof", "VendBill"],
+        "AND",
+        ["mainline", "is", "T"],
+        "AND",
+        ["createdfrom", "anyof", orderIds],
+        "AND",
+        ["voided", "is", "T"],
+      ],
+      [column("billId", "internalid")],
+      MAX_BILLS,
+    );
+    return new Set(found.map((row) => text(row.id)));
+  }
+
   // 账单累计金额应等于有效明细“本次收”合计；不一致的账单回写时须先由财务处理。
+  // 明细的账单字段不能按 GROUP 汇总（INVALID_RESULT_SUMMARY_FUNC），逐行读取后按整数分合计。
   function findDetails(billIds) {
     if (!billIds.length) return new Map();
     const columns = [
-      column("billId", "custrecord_swc_vid_bill", { summary: search.Summary.GROUP }),
-      column("total", "custrecord_swc_cid_current_amount", { summary: search.Summary.SUM }),
-      column("count", "internalid", { summary: search.Summary.COUNT }),
+      column("billId", "custrecord_swc_vid_bill"),
+      column("amount", "custrecord_swc_cid_current_amount"),
     ];
     const read = reader(columns);
     const found = rows(
       DETAIL,
       [["custrecord_swc_vid_bill", "anyof", billIds], "AND", ["isinactive", "is", "F"]],
       columns,
-      billIds.length,
+      MAX_DETAILS,
     );
     const details = new Map();
     for (const row of found) {
       const billId = read.value(row, "billId");
-      const count = Number(read.value(row, "count"));
-      if (!billIds.includes(billId) || details.has(billId) || !Number.isSafeInteger(count) || count < 1)
-        fail("INVALID_RESULT");
-      details.set(billId, { count, total: cents(read.value(row, "total") || "0") });
+      if (!billIds.includes(billId)) fail("INVALID_RESULT");
+      const current = details.get(billId) || { count: 0, total: 0 };
+      // 与 SUM 口径一致：未填“本次收”的明细按 0 计入，但仍计入条数。
+      current.count += 1;
+      current.total += cents(read.value(row, "amount") || "0");
+      details.set(billId, current);
     }
     return details;
   }
 
-  function output(bill, detail) {
+  function output(bill, voided, detail) {
     const payable = bill.remaining + bill.applied;
     const details = detail || { count: 0, total: 0 };
     return {
@@ -252,7 +274,7 @@ define(["N/search", "N/runtime"], (search, runtime) => {
       currencyId: bill.currencyId,
       currencyName: bill.currencyName,
       approvalStatus: bill.approvalStatus,
-      voided: bill.voided,
+      voided,
       hasTax: bill.hasTax,
       amounts: {
         remaining: money(bill.remaining),
@@ -266,13 +288,21 @@ define(["N/search", "N/runtime"], (search, runtime) => {
     };
   }
 
-  function query(input) {
+  function query(input, trace) {
+    trace.stage = "vendor_lookup";
     const vendor = findVendor(input.vendorId);
     if (!vendor) return { status: "VENDOR_NOT_FOUND", vendor: null, purchaseOrders: [] };
+    trace.stage = "purchase_order_lookup";
     const orders = findOrders(input.purchaseOrderIds);
     const matched = input.purchaseOrderIds.filter((key) => orders.get(key)?.vendorId === vendor.id);
+    trace.stage = "bill_lookup";
     const bills = matched.length ? findBills(matched) : new Map();
+    trace.stage = "voided_lookup";
+    const voided = bills.size ? findVoided(matched) : new Set();
+    if ([...voided].some((billId) => !bills.has(billId))) fail("INVALID_RESULT");
+    trace.stage = "invoice_detail_lookup";
     const details = findDetails([...bills.keys()]);
+    trace.stage = "result_assembly";
     const purchaseOrders = input.purchaseOrderIds.map((key) => {
       const order = orders.get(key);
       if (!order) return { id: key, status: "PO_NOT_FOUND", bills: [] };
@@ -280,13 +310,15 @@ define(["N/search", "N/runtime"], (search, runtime) => {
       const found = [...bills.values()]
         .filter((bill) => bill.purchaseOrderId === key)
         .sort((left, right) => Number(left.billId) - Number(right.billId))
-        .map((bill) => output(bill, details.get(bill.billId)));
+        .map((bill) => output(bill, voided.has(bill.billId), details.get(bill.billId)));
       return { ...order, status: found.length ? "FOUND" : "NO_BILLS", bills: found };
     });
     return { status: "OK", vendor, purchaseOrders };
   }
 
   function post(input) {
+    const started = Date.now();
+    const trace = { revision: REVISION, stage: "request_validation" };
     const envelope = {
       contractVersion: 3,
       source: "vendor-bill-query",
@@ -295,8 +327,22 @@ define(["N/search", "N/runtime"], (search, runtime) => {
     };
     try {
       const request = queryInput(input);
-      const result = query(request);
+      // 仅记录通过格式校验的身份；不记录原始请求、认证信息或整份业务响应。
+      trace.vendorId = request.vendorId;
+      trace.purchaseOrderIds = request.purchaseOrderIds;
+      const result = query(request, trace);
+      trace.stage = "budget_check";
       budget();
+      log.audit({
+        title: "VENDOR_BILL_QUERY_OK",
+        details: JSON.stringify({
+          ...trace,
+          stage: "complete",
+          status: result.status,
+          billCount: result.purchaseOrders.reduce((count, order) => count + order.bills.length, 0),
+          elapsedMs: Date.now() - started,
+        }),
+      });
       return {
         ...envelope,
         complete: true,
@@ -305,9 +351,22 @@ define(["N/search", "N/runtime"], (search, runtime) => {
         readCompletedAt: new Date().toISOString(),
       };
     } catch (error) {
-      const code = ["INVALID_REQUEST", "INVALID_RESULT", "QUERY_LIMIT"].includes(error.message)
-        ? error.message
+      const message = text(error?.message);
+      const code = ["INVALID_REQUEST", "INVALID_RESULT", "QUERY_LIMIT"].includes(message)
+        ? message
         : "QUERY_FAILED";
+      // 诊断信息仅写入 NS 执行日志，接口仍只返回固定错误码。
+      log.error({
+        title: "VENDOR_BILL_QUERY_FAILED",
+        details: JSON.stringify({
+          ...trace,
+          code,
+          errorName: text(error?.name).slice(0, 100),
+          message: message.slice(0, 1000),
+          stack: text(error?.stack).slice(0, 2000),
+          elapsedMs: Date.now() - started,
+        }),
+      });
       return { ...envelope, complete: false, error: { code }, readCompletedAt: new Date().toISOString() };
     }
   }
