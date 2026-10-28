@@ -81,3 +81,7 @@ yarn-error.log*
 
 # 本地 AI 工具记忆与运行状态，不包含项目共享的 .agents/skills。
 /.workbuddy/
+
+# Claude Code 本机状态：预览配置（含本机临时路径）、本地技能与临时 worktree。
+/.claude/
+/skills-lock.json

@@ -34,6 +34,7 @@
 | `compose.override.yaml` | 部署服务器本地的 Compose 覆盖，如合同共享盘挂载，见 [Docker 部署](docker-deploy.md#合同仅保存到共享盘) | 删除后容器失去共享盘挂载，合同保存失败；按服务器实际挂载维护 |
 | `outputs/`、`work/`、`backend/work/`、`backend/.tmp/` | 本地导出、检查结果或临时工作文件 | 逐项核对是否需交付或归档，不能仅凭目录名删除 |
 | `.workbuddy/` | 本地 AI 工具记忆与运行状态，可能包含会话信息 | 不随源码提交，不自动删除；共享技能仍保留 |
+| `.claude/`、`skills-lock.json` | Claude Code 本机状态：`launch.json` 预览配置写有本机临时目录路径，`skills/` 为本地安装的技能（`skills-lock.json` 记录其来源与哈希），`worktrees/` 为临时工作区（2026-10-28 加入忽略） | 不随源码提交；删除 `worktrees/` 下的目录前先确认没有未提交改动，并用 `git worktree remove` 移除 |
 | `playwright-report/`、`test-results/`（根目录或 `frontend/`） | 浏览器测试报告及截图 | 按需重新运行测试生成，不包含 `tests/` 中的夹具 |
 | `SuiteScripts/` | 延续原仓库的本地独立 NS 脚本管理方式 | 网站 RESTlet 与部分 Node 测试仍依赖其共用模块；应单独管理和交付 |
 | `netsuite/tests/ns-pl-lookup.test.mjs` | 延续原有独立脚本测试的忽略约定（由 `netsuite/.gitignore` 忽略） | 本地专项测试可能仍有用途，不纳入自动删除范围 |
