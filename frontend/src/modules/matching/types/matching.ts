@@ -216,14 +216,6 @@ export type MatchingSummary = {
   confirmed: number;
 };
 
-export type Candidate = {
-  purchase: PurchaseSide;
-  checks: Check[];
-  confidence: string;
-  tier: Tier;
-  block: string;
-};
-
 export type Conversion = {
   conversionNumerator: string;
   conversionDenominator: string;
@@ -234,14 +226,6 @@ export type ConfirmBody = Partial<Conversion> & {
   closesPurchaseLine?: boolean;
   invoiceVersionId?: string | null;
   purchaseBasisId?: string | null;
-};
-export type ManualBody = ConfirmBody & {
-  requestId: string;
-  invoiceId: string;
-  invoiceItemId: string;
-  purchaseLineId: string;
-  quantity: string;
-  amount: string;
 };
 
 // 中文文案只在这里维护一份。

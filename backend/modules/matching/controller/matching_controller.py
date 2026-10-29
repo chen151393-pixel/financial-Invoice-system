@@ -8,6 +8,7 @@ from backend.core.dependencies import Owner
 
 from ..dto.invoice_list_dto import InvoiceListQuery
 from ..dto.invoice_totals_dto import InvoiceTotalsQuery
+from ..dto.manual_order_dto import ManualOrderBody
 from ..dto.matching_dto import (
     BatchBody,
     CancelBody,
@@ -27,6 +28,7 @@ from ..dto.order_matching_dto import OrderCandidateQuery, OrderConfirmBody
 from ..vo.invoice_list_vo import InvoiceListResult
 from ..vo.invoice_queue_vo import InvoiceQueue
 from ..vo.invoice_totals_vo import InvoiceTotals
+from ..vo.manual_order_vo import ManualOrderCandidates
 from ..vo.matching_vo import BatchResult, Candidates, GenerateResult, InvoiceMatching, Queue, Summaries
 from ..vo.order_matching_vo import OrderCandidates
 
@@ -63,7 +65,18 @@ def create_router(queries, allocations, proposals, invoice_lists):
 
     @router.post("/candidates/query", response_model=Candidates)
     def candidates(body: CandidateQuery, owner: Owner):
+        """逐行候选（旧契约）：详情页已改用整单候选，仅保留给既有调用方与回归测试。"""
         return queries.candidates(body)
+
+    @router.post("/manual-orders/candidates/query", response_model=ManualOrderCandidates)
+    def manual_order_candidates(body: CandidateQuery, owner: Owner):
+        """手动关联候选：一行一张整张子采购单，含选中后展示的明细与剩余应开。"""
+        return queries.manual_order_candidates(body)
+
+    @router.post("/manual-orders", response_model=InvoiceMatching)
+    def create_manual_order(body: ManualOrderBody, owner: Owner):
+        """发票行关联一张整张子采购单：逐条明细按填写的数量金额整组保存并通过，任一失败全部回滚。"""
+        return allocations.create_manual_order(body, owner)
 
     @router.post("/order-candidates/query", response_model=OrderCandidates)
     def order_candidates(body: OrderCandidateQuery, owner: Owner):

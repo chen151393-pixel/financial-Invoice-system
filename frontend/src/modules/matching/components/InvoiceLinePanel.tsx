@@ -1,13 +1,7 @@
 import { useState } from "react";
 import { Badge, Button, Card, CardContent, CardHeader, EmptyState } from "../../../shared/components/ui";
-import type {
-  Candidate,
-  ConfirmBody,
-  InvoiceItem,
-  InvoiceMatching,
-  ManualBody,
-  MatchingGroup,
-} from "../types/matching";
+import type { ManualOrderBody, ManualOrderCandidates } from "../types/manual-order";
+import type { ConfirmBody, InvoiceItem, InvoiceMatching, MatchingGroup } from "../types/matching";
 import { AllocationCard } from "./AllocationCard";
 import { groupAllocations } from "./allocation-groups";
 import { GroupComparisonCard } from "./GroupComparisonCard";
@@ -19,8 +13,8 @@ type Actions = {
   reverify: (id: string, body: ConfirmBody) => void;
   reject: (id: string, note: string) => void;
   cancel: (id: string, reason: string) => Promise<boolean>;
-  create: (body: ManualBody, replaceId: string, reason: string) => Promise<boolean>;
-  search: (keyword: string) => Promise<{ rows: Candidate[]; total: number }>;
+  create: (body: ManualOrderBody) => Promise<boolean>;
+  search: (keyword: string) => Promise<ManualOrderCandidates>;
   confirmGroup: (groupId: string, note: string) => Promise<boolean>;
   rejectGroup: (groupId: string, note: string) => Promise<boolean>;
 };
@@ -125,10 +119,10 @@ export function InvoiceLinePanel({
               />
             </Card>
           )}
-      <Card aria-label="候选子采购行">
+      <Card aria-label="候选子采购单">
         <CardHeader
-          title="候选子采购行"
-          description="已有待审核建议时，请先驳回再手动关联；已通过的关联可选择替换。"
+          title="候选子采购单"
+          description="以整张子采购单为最小关联单位，选择后展开该单明细填写本票分配。已有待审核建议时，请先驳回再手动关联；已通过的关联可选择替换。"
           actions={
             <Button disabled={busy} aria-expanded={manual} onClick={() => setManual(!manual)}>
               {manual ? "收起手动关联" : "手动关联"}

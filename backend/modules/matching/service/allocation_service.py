@@ -58,6 +58,15 @@ class AllocationService:
         _require_user(actor)
         return confirm(self, body, actor)
 
+    def create_manual_order(self, body, actor):
+        """手动整单关联并通过；requestId 保证重复提交只生效一次。"""
+        from .manual_order_service import create
+
+        _require_user(actor)
+        return self.queries.invoice(
+            self._run(lambda connection: create(self, connection, body, actor), actor)
+        )
+
     def confirm_group(self, key, body, actor):
         _require_user(actor)
         return self.queries.invoice(group_view_service.confirm(self, key, body, actor))

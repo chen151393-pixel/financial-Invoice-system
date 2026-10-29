@@ -89,6 +89,17 @@
   border-radius: var(--radius-control);
   font: inherit;
 }
+/* 整单手动关联：明细表内逐行填写本票分配数量与金额；表单可收窄，宽表在自身容器内横向滚动 */
+.matching-share-form {
+  min-width: 0;
+  grid-template-columns: minmax(0, 1fr);
+}
+.matching-form .matching-share-input {
+  width: 9em;
+  max-width: 100%;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
 .matching-form .matching-check {
   display: flex;
   align-items: center;

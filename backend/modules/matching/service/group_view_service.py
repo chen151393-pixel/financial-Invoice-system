@@ -125,6 +125,36 @@ def _rows(connection, invoice_id, key):
     return sorted(rows, key=lambda row: row["id"])
 
 
+def approve_rows(service, connection, rows, body, actor, extra_reasons=()):
+    """在调用方事务内整组逐条通过；需说明而未填写或任一条不能通过时抛错，由事务整体回滚。"""
+    invoice_id = int(body.invoiceId)
+    invoice = read_invoices(connection, [invoice_id])[0]
+    lines, _ = service.queries._context(connection, rows)
+    _, reasons, block = evaluate(invoice, read_invoice_paper(connection, invoice_id), rows, lines)
+    if block:
+        raise ApiError(409, block)
+    reasons = list(dict.fromkeys([*reasons, *extra_reasons]))
+    note = body.note.strip()
+    if reasons and not note:
+        raise ApiError(400, "请填写审核说明：" + "、".join(reasons))
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    for row in rows:
+        confirm_body = ConfirmBody(
+            note=note,
+            invoiceVersionId=body.invoiceVersionId,
+            purchaseBasisId=str(row["purchase_basis_id"]) if row["purchase_basis_id"] else None,
+        )
+        approval_service.approve(
+            service,
+            connection,
+            allocation_dao.get(connection, row["id"]),
+            confirm_body,
+            actor,
+            now,
+            grouped=True,
+        )
+
+
 def confirm(service, key, body, actor, *, batch=False):
     """整组通过：同一账本事务内逐条通过，任一条失败全部回滚。"""
 
@@ -137,30 +167,7 @@ def confirm(service, key, body, actor, *, batch=False):
             raise ApiError(409, "整单建议已部分处理或失效，请刷新后核对")
         if batch and any(row["confidence"] is None or row["confidence"] < HIGH for row in rows):
             raise ApiError(409, "整单建议置信度未达到高档，请在详情页审核")
-        invoice = read_invoices(connection, [invoice_id])[0]
-        lines, _ = service.queries._context(connection, rows)
-        _, reasons, block = evaluate(invoice, read_invoice_paper(connection, invoice_id), rows, lines)
-        if block:
-            raise ApiError(409, block)
-        note = body.note.strip()
-        if reasons and not note:
-            raise ApiError(400, "请填写审核说明：" + "、".join(reasons))
-        now = datetime.now(timezone.utc).replace(tzinfo=None)
-        for row in rows:
-            confirm_body = ConfirmBody(
-                note=note,
-                invoiceVersionId=body.invoiceVersionId,
-                purchaseBasisId=str(row["purchase_basis_id"]) if row["purchase_basis_id"] else None,
-            )
-            approval_service.approve(
-                service,
-                connection,
-                allocation_dao.get(connection, row["id"]),
-                confirm_body,
-                actor,
-                now,
-                grouped=True,
-            )
+        approve_rows(service, connection, rows, body, actor)
         return invoice_id
 
     return service._run(action, actor)

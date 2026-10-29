@@ -193,17 +193,33 @@ test("明细导航保持选中行；提交期间禁止切换，候选限制取�
   const candidates = render(Candidates, {
     rows: [
       {
-        purchase: { purchaseLineId: "3", orderNo: "SUB-3", item: "墨水", currency: "CNY" },
+        purchaseOrderId: "3",
+        orderNo: "SUB-3",
+        parentOrderNo: "PO-3",
+        supplier: "测试供应商",
+        recordNumbers: ["CD3"],
+        currency: "CNY",
+        unit: "个",
+        remainingQuantity: "30",
+        remainingAmount: "301.50",
+        orderMatched: true,
         confidence: "60",
+        checks: [],
         block: "币种待核实",
+        lines: [{ purchaseLineId: "31" }, { purchaseLineId: "32" }],
       },
     ],
-    name: "test",
     chosenId: null,
     onChoose() {},
   });
+  // 候选以整张子采购单为一行：显示母单、明细行数与整单剩余应开，限制取后端
+  assert.match(candidates, /SUB-3/);
+  assert.match(candidates, /母采购单 PO-3/);
+  assert.match(candidates, /2 行/);
+  assert.match(candidates, /301.50 CNY/);
+  assert.match(candidates, /备注命中/);
   assert.match(candidates, /币种待核实/);
-  assert.match(candidates, /disabled=""[^>]*>选用此行/);
+  assert.match(candidates, /disabled=""[^>]*>选择此单/);
 });
 const row = {
   key: "review:1",

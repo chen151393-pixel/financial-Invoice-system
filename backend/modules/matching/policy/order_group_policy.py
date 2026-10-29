@@ -14,28 +14,43 @@ MAX_ORDERS = 24
 MAX_NODES = 50000
 
 
-def order_parts(invoice, items, lines, tasks, bases, units):
-    """一张子采购单的整单分配 (parts, 阻断原因)；parts 每行为整条明细的剩余应开，按品名对应发票行。
+def order_shares(invoice, lines, tasks, bases):
+    """一张子采购单各明细的剩余应开 ({子采购行 ID: (数量, 金额)}, 阻断原因)；已开完的明细不列出。
 
+    整单是最小单位：任一明细不在有效应开范围、依据变化或已按差异结束时整单不可分配。
     lines 为 source 门面的子采购行上下文，调用方已补入开票依据的 currency 与 basis_reason。
     """
-    parts = []
+    shares = {}
     for line_id, line in sorted(lines.items()):
         task, basis = tasks.get(line_id), bases.get(line_id)
         block = hard_block(invoice, line, task)
         if block:
-            return [], block
+            return {}, block
         if basis is None or not basis["allowed"] or task["purchase_basis_id"] != basis["id"]:
-            return [], "开票依据已变化或未审核"
+            return {}, "开票依据已变化或未审核"
         if task.get("closed_with_difference"):
-            return [], "含已按差异结束的明细"
+            return {}, "含已按差异结束的明细"
         quantity, amount = remaining(task)
         if quantity is None or amount is None or quantity < 0 or amount < 0:
-            return [], "剩余数量或金额缺失、超开"
+            return {}, "剩余数量或金额缺失、超开"
         if quantity == 0 and amount == 0:
             continue
         if quantity <= 0 or amount <= 0:
-            return [], "明细数量与金额进度不一致"
+            return {}, "明细数量与金额进度不一致"
+        shares[line_id] = (quantity, amount)
+    if not shares:
+        return {}, "子采购单没有剩余应开"
+    return shares, ""
+
+
+def order_parts(invoice, items, lines, tasks, bases, units):
+    """一张子采购单的整单分配 (parts, 阻断原因)；parts 每行为整条明细的剩余应开，按品名对应发票行。"""
+    shares, block = order_shares(invoice, lines, tasks, bases)
+    if block:
+        return [], block
+    parts = []
+    for line_id, (quantity, amount) in shares.items():
+        line, basis = lines[line_id], bases[line_id]
         # 不一致项只影响得分；同一采购行按综合得分定位发票行，不以品名作准入门槛。
         ranked = [
             (item, compare_group(invoice, item, item.get("tax_amount"), [(line, quantity, amount)])[1])
@@ -56,8 +71,6 @@ def order_parts(invoice, items, lines, tasks, bases, units):
                 "amount": amount,
             }
         )
-    if not parts:
-        return [], "子采购单没有剩余应开"
     return parts, ""
 
 

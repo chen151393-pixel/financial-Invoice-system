@@ -1,14 +1,13 @@
 import { http, HttpError } from "../../../shared/api/http";
 import { openLocalSession } from "../../identity/api";
 import type { InvoiceTotals, InvoiceTotalsFilters } from "../types/invoice-totals";
+import type { ManualOrderBody, ManualOrderCandidates } from "../types/manual-order";
 import type { OrderCandidates, OrderConfirmBody } from "../types/order-matching";
 import type {
-  Candidate,
   ConfirmBody,
   InvoiceMatchFilters,
   InvoiceMatchList,
   InvoiceMatching,
-  ManualBody,
   InvoiceQueue,
   QueueQuery,
 } from "../types/matching";
@@ -74,12 +73,16 @@ export function getInvoiceTotals(filters: InvoiceTotalsFilters) {
     if (filters[key]) params.set(key, filters[key]);
   return read<InvoiceTotals>(`/matching/invoice-totals?${params}`);
 }
-export const findCandidates = (invoiceId: string, invoiceItemId: string, keyword: string) =>
-  read<{ rows: Candidate[]; total: number }>("/matching/candidates/query", "POST", {
+// 手动关联候选：一行一张整张子采购单
+export const findManualOrders = (invoiceId: string, invoiceItemId: string, keyword: string) =>
+  read<ManualOrderCandidates>("/matching/manual-orders/candidates/query", "POST", {
     invoiceId,
     invoiceItemId,
     keyword,
   });
+// 发票行关联整张子采购单：各明细按填写的数量金额整组保存并通过，可选原子替换一条已确认关联
+export const createManualOrder = (body: ManualOrderBody) =>
+  http<InvoiceMatching>("/matching/manual-orders", "POST", body);
 
 export const confirmAllocation = (id: string, body: ConfirmBody) =>
   http<InvoiceMatching>(`${allocation(id)}/confirm`, "POST", body);
@@ -87,8 +90,6 @@ export const rejectAllocation = (id: string, note: string) =>
   http<InvoiceMatching>(`${allocation(id)}/reject`, "POST", { note });
 export const cancelAllocation = (id: string, reason: string) =>
   http<InvoiceMatching>(`${allocation(id)}/cancel`, "POST", { reason });
-export const createAllocation = (body: ManualBody) =>
-  http<InvoiceMatching>("/matching/allocations", "POST", body);
 // 整单建议整组通过 / 驳回：发票行对应的一张或多张整张子采购单
 export const confirmGroup = (
   groupId: string,
@@ -117,6 +118,3 @@ export const generateProposals = (invoiceIds: string[]) =>
 
 export const reverifyAllocation = (id: string, body: ConfirmBody) =>
   http<InvoiceMatching>(`${allocation(id)}/reverify`, "POST", body);
-
-export const replaceAllocation = (id: string, body: ManualBody, reason: string) =>
-  http<InvoiceMatching>(`${allocation(id)}/replace`, "POST", { ...body, reason });

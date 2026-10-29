@@ -75,6 +75,11 @@ class MatchingQueryService:
 
         return self._read(lambda connection: query_candidates(connection, query))
 
+    def manual_order_candidates(self, query):
+        from .manual_order_service import candidates
+
+        return self._read(lambda connection: candidates(connection, query))
+
     def invoice_totals(self, query):
         return InvoiceTotalsService(self.engine).read(query)
 

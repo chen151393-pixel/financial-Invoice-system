@@ -7,14 +7,13 @@ import {
   cancelAllocation,
   confirmAllocation,
   confirmGroup,
-  createAllocation,
-  findCandidates,
+  createManualOrder,
+  findManualOrders,
   generateProposals,
   getInvoiceMatching,
   rejectAllocation,
   rejectGroup,
   reverifyAllocation,
-  replaceAllocation,
 } from "../api";
 import { groupAllocations } from "../components/allocation-groups";
 import { InvoiceLineNav } from "../components/InvoiceLineNav";
@@ -162,12 +161,14 @@ export function MatchingInvoicePage({ invoiceId }: { invoiceId: string }) {
               reject: (id, note) => void act(() => rejectAllocation(id, note), "已驳回该建议。"),
               cancel: (id, reason) =>
                 act(() => cancelAllocation(id, reason), "已删除关联，任务收票进度已回退。"),
-              create: (body, replaceId, reason) =>
+              create: (body) =>
                 act(
-                  () => (replaceId ? replaceAllocation(replaceId, body, reason) : createAllocation(body)),
-                  replaceId ? "已替换原关联，新关联已通过。" : "手动关联已保存并通过。",
+                  () => createManualOrder(body),
+                  body.replaceAllocationId
+                    ? "已替换原关联，整单关联已通过。"
+                    : "整单关联已保存并通过，任务收票进度已更新。",
                 ),
-              search: (keyword) => findCandidates(invoiceId, selected.id, keyword),
+              search: (keyword) => findManualOrders(invoiceId, selected.id, keyword),
               confirmGroup: (groupId, note) =>
                 act(
                   () => confirmGroup(groupId, invoiceId, invoice.versionId, note),
