@@ -1,4 +1,4 @@
-import { Alert, Button, DataTable, EmptyState, type Column } from "../../../shared/components/ui";
+import { Alert, Badge, Button, DataTable, EmptyState, type Column } from "../../../shared/components/ui";
 import type { ComparisonGroup, CustomsLine, PurchaseLine } from "../types";
 import { UnitPriceMargin } from "./UnitPriceMargin";
 import "./review-levels.css";
@@ -114,11 +114,24 @@ export function CustomsRows({
       header: "单价",
       width: "6%",
       align: "right",
-      render: (row) => (
-        <span aria-label={row.kind === "customs" ? "申报单价" : "采购含税单价"}>
-          {row.line.price || "未提供"}
-        </span>
-      ),
+      render: (row) =>
+        row.kind === "customs" && row.line.priceEstimated ? (
+          // NS 未填申报单价时，后端按报关金额 ÷ 报关数量试算；前端只标注，不重算。
+          <span
+            className="fr-price-estimated"
+            aria-label={`申报单价 ${row.line.price}，NS 未填写，按报关金额除以报关数量试算`}
+            title="NS 未填写申报单价，按报关金额 ÷ 报关数量试算"
+          >
+            {row.line.price}
+            <Badge tone="info" dot={false}>
+              试算
+            </Badge>
+          </span>
+        ) : (
+          <span aria-label={row.kind === "customs" ? "申报单价" : "采购含税单价"}>
+            {row.line.price || "未提供"}
+          </span>
+        ),
     },
     {
       key: "amount",

@@ -1,13 +1,19 @@
 """已知非关键展示字段缺失的边界；缺失代表未知，不能推断为空或沿用旧值。"""
 
+OPTIONAL_CUSTOMS_FIELDS = {
+    "specification": "custrecord_swc_huge",
+    # NS 自 2026-08-17 起才填写申报单价，此前的报关行为空；按 NULL 保存，核对时由 source 规则试算。
+    "declared_unit_price": "custrecord_swc_grossamountzj",
+}
+
 
 def allows_missing(kind, spec, key):
-    # 只放行已知报关明细的规格型号；拼错映射、其他记录类型及金额等字段仍失败。
+    # 只放行已知报关明细的规格型号与申报单价；拼错映射、其他记录类型及金额等字段仍失败。
     return (
         kind == "customs_line"
         and spec.type == "customrecord_swc_delare_detail"
-        and key == "specification"
-        and spec.storage_fields.get(key) == "custrecord_swc_huge"
+        and key in OPTIONAL_CUSTOMS_FIELDS
+        and spec.storage_fields.get(key) == OPTIONAL_CUSTOMS_FIELDS[key]
     )
 
 

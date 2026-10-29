@@ -15,6 +15,14 @@
   color: var(--color-muted);
   font-size: inherit;
 }
+/* 试算申报单价：数值与“试算”徽标同列右对齐，窄列时徽标换到下一行 */
+.fr-price-estimated {
+  display: inline-flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 4px;
+}
 /*
  * 层级：报关行与子采购行的单号从同一缩进开始、逐列对齐；
  * 子采购行的连线画在这段左侧留白里挂到报关行下，报关行加粗。单号不换行。

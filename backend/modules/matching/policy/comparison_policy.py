@@ -193,6 +193,8 @@ def price_check(item, line, unit_match):
     invoice_value = f"不含税 {_money(excluding)}" + (
         f"，单价 {_money(unit_price)}" if unit_price is not None else ""
     )
+    # NS 未填申报单价时单价为报关金额 ÷ 报关数量的试算值，比对结果中标注“试算”。
+    estimated = "（试算）" if declared.get("unit_price_estimated") else ""
     purchase_value = f"申报 {_money(declared['amount_cny'])}" + (
         f"，单价 {_money(declared['unit_price_cny'])}{estimated}"
         if same_unit and declared["unit_price_cny"] is not None

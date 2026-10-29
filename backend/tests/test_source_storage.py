@@ -303,6 +303,17 @@ def test_missing_amount_marked_source_missing(ns, engine):
     assert statuses == ["matched", "source_missing"]
 
 
+def test_missing_declared_unit_price_saves_null(ns, engine):
+    # NS 2026-08-17 前的报关行没有申报单价，批量读取省略该字段；应按 NULL 保存，不拒绝整页。
+    customs_id, head, lines = customs()
+    for _, record in lines:
+        del record["custrecord_swc_grossamountzj"]
+    save(ns, engine, bundle([purchase()], [(customs_id, head, lines)]))
+    saved = rows(engine, "SELECT declared_unit_price, amount, declared_quantity FROM source_customs_lines")
+    assert [row["declared_unit_price"] for row in saved] == [None, None]
+    assert Decimal(str(saved[0]["amount"])) == Decimal("15")
+
+
 def test_order_moving_to_other_declaration_marks_old_one_dependent(ns, engine):
     save(ns, engine, bundle([purchase()], [customs("870")]))
     old = declaration(engine, "870")

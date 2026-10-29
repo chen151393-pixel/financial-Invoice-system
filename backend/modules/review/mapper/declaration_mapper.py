@@ -6,7 +6,7 @@ from collections import defaultdict
 from datetime import UTC
 from decimal import Decimal
 
-from backend.modules.source.public import unit_label
+from backend.modules.source.public import declared_unit_price, unit_label
 
 from ..policy.auto_review_policy import auto_review_reasons, margin_alert
 from ..policy.margin_policy import DEFAULT_UNIT_PRICE_TOLERANCE_CNY, declared_margin
@@ -138,6 +138,7 @@ def declaration(
         )
         for row in content["customs_lines"]
     }
+    prices = {row["id"]: declared_unit_price(row) for row in content["customs_lines"]}
     unlinked = by_customs[None]
     reasons = auto_review_reasons(
         state,
@@ -161,8 +162,9 @@ def declaration(
             model=text(row["specification"]),
             quantity=text(row["declared_quantity"]),
             unit=unit_label(row["declared_unit"], content.get("unit_names")),
-            # 与报关数量、报关单位配套的申报单价，和申报幅度使用同一口径。
-            price=text(row["declared_unit_price"]),
+            # 与报关数量、报关单位配套的申报单价，和申报幅度使用同一口径；NS 未填时为试算值并标注。
+            price=text(prices[row["id"]][0]),
+            priceEstimated=prices[row["id"]][1],
             amount=text(row["amount"]),
             currency=text(row["currency"]),
             purchaseCount=len(by_customs[row["id"]]),

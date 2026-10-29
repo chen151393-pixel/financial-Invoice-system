@@ -5,7 +5,12 @@ from dataclasses import dataclass
 from .dao.purchase_order_dao import lines as purchase_order_lines
 from .dao.unit_dictionary_dao import unit_names
 from .policy.admission_policy import admission_issues, admission_reason
-from .policy.declared_price_policy import declared_cny, declared_unit_price_cny, pick_sales_order
+from .policy.declared_price_policy import (
+    declared_cny,
+    declared_unit_price,
+    declared_unit_price_cny,
+    pick_sales_order,
+)
 from .policy.unit_policy import unit_label
 from .service.contract_service import SubpoContractSource
 from .service.declaration_service import DeclarationService, digest, snapshot
@@ -40,8 +45,10 @@ __all__ = [
     "supplier_line_ids",
     # 子采购行所属子采购单号与报关单 ID（matching 归档发票文件）
     "line_declarations",
-    # 申报价换算为人民币（按对应销售单汇率）：review 申报幅度、matching 价格校验
+    # 申报价换算为人民币（按对应销售单汇率）：review 申报幅度、matching 价格校验；
+    # declared_unit_price 给出原币申报单价及是否试算（NS 未填时按报关金额 ÷ 报关数量）
     "declared_cny",
+    "declared_unit_price",
     "declared_unit_price_cny",
     "pick_sales_order",
     "declared_prices",

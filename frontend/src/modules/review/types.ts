@@ -38,6 +38,8 @@ export interface CustomsLine extends UnitPriceMargin {
   quantity: string;
   unit: string;
   price: string;
+  // NS 未填申报单价时 price 为后端按报关金额 ÷ 报关数量的试算值，页面标注“试算”
+  priceEstimated?: boolean;
   amount: string;
   currency: string;
   purchaseCount: number;

@@ -550,3 +550,27 @@ test("报关行最后一列显示后端计算的申报幅度；负数与无法�
   assert.match(html, /报关单价 10.65 \/ 合并采购单价 12 元/);
   assert.match(html, /fr-margin--unavailable[\s\S]*—[\s\S]*单位不一致，不计算申报幅度/);
 });
+
+test("NS 未填申报单价时显示后端试算值并标注“试算”，不在前端计算", () => {
+  const item = group();
+  item.customsLines = [
+    {
+      ...item.customsLines[0],
+      price: "1.5",
+      priceEstimated: true,
+      margin: "-12.68%",
+      marginStatus: "negative",
+      marginNote: "报关单价低于采购价",
+      declaredUnitPriceCny: "10.65",
+      combinedPurchaseUnitPrice: "12",
+    },
+    { ...item.customsLines[0], id: "customs:1", lineNo: 2, price: "1.5", priceEstimated: false },
+  ];
+  const html = customs(item);
+  assert.match(
+    html,
+    /aria-label="申报单价 1.5，NS 未填写，按报关金额除以报关数量试算"[^>]*>1.5<span class="ui-badge" data-tone="info">试算<\/span>/,
+  );
+  assert.match(html, /报关单价 10.65（试算） \/ 合并采购单价 12 元/);
+  assert.equal(html.match(/>试算</g).length, 1);
+});

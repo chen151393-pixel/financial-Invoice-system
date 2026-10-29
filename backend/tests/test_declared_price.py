@@ -9,9 +9,14 @@ from types import SimpleNamespace
 import pytest
 from backend.core.errors import ApiError
 from backend.modules.matching.dto.matching_dto import BatchBody, ConfirmBody, QueueQuery
+from backend.modules.matching.policy.comparison_policy import price_check
 from backend.modules.review.mapper.declaration_mapper import declaration
 from backend.modules.review.policy.margin_policy import declared_margin
-from backend.modules.source.policy.declared_price_policy import declared_cny, pick_sales_order
+from backend.modules.source.policy.declared_price_policy import (
+    declared_cny,
+    declared_unit_price,
+    pick_sales_order,
+)
 from backend.modules.source.service.sales_order_reader import WARNING, read_sales_orders
 from backend.tests.invoice_files import invoice
 from backend.tests.test_matching import INK, import_invoices, invoice_id, proposals
@@ -50,6 +55,7 @@ def test_margin_uses_unit_prices_and_skips_unit_mismatch(currency):
     customs_row = {
         "declared_unit": "个",
         "amount": Decimal("15"),
+        "declared_quantity": Decimal("10"),
         "declared_unit_price": Decimal("1.5"),
         # 另一套口径的单位与单价不参与申报幅度
         "unit": "千克",
@@ -83,11 +89,18 @@ def test_margin_uses_unit_prices_and_skips_unit_mismatch(currency):
     assert declared_margin({**customs_row, "amount": None}, [line], orders, sales) == (
         declared_margin(customs_row, [line], orders, sales)
     )
-    for value in (None, Decimal(0)):
-        assert (
-            declared_margin({**customs_row, "declared_unit_price": value}, [line], orders, sales)["margin"]
-            is None
+    assert (
+        declared_margin({**customs_row, "declared_unit_price": Decimal(0)}, [line], orders, sales)["margin"]
+        is None
+    )
+    # NS 未填申报单价：按报关金额 15 ÷ 报关数量 10 = 1.5 试算，结果与填写 1.5 相同
+    estimated = declared_margin({**customs_row, "declared_unit_price": None}, [line], orders, sales)
+    assert estimated == negative
+    for field, value in (("amount", None), ("declared_quantity", None), ("declared_quantity", Decimal(0))):
+        missing_price = declared_margin(
+            {**customs_row, "declared_unit_price": None, field: value}, [line], orders, sales
         )
+        assert missing_price["margin"] is None and "无法试算" in missing_price["note"]
     for field, value in (("amount", None), ("quantity", None), ("quantity", Decimal(0))):
         assert declared_margin(customs_row, [{**line, field: value}], orders, sales)["margin"] is None
     mismatch = declared_margin(customs_row, [{**line, "unit": "千克"}], orders, sales)
@@ -155,6 +168,36 @@ def test_review_page_shows_margin_per_customs_line(ns, engine, service):
     assert rows(engine, "SELECT content_sha256 FROM source_customs_declarations")[0]["content_sha256"] == (
         group(service, "CD870").contentSha256
     )
+
+
+def test_review_page_estimates_missing_declared_price(ns, engine, service):
+    # NS 未填申报单价：按报关金额 15 ÷ 报关数量 10 试算 1.5，申报幅度与填写时相同并标注试算
+    order = purchase(amounts=("120.00", "20.00"))
+    customs_id, head, lines = customs("870")
+    for _, record in lines:
+        del record["custrecord_swc_grossamountzj"]
+    save(ns, engine, bundle([order], [(customs_id, head, lines)]))
+    shown = group(service, "CD870").customsLines
+    assert [(line.price, line.priceEstimated) for line in shown] == [("1.5", True), ("1.5", True)]
+    assert shown[0].declaredUnitPriceCny == "10.65" and shown[0].margin == "-12.68%"
+
+
+def test_price_check_labels_estimated_declared_price():
+    item = {"amount_excluding_tax": Decimal("50"), "unit": "个", "quantity": Decimal("10")}
+    declared = {
+        "amount_cny": Decimal("106.5"),
+        "unit": "个",
+        "unit_price_cny": Decimal("10.65"),
+        "unit_price_estimated": True,
+        "reason": "",
+    }
+    check = price_check(item, {"declared": declared}, True)
+    assert check["purchaseValue"] == "申报 106.50，单价 10.65（试算）"
+    filled = price_check(item, {"declared": {**declared, "unit_price_estimated": False}}, True)
+    assert filled["purchaseValue"] == "申报 106.50，单价 10.65"
+    assert declared_unit_price(
+        {"declared_unit_price": None, "amount": Decimal("2423.14"), "declared_quantity": Decimal("11760")}
+    ) == (Decimal("0.20604932"), True)
 
 
 def test_purchase_sales_rate_preserves_precision_and_requires_own_relation(ns, engine, service):

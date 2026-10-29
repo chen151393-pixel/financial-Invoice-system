@@ -3,7 +3,8 @@
 申报幅度 =（人民币报关单价 − 合并采购单价）÷ 人民币报关单价：
 - 报关单价取报关行的申报单价 declared_unit_price（NS custrecord_swc_grossamountzj，与报关数量、
   报关单位配套；2026-10-28 用户确认，不用 custrecord_swc_unitprice），按对应销售单汇率换算为人民币
-  （source 规则），不先舍入；
+  （source 规则），不先舍入；NS 未填申报单价时按报关金额 ÷ 报关数量试算（source declared_unit_price），
+  页面标注“试算”；
 - 合并采购单价 = 关联采购行含税总金额 ÷ 总数量，不先舍入；
 - 报关单位与子采购单位不一致、采购币种不是人民币、金额数量或申报单价汇率缺失时不计算，不显示 0；
 - 采购单价超过人民币报关单价且差额大于配置容差时才标异常；容差内保留真实幅度。
@@ -11,7 +12,12 @@
 
 from decimal import ROUND_HALF_UP, Decimal
 
-from backend.modules.source.public import declared_unit_price_cny, pick_sales_order, unit_label
+from backend.modules.source.public import (
+    declared_unit_price,
+    declared_unit_price_cny,
+    pick_sales_order,
+    unit_label,
+)
 
 CNY = "CNY"
 CENT = Decimal("0.01")
@@ -54,8 +60,9 @@ def declared_margin(
         sales_orders.get(orders[row["purchase_order_id"]].get("sales_order_id")) for row in purchase_rows
     ]
     sales_order, sales_reason = pick_sales_order(customs_row["sales_order_no"], candidates)
+    source_price, _ = declared_unit_price(customs_row)
     declared, reason = declared_unit_price_cny(
-        customs_row["declared_unit_price"], customs_row["currency"], sales_order, sales_reason
+        source_price, customs_row["currency"], sales_order, sales_reason
     )
     if declared is None:
         return unavailable(f"{reason}，无法计算")

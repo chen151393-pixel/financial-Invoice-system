@@ -1,7 +1,7 @@
 import type { UnitPriceMargin as Margin } from "../types";
 import { Badge } from "../../../shared/components/ui";
 
-export function UnitPriceMargin({ line }: { line: Margin }) {
+export function UnitPriceMargin({ line }: { line: Margin & { priceEstimated?: boolean } }) {
   return (
     <div className={`fr-margin fr-margin--${line.marginStatus ?? "unavailable"}`}>
       <strong>{line.margin || "—"}</strong>
@@ -18,7 +18,8 @@ export function UnitPriceMargin({ line }: { line: Margin }) {
         <small>{line.marginNote || "无法计算"}</small>
       ) : (
         <small>
-          报关单价 {line.declaredUnitPriceCny} / 合并采购单价 {line.combinedPurchaseUnitPrice} 元
+          报关单价 {line.declaredUnitPriceCny}
+          {line.priceEstimated && "（试算）"} / 合并采购单价 {line.combinedPurchaseUnitPrice} 元
         </small>
       )}
     </div>

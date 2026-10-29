@@ -48,6 +48,8 @@ class CustomsLine(UnitPriceMargin):
     quantity: str
     unit: str
     price: str
+    # NS 未填申报单价时 price 为报关金额 ÷ 报关数量的试算值，页面标注“试算”
+    priceEstimated: bool = False
     amount: str
     currency: str
     purchaseCount: int

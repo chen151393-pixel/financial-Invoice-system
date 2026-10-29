@@ -5,11 +5,12 @@
 - 汇率不参与报关单内容摘要；缺汇率、币种不一致等无法换算时给出原因，不以 1 或 0 代替。
 """
 
-from decimal import Decimal
+from decimal import ROUND_HALF_UP, Decimal
 
 from .currency_policy import currency_code
 
 CNY = "CNY"
+ESTIMATE_SCALE = Decimal("0.00000001")
 
 
 def pick_sales_order(sales_order_no, candidates):
@@ -49,9 +50,23 @@ def declared_cny(amount, unit_price, currency, sales_order, sales_reason=""):
     return amount * rate, (unit_price * rate if unit_price is not None else None), ""
 
 
+def declared_unit_price(line):
+    """返回 (原币申报单价, 是否试算)，line 需含 declared_unit_price、amount、declared_quantity。
+
+    NS 自 2026-08-17 起才填写申报单价；此前的报关行为空，按报关金额 ÷ 报关数量试算（2026-10-28 用户确认），
+    保留 8 位小数与数据库标度一致。NS 已填的申报单价只保留 2 位小数，原样使用，不以试算值覆盖。
+    """
+    if line["declared_unit_price"] is not None:
+        return line["declared_unit_price"], False
+    amount, quantity = line["amount"], line["declared_quantity"]
+    if amount is None or quantity is None or quantity <= 0:
+        return None, False
+    return (amount / quantity).quantize(ESTIMATE_SCALE, rounding=ROUND_HALF_UP), True
+
+
 def declared_unit_price_cny(unit_price, currency, sales_order, sales_reason=""):
-    """单价独立换算，不要求报关总金额存在，也不从金额和数量倒算单价。"""
+    """单价独立换算，不要求报关总金额存在；unit_price 由 declared_unit_price 给出（可能为试算值）。"""
     if unit_price is None:
-        return None, "申报单价缺失（重新同步报关单后补齐）"
+        return None, "申报单价缺失，且报关金额或报关数量缺失，无法试算"
     converted, _, reason = declared_cny(unit_price, None, currency, sales_order, sales_reason)
     return converted, reason
