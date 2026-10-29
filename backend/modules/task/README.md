@@ -268,3 +268,5 @@ MySQL 命名锁保证多实例单消费者，并对同一任务的同一子采�
 `POST /api/task/supplier-groups/profiles/query` 接收 `supplierName`、`groupName`、`owner`，分别搜索供应商名称、已绑定外部群名称、群主姓名或账号。支持部分匹配和批量输入：中英文逗号、分号、换行分隔，最多 50 条，每条最多 120 字符；框内 OR、框间 AND，空项忽略、重复项去重，通配符作为普通字符。绑定状态与群条件一并过滤；无匹配 ID 不能退化为不限制。source 门面按名称和 ID 范围过滤后分页。顶部供应商概况仍为全量，不随搜索变化。
 
 旧 `/api/tasks/supplier-groups/profiles/query` 和 `keyword` 保留一个版本兼容旧前端；正式前端已切换新路径，旧调用方升级后删除该别名。其余群维护接口不变。
+
+供应商档案 `profiles/query.status` 新增 `bound`（任意群绑定，含停用绑定）与 `notify_off`（供应商通知关闭，与群绑定是否启用无关），用于概况卡筛选；与名称、群名、群主条件取交集，先筛选再分页。原 all/enabled/disabled/unbound 保留，概况 counts 不随筛选变化。无需数据库迁移。

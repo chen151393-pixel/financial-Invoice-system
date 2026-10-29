@@ -35,10 +35,13 @@ class SupplierProfileService:
                         group_names=search_terms(query.groupName),
                         owners=search_terms(query.owner),
                     )
-                    if query.status in ("enabled", "disabled") or query.groupName or query.owner
+                    if query.status in ("bound", "enabled", "disabled") or query.groupName or query.owner
                     else None
                 )
                 excluded = supplier_group_dao.supplier_ids(connection) if query.status == "unbound" else []
+                if query.status == "notify_off":
+                    notify_off = supplier_setting_dao.disabled_ids(connection)
+                    included = notify_off if included is None else sorted(set(included) & set(notify_off))
                 matched = (
                     supplier_group_dao.supplier_ids(connection, keyword=query.keyword)
                     if query.keyword

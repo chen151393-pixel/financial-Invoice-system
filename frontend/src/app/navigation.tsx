@@ -37,14 +37,14 @@ export const navigation: readonly SidebarGroup<View>[] = [
         icon: <MenuIcon path="M9 11l3 3 8-8 M20 12v7a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1h11" />,
       },
       {
-        id: "match",
-        label: "发票比对",
-        icon: <MenuIcon path="M4 7h13l-3-3 M20 17H7l3 3" />,
-      },
-      {
         id: "invoices",
         label: "进项发票",
         icon: <MenuIcon path="M6 3h12v18l-3-2-3 2-3-2-3 2z M9 8h6 M9 12h6" />,
+      },
+      {
+        id: "match",
+        label: "发票比对",
+        icon: <MenuIcon path="M4 7h13l-3-3 M20 17H7l3 3" />,
       },
     ],
   },

@@ -79,7 +79,9 @@ export function SupplierProfileSearch({
           }
         >
           <option value="all">全部供应商</option>
+          <option value="bound">已绑定开票群</option>
           <option value="unbound">未绑定</option>
+          <option value="notify_off">已关闭通知</option>
           <option value="enabled">已绑定 · 启用</option>
           <option value="disabled">已绑定 · 停用</option>
         </select>

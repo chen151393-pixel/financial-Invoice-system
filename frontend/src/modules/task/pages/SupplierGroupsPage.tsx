@@ -83,10 +83,19 @@ export function SupplierGroupsPage() {
       )}
       {counts && (
         <StatGrid label="绑定概况">
-          <StatCard glyph="全" label="全部供应商" value={`${counts.all} 家`} note="来自已同步的子采购订单" />
+          <StatCard
+            glyph="全"
+            label="全部供应商"
+            value={`${counts.all} 家`}
+            note="来自已同步的子采购订单"
+            selected={query.status === "all"}
+            onSelect={() => change({ status: "all" })}
+          />
           <StatCard
             glyph="群"
             label="已绑定开票群"
+            selected={["bound", "enabled", "disabled"].includes(query.status)}
+            onSelect={() => change({ status: "bound" })}
             value={`${counts.bound} 家`}
             note="通知时默认带出绑定的企微群"
           />
@@ -94,12 +103,16 @@ export function SupplierGroupsPage() {
             glyph="未"
             tone={counts.unbound > 0 ? "warning" : "neutral"}
             label="未绑定开票群"
+            selected={query.status === "unbound"}
+            onSelect={() => change({ status: "unbound" })}
             value={`${counts.unbound} 家`}
             note="可导入外部群表或查询企微群后关联"
           />
           <StatCard
             glyph="关"
             label="已关闭通知"
+            selected={query.status === "notify_off"}
+            onSelect={() => change({ status: "notify_off" })}
             value={`${counts.notifyOff} 家`}
             note="审核通过后不生成该供应商的开票任务"
           />

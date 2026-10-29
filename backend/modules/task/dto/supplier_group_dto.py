@@ -29,7 +29,7 @@ class SupplierProfileQuery(StrictModel):
     owner: SearchText = ""
     keyword: Annotated[str, StringConstraints(strip_whitespace=True, max_length=120)] = ""
     account: str = Field(default="", max_length=100)
-    status: Literal["all", "enabled", "disabled", "unbound"] = "all"
+    status: Literal["all", "bound", "enabled", "disabled", "unbound", "notify_off"] = "all"
     page: int = Field(default=1, ge=1)
     pageSize: int = Field(default=20, ge=1, le=50)
 

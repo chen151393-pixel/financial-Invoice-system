@@ -77,7 +77,7 @@ export interface SupplierProfileQuery extends Omit<GroupQuery, "status" | "accou
   supplierName?: string;
   groupName?: string;
   owner?: string;
-  status: GroupQuery["status"] | "unbound";
+  status: GroupQuery["status"] | "unbound" | "bound" | "notify_off";
 }
 export interface SupplierProfileList extends GroupPage<SupplierProfile> {
   manage: GroupList["manage"];

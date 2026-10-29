@@ -4,7 +4,12 @@ import pytest
 from backend.app import create_app
 from backend.core.errors import ApiError
 from backend.modules.source.public import SourceDirectory
-from backend.modules.task.dto.supplier_group_dto import GroupSave, SupplierGroupMatch, SupplierProfileQuery
+from backend.modules.task.dto.supplier_group_dto import (
+    GroupSave,
+    SupplierGroupMatch,
+    SupplierNotifySave,
+    SupplierProfileQuery,
+)
 from backend.modules.task.policy.supplier_group_policy import match_group
 from backend.modules.task.service.supplier_group_service import SupplierGroupService
 from backend.modules.task.service.supplier_profile_service import SupplierProfileService
@@ -76,6 +81,32 @@ def test_ranking_duplicate_names_pagination_and_no_automatic_binding(setup):
     assert [item.chatId for item in page2.items] == ["full", "short"]
     assert wecom.refreshes == [True, False]
     assert profiles.browse(SupplierProfileQuery(status="unbound"), USER).total == 2
+
+
+def test_summary_card_filters_match_counts_and_combine_with_search(setup):
+    groups, profiles, supplier, _ = setup
+    groups.save(GroupSave(supplierId=supplier.supplierId, chatId="exact2", revision=0, enabled=False), USER)
+
+    def browse(**values):
+        return profiles.browse(SupplierProfileQuery(**values), USER)
+
+    bound = browse(status="bound")
+    assert bound.total == bound.counts["bound"] == 1
+    assert not bound.items[0].binding.enabled
+    assert browse(status="enabled").total == 0
+    assert browse(status="notify_off").total == 0
+    unbound = browse(status="unbound").items[0]
+    profiles.set_notify(SupplierNotifySave(supplierId=unbound.supplierId, enabled=False, revision=0), USER)
+    off = browse(status="notify_off")
+    assert off.total == off.counts["notifyOff"] == 1
+    assert off.items[0].supplierId == unbound.supplierId and off.items[0].binding is None
+    assert browse(status="notify_off", groupName="印花").total == 0
+    profiles.set_notify(SupplierNotifySave(supplierId=supplier.supplierId, enabled=False, revision=0), USER)
+    page = browse(status="notify_off", pageSize=1, page=2)
+    assert page.total == 2 and page.pages == 2 and len(page.items) == 1
+    assert browse(status="notify_off", owner="owner2").total == 1
+    assert browse(status="bound", supplierName="不存在").total == 0
+    assert browse(status="notify_off", account="another-account").total == 0
 
 
 def test_normalization_short_names_and_manual_keyword():
@@ -164,6 +195,11 @@ def test_http_profiles_and_match(context, engine, setup):
             json={"supplierName": "江川，清泉", "pageSize": 1},
         )
         assert split.status_code == 200 and split.json()["total"] == 2
+        for status in ("bound", "notify_off"):
+            filtered = client.post(
+                "/api/task/supplier-groups/profiles/query", headers=headers, json={"status": status}
+            )
+            assert filtered.status_code == 200 and filtered.json()["total"] == 0
         invalid = client.post(
             "/api/task/supplier-groups/profiles/query",
             headers=headers,
