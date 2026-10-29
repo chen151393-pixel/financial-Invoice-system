@@ -56,7 +56,7 @@ const render = (state = createPlComparisonState(), props = {}) =>
     createElement(PlComparison, { state, onRetry() {}, onFilter() {}, onReview() {}, ...props }),
   );
 const group = () => createPlComparisonState().result.groups[0];
-test("后台计算未完成时展示原因，禁用审核且不显示旧的自动审核结论", () => {
+test("后台计算未完成时不显示顶部黄色说明，保留审核禁用及原因", () => {
   const state = createPlComparisonState();
   const reason = "来源或审核已更新，后台计算中，请稍后刷新";
   state.result.notices = [reason];
@@ -69,6 +69,7 @@ test("后台计算未完成时展示原因，禁用审核且不显示旧的自�
   state.result.groups = [item];
   const html = render(state);
   assert.match(html, /后台计算中，请稍后刷新/);
+  assert.doesNotMatch(html, /class="fr-review-reason"/);
   assert.match(html, /disabled=""[^>]*aria-label="审核通过/);
   assert.doesNotMatch(html, />可自动审核<|>申报幅度异常</);
 });
@@ -311,7 +312,7 @@ test("报关单暂无明细时显示明确空状态", () => {
   assert.match(customs(item), /暂无报关与采购明细/);
   assert.doesNotMatch(customs(item), /<table|aria-expanded/);
 });
-test("查询加载、空结果、失败可恢复，后端提示可见", () => {
+test("查询加载、空结果、失败可恢复，列表不再渲染顶部说明条", () => {
   assert.match(render({ kind: "idle" }), /填写 CD 编号/);
   assert.match(render({ kind: "loading" }), /正在读取报关单与关联采购/);
   assert.match(render({ kind: "error", message: "连接不可用" }), /连接不可用/);
@@ -320,7 +321,7 @@ test("查询加载、空结果、失败可恢复，后端提示可见", () => {
   state.result.groups = [];
   state.result.notices = ["旧接口缺少行关联"];
   assert.match(render(state), /没有符合条件的报关单/);
-  assert.match(render(state), /旧接口缺少行关联/);
+  assert.doesNotMatch(render(state), /旧接口缺少行关联/);
 });
 
 test("本地自动列表标明来源账套并保持单头收起，不显示演示数据说明", () => {

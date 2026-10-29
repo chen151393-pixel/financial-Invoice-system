@@ -50,7 +50,6 @@ export function ReviewPage() {
   const [batchResult, setBatchResult] = useState<BatchApproveResult | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [approvalError, setApprovalError] = useState("");
-  const [notice, setNotice] = useState("");
   const submitLock = useRef(false);
   useEffect(() => {
     let active = true;
@@ -84,11 +83,8 @@ export function ReviewPage() {
     setSubmitting(true);
     setApprovalError("");
     try {
-      const approved = await approveDeclaration(review.id, review.contentSha256, note, evidence);
-      setReview(approved);
-      setNotice(
-        `${approved.recordNumber} 审核结果已保存，并按供应商自动生成开票任务，可前往「开票跟进」查看。`,
-      );
+      await approveDeclaration(review.id, review.contentSha256, note, evidence);
+      setReview(null);
       setRefresh((value) => value + 1);
     } catch (error) {
       setApprovalError(error instanceof Error ? error.message : "审核失败，请核实后重试");
@@ -105,9 +101,7 @@ export function ReviewPage() {
     try {
       const result = await approveDeclarations(batch, note);
       setBatchResult(result);
-      if (result.approved.length) {
-        setNotice(`批量审核：${result.approved.length} 张已审核通过并生成开票任务，可前往「开票跟进」查看。`);
-      }
+      if (!result.skipped.length && result.approved.length === batch.length) setBatch(null);
     } catch (error) {
       setApprovalError(error instanceof Error ? error.message : "批量审核失败，请刷新后查看结果");
     } finally {
@@ -158,15 +152,9 @@ export function ReviewPage() {
           }}
           busy={busy}
           onSearch={(criteria) => {
-            setNotice("");
             setQuery((current) => ({ ...current, ...criteria, keyword: "", supplierId: "", page: 1 }));
           }}
         />
-        {notice && (
-          <p className="fr-status-note" role="status">
-            {notice}
-          </p>
-        )}
         <FinanceComparison
           key={state.kind === "ready" ? `ready-${loads}` : state.kind}
           state={state}

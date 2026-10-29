@@ -412,9 +412,6 @@
   color: var(--color-muted);
   font-size: 12px;
 }
-.fr-panel > .fr-status-note {
-  margin: 12px 20px 0;
-}
 
 .fr-currency-evidence fieldset {
   border: 1px solid var(--color-border);

@@ -58,11 +58,6 @@ export function FinanceComparison({
   }
   return (
     <div className="fr-preview">
-      {result.notices.map((notice) => (
-        <p className="fr-review-reason" key={notice}>
-          {notice}
-        </p>
-      ))}
       <div className="fr-results">
         <p>
           {result.counts.shown} 张报关单 · {result.counts.customs} 条报关行 · {result.counts.purchase}{" "}
