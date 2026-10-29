@@ -34,7 +34,8 @@ QUERIES = {
     ),
     # 母采购单头：子采购单币种取自母采购单（purchaseOrder.currency），汇率作为换算依据。
     "parent_headers": (
-        "SELECT t.id,t.tranid,t.currency,BUILTIN.DF(t.currency) AS currencyname,"
+        "SELECT t.id,t.tranid,t.entity AS supplierid,BUILTIN.DF(t.entity) AS suppliername,"
+        "t.currency,BUILTIN.DF(t.currency) AS currencyname,"
         "t.exchangerate FROM transaction t "
         "WHERE t.type = 'PurchOrd' AND t.id IN ({ids}) ORDER BY t.id"
     ),

@@ -18,7 +18,6 @@ from backend.integrations.netsuite.read_batch import quiet_progress
 from ..dao import (
     company_dao,
     customs_declaration_dao,
-    parent_order_dao,
     purchase_order_dao,
     raw_record_dao,
     sales_order_dao,
@@ -27,7 +26,7 @@ from ..dao import (
 from ..entity import SOURCE_TABLES, sales_orders
 from ..mapper.admission_filter import skip_unshipped
 from ..mapper.bundle_mapper import map_bundle
-from ..mapper.storage_mapper import column_value, map_parent, validate_storage_config
+from ..mapper.storage_mapper import column_value, validate_storage_config
 from ..policy.currency_policy import currency_code
 from ..policy.currency_policy import resolve as resolve_currency
 from ..policy.ns_config import parse_config
@@ -39,6 +38,7 @@ from . import link_service
 from .declaration_service import sync_lock_name
 from .ns_reader import PlReader
 from .parent_order_reader import read_parent_orders
+from .parent_order_service import save_header
 from .parent_reference_service import verify_missing_parents
 from .relation_reader import RelationReader
 from .sales_order_reader import read_sales_orders
@@ -262,19 +262,9 @@ class StorageService:
             "currency_raw_record_id": None,
         }
         if header is not None:
-            raw_id = raw_record_dao.save(connection, account, "purchaseOrder", parent_ns_id, header, now)
+            parent_id, raw_id = save_header(connection, account, parent_ns_id, header, currency, now)
             values["currency_raw_record_id"] = raw_id
-            values["parent_order_id"] = parent_order_dao.upsert(
-                connection,
-                account,
-                parent_ns_id,
-                {
-                    **map_parent(header, currency),
-                    "raw_record_id": raw_id,
-                    "currency_internal_id": str(header.get("currency") or "") or None,
-                },
-                now,
-            )
+            values["parent_order_id"] = parent_id
             affected_orders.update(
                 purchase_order_dao.inherited_orders(connection, values["parent_order_id"], values, now)
             )

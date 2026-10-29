@@ -77,6 +77,7 @@ def test_parent_headers_use_transaction_currency_without_currency_table_or_rest_
         assert request.url.path.endswith("/query/v1/suiteql")
         query = json.loads(request.content)["q"]
         assert "BUILTIN.DF(t.currency)" in query
+        assert "t.entity AS supplierid" in query and "BUILTIN.DF(t.entity) AS suppliername" in query
         assert "JOIN currency" not in query and "c.symbol" not in query
         assert "t.type = 'PurchOrd'" in query and "t.id IN (100)" in query
         return httpx.Response(
@@ -86,6 +87,8 @@ def test_parent_headers_use_transaction_currency_without_currency_table_or_rest_
                     {
                         "id": "100",
                         "tranid": "PO-100",
+                        "supplierid": "77",
+                        "suppliername": "上海供应商（有限）公司",
                         "currency": "1",
                         "currencyname": "人民币",
                         "exchangerate": "1.25",
@@ -102,6 +105,7 @@ def test_parent_headers_use_transaction_currency_without_currency_table_or_rest_
     assert len(calls) == 1
     assert parents["100"]["currency"] == "1"
     assert parents["100"]["exchangerate"] == "1.25"
+    assert parents["100"]["supplierid"] == "77"
     assert resolve("100", parents["100"]) == ("CNY", "parent_order", None)
 
 

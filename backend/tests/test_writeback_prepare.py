@@ -153,6 +153,62 @@ def test_atomic_enqueue_and_idempotent_confirmation(engine, prepared):
         )
 
 
+@pytest.mark.parametrize(
+    "buyer, normalized, allowed",
+    [(None, None, True), ("", "", True), ("采购公司A", "采购公司a", True), ("其他公司", "其他公司", False)],
+)
+def test_buyer_missing_or_matching_can_enqueue_but_mismatch_requires_review(
+    engine, ns, world, buyer, normalized, allowed
+):
+    save(ns, engine, bundle([purchase()], [customs()]))
+    with engine.begin() as connection:
+        connection.execute(
+            text(
+                "UPDATE source_parent_orders SET currency_internal_id='1', supplier_id=(SELECT id FROM source_suppliers LIMIT 1)"
+            )
+        )
+    approve(world, "CD870")
+    import_invoices(world, [invoice("26000000000000008999", [INK, FLUID], remark="SUB-200")])
+    target = invoice_id(engine, "26000000000000008999")
+    with engine.begin() as connection:
+        connection.execute(
+            text(
+                "UPDATE invoice_headers SET buyer_name=:buyer, buyer_name_normalized=:normalized WHERE id=:id"
+            ),
+            {"buyer": buyer, "normalized": normalized, "id": target},
+        )
+    for proposal in proposals(world, target):
+        world["allocations"].confirm(int(proposal.id), ConfirmBody(note="已核实发票分配"), USER)
+    service = TaskService(engine, "prod")
+    readiness = service.invoice(target)
+    assert readiness["ready"] is allowed
+    assert service.list(TaskQuery())["total"] == int(allowed)
+    if allowed:
+        assert readiness["task"]["state"] == "queued"
+        service.recheck(target, USER)
+        assert service.list(TaskQuery())["total"] == 1
+        with engine.connect() as connection:
+            snapshot = task_dao.current(connection, target)["snapshot"]
+        assert snapshot["invoice"]["buyer_name"] == buyer
+    else:
+        assert readiness["task"] is None
+        assert readiness["reason"] == "票面购买方与采购公司身份待核实"
+        assert service.recheck(target, USER)["task"] is None
+
+
+def test_missing_buyer_does_not_bypass_parent_supplier_check(engine, prepared):
+    with engine.begin() as connection:
+        connection.execute(
+            text("UPDATE invoice_headers SET buyer_name=NULL, buyer_name_normalized=NULL WHERE id=:id"),
+            {"id": prepared.invoice_id},
+        )
+        connection.execute(text("UPDATE source_parent_orders SET supplier_id=NULL"))
+    readiness = prepared.service.invoice(prepared.invoice_id)
+    assert not readiness["ready"]
+    assert readiness["reason"] == "母采购或供应商关系尚待核实"
+    assert prepared.service.get(prepared.task_id)["state"] == "stale"
+
+
 def test_query_outside_transaction_and_cancel_discards_late_result(prepared):
     task = query(
         prepared,

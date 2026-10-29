@@ -212,3 +212,5 @@
 ### 回写准备的来源上下文
 
 公开 `writeback_context(connection, line_ids)` 返回已关联子采购行的供应商、公司、母采购与 NS 账套身份，由 matching 整票就绪策略读取；仅访问 source 自有表。查询服务提供 `query_ids` 适配入口，由 app 注入 writeback；实际候选仍复用现有版本 3 校验，不创建第二套 NS 搜索。
+
+2026-10-29 修复母采购供应商关联遗漏：`parent_headers` 同时查询交易头 `entity` 及其显示名，`parent_order_service.save_header` 按同 NS 账套和供应商内部 ID 解析或创建档案，将本地 ID 写入 `source_parent_orders.supplier_id` 并保存原始查询快照。已有档案沿用其名称和停用状态，不用显示名覆盖正式名称；缺少供应商引用时保留空值，不从子采购供应商或名称猜测。历史母单需重新读取单头补齐后，再使用既有回写重新检查流程；不更改审核记录或绕过整票检查。

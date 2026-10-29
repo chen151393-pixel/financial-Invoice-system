@@ -20,6 +20,7 @@ from ..entity import (
     parent_orders,
     purchase_order_lines,
     purchase_orders,
+    suppliers,
 )
 from ..policy.optional_field_policy import allows_missing
 from ..policy.parent_reference_policy import PARENT_FIELD
@@ -255,6 +256,19 @@ def map_customs(bundle, config, now):
             }
         )
     return documents
+
+
+def map_parent_supplier(header):
+    """母采购供应商只使用 NS 单头引用，不从子采购或同名档案反推。"""
+    identity = str(header.get("supplierid") or "").strip()
+    if not identity:
+        return None
+    if not re.fullmatch(r"[1-9][0-9]{0,19}", identity):
+        raise ApiError(422, "母采购供应商内部 ID 无效，未保存")
+    return {
+        "ns_internal_id": identity,
+        "name": checked_text(header.get("suppliername"), suppliers.c.name),
+    }
 
 
 def map_parent(header, currency):

@@ -138,9 +138,10 @@ def _reason(invoice, items, allocations, confirmed, bases, contexts, units):
             or invoice["seller_name_normalized"] != source["vendor_name_normalized"]
         ):
             return "票面销售方与 NS 供应商身份待核实"
+        # 导入文件可能缺少购买方；缺失不单独阻断，有名称时仍须与采购公司一致。
         if (
-            not invoice["buyer_name_normalized"]
-            or invoice["buyer_name_normalized"] != source["company_name_normalized"]
+            invoice["buyer_name_normalized"]
+            and invoice["buyer_name_normalized"] != source["company_name_normalized"]
         ):
             return "票面购买方与采购公司身份待核实"
     if len({(s["ns_account"], s["vendor_id"], s["company_id"]) for s in contexts.values()}) != 1:

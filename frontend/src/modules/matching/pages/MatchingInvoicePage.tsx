@@ -3,12 +3,9 @@ import { Link } from "react-router";
 import { paths } from "../../../app/paths";
 import { Alert, Button, Card, EmptyState, ErrorState, Skeleton } from "../../../shared/components/ui";
 import { openLocalSession } from "../../identity/api";
-import { InvoiceWritebackStatus } from "../components/InvoiceWritebackStatus";
-import { OrderMatchingPanel } from "../components/OrderMatchingPanel";
 import {
   cancelAllocation,
   confirmAllocation,
-  confirmOrder,
   createAllocation,
   findCandidates,
   generateProposals,
@@ -121,7 +118,6 @@ export function MatchingInvoicePage({ invoiceId }: { invoiceId: string }) {
   );
   return (
     <div className="matching-page">
-      <InvoiceWritebackStatus invoiceId={invoiceId} version={state.data} />
       <InvoicePaper
         value={state.data}
         selectedId={selected?.id ?? null}
@@ -170,15 +166,6 @@ export function MatchingInvoicePage({ invoiceId }: { invoiceId: string }) {
           <EmptyState title="这张发票没有可比对的明细" description="请先在进项发票中补齐商品明细。" />
         </Card>
       )}
-      <OrderMatchingPanel
-        key={invoiceId}
-        invoiceId={invoiceId}
-        value={state.data}
-        busy={busy}
-        onConfirm={(body) =>
-          act(() => confirmOrder(body), "整单匹配已保存，全部明细分配和任务收票进度已同步更新。")
-        }
-      />
     </div>
   );
 }

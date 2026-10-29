@@ -7,6 +7,15 @@ from backend.core.names import normalize_name
 from ..entity import suppliers
 
 
+def reference_id(connection, account, ns_internal_id):
+    """只按同账套 NS 身份解析引用，保留现有名称与停用状态。"""
+    return connection.execute(
+        select(suppliers.c.id).where(
+            suppliers.c.ns_account == account, suppliers.c.ns_internal_id == ns_internal_id
+        )
+    ).scalar_one_or_none()
+
+
 def upsert(connection, account, party, now):
     row = (
         connection.execute(

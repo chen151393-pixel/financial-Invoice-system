@@ -111,7 +111,7 @@
 
 ## 比对详情页布局与票面（2026-10-28）
 
-- 页面自上而下：整张发票票面（票种与状态、购买方／销售方及纳税人识别号、商品明细表含单位／数量／单价／金额／税率／税额、合计金额与税额、价税合计、备注）→ 左右分栏核对（左侧发票商品明细，右侧所选行与子采购行逐项比对）→ 整张子采购单匹配。逐行核对不再收在折叠区内。
+- 页面自上而下：整张发票票面（票种与状态、购买方／销售方及纳税人识别号、商品明细表含单位／数量／单价／金额／税率／税额、合计金额与税额、价税合计、备注）→ 左右分栏核对（左侧发票商品明细，右侧所选行与子采购行逐项比对）。逐行核对不再收在折叠区内。2026-10-29 移除详情页顶部回写准备提示和底部整单匹配表单；后端接口与规则保留。
 - 同一发票行有多条待处理比对（如整单拆分）时，右侧先列出各条子采购行供切换，一次只展开一条逐项比对，避免几十张相同卡片堆叠；左侧导航只汇总涉及的子采购单号。
 - `GET /api/matching/invoices/{id}` 响应新增 `paper`（`invoiceType`、`buyerTaxNo`、`sellerTaxNo`、`net`、`tax`、`gross`），`items[]` 新增 `unitPrice`、`net`、`taxRate`（如“13%”）、`tax`。票面金额按两位小数并带千分位的文本返回，前端只展示不计算；原 `invoice`、`items[].amount` 等字段不变。数据经 invoice 门面 `read_invoice_paper` 读取，不进入比对与回写快照。
 - 组件：`components/InvoicePaper.tsx`（票面）、`InvoiceLineNav.tsx`、`InvoiceLinePanel.tsx`；样式在 `components/matching-detail.css`。验证：`test_matching_whole_order.py::test_detail_view_returns_invoice_paper`，本地隔离 SQLite 合成数据预览（1440px 与 375px）。
