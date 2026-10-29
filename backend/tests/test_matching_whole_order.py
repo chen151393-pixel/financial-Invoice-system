@@ -14,6 +14,7 @@ from backend.tests.test_matching import reviewed as reviewed
 from backend.tests.test_matching import world as world
 from backend.tests.test_source_storage import bundle, customs, purchase, rows, save
 from backend.tests.test_task import USER, approve
+from backend.tests.test_unit_display import dictionary as dictionary
 from sqlalchemy import text
 
 
@@ -135,3 +136,43 @@ def test_unit_evidence_required_and_converted_quantity_conserved(engine, world, 
     assert all(
         row["received_quantity"] == 10 for row in rows(engine, "SELECT received_quantity FROM task_lines")
     )
+
+
+def test_unit_code_resolved_before_comparison(ns, engine, world, dictionary):
+    # NS 子采购单位存编号 1，单位字典为“台”；票面写“台”时应按同单位处理，不要求换算证据。
+    order = purchase()
+    for _, line in order[2]:
+        line["custrecord_swc_subpo_item_unit"] = "1"
+        line["custrecord_swc_subpo_item_bgname"] = "墨水"
+    declaration = customs("870")
+    declaration[2][1][1]["custrecord_swc_delare_name"] = "墨水"
+    save(ns, engine, bundle([order], [declaration]))
+    approve(world, "CD870", "单位编号按字典核实")
+    import_invoices(
+        world, [invoice("26000000000000009903", [("墨水", "台", "20", "120.50", "0")], remark="PO-100")]
+    )
+    target = invoice_id(engine, "26000000000000009903")
+    assert {row["unit"] for row in rows(engine, "SELECT unit FROM source_purchase_order_lines")} == {"1"}
+    for proposal in proposals(world, target):
+        unit = next(check for check in proposal.checks if check.key == "unit")
+        quantity = next(check for check in proposal.checks if check.key == "quantity")
+        assert unit.result == "match" and unit.purchaseValue == "台"
+        assert quantity.result == "match"
+    found = candidate(world, target)
+    assert found.confirm.allowed
+    assert not any("换算证据" in warning for warning in found.warnings)
+    assert {part.purchaseUnit for part in found.allocations} == {"台"}
+    view = world["allocations"].confirm_order(confirmation(target, found), USER)
+    assert view.items[0].confirmedQuantity == "20"
+    confirmed = "SELECT purchase_unit FROM matching_allocations WHERE status = 'confirmed'"
+    assert {row["purchase_unit"] for row in rows(engine, confirmed)} == {"1"}
+
+
+def test_detail_view_returns_invoice_paper(world, aggregate):
+    # 比对详情页还原票面：票种、销售方税号、合计与商品行税率税额均为后端文本。
+    view = world["queries"].invoice(aggregate)
+    assert view.paper.invoiceType == "数电发票（增值税专用发票）"
+    assert view.paper.sellerTaxNo == "91310000TEST00001X"
+    assert (view.paper.net, view.paper.tax, view.paper.gross) == ("120.50", "0.00", "120.50")
+    line = view.items[0]
+    assert (line.net, line.taxRate, line.tax, line.amount) == ("120.50", "13%", "0.00", "120.5")

@@ -2,11 +2,13 @@
 
 from decimal import Decimal, localcontext
 
+from backend.modules.source.public import unit_label
+
 from .allocation_policy import hard_block, remaining
-from .comparison_policy import item_name
+from .comparison_policy import item_name, same_unit
 
 
-def plan(invoice, lines, tasks, bases, conversion):
+def plan(invoice, lines, tasks, bases, conversion, units):
     """返回 (分配计划, 阻断原因)。多发票行只接受品名唯一对应，不猜测同名行之间的分摊。"""
     items = [item for item in invoice["items"] if item["is_active"]]
     if not items:
@@ -38,7 +40,7 @@ def plan(invoice, lines, tasks, bases, conversion):
         item = matches[0]
         if not item["unit"] or not basis["unit"]:
             return [], "发票或采购明细缺少单位，须先补齐"
-        if item["unit"] == basis["unit"] and (
+        if same_unit(item["unit"], unit_label(basis["unit"], units)) and (
             conversion.conversionNumerator != 1 or conversion.conversionDenominator != 1
         ):
             return [], "同单位必须使用 1 / 1 换算"

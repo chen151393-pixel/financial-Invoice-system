@@ -28,6 +28,8 @@ def context(order, parent, *, supplier="甲公司", unit="个", item="墨水", a
         "declaration_name": item,
         "item_name": "普通商品名",
         "unit": unit,
+        # 与 source.purchase_lines 一致：单位字典名称，未知编号保留原值
+        "unit_name": unit,
         "active": active,
     }
 

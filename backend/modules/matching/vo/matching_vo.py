@@ -90,6 +90,11 @@ class ItemView(StrictModel):
     unit: str | None
     quantity: str | None
     amount: str | None
+    # 票面展示：单价、不含税金额、税率（如“13%”）、税额，均为后端文本；金额两位小数带千分位
+    unitPrice: str | None = None
+    net: str | None = None
+    taxRate: str | None = None
+    tax: str | None = None
     confirmedQuantity: str
     confirmedAmount: str
     allocations: list[AllocationView]
@@ -110,8 +115,20 @@ class InvoiceSide(StrictModel):
     remark: str | None
 
 
+class InvoicePaper(StrictModel):
+    """比对详情页票面补充信息；只读展示，不参与比对。"""
+
+    invoiceType: str | None
+    buyerTaxNo: str | None
+    sellerTaxNo: str | None
+    net: str | None
+    tax: str | None
+    gross: str | None
+
+
 class InvoiceMatching(StrictModel):
     invoice: InvoiceSide
+    paper: InvoicePaper
     items: list[ItemView]
     generate: Capability
 

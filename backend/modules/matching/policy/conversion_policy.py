@@ -3,13 +3,17 @@
 from decimal import Decimal, localcontext
 
 from backend.core.errors import ApiError
+from backend.modules.source.public import unit_label
+
+from .comparison_policy import same_unit
 
 
-def convert(quantity, item, basis, body):
+def convert(quantity, item, basis, body, units):
     if item["quantity"] is None or not item["unit"] or not basis["unit"]:
         raise ApiError(409, "发票或采购缺少可核实的数量单位，不能确认分配")
     numerator, denominator = body.conversionNumerator, body.conversionDenominator
-    if item["unit"] == basis["unit"]:
+    # 记录仍保存采购单位原值，只在判断是否同单位时按字典名称比较
+    if same_unit(item["unit"], unit_label(basis["unit"], units)):
         if (numerator, denominator) != (Decimal(1), Decimal(1)):
             raise ApiError(422, "相同单位的换算因子必须为 1")
     elif not body.conversionEvidence.strip():

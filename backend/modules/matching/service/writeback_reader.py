@@ -2,7 +2,7 @@
 
 from backend.modules.invoice.public import read_invoices
 from backend.modules.review.public import current_bases
-from backend.modules.source.public import writeback_context
+from backend.modules.source.public import unit_names, writeback_context
 
 from ..dao import allocation_dao
 from ..policy.writeback_readiness import assess
@@ -17,6 +17,7 @@ def read_writeback_snapshot(connection, invoice_id):
         rows,
         current_bases(connection, line_ids),
         writeback_context(connection, line_ids),
+        unit_names(connection),
     )
 
 

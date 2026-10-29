@@ -41,6 +41,25 @@ ITEM_FIELDS = (
 )
 
 
+# 票面展示补充字段：只供比对详情页还原票面，不进入 read_invoices，避免改变比对指纹与回写快照。
+PAPER_HEADER_FIELDS = ("invoice_type", "amount_excluding_tax")
+PAPER_ITEM_FIELDS = ("unit_price", "tax_rate", "tax_amount")
+
+
+def read_invoice_paper(connection, invoice_id):
+    """{票种、不含税合计, "items": {发票行 ID: {单价、税率、税额}}}；发票不存在返回 None。"""
+    headers = header_dao.by_ids(connection, [invoice_id])
+    if not headers:
+        return None
+    return {
+        **{key: headers[0][key] for key in PAPER_HEADER_FIELDS},
+        "items": {
+            item["id"]: {key: item[key] for key in PAPER_ITEM_FIELDS}
+            for item in item_dao.by_invoices(connection, [invoice_id])
+        },
+    }
+
+
 def invoice_ids_between(connection, start, end, *, number_terms=()):
     """比对队列的发票 ID：可选起止日期与票面号码部分匹配，多号码取并集。"""
     return header_dao.ids_between(connection, start, end, number_terms=number_terms)

@@ -5,7 +5,10 @@ import json
 import re
 from decimal import Decimal, localcontext
 
+from backend.modules.source.public import unit_label
+
 from .approval_version import effective_basis, effective_invoice
+from .comparison_policy import same_unit
 
 
 def canonical(value):
@@ -16,12 +19,12 @@ def canonical(value):
     raise TypeError(type(value).__name__)
 
 
-def assess(invoice, allocations, bases, contexts):
+def assess(invoice, allocations, bases, contexts, units):
     if not invoice:
         return {"ready": False, "reason": "发票不存在"}
     active = [item for item in invoice["items"] if item["is_active"]]
     confirmed = [row for row in allocations if row["status"] == "confirmed"]
-    reason = _reason(invoice, active, allocations, confirmed, bases, contexts)
+    reason = _reason(invoice, active, allocations, confirmed, bases, contexts, units)
     if reason:
         return {"ready": False, "reason": reason}
     snapshot = {
@@ -39,11 +42,12 @@ def assess(invoice, allocations, bases, contexts):
     }
 
 
-def _reason(invoice, items, allocations, confirmed, bases, contexts):
+def _reason(invoice, items, allocations, confirmed, bases, contexts, units):
     if invoice["status"] != "normal" or invoice["currency"] != "CNY":
         return "首期只接收正常人民币发票"
-    if not invoice.get("tax_amount") or invoice["tax_amount"] <= 0:
-        return "零税额或税额不明业务须专项核实"
+    # 2026-10-28 确认：采购税额为 0 也须登记，零税额发票照常回写；税额缺失或为负仍须核实。
+    if invoice.get("tax_amount") is None or invoice["tax_amount"] < 0:
+        return "税额不明或为负，须专项核实"
     if invoice["detail_status"] != "complete" or not invoice["current_version_id"] or not items:
         return "发票明细或版本尚不完整"
     if not invoice["invoice_no"] or not invoice["invoice_date"]:
@@ -104,7 +108,7 @@ def _reason(invoice, items, allocations, confirmed, bases, contexts):
             or basis["currency"] != "CNY"
         ):
             return "单位或币种与当前开票依据不一致"
-        if item["unit"] == basis["unit"]:
+        if same_unit(item["unit"], unit_label(basis["unit"], units)):
             if (row["conversion_numerator"], row["conversion_denominator"]) != (Decimal(1), Decimal(1)):
                 return "相同单位的换算比例必须为一"
         elif not (row["conversion_evidence"] or {}).get("reference"):

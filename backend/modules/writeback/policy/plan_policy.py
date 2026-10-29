@@ -55,12 +55,11 @@ def validate_plan(task, result, targets):
         if (
             bill["approvalStatus"] != "2"
             or bill["voided"]
-            or not bill["hasTax"]
             or not bill["consistent"]
             or bill["currency"] != "CNY"
             or Decimal(bill["amounts"]["received"]) < 0
         ):
-            raise ApiError(409, "账单未批准、作废、税额或历史金额存在问题，不能确认")
+            raise ApiError(409, "账单未批准、作废或历史金额存在问题，不能确认")
         amount = Decimal(target["amount"])
         if amount <= 0 or amount != amount.quantize(Decimal("0.01")):
             raise ApiError(422, "分配金额必须为正数且精确到分")

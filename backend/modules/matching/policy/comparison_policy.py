@@ -62,6 +62,15 @@ def name_result(invoice_name, purchase_name):
     return "partial" if invoice_name in purchase_name or purchase_name in invoice_name else "mismatch"
 
 
+def same_unit(invoice_unit, purchase_unit_name):
+    """NS 采购单位是编号，调用方须先经 source 单位字典换成名称；未知编号保留原值，不会被判为一致。"""
+    return bool(
+        invoice_unit
+        and purchase_unit_name
+        and normalize_name(invoice_unit) == normalize_name(purchase_unit_name)
+    )
+
+
 def order_in_remark(remark, order_no):
     """备注中出现完整订单号，不能把长单号或子单后缀误认为母单号。"""
     if not remark or not order_no:
@@ -113,9 +122,7 @@ def compare(invoice, item, line, remaining_quantity, remaining_amount):
         if invoice["remark"]
         else "发票没有备注"
     )
-    unit_match = bool(
-        item["unit"] and line["unit"] and normalize_name(item["unit"]) == normalize_name(line["unit"])
-    )
+    unit_match = same_unit(item["unit"], line["unit_name"])
     checks = [
         _check(
             "order",
@@ -187,7 +194,7 @@ def price_check(item, line, unit_match):
         f"，单价 {_money(unit_price)}" if unit_price is not None else ""
     )
     purchase_value = f"申报 {_money(declared['amount_cny'])}" + (
-        f"，单价 {_money(declared['unit_price_cny'])}"
+        f"，单价 {_money(declared['unit_price_cny'])}{estimated}"
         if same_unit and declared["unit_price_cny"] is not None
         else ""
     )

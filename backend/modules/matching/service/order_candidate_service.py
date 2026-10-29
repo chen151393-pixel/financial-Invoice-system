@@ -12,7 +12,7 @@ from backend.modules.task.public import open_lines
 
 from ..dao import allocation_dao, ledger_dao
 from ..policy.allocation_policy import remaining
-from ..policy.comparison_policy import name_result, order_reference, text
+from ..policy.comparison_policy import name_result, order_reference, same_unit, text
 from ..policy.order_matching_policy import plan
 from ..vo.order_matching_vo import OrderCandidate, OrderCandidates
 
@@ -62,7 +62,7 @@ def candidates(connection, query, *, order_id=None):
         grouped.setdefault(line["purchase_order_id"], {})[line_id] = line
     rows = []
     for purchase_id, lines in grouped.items():
-        allocation_plan, block = plan(invoice, lines, tasks, bases, query)
+        allocation_plan, block = plan(invoice, lines, tasks, bases, query, units)
         if confirmed:
             block = "发票已有已确认分配，请在逐行分配中核实或取消，不能再次整单分配"
         if not block and any(
@@ -103,7 +103,7 @@ def _candidate(invoice, order_id, lines, tasks, bases, units, query, allocation_
             bases[part["purchase_line_id"]],
             items[part["invoice_item_id"]],
         )
-        if item["unit"] != basis["unit"]:
+        if not same_unit(item["unit"], unit_label(basis["unit"], units)):
             warnings.append(
                 f"发票单位 {item['unit']} 与采购单位 {unit_label(basis['unit'], units)} 不同，确认时必须填写换算证据"
             )

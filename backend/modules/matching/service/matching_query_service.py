@@ -5,9 +5,9 @@ from decimal import Decimal
 from sqlalchemy.exc import SQLAlchemyError
 
 from backend.core.errors import ApiError
-from backend.modules.invoice.public import invoice_display_status, read_invoices
+from backend.modules.invoice.public import invoice_display_status, read_invoice_paper, read_invoices
 from backend.modules.review.public import current_bases
-from backend.modules.source.public import purchase_lines, unit_label, unit_names
+from backend.modules.source.public import purchase_lines
 from backend.modules.task.public import open_lines
 
 from ..dao import allocation_dao
@@ -92,11 +92,9 @@ class MatchingQueryService:
         )
         lines = purchase_lines(connection, line_ids)
         bases = current_bases(connection, line_ids)
-        units = unit_names(connection)
         for key, line in lines.items():
             basis = bases.get(key)
             line.update(
-                unit_display=unit_label(line["unit"], units),
                 currency=basis["currency"] if basis else None,
                 basis_reason=basis["reason"] if basis else "缺少有效开票依据",
                 basis_id=basis["id"] if basis else None,
@@ -142,12 +140,14 @@ class MatchingQueryService:
             if not found:
                 raise ApiError(404, "发票不存在")
             invoice = found[0]
+            paper = read_invoice_paper(connection, invoice_id)
             rows = allocation_dao.by_invoices(connection, [invoice_id])
             views = self._views(connection, invoice, rows)
             items = []
             for item in invoice["items"]:
                 own = [row for row in rows if row["invoice_item_id"] == item["id"]]
                 confirmed = [row for row in own if row["status"] == "confirmed"]
+                face = paper["items"][item["id"]]
                 items.append(
                     ItemView(
                         active=item["is_active"],
@@ -158,6 +158,10 @@ class MatchingQueryService:
                         unit=item["unit"],
                         quantity=text(item["quantity"]),
                         amount=text(item["amount_including_tax"]),
+                        unitPrice=text(face["unit_price"]),
+                        net=mapper.paper_money(item["amount_excluding_tax"]),
+                        taxRate=mapper.tax_rate(face["tax_rate"]),
+                        tax=mapper.paper_money(face["tax_amount"]),
                         confirmedQuantity=text(sum((row["quantity"] for row in confirmed), Decimal(0))),
                         confirmedAmount=text(sum((row["amount"] for row in confirmed), Decimal(0))),
                         allocations=[views[row["id"]] for row in own],
@@ -166,6 +170,7 @@ class MatchingQueryService:
             normal = invoice["status"] == "normal"
             return InvoiceMatching(
                 invoice=mapper.invoice_side(invoice),
+                paper=mapper.invoice_paper(invoice, paper),
                 items=items,
                 generate=Capability(
                     allowed=normal,
@@ -303,7 +308,7 @@ class MatchingQueryService:
                 rows.append(
                     Candidate(
                         purchase=mapper.purchase_side(task_line["purchase_line_id"], line, task_line),
-                        checks=mapper.check_views(checks, line.get("unit_display")),
+                        checks=mapper.check_views(checks, line.get("unit_name")),
                         confidence=text(confidence),
                         tier=tier(confidence),
                         block=rules.hard_block(invoice, line, task_line),

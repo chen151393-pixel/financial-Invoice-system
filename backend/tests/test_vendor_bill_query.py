@@ -261,8 +261,10 @@ def test_zero_tax_full_or_over_received_and_inconsistent_details_remain_visible(
     actual = query(data)
     output = actual.purchaseOrders[0].bills[0]
     assert output.availableInvoiceAmount == available
-    for fragment in ("税额为零", "正向收票", "明细合计不一致", "尚未批准", "已作废"):
+    for fragment in ("正向收票", "明细合计不一致", "尚未批准", "已作废"):
         assert any(fragment in issue for issue in output.issues)
+    # 采购税额为 0 也须登记，零税额不再作为问题提示。
+    assert not any("税额" in issue for issue in output.issues)
     assert not actual.writeback.allowed
 
 

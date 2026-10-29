@@ -118,7 +118,7 @@
 - 报关单读取门面（第 4b 步加入，供 review 使用）：`DeclarationService`（索引、分页内容、账户锁 `locked`）、`snapshot`（锁内读取完整内容）、`digest`（重算内容摘要）。2026-10-22 起索引返回真实报关单号并可按供应商筛选；`suppliers(account)` 返回有效报关单关联的供应商选项。
 - 报关单准入（2026-10-22 加入）：`admission_issues(declaration_no, order_count)` 返回未出库原因列表，`admission_reason(issues)` 返回提示文案。2026-10-23 起拉取时即按此跳过（见下节）；review 保留同一判断，只用于拦截库中遗留的旧数据。
 - 归档用报关单头（2026-10-23 加入，供 task 使用）：`SourceDirectory.declarations(ids)` 返回 `{id: {record_no, declaration_no, created_at}}`，`created_at` 为 NS 创建时间（UTC）。
-- 子采购行比对上下文（第 4d 步加入，供 matching 使用）：`purchase_lines(connection, line_ids)`——子采购单号、供应商与采购公司（含规范化名称）、品名、单位、数量金额、币种及来源、是否有效、内容摘要 `digest`（建议生成后来源变化即改变）。
+- 子采购行比对上下文（第 4d 步加入，供 matching 使用）：`purchase_lines(connection, line_ids)`——子采购单号、供应商与采购公司（含规范化名称）、品名、单位、数量金额、币种及来源、是否有效、内容摘要 `digest`（建议生成后来源变化即改变）。2026-10-28 新增 `unit_name`：单位编号经单位字典解析的名称，供 matching 判断是否同单位；不参与摘要。
 - 来源目录（第 4c 步加入，供 task 使用）：`SourceDirectory`（`service/directory_service.py`）——按 ID 批量取供应商、采购公司、子采购单号与行品名（含已停用记录，保证历史任务可显示），按名称 / 单号搜索 ID，有效供应商分页。
 
 ## 4e 切换

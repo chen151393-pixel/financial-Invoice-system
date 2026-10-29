@@ -3,7 +3,7 @@
 from backend.core.errors import ApiError
 from backend.modules.invoice.public import lock_invoice, read_invoices
 from backend.modules.review.public import current_bases
-from backend.modules.source.public import purchase_lines
+from backend.modules.source.public import purchase_lines, unit_names
 from backend.modules.task.public import open_lines
 
 from ..dao import allocation_dao, ledger_dao
@@ -43,7 +43,7 @@ def approve(service, connection, allocation, body, actor, now, *, reverify=False
     invoice, item, line, task_line, basis = context(connection, allocation)
     note = body.note.strip()
     _validate(connection, allocation, body, invoice, item, line, task_line, basis, reverify)
-    converted = convert(allocation["quantity"], item, basis, body)
+    converted = convert(allocation["quantity"], item, basis, body, unit_names(connection))
     if reverify and allocation["verification_status"] == "valid":
         previous = (allocation["verification_history"] or [{}])[-1]
         if (

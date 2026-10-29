@@ -109,6 +109,22 @@
 
 发票比对采购侧与单位比对项通过 source 只读门面解析为单位名称，仅影响展示，不修改原始编号、数量金额或审核／比对结论。字典缺失、停用及未知编号保留原值，规则与兼容表归属见 [source 单位说明](../source/README.md)；验证见 `backend/tests/test_unit_display.py`。
 
+## 比对详情页布局与票面（2026-10-28）
+
+- 页面自上而下：整张发票票面（票种与状态、购买方／销售方及纳税人识别号、商品明细表含单位／数量／单价／金额／税率／税额、合计金额与税额、价税合计、备注）→ 左右分栏核对（左侧发票商品明细，右侧所选行与子采购行逐项比对）→ 整张子采购单匹配。逐行核对不再收在折叠区内。
+- 同一发票行有多条待处理比对（如整单拆分）时，右侧先列出各条子采购行供切换，一次只展开一条逐项比对，避免几十张相同卡片堆叠；左侧导航只汇总涉及的子采购单号。
+- `GET /api/matching/invoices/{id}` 响应新增 `paper`（`invoiceType`、`buyerTaxNo`、`sellerTaxNo`、`net`、`tax`、`gross`），`items[]` 新增 `unitPrice`、`net`、`taxRate`（如“13%”）、`tax`。票面金额按两位小数并带千分位的文本返回，前端只展示不计算；原 `invoice`、`items[].amount` 等字段不变。数据经 invoice 门面 `read_invoice_paper` 读取，不进入比对与回写快照。
+- 组件：`components/InvoicePaper.tsx`（票面）、`InvoiceLineNav.tsx`、`InvoiceLinePanel.tsx`；样式在 `components/matching-detail.css`。验证：`test_matching_whole_order.py::test_detail_view_returns_invoice_paper`，本地隔离 SQLite 合成数据预览（1440px 与 375px）。
+
+## 单位按字典名称比对（2026-10-28）
+
+NS 子采购单位保存的是单位编号（如 `20`），票面是单位名称（如“卷”）。此前比对直接用编号与票面名称比较，同一单位也判为不一致，连带数量不一致、置信度下降，并要求填写说明和换算证据。现在 `comparison_policy.same_unit` 统一按 source 单位字典名称判断是否同单位，覆盖逐行比对、整单候选警告与规划（`order_matching_policy`）、确认换算（`conversion_policy`）和回写就绪（`writeback_readiness`）。
+
+- `source.public.purchase_lines` 上下文新增 `unit_name`（字典名称，未知编号保留原值），不进入行摘要，字典调整不会使已有建议过期；原 `unit_display` 由它替代。
+- 分配记录与开票依据仍保存单位原值；同单位仍须 1 / 1 换算，不同单位仍须换算证据。
+- 已生成的待审建议保存了旧置信度：详情页比对项实时重算，排序与分档需在详情页点“重新生成建议”后更新。
+- 验证：`test_matching_whole_order.py::test_unit_code_resolved_before_comparison`。不需要数据库迁移，不触发 NS 写入。
+
 2026-10-19：专业版 API 商品明细补全后沿用 InvoicesImported 订阅生成建议，不新增匹配算法或自动确认入口。明细不完整时禁止确认；发票先拉取、采购后审核时仍通过“重新生成建议”进入队列。完整拉票到收齐、重排去重、换版待复核、作废红冲、撤销和事务回滚见 `backend/tests/sync/test_lemon_detail_matching.py`，MySQL 复用验证见 `test_lemon_detail_mysql.py`。
 
 ## 发票工作台只读汇总

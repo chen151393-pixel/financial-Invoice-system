@@ -93,8 +93,6 @@ def describe_bill(bill):
         issues.append("账单尚未批准或审批状态待核实")
     if currency != "CNY":
         issues.append("币种不是已核实人民币，暂不纳入首期回写")
-    if not bill.hasTax:
-        issues.append("账单税额为零，暂不纳入首期回写")
     if total <= 0 or received < 0 or available <= 0:
         issues.append("账单应收、已收或可收金额不满足正向收票条件")
     if not bill.consistent:

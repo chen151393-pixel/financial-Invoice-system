@@ -27,7 +27,7 @@
 | service | `import_service.py` | 预览凭证（绑定操作者、文件名、文件摘要、预览时票据版本，30 分钟）、命名锁、去重分类、整批保存、发布事件 |
 | | `invoice_service.py` | 列表与详情 |
 | | `invoice_stats_service.py` | 分布统计：最近 6 个月按开票日期的张数与人民币价税合计、票面展示状态（红字按负金额识别，同列表）、柠檬云账套张数与人民币价税合计；非人民币发票不混入金额，另返回 `otherCurrencyCount`；筛选条件同列表，分页参数不起作用 |
-| | `invoice_reader.py` | 门面读取：`read_invoices`、`lock_invoice`（传入调用方连接） |
+| | `invoice_reader.py` | 门面读取：`read_invoices`、`read_invoice_paper`、`lock_invoice`（传入调用方连接） |
 | | `excel_parser.py`、`xlsx_reader.py` | 柠檬云 XLS / XLSX 解析与源数据校验（沿用原实现） |
 | dao | `header_dao.py`、`item_dao.py`、`raw_record_dao.py` | 各表读写 |
 | mapper | `import_mapper.py` | 解析结果 → 新表行（金额两位小数、字段长度、名称规范化） |
@@ -49,6 +49,7 @@
 
 - 事件 `InvoicesImported(invoice_ids)`：本次新增或更新的发票 ID。
 - `read_invoices(connection, invoice_ids)`：票头（状态、销售方、购买方及规范化名称、币种、价税合计、备注）与发票行（品名及规范化名称、规格、数量、单位、含税金额）。
+- `read_invoice_paper(connection, invoice_id)`（2026-10-28）：比对详情页还原票面所需的票种、不含税合计，以及各发票行单价、税率、税额；发票不存在返回 `None`。单独提供而不并入 `read_invoices`，避免改变整单候选指纹和回写就绪快照。
 - `lock_invoice(connection, invoice_id)`：在调用方事务中锁定票头（matching 审核分配时使用）。
 - `read_invoice_amount_scope(connection, filters, after_id=0)`：复用列表的关键字、状态和日期筛选；首批返回全范围票面汇总，每批至多 500 张统计票头，供 matching 汇总匹配金额。返回普通数据，不暴露表结构，不按页面页码限制范围。
 

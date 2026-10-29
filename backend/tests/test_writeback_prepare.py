@@ -282,7 +282,7 @@ def test_snapshot_is_immutable_and_readiness_detects_incomplete_amount(engine, p
         ("UPDATE matching_allocations SET verification_status='needs_review' WHERE id=:id", "复核"),
         ("UPDATE invoice_headers SET current_version_id=current_version_id+1 WHERE id=:id", "版本"),
         ("UPDATE invoice_headers SET status='void' WHERE id=:id", "正常"),
-        ("UPDATE invoice_headers SET tax_amount=0 WHERE id=:id", "零税额"),
+        ("UPDATE invoice_headers SET tax_amount=NULL WHERE id=:id", "税额不明"),
         ("UPDATE matching_allocations SET conversion_numerator=2 WHERE id=:id", "换算"),
     ],
 )
@@ -294,6 +294,23 @@ def test_readiness_rejects_changed_versions_units_and_incomplete_invoice(engine,
     readiness = prepared.service.invoice(prepared.invoice_id)
     assert not readiness["ready"] and reason in readiness["reason"]
     assert prepared.service.get(prepared.task_id)["state"] == "stale"
+
+
+def test_zero_tax_invoice_and_bill_can_be_confirmed(engine, prepared):
+    # 2026-10-28 确认：采购税额为 0 也须登记。
+    with engine.begin() as connection:
+        connection.execute(
+            text("UPDATE invoice_headers SET tax_amount=0 WHERE id=:id"), {"id": prepared.invoice_id}
+        )
+    assert prepared.service.invoice(prepared.invoice_id)["ready"]
+    prepared.service.recheck(prepared.invoice_id, USER)
+    payload = result()
+    payload["purchaseOrders"][0]["bills"][0]["hasTax"] = False
+    # 税额变化会改变审核快照，重新检查后以当前任务为准。
+    current = prepared.service.invoice(prepared.invoice_id)["task"]
+    task = query(SimpleNamespace(**{**vars(prepared), "task_id": current["id"]}), payload)
+    done = prepared.service.confirm(task["id"], confirmation(task), USER)
+    assert done["state"] == "ready"
 
 
 def test_waiting_bill_and_query_failure_are_distinct(prepared):

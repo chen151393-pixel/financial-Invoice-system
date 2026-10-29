@@ -1,10 +1,11 @@
 """分配记录、子采购行上下文 → 响应对象。"""
 
 from datetime import UTC
+from decimal import Decimal
 
 from ..policy.allocation_policy import STATUS_LABELS, remaining
 from ..policy.comparison_policy import text, tier
-from ..vo.matching_vo import AllocationView, Check, InvoiceSide, PurchaseSide
+from ..vo.matching_vo import AllocationView, Check, InvoicePaper, InvoiceSide, PurchaseSide
 
 INVOICE_STATUS = {"normal": "正常", "red_offset": "已红冲", "void": "作废", "unknown": "未知"}
 
@@ -35,7 +36,7 @@ def purchase_side(purchase_line_id, line, task_line):
         company=line.get("company_name") or "",
         item=line.get("declaration_name") or line.get("item_name") or "",
         specification=line.get("specification") or "",
-        unit=line.get("unit_display", line.get("unit")) or "",
+        unit=line.get("unit_name", line.get("unit")) or "",
         currency=line.get("currency") or "",
         currencyNote=line.get("currency_issue") or ("取自母采购单" if line.get("currency") else ""),
         expectedQuantity=text(task_line["expected_quantity"]) if task_line else None,
@@ -91,6 +92,27 @@ def allocation_view(row, checks, purchase, capabilities, note_reasons):
         purchase=purchase,
         noteReasons=note_reasons,
         **capabilities,
+    )
+
+
+def tax_rate(value):
+    """税率小数转为票面写法，例如 0.130000 → 13%；缺失保持为空，不显示为 0。"""
+    return None if value is None else f"{text(value * 100)}%"
+
+
+def paper_money(value):
+    """票面金额按“126,550.00”写法展示；库内金额本为两位小数，不发生舍入。"""
+    return None if value is None else format(value.quantize(Decimal("0.01")), ",f")
+
+
+def invoice_paper(invoice, paper):
+    return InvoicePaper(
+        invoiceType=paper["invoice_type"],
+        buyerTaxNo=invoice["buyer_tax_no"],
+        sellerTaxNo=invoice["seller_tax_no"],
+        net=paper_money(paper["amount_excluding_tax"]),
+        tax=paper_money(invoice["tax_amount"]),
+        gross=paper_money(invoice["amount_including_tax"]),
     )
 
 

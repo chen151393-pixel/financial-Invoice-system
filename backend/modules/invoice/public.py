@@ -2,6 +2,7 @@
 
 - 事件 InvoicesImported：发票导入事务中发布，matching 订阅后生成比对建议。
 - 只读函数（需传入调用方的数据库连接，便于在同一事务中读取）：read_invoices、lock_invoice、invoices_by_number、
+  read_invoice_paper（比对详情页票面展示字段）、
   read_invoice_status_scope / read_invoice_page（按列表条件分批读取状态、在给定发票范围内分页）。
 - InvoiceQuery / InvoiceList：列表查询条件与分页结果结构，供按匹配状态筛选的列表复用。
 """
@@ -23,6 +24,7 @@ from .service.invoice_reader import (
     read_invoice_accounts,
     read_invoice_amount_scope,
     read_invoice_page,
+    read_invoice_paper,
     read_invoice_status_scope,
     read_invoices,
 )
@@ -47,6 +49,7 @@ __all__ = [
     "read_invoice_accounts",
     "read_invoice_amount_scope",
     "read_invoice_page",
+    "read_invoice_paper",
     "read_invoice_status_scope",
     "invoice_display_status",
     "InvoiceQuery",

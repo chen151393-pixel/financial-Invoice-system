@@ -7,7 +7,9 @@ import hashlib
 import json
 
 from ..dao import purchase_order_dao
+from ..dao.unit_dictionary_dao import unit_names
 from ..policy.content_digest import canonical
+from ..policy.unit_policy import unit_label
 from .declared_price_reader import declared_prices
 
 FIELDS = (
@@ -52,10 +54,13 @@ def supplier_line_ids(connection, supplier_id=None, *, name_terms=()):
 def purchase_lines(connection, line_ids, *, lock=False):
     """{子采购行 ID: 比对上下文}；active 为子采购单与行均有效。"""
     result = {}
+    names = unit_names(connection)
     for row in purchase_order_dao.line_context(connection, sorted(set(line_ids)), lock=lock):
         context = {key: row[key] for key in FIELDS}
         context["active"] = bool(row["is_active"] and row["order_active"])
         context["digest"] = line_digest(context)
+        # NS 单位存编号，比对须用字典名称；不参与摘要，字典调整不会使已有建议过期
+        context["unit_name"] = unit_label(row["unit"], names)
         # 对应报关行的人民币申报价（价格校验用）；只读参考，不参与摘要
         context["declared"] = None
         context["source_refs"] = {
