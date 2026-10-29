@@ -25,7 +25,7 @@ def test_invoice_queue_groups_before_paging(engine, world, reviewed):
             invoice("26000000000000009904", [("其他商品", "箱", "1000", "100000", "0")]),
         ],
     )
-    # 整单建议不会是低置信度；模拟一张低置信票以覆盖三档
+    # 第四张票现在会生成低分待审建议；再降低第三张票的分数，覆盖低分多票分页。
     with engine.begin() as connection:
         connection.execute(
             text("UPDATE matching_allocations SET confidence = 40 WHERE invoice_id = :i"),
@@ -33,14 +33,18 @@ def test_invoice_queue_groups_before_paging(engine, world, reviewed):
         )
     first = world["queries"].invoice_queue(QueueQuery(pageSize=1))
     second = world["queries"].invoice_queue(QueueQuery(pageSize=1, page=2))
-    assert first.total == first.pages == 3
-    assert first.counts == {"all": 3, "high": 1, "medium": 1, "low": 1}
+    assert first.total == first.pages == 4
+    assert first.counts == {"all": 4, "high": 1, "medium": 1, "low": 2}
     assert first.rows[0].proposalCount == 2
     assert first.rows[0].invoice.number == "26000000000000009901"
     assert first.rows[0].invoice.id != second.rows[0].invoice.id
     assert first.rows[0].batch.allowed and len(first.rows[0].batchIds) == 2
     assert not second.rows[0].batch.allowed
     assert world["queries"].invoice_queue(QueueQuery(tier="high")).total == 1
+    low = world["queries"].invoice_queue(QueueQuery(tier="low", pageSize=1, page=2))
+    assert low.total == low.pages == 2
+    assert low.rows[0].invoice.number == "26000000000000009904"
+    assert low.rows[0].proposalCount == 2 and not low.rows[0].batch.allowed
     assert world["queries"].invoice_queue(QueueQuery(page=99)).page == 1
 
 
