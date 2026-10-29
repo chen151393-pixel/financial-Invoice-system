@@ -153,7 +153,7 @@ export function InvoiceListPage() {
         totalsStarted = true;
         void loadTotals();
         const filters = new URLSearchParams();
-        for (const key of ["q", "account", "status", "date_from", "date_to"] as const)
+        for (const key of Object.keys(emptyFilters) as (keyof typeof emptyFilters)[])
           if (query[key]) filters.set(key, query[key]);
         void loadStats(filters);
         // 列表、匹配状态张数与本页比对状态由比对模块一次返回（按匹配状态筛选需在比对模块组织）

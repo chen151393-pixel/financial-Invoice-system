@@ -3,7 +3,14 @@
   gap: 20px;
   min-width: 0;
 }
-/* 汇总指标与列表面板的外观来自组件库（MetricCard、Card），这里只做排布 */
+/* 汇总金额突出展示；说明文字继续沿用指标卡默认字号。 */
+.invoice-list__summary .ui-metric__value > strong {
+  min-width: 0;
+  font-size: clamp(24px, 2vw, 32px);
+  font-weight: 750;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
 .invoice-list__amounts {
   display: grid;
   gap: 2px;

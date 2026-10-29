@@ -304,7 +304,7 @@ button.ui-metric:focus-visible {
   font-variant-numeric: tabular-nums;
   letter-spacing: -0.01em;
 }
-.ui-metric__value span {
+.ui-metric__value > span {
   color: var(--color-muted);
   font-size: 12px;
 }
@@ -1050,6 +1050,10 @@ button.ui-metric:focus-visible {
 .ui-chart__hit[data-active] {
   fill: var(--color-primary-soft);
   opacity: 0.6;
+}
+.ui-chart g[tabindex]:focus-visible .ui-chart__hit {
+  stroke: var(--color-primary);
+  stroke-width: 1;
 }
 .ui-chart__line {
   fill: none;

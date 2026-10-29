@@ -70,6 +70,13 @@ def read_invoice_accounts(connection):
     return header_dao.accounts(connection)
 
 
+def read_receipt_dates(connection, start, end):
+    """按票面开票日期汇总全部正常人民币进项票（含未匹配），不按任务或 NS 账套归集。"""
+    return header_dao.date_counts(
+        connection, InvoiceQuery(status="normal", date_from=start, date_to=end), currency="CNY"
+    )
+
+
 def read_invoices(connection, invoice_ids):
     """[{发票头字段..., "items": [发票行字段...]}]，按 ID 顺序；不存在的 ID 不返回。"""
     headers = header_dao.by_ids(connection, sorted(set(invoice_ids)))

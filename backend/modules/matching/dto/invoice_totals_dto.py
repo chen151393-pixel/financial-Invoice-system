@@ -10,6 +10,9 @@ from backend.core.dto import StrictModel
 
 class InvoiceTotalsQuery(StrictModel):
     q: str = Field(default="", max_length=100)
+    invoice_no: str = Field(default="", max_length=100, description="发票号码部分匹配")
+    seller_name: str = Field(default="", max_length=100, description="供应商名称部分匹配")
+    seller_tax_no: str = Field(default="", max_length=100, description="供应商税号部分匹配")
     account: str = Field(default="", max_length=100, description="与发票列表相同的来源账套标识")
     status: Literal["", "normal", "red_letter", "red_offset", "void", "unknown"] = ""
     date_from: date | None = Field(default=None, strict=False)

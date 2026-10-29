@@ -35,6 +35,11 @@ def _conditions(query):
     conditions = []
     if query.account:
         conditions.append(headers.c.lemon_account == query.account)
+    # 独立字段取交集；原 q 保留兼容既有调用方的跨字段搜索。
+    for name in ("invoice_no", "seller_name", "seller_tax_no"):
+        value = getattr(query, name).strip()
+        if value:
+            conditions.append(headers.c[name].contains(value, autoescape=True))
     keyword = query.q.strip()
     if keyword:
         conditions.append(
@@ -136,11 +141,15 @@ def other_currency_count(connection, query):
     )
 
 
-def date_counts(connection, query):
+def date_counts(connection, query, *, currency=None):
     """当前筛选下按开票日期计数（月份在服务层汇总，避免依赖数据库日期函数）。"""
     result = connection.execute(
         select(headers.c.invoice_date.label("date"), func.count().label("count"), CNY_GROSS)
-        .where(*_conditions(query), headers.c.invoice_date.is_not(None))
+        .where(
+            *_conditions(query),
+            headers.c.invoice_date.is_not(None),
+            *([headers.c.currency == currency] if currency else []),
+        )
         .group_by(headers.c.invoice_date)
     ).mappings()
     return [dict(row) for row in result]

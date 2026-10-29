@@ -1,13 +1,11 @@
 """工作台关键指标（纯函数）：数值、对比说明与近 6 个月序列都在这里算好，前端只展示。
 
-金额指标只统计人民币任务（与"应开与已收票金额趋势"口径一致）；序列按任务或报关单的生成月份（北京时间）。
+应开与待收来自人民币任务；收票金额来自按开票月份归集的全部正常人民币进项票（含未匹配）。
 """
 
 from decimal import Decimal
 
 from .workbench_reports import OVERDUE_DAYS, month_keys, month_of
-
-RECEIVED_STATUSES = ("documents_incomplete", "completed")
 
 
 def _delta(text, direction="flat", tone="neutral"):
@@ -53,7 +51,6 @@ def kpis(*, monthly, tasks, reviews, today):
     changed = sum(bool(row.get("changed")) for row in reviews)
     notify = [row for row in tasks if row["node"] == "notification"]
     documents = sum(row["node"] == "documents" for row in tasks)
-    settled = sum(row["status"] in RECEIVED_STATUSES for row in this_month)
     return [
         {
             "key": "expected",
@@ -70,16 +67,16 @@ def kpis(*, monthly, tasks, reviews, today):
         },
         {
             "key": "received",
-            "label": "已收票金额",
+            "label": "本月收票金额",
             "role": "finance",
             "value": current["received"],
             "unit": "",
             "currency": "CNY",
             **_delta(
-                f"收票率 {current['percent']}%" if current["percent"] is not None else "本月暂无应开",
+                f"收票／应开比 {current['percent']}%" if current["percent"] is not None else "本月暂无应开",
                 tone="positive" if current["percent"] is not None else "neutral",
             ),
-            "hint": f"已收齐 {settled} / {len(this_month)} 个任务",
+            "hint": f"本月开票 {current['invoiceCount']} 张正常进项票（含未匹配）",
             "series": [item["received"] for item in monthly],
         },
         {

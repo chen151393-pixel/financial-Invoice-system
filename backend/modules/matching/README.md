@@ -192,7 +192,7 @@ MySQL 的 `SUM(CASE ...)` 返回 Decimal，待审核建议非空时曾导致队�
 
 ## 工作台漏斗、应开与已收、比对队列分档（2026-10-27）
 
-`POST /api/matching/workbench/query` 新增：`funnel`（由五个业务状态累加的“至少走到这一步”报关单数及相对上一步的通过率，不含无需开票的报关单）、`monthly`（最近 6 个月按任务生成月份的人民币应开合计与目前已收票合计、收票率；应开金额缺失的任务不计入并计数）、`queue`（待审核比对建议按置信度高 / 中 / 低分档计数）。规则在 `policy/workbench_reports.py`，任务应开合计由 task 门面 `workbench_tasks` 的 `expected` 字段提供（任一行缺失为空）。
+`POST /api/matching/workbench/query` 新增：`funnel`（由五个业务状态累加的“至少走到这一步”报关单数及相对上一步的通过率，不含无需开票的报关单）、`monthly`（最近 6 个月人民币应开按任务生成月，收票按全部正常入库进项票的开票月（含未匹配）；invoiceCount 为正常票张数，percent 为收票／应开比，可超过 100%；应开缺失只影响应开统计并另计数）、`queue`（待审核比对建议按置信度高 / 中 / 低分档计数）。规则在 `policy/workbench_reports.py`，任务应开合计由 task 门面 `workbench_tasks` 的 `expected` 字段提供（任一行缺失为空）。
 
 ## 进项发票按匹配状态筛选（2026-10-27）
 

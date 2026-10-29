@@ -8,6 +8,9 @@ from pydantic import BaseModel, Field, model_validator
 
 class InvoiceQuery(BaseModel):
     q: str = Field(default="", max_length=100)
+    invoice_no: str = Field(default="", max_length=100, description="发票号码部分匹配")
+    seller_name: str = Field(default="", max_length=100, description="供应商名称部分匹配")
+    seller_tax_no: str = Field(default="", max_length=100, description="供应商税号部分匹配")
     account: str = Field(default="", max_length=100, description="来源账套标识；空值查询全部账套")
     page: int = Field(default=1, ge=1, le=100000)
     page_size: int = Field(default=20, ge=1, le=100)

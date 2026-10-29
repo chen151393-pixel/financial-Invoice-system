@@ -9,6 +9,50 @@
   margin: 10px 0 0;
 }
 
+/* 月度收票进度：直接展示所选月份的后端金额与收票率，低比例不再只靠柱高辨认。 */
+.wb-receipts-month {
+  display: grid;
+  gap: 4px;
+  color: var(--color-muted);
+  font-size: 12px;
+}
+.wb-receipts-month select {
+  min-height: 34px;
+  padding: 6px 10px;
+  border: 1px solid var(--color-input-border);
+  border-radius: var(--radius-control);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font: inherit;
+}
+.wb-receipts-month select:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+.wb-receipts-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px 32px;
+  margin: 0 0 20px;
+}
+.wb-receipts-summary > div {
+  min-width: 0;
+}
+.wb-receipts-summary dt {
+  color: var(--color-muted);
+  font-size: 12px;
+}
+.wb-receipts-summary dd {
+  margin: 6px 0 0;
+  font-size: 20px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+.wb-receipts-summary__received {
+  color: var(--color-primary);
+}
+
 /* 供应商待收票排行：序号、名称、金额一行，条形与最长等待一行 */
 .wb-rank-list {
   display: grid;

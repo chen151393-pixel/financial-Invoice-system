@@ -77,7 +77,8 @@ import { Card, CardHeader, CardContent, MetricCard, MetricGrid, Badge } from "..
 
 ## 2026-10-27 补充
 
-- `TrendChart` 新增 `grouped`（并排柱）与 `lineAxis="percent"`（折线按右侧 0–100% 轴绘制并在点上显示 `texts`，“—”不标注）；系列可传 `color`（设计变量）。
+- `TrendChart` 新增 `grouped`（并排柱）与 `lineAxis="percent"`（折线按右侧百分比轴绘制，轴上限至少 100%，超过时随真实最大值扩展并在点上显示 `texts`，“—”不标注）；系列可传 `color`（设计变量）。
+- `TrendChart.line.values` 支持 `null`：不画该点、不跨空值连线，提示文字由 `texts` 提供。各月份支持 Tab 聚焦查看明细，并提供焦点边框；金额轴和百分比轴保持真实比例。
 - `Sparkline` 新增 `warning`、`inverse`（实底卡片上反白）色调。
 - 设计变量新增 `--color-warning`：超期、需关注等小面积标记（条形、走势线），不用于大面积底色。
 

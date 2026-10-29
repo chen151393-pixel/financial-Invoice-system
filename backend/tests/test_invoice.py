@@ -21,6 +21,7 @@ from backend.tests.invoice_files import invoice, workbook
 from backend.tests.test_source_storage import engine as engine  # 共用夹具
 from backend.tests.test_source_storage import rows
 from fastapi.testclient import TestClient
+from sqlalchemy import text
 
 USER = "user:admin"
 XLS = base64.b64encode((Path(__file__).parent / "fixtures" / "lemon-invoices.xls").read_bytes()).decode()
@@ -220,6 +221,65 @@ def test_http_import_and_list(context, engine):
         stats = client.get("/api/invoices/stats?status=red_letter", headers=headers).json()
         assert sum(item["count"] for item in stats["statuses"]) == 1
         assert client.get("/api/invoices/0", headers=headers).status_code == 400
+
+
+def test_independent_search_fields_share_list_stats_and_matching_scope(context, engine, imports):
+    run(
+        imports,
+        workbook(
+            [
+                invoice("26000000000000000111", [("商品", "个", "1", "10.00", "1.30")], seller="甲供应商"),
+                invoice("26000000000000000222", [("商品", "个", "1", "20.00", "2.60")], seller="乙供应商111"),
+            ]
+        ),
+        "fields.xlsx",
+    )
+    with engine.begin() as connection:
+        connection.execute(
+            text("UPDATE invoice_headers SET seller_tax_no = 'TAX111' WHERE seller_name = '甲供应商'")
+        )
+        connection.execute(
+            text("UPDATE invoice_headers SET seller_tax_no = 'TAX222' WHERE seller_name = '乙供应商111'")
+        )
+    app = create_app(context.settings, context.ns, engine)
+    with TestClient(app) as client:
+        origin = {"Origin": context.settings.origin}
+        assert (
+            client.post(
+                "/api/session",
+                headers=origin,
+                json={
+                    "username": "admin",
+                    "password": context.settings.admin_password,
+                },
+            ).status_code
+            == 200
+        )
+        for filters, count, number in [
+            ({"invoice_no": " 111 "}, 1, "26000000000000000111"),
+            ({"seller_name": "111"}, 1, "26000000000000000222"),
+            ({"seller_tax_no": "222"}, 1, "26000000000000000222"),
+            ({"invoice_no": "111", "seller_name": "甲", "seller_tax_no": "111"}, 1, "26000000000000000111"),
+            ({"invoice_no": "111", "seller_name": "乙"}, 0, None),
+            ({"seller_name": "%"}, 0, None),
+            ({"seller_tax_no": "_"}, 0, None),
+            ({"invoice_no": " "}, 2, None),
+        ]:
+            listed = client.get("/api/invoices", params=filters)
+            assert listed.status_code == 200 and listed.json()["total"] == count
+            if number:
+                assert listed.json()["rows"][0]["number"] == number
+            stats = client.get("/api/invoices/stats", params=filters)
+            assert stats.status_code == 200 and stats.json()["total"] == count
+            totals = client.get("/api/matching/invoice-totals", params=filters)
+            assert totals.status_code == 200
+            assert sum(row["count"] for row in totals.json()["amounts"]) == count
+            matched = client.post("/api/matching/invoices/query", json=filters, headers=origin)
+            assert matched.status_code == 200 and matched.json()["list"]["total"] == count
+        for field in ("invoice_no", "seller_name", "seller_tax_no"):
+            invalid = {field: "x" * 101}
+            assert client.get("/api/invoices", params=invalid).status_code == 400
+            assert client.get("/api/matching/invoice-totals", params=invalid).status_code == 400
 
 
 def test_stale_preview_cannot_overwrite_a_newer_version(imports, engine):

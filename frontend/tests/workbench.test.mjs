@@ -57,6 +57,64 @@ after(async () => {
 });
 const counts = { all: 3, review: 1, matching: 1, task: 1, blocked: 0, reverify: 0, preparation: 1 };
 
+test("月度收票趋势区分无应开和真实零收票，直接显示精确金额与低收票率", async () => {
+  const { WorkbenchReceipts } = await server.ssrLoadModule(
+    "/src/modules/matching/components/WorkbenchReceipts.tsx",
+  );
+  const monthly = [
+    { month: "2026-08", expected: "0", received: "0", percent: null, unknownTasks: 2 },
+    { month: "2026-09", expected: "100.00", received: "0", percent: "0.0", unknownTasks: 0 },
+    { month: "2026-10", expected: "920000.00", received: "11040.00", percent: "1.2", unknownTasks: 0 },
+  ];
+  const html = renderToStaticMarkup(createElement(WorkbenchReceipts, { monthly }));
+  assert.match(html, /920,000.00/);
+  assert.match(html, /11,040.00/);
+  assert.match(html, /1.2%/);
+  assert.match(html, /value="2026-10" selected=""/);
+  assert.equal((html.match(/class="ui-chart__point"/g) ?? []).length, 2);
+  assert.match(html, /收票／应开比 暂无应开/);
+  assert.match(html, /0.0%/);
+  assert.match(html, /另有 2 个任务应开金额缺失/);
+  const empty = renderToStaticMarkup(createElement(WorkbenchReceipts, { monthly: [monthly[0]] }));
+  assert.match(empty, /暂无可统计的应开或收票金额/);
+  assert.doesNotMatch(empty, /class="ui-chart"/);
+  const noMonths = renderToStaticMarkup(createElement(WorkbenchReceipts, { monthly: [] }));
+  assert.match(noMonths, /暂无可统计的应开或收票金额/);
+  const onlyInvoices = renderToStaticMarkup(
+    createElement(WorkbenchReceipts, {
+      monthly: [{ ...monthly[0], received: "123.45" }],
+    }),
+  );
+  assert.match(onlyInvoices, /123.45/);
+  assert.match(onlyInvoices, /class="ui-chart"/);
+  assert.doesNotMatch(onlyInvoices, /class="ui-chart__point"/);
+});
+
+test("折线空值形成断点，孤立有效点与真实零值仍保留", async () => {
+  const { TrendChart } = await server.ssrLoadModule("/src/shared/components/ui/charts/TrendChart.tsx");
+  const html = renderToStaticMarkup(
+    createElement(TrendChart, {
+      label: "断点验证",
+      categories: ["5月", "6月", "7月", "8月", "9月", "10月"],
+      lineAxis: "percent",
+      line: { key: "rate", label: "收票率", values: [0, 10, null, 30, null, 1.2] },
+    }),
+  );
+  assert.equal((html.match(/<polyline/g) ?? []).length, 1);
+  assert.equal((html.match(/class="ui-chart__point"/g) ?? []).length, 4);
+  assert.equal((html.match(/tabindex="0"/g) ?? []).length, 6);
+  assert.doesNotMatch(html, /NaN|undefined/);
+  const over = renderToStaticMarkup(
+    createElement(TrendChart, {
+      label: "超过百分百",
+      categories: ["10月"],
+      lineAxis: "percent",
+      line: { key: "ratio", label: "收票／应开比", values: [140] },
+    }),
+  );
+  assert.match(over, /150%/);
+});
+
 test("审核队列请求整票接口并保留后端分页与日期条件", async (t) => {
   let seen;
   t.mock.method(globalThis, "fetch", async (url, options) => {

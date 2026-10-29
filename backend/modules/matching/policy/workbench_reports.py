@@ -73,12 +73,16 @@ def supplier_ranking(tasks, limit=6):
     return result, len(unknown)
 
 
-def monthly_receipts(tasks, today, months=6, currency="CNY"):
-    """按任务生成月份（北京时间）汇总人民币应开与目前已收票金额，最近 months 个月；
-    应开金额缺失的任务不计入应开与已收，另计张数提示。"""
+def monthly_receipts(tasks, receipts, today, months=6, currency="CNY"):
+    """应开按任务生成月，收票按全部正常人民币进项票的开票月（含未匹配）。
+
+    receipts 来自 invoice 门面的按日期汇总；比值不表示同一批任务完成率，可超过 100%。
+    应开缺失只影响应开统计，不影响独立的票面收票金额。
+    """
     keys = month_keys(today, months)
     expected = dict.fromkeys(keys, Decimal(0))
     received = dict.fromkeys(keys, Decimal(0))
+    invoice_counts = dict.fromkeys(keys, 0)
     unknown = dict.fromkeys(keys, 0)
     for row in tasks:
         key = month_of(row["created_at"])
@@ -88,13 +92,18 @@ def monthly_receipts(tasks, today, months=6, currency="CNY"):
             unknown[key] += 1
             continue
         expected[key] += row["expected"]
-        received[key] += row["received"]
+    for row in receipts:
+        key = row["date"].strftime("%Y-%m")
+        if key in received:
+            received[key] += Decimal(str(row["gross"] or 0))
+            invoice_counts[key] += row["count"]
     return [
         {
             "month": key,
             "currency": currency,
             "expected": format(expected[key], "f"),
             "received": format(received[key], "f"),
+            "invoiceCount": invoice_counts[key],
             "percent": percent(received[key], expected[key]) if expected[key] else None,
             "unknownTasks": unknown[key],
         }

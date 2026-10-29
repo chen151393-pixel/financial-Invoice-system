@@ -114,6 +114,7 @@ class MonthlyReceipt(StrictModel):
     currency: str
     expected: str
     received: str
+    invoiceCount: int
     percent: str | None
     # 当月应开金额缺失、未计入的任务数
     unknownTasks: int

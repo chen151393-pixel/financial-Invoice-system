@@ -89,6 +89,9 @@ test("统计请求只携带已应用筛选，不携带页码或金额", async (t
   });
   const result = await api.getInvoiceTotals({
     q: "测试供应商",
+    invoice_no: "9501",
+    seller_name: "供应商",
+    seller_tax_no: "9131",
     account: "professional:account-a",
     status: "normal",
     date_from: "2026-10-01",
@@ -101,11 +104,48 @@ test("统计请求只携带已应用筛选，不携带页码或金额", async (t
   assert.equal(seen.pathname, "/api/matching/invoice-totals");
   assert.deepEqual(Object.fromEntries(seen.searchParams), {
     q: "测试供应商",
+    invoice_no: "9501",
+    seller_name: "供应商",
+    seller_tax_no: "9131",
     account: "professional:account-a",
     status: "normal",
     date_from: "2026-10-01",
     date_to: "2026-10-19",
   });
+});
+
+test("号码、供应商和税号独立显示并分别更新，清空后不再提示未应用条件", () => {
+  const draft = { ...emptyFilters, invoice_no: "9501", seller_name: "供应商", seller_tax_no: "9131" };
+  let changed;
+  const props = {
+    draft,
+    applied: emptyFilters,
+    loading: false,
+    onChange(value) {
+      changed = value;
+    },
+    onSubmit() {},
+    onReset() {},
+    onRefresh() {},
+  };
+  const html = renderToStaticMarkup(createElement(Filters, props));
+  assert.doesNotMatch(html, /发票 \/ 供应商 \/ 税号/);
+  for (const label of ["发票号码", "供应商", "供应商税号"]) assert.match(html, new RegExp(label));
+  const form = Filters(props).props.children[0];
+  for (const [index, key] of ["invoice_no", "seller_name", "seller_tax_no"].entries()) {
+    form.props.children[index].props.children.props.onChange({ target: { value: "新条件" } });
+    assert.deepEqual(changed, { ...draft, [key]: "新条件" });
+  }
+  assert.doesNotMatch(
+    renderToStaticMarkup(
+      createElement(Filters, {
+        ...props,
+        draft: emptyFilters,
+        applied: emptyFilters,
+      }),
+    ),
+    /当前结果仍对应上次查询/,
+  );
 });
 
 test("账套筛选展示后端名称、选中项和未应用提示，包含加载及失败状态", () => {
@@ -150,7 +190,9 @@ test("按匹配状态筛选的列表请求带全部筛选条件与匹配状态�
   });
   await api.queryInvoiceMatchList({
     ...emptyFilters,
-    q: "供应商",
+    invoice_no: "9501",
+    seller_name: "供应商",
+    seller_tax_no: "9131",
     date_from: "2026-10-01",
     matchStatus: "proposed",
     page: 2,
@@ -158,7 +200,9 @@ test("按匹配状态筛选的列表请求带全部筛选条件与匹配状态�
   });
   assert.match(calls[0].url, /\/api\/matching\/invoices\/query$/);
   assert.deepEqual(calls[0].body, {
-    q: "供应商",
+    invoice_no: "9501",
+    seller_name: "供应商",
+    seller_tax_no: "9131",
     account: "",
     status: "",
     date_from: "2026-10-01",

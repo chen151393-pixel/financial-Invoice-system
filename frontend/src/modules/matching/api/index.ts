@@ -48,6 +48,9 @@ export const getMatchingQueue = (query: QueueQuery) =>
 export const queryInvoiceMatchList = <List>(filters: InvoiceMatchFilters) =>
   read<InvoiceMatchList<List>>("/matching/invoices/query", "POST", {
     q: filters.q,
+    invoice_no: filters.invoice_no,
+    seller_name: filters.seller_name,
+    seller_tax_no: filters.seller_tax_no,
     account: filters.account,
     status: filters.status,
     date_from: filters.date_from || null,
@@ -58,7 +61,16 @@ export const queryInvoiceMatchList = <List>(filters: InvoiceMatchFilters) =>
   });
 export function getInvoiceTotals(filters: InvoiceTotalsFilters) {
   const params = new URLSearchParams();
-  for (const key of ["q", "account", "status", "date_from", "date_to"] as const)
+  for (const key of [
+    "q",
+    "invoice_no",
+    "seller_name",
+    "seller_tax_no",
+    "account",
+    "status",
+    "date_from",
+    "date_to",
+  ] as const)
     if (filters[key]) params.set(key, filters[key]);
   return read<InvoiceTotals>(`/matching/invoice-totals?${params}`);
 }

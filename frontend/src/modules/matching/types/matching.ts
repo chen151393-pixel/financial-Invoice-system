@@ -255,7 +255,10 @@ export const resultLabels: Record<Check["result"], string> = {
 
 // 进项发票按匹配状态筛选的列表：list 为发票列表分页结构（由调用方给出类型），counts 不受所选匹配状态影响
 export type InvoiceMatchFilters = {
-  q: string;
+  q?: string;
+  invoice_no?: string;
+  seller_name?: string;
+  seller_tax_no?: string;
   account: string;
   status: string;
   date_from: string;

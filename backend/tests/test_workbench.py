@@ -1,6 +1,6 @@
 """工作台：真实业务链路、全量筛选导出、币种日期口径和只读认证。"""
 
-from datetime import datetime
+from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 
 from backend.app import create_app
@@ -8,7 +8,11 @@ from backend.core.config import load_settings
 from backend.modules.matching.dto.workbench_dto import WorkbenchQuery
 from backend.modules.matching.policy.workbench_flow import funnel, node_distribution
 from backend.modules.matching.policy.workbench_kpis import kpis
-from backend.modules.matching.policy.workbench_reports import monthly_receipts, supplier_ranking
+from backend.modules.matching.policy.workbench_reports import (
+    BUSINESS_ZONE,
+    monthly_receipts,
+    supplier_ranking,
+)
 from backend.modules.matching.service.workbench_service import WorkbenchService
 from backend.tests.documents_ready import complete_documents
 from backend.tests.invoice_files import invoice
@@ -67,7 +71,9 @@ def test_review_to_task_to_receipt_and_version_review(engine, ns, world):
     result = read(engine)
     assert result.counts.matching == result.counts.task == 0
     received = next(k for k in result.kpis if k.key == "received")
-    assert Decimal(received.value) == Decimal("120.5") and received.hint == "已收齐 1 / 1 个任务"
+    assert (
+        Decimal(received.value) == Decimal("120.5") and received.hint == "本月开票 1 张正常进项票（含未匹配）"
+    )
     # 漏斗与按月应开/已收：已完结的报关单走完全部环节；本月人民币应开与已收各 120.5
     steps = result.funnel.steps
     assert [(step.key, step.count) for step in steps][-1] == ("completed", 1)
@@ -84,7 +90,8 @@ def test_review_to_task_to_receipt_and_version_review(engine, ns, world):
     result = read(engine)
     assert result.counts.reverify == result.counts.matching == 1
     assert result.counts.task == 1
-    assert next(k for k in result.kpis if k.key == "received").hint == "已收齐 0 / 1 个任务"
+    # 发票换版导致待复核，不影响正常票面收票统计。
+    assert Decimal(next(k for k in result.kpis if k.key == "received").value) == Decimal("120.5")
 
 
 def test_filters_pagination_and_full_export(engine, ns, world, reviewed):
@@ -115,7 +122,12 @@ def test_monthly_receipts_by_creation_month_cny_only():
         {**base, "currency": "USD", "expected": Decimal("999")},  # 非人民币不混入
         {**base, "created_at": datetime(2026, 9, 30, 15, 59), "expected": Decimal("50")},  # 北京时间 9 月
     ]
-    months = monthly_receipts(rows, today)
+    receipts = [
+        {"date": date(2026, 10, 31), "gross": Decimal("40"), "count": 2},
+        {"date": date(2026, 9, 30), "gross": Decimal("70"), "count": 1},
+        {"date": date(2026, 4, 30), "gross": Decimal("999"), "count": 1},
+    ]
+    months = monthly_receipts(rows, receipts, today)
     assert [item["month"] for item in months][0] == "2026-05" and len(months) == 6
     october, september = months[-1], months[-2]
     assert (october["expected"], october["received"], october["percent"], october["unknownTasks"]) == (
@@ -125,6 +137,53 @@ def test_monthly_receipts_by_creation_month_cny_only():
         1,
     )
     assert september["expected"] == "50" and months[0]["percent"] is None
+    assert september["received"] == "70" and september["percent"] == "140.0"
+    assert october["invoiceCount"] == 2
+    no_tasks = monthly_receipts([], receipts, today)[-1]
+    assert no_tasks["received"] == "40" and no_tasks["percent"] is None
+
+
+def test_receipt_totals_use_invoice_date_all_normal_cny_including_unmatched(engine, world):
+    numbers = [f"260000000000000098{i:02d}" for i in range(1, 8)]
+    import_invoices(
+        world,
+        [
+            invoice(numbers[0], [INK]),
+            invoice(numbers[1], [FLUID]),
+            invoice(numbers[2], [INK], status="作废"),
+            invoice(numbers[3], [INK], status="已被红冲"),
+            invoice(numbers[4], [("退货", "个", "-1", "-10.00", "-1.30")]),
+            invoice(numbers[5], [INK]),
+            invoice(numbers[6], [INK]),
+        ],
+    )
+    # 无任务、无有效匹配；全部正常人民币票也应计入。测试日期取服务当前月份。
+    current = datetime.now(UTC).astimezone(BUSINESS_ZONE).date().replace(day=1)
+    previous = current - timedelta(days=1)
+    future = date(current.year + (current.month == 12), current.month % 12 + 1, 1)
+    with engine.begin() as connection:
+        connection.execute(text("UPDATE invoice_headers SET invoice_date = :date"), {"date": current})
+        connection.execute(
+            text("UPDATE invoice_headers SET invoice_date = :date WHERE invoice_no = :number"),
+            {"date": previous, "number": numbers[1]},
+        )
+        connection.execute(
+            text("UPDATE invoice_headers SET currency = 'USD' WHERE invoice_no = :number"),
+            {"number": numbers[5]},
+        )
+        connection.execute(
+            text("UPDATE invoice_headers SET invoice_date = :date WHERE invoice_no = :number"),
+            {"date": future, "number": numbers[6]},
+        )
+    result = read(engine)
+    assert Decimal(result.monthly[-1].received) == Decimal("100.50")
+    assert result.monthly[-1].invoiceCount == 1 and result.monthly[-1].percent is None
+    assert Decimal(result.monthly[-2].received) == Decimal("20.00")
+    received = next(k for k in result.kpis if k.key == "received")
+    assert Decimal(received.value) == Decimal("100.50")
+    assert received.label == "本月收票金额" and "含未匹配" in received.hint
+    # 收票属于全部入库票据，不随 NS 任务账套筛选变化。
+    assert read(engine, account="missing").monthly[-1].received == result.monthly[-1].received
 
 
 def test_ranking_does_not_mix_currencies_or_partial_unknown_totals():
@@ -196,7 +255,7 @@ def test_node_distribution_excludes_completed_tasks():
 def test_kpis_month_change_outstanding_and_counts():
     today = datetime(2026, 10, 19).date()
     monthly = [
-        {"month": m, "expected": e, "received": r, "percent": p}
+        {"month": m, "expected": e, "received": r, "percent": p, "invoiceCount": 1}
         for m, e, r, p in (
             ("2026-05", "0", "0", None),
             ("2026-06", "0", "0", None),
@@ -227,7 +286,8 @@ def test_kpis_month_change_outstanding_and_counts():
     found = {k["key"]: k for k in kpis(monthly=monthly, tasks=tasks, reviews=reviews, today=today)}
     assert found["expected"]["delta"] == "较上月 +25.0%" and found["expected"]["direction"] == "up"
     assert found["expected"]["hint"] == "本月生成 4 个开票任务"
-    assert found["received"]["delta"] == "收票率 20.0%" and found["received"]["hint"] == "已收齐 1 / 4 个任务"
+    assert found["received"]["delta"] == "收票／应开比 20.0%"
+    assert found["received"]["hint"] == "本月开票 1 张正常进项票（含未匹配）"
     outstanding = found["outstanding"]
     assert outstanding["value"] == "60" and outstanding["tone"] == "warning"
     assert outstanding["hint"] == "涉及 1 家供应商，另有 1 个任务金额待核实"

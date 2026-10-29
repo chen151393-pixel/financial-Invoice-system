@@ -27,6 +27,7 @@ from .service.invoice_reader import (
     read_invoice_paper,
     read_invoice_status_scope,
     read_invoices,
+    read_receipt_dates,
 )
 from .service.lemon_refresh_reader import read_lemon_refresh_targets
 from .vo.invoice_vo import InvoiceList
@@ -46,6 +47,7 @@ __all__ = [
     "lock_invoice",
     "invoices_by_number",
     "read_invoices",
+    "read_receipt_dates",
     "read_invoice_accounts",
     "read_invoice_amount_scope",
     "read_invoice_page",

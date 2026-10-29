@@ -2,9 +2,17 @@ import { Alert, Button, Field, FilterBar } from "../../../shared/components/ui";
 import type { InvoiceAccountOption, InvoiceFilters as Filters } from "../types/invoice";
 import "./invoice-status.css";
 
-export const emptyFilters: Filters = { q: "", account: "", status: "", date_from: "", date_to: "" };
+export const emptyFilters: Filters = {
+  invoice_no: "",
+  seller_name: "",
+  seller_tax_no: "",
+  account: "",
+  status: "",
+  date_from: "",
+  date_to: "",
+};
 
-/** 发票查询条件：关键字、账套、票面状态与开票日期一行展示，查询按钮紧跟条件。 */
+/** 发票号码、供应商和税号独立查询，可与账套、状态、日期组合筛选。 */
 export function InvoiceFilters({
   draft,
   applied,
@@ -46,12 +54,28 @@ export function InvoiceFilters({
           </>
         }
       >
-        <Field label="发票 / 供应商 / 税号" grow>
+        <Field label="发票号码">
           <input
-            value={draft.q}
+            value={draft.invoice_no}
             maxLength={100}
-            placeholder="搜索发票号码、供应商或税号"
-            onChange={(event) => onChange({ ...draft, q: event.target.value })}
+            placeholder="输入发票号码"
+            onChange={(event) => onChange({ ...draft, invoice_no: event.target.value })}
+          />
+        </Field>
+        <Field label="供应商">
+          <input
+            value={draft.seller_name}
+            maxLength={100}
+            placeholder="输入供应商名称"
+            onChange={(event) => onChange({ ...draft, seller_name: event.target.value })}
+          />
+        </Field>
+        <Field label="供应商税号">
+          <input
+            value={draft.seller_tax_no}
+            maxLength={100}
+            placeholder="输入供应商税号"
+            onChange={(event) => onChange({ ...draft, seller_tax_no: event.target.value })}
           />
         </Field>
         <Field label="账套">

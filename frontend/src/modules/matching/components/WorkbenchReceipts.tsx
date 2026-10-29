@@ -1,52 +1,102 @@
-import { TrendChart } from "../../../shared/components/ui";
+import { useState } from "react";
+import { EmptyState, TrendChart } from "../../../shared/components/ui";
 import { money } from "../../../shared/format/money";
 import type { Workbench } from "../types/workbench";
 
 /**
- * 应开与已收票金额趋势：按任务生成月份的人民币应开（浅柱）、目前已收票（深柱）与收票率（折线，右轴），
- * 金额与收票率来自后端；图形只用金额画图，悬停和点上文字为后端十进制字符串。
+ * 应开按任务生成月（浅柱），全部正常人民币进项票按开票月汇总（深柱，含未匹配）。
+ * 金额与收票／应开比来自后端；绘图只作坐标换算，展示使用后端十进制字符串。
  */
 export function WorkbenchReceipts({ monthly }: { monthly: Workbench["monthly"] }) {
   const unknown = monthly.reduce((sum, item) => sum + item.unknownTasks, 0);
+  const [month, setMonth] = useState("");
+  const selected = monthly.find((item) => item.month === month) ?? monthly.at(-1);
+  const hasAmounts = monthly.some((item) => Number(item.expected) > 0 || Number(item.received) > 0);
   return (
     <section className="wb-panel" aria-labelledby="wb-receipts-title">
-      <div className="wb-panel__head">
+      <div className="wb-panel__head wb-panel__head--split">
         <div>
           <h2 id="wb-receipts-title">应开与已收票金额趋势</h2>
-          <p className="wb-panel__sub">按开票任务生成月份 · 人民币 · 折线为收票率</p>
+          <p className="wb-panel__sub">应开按任务生成月 · 收票按开票月 · 人民币</p>
         </div>
+        {selected && hasAmounts && (
+          <label className="wb-receipts-month">
+            查看月份
+            <select value={selected.month} onChange={(event) => setMonth(event.target.value)}>
+              {monthly.map((item) => (
+                <option key={item.month} value={item.month}>
+                  {item.month.replace("-", "年")}月
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
       </div>
       <div className="wb-panel__body">
-        <TrendChart
-          label="按任务生成月份的应开、已收票金额与收票率"
-          height={260}
-          grouped
-          lineAxis="percent"
-          categories={monthly.map((item) => `${Number(item.month.slice(5))}月`)}
-          bars={[
-            {
-              key: "expected",
-              label: "应开金额",
-              color: "var(--color-chart-3)",
-              values: monthly.map((item) => Number(item.expected)),
-              texts: monthly.map((item) => `¥ ${money(item.expected)}`),
-            },
-            {
-              key: "received",
-              label: "已收票金额",
-              color: "var(--color-chart-1)",
-              values: monthly.map((item) => Number(item.received)),
-              texts: monthly.map((item) => `¥ ${money(item.received)}`),
-            },
-          ]}
-          line={{
-            key: "rate",
-            label: "收票率",
-            values: monthly.map((item) => Number(item.percent ?? 0)),
-            texts: monthly.map((item) => (item.percent === null ? "—" : `${item.percent}%`)),
-          }}
-        />
-        {unknown > 0 && <p className="wb-report-note">另有 {unknown} 个任务应开金额缺失，未计入。</p>}
+        {selected && hasAmounts && (
+          <dl className="wb-receipts-summary" aria-label={`${selected.month}金额汇总`}>
+            <div>
+              <dt>应开金额（元）</dt>
+              <dd>{money(selected.expected)}</dd>
+            </div>
+            <div>
+              <dt>已收票金额（元）</dt>
+              <dd className="wb-receipts-summary__received">{money(selected.received)}</dd>
+            </div>
+            <div>
+              <dt>收票／应开比</dt>
+              <dd>{selected.percent === null ? "—" : `${selected.percent}%`}</dd>
+            </div>
+          </dl>
+        )}
+        {hasAmounts ? (
+          <TrendChart
+            label="按任务生成月的应开金额、按开票月的收票金额与收票应开比"
+            height={260}
+            grouped
+            lineAxis="percent"
+            categories={monthly.map((item) => `${Number(item.month.slice(5))}月`)}
+            bars={[
+              {
+                key: "expected",
+                label: "应开金额",
+                color: "var(--color-chart-3)",
+                values: monthly.map((item) => Number(item.expected)),
+                texts: monthly.map((item) => `¥ ${money(item.expected)}`),
+              },
+              {
+                key: "received",
+                label: "已收票金额",
+                color: "var(--color-chart-1)",
+                values: monthly.map((item) => Number(item.received)),
+                texts: monthly.map((item) => `¥ ${money(item.received)}`),
+              },
+            ]}
+            line={{
+              key: "rate",
+              label: "收票／应开比",
+              values: monthly.map((item) => (item.percent === null ? null : Number(item.percent))),
+              texts: monthly.map((item) => (item.percent === null ? "暂无应开" : `${item.percent}%`)),
+            }}
+          />
+        ) : (
+          <EmptyState
+            title="近 6 个月暂无可统计的应开或收票金额"
+            description="任务应开金额及正常人民币进项发票入库后，将按各自月份展示。"
+          />
+        )}
+        {hasAmounts && (
+          <p className="wb-report-note">
+            收票金额按发票开票日期统计全部已入库正常人民币进项票（含未匹配），不含红字、已被红冲及作废票。
+            应开按任务生成月份统计；收票／应开比可超过 100%，不代表同一批任务完成率。悬停或按 Tab
+            聚焦月份查看明细。
+          </p>
+        )}
+        {unknown > 0 && (
+          <p className="wb-report-note">
+            另有 {unknown} 个任务应开金额缺失，未计入应开金额，不影响收票统计。
+          </p>
+        )}
       </div>
     </section>
   );

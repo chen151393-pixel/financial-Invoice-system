@@ -3,13 +3,13 @@
 import csv
 import io
 from collections import Counter, defaultdict
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 
 from sqlalchemy.exc import SQLAlchemyError
 
 from backend.core.errors import ApiError
-from backend.modules.invoice.public import read_invoices
+from backend.modules.invoice.public import read_invoices, read_receipt_dates
 from backend.modules.review.public import workbench_reviews
 from backend.modules.source.public import (
     admission_issues,
@@ -25,7 +25,7 @@ from ..policy.anomaly_policy import check_categories
 from ..policy.comparison_policy import HIGH, MEDIUM
 from ..policy.workbench_flow import declaration_positions, funnel, node_distribution
 from ..policy.workbench_kpis import kpis
-from ..policy.workbench_reports import BUSINESS_ZONE, monthly_receipts, percent, supplier_ranking
+from ..policy.workbench_reports import BUSINESS_ZONE, month_keys, monthly_receipts, percent, supplier_ranking
 from ..policy.workbench_scope import Scope, supplier_options
 from ..vo.workbench_vo import Workbench, WorkbenchCounts
 
@@ -138,7 +138,11 @@ class WorkbenchService:
             return export_csv(selected)
         scoped_tasks = [r for r in tasks if not query.account or r["ns_account"] == query.account]
         today = now.astimezone(BUSINESS_ZONE).date()
-        monthly = monthly_receipts(scoped_tasks, today)
+        # 票面收票覆盖全部已入库正常人民币发票；与 NS 任务账套、审核进度无关。
+        start = date.fromisoformat(f"{month_keys(today)[0]}-01")
+        end = date(today.year + (today.month == 12), today.month % 12 + 1, 1)
+        receipts = read_receipt_dates(connection, start, end - timedelta(days=1))
+        monthly = monthly_receipts(scoped_tasks, receipts, today)
         rank, unknown = supplier_ranking(scoped_tasks)
         total = len(selected)
         pages = max(1, (total + query.pageSize - 1) // query.pageSize)

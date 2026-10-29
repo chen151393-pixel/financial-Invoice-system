@@ -12,7 +12,10 @@ export type InvoiceTotals = {
 };
 
 export type InvoiceTotalsFilters = {
-  q: string;
+  q?: string;
+  invoice_no?: string;
+  seller_name?: string;
+  seller_tax_no?: string;
   account: string;
   status: string;
   date_from: string;
