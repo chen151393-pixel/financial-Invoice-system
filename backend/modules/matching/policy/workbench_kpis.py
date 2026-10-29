@@ -5,7 +5,7 @@
 
 from decimal import Decimal
 
-from .workbench_reports import OVERDUE_DAYS, month_keys, month_of
+from .workbench_reports import OVERDUE_DAYS, expected_month, month_keys, month_of
 
 
 def _delta(text, direction="flat", tone="neutral"):
@@ -37,7 +37,7 @@ def kpis(*, monthly, tasks, reviews, today):
     keys = month_keys(today, len(monthly))
     current, previous = monthly[-1], monthly[-2] if len(monthly) > 1 else None
     cny = [row for row in tasks if row["currency"] == "CNY"]
-    this_month = [row for row in cny if month_of(row["created_at"]) == keys[-1]]
+    this_month = [row for row in cny if expected_month(row) == keys[-1]]
     open_cny = [row for row in cny if row["status"] != "completed"]
     known = [row for row in open_cny if row["outstanding"] is not None]
     outstanding_by_month = dict.fromkeys(keys, Decimal(0))
@@ -62,7 +62,7 @@ def kpis(*, monthly, tasks, reviews, today):
             **_month_change(
                 Decimal(current["expected"]), Decimal(previous["expected"]) if previous else None
             ),
-            "hint": f"本月生成 {len(this_month)} 个开票任务",
+            "hint": f"本月创建报关单关联 {len(this_month)} 个开票任务",
             "series": [item["expected"] for item in monthly],
         },
         {

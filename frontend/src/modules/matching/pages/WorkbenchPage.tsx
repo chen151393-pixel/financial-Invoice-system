@@ -38,7 +38,10 @@ export function WorkbenchPage({ state }: { state: ReturnType<typeof useWorkbench
             <WorkbenchMetrics funnel={state.data.funnel} noTaskCount={state.data.noTaskCount} />
           )}
           <div className="wb-columns">
-            <WorkbenchReceipts monthly={state.data.monthly} />
+            <WorkbenchReceipts
+              monthly={state.data.monthly}
+              unknownExpectedDates={state.data.unknownExpectedDates}
+            />
             {state.data.nodes && <WorkbenchNodes nodes={state.data.nodes} />}
           </div>
           <div className="wb-columns wb-columns--even">
@@ -60,7 +63,9 @@ export function WorkbenchPage({ state }: { state: ReturnType<typeof useWorkbench
           <details className="wb-definitions">
             <summary>统计口径</summary>
             <p>
-              金额指标仅统计人民币：应开按任务生成月份（北京时间）；收票按发票开票月份统计全部已入库正常进项票，包含未匹配发票，
+              金额指标仅统计人民币：应开取有效任务的冻结金额，按关联报关单在 NS
+              的创建月份（北京时间）统计；缺少创建日期的任务单独提示且不计入。
+              收票按发票开票月份统计全部已入库正常进项票，包含未匹配发票，
               不含红字、已被红冲及作废票。收票／应开比不代表任务完成率。待收金额仍按未完成任务统计；走势线为近
               6 个月的同口径序列。 待财务审核按报关单计数，待通知供应商按开票跟进节点计数。
             </p>

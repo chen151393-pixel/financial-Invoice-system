@@ -136,7 +136,14 @@ class WorkbenchService:
         selected, filtered_counts = select_rows(scoped, query)
         if export:
             return export_csv(selected)
-        scoped_tasks = [r for r in tasks if not query.account or r["ns_account"] == query.account]
+        scoped_tasks = [
+            {
+                **row,
+                "declaration_created_at": heads.get(row["customs_declaration_id"], {}).get("ns_created_at"),
+            }
+            for row in tasks
+            if not query.account or row["ns_account"] == query.account
+        ]
         today = now.astimezone(BUSINESS_ZONE).date()
         # 票面收票覆盖全部已入库正常人民币发票；与 NS 任务账套、审核进度无关。
         start = date.fromisoformat(f"{month_keys(today)[0]}-01")
@@ -166,6 +173,9 @@ class WorkbenchService:
             funnel=funnel(positions),
             nodes=node_distribution(scoped_tasks),
             monthly=monthly,
+            unknownExpectedDates=sum(
+                row["currency"] == "CNY" and not row["declaration_created_at"] for row in scoped_tasks
+            ),
             queue={
                 **allocation_dao.proposal_counts(connection, HIGH, MEDIUM),
                 "anomalies": anomaly_counts(allocations),

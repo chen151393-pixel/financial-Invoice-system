@@ -4,10 +4,16 @@ import { money } from "../../../shared/format/money";
 import type { Workbench } from "../types/workbench";
 
 /**
- * 应开按任务生成月（浅柱），全部正常人民币进项票按开票月汇总（深柱，含未匹配）。
+ * 应开按关联报关单创建月（浅柱），全部正常人民币进项票按开票月汇总（深柱，含未匹配）。
  * 金额与收票／应开比来自后端；绘图只作坐标换算，展示使用后端十进制字符串。
  */
-export function WorkbenchReceipts({ monthly }: { monthly: Workbench["monthly"] }) {
+export function WorkbenchReceipts({
+  monthly,
+  unknownExpectedDates = 0,
+}: {
+  monthly: Workbench["monthly"];
+  unknownExpectedDates?: number;
+}) {
   const unknown = monthly.reduce((sum, item) => sum + item.unknownTasks, 0);
   const [month, setMonth] = useState("");
   const selected = monthly.find((item) => item.month === month) ?? monthly.at(-1);
@@ -17,7 +23,7 @@ export function WorkbenchReceipts({ monthly }: { monthly: Workbench["monthly"] }
       <div className="wb-panel__head wb-panel__head--split">
         <div>
           <h2 id="wb-receipts-title">应开与已收票金额趋势</h2>
-          <p className="wb-panel__sub">应开按任务生成月 · 收票按开票月 · 人民币</p>
+          <p className="wb-panel__sub">应开按报关单创建月 · 收票按开票月 · 人民币</p>
         </div>
         {selected && hasAmounts && (
           <label className="wb-receipts-month">
@@ -51,7 +57,7 @@ export function WorkbenchReceipts({ monthly }: { monthly: Workbench["monthly"] }
         )}
         {hasAmounts ? (
           <TrendChart
-            label="按任务生成月的应开金额、按开票月的收票金额与收票应开比"
+            label="按报关单创建月的应开金额、按开票月的收票金额与收票应开比"
             height={260}
             grouped
             lineAxis="percent"
@@ -88,13 +94,19 @@ export function WorkbenchReceipts({ monthly }: { monthly: Workbench["monthly"] }
         {hasAmounts && (
           <p className="wb-report-note">
             收票金额按发票开票日期统计全部已入库正常人民币进项票（含未匹配），不含红字、已被红冲及作废票。
-            应开按任务生成月份统计；收票／应开比可超过 100%，不代表同一批任务完成率。悬停或按 Tab
-            聚焦月份查看明细。
+            应开取任务冻结金额，按关联报关单的 NS 创建月份（北京时间）统计；收票／应开比可超过
+            100%，不代表同一批任务完成率。悬停或按 Tab 聚焦月份查看明细。
           </p>
         )}
         {unknown > 0 && (
           <p className="wb-report-note">
             另有 {unknown} 个任务应开金额缺失，未计入应开金额，不影响收票统计。
+          </p>
+        )}
+        {unknownExpectedDates > 0 && (
+          <p className="wb-report-note">
+            另有 {unknownExpectedDates}{" "}
+            个人民币任务未取得关联报关单的创建日期，未计入应开金额趋势；请同步报关单后核对，不影响收票统计。
           </p>
         )}
       </div>

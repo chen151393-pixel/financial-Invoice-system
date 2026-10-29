@@ -162,10 +162,11 @@ class Workbench(StrictModel):
     kpis: list[Kpi] = Field(default_factory=list)
     suppliers: list[SupplierRank]
     unknownSupplierAmounts: int
-    # 业务流程漏斗（按报关单）、开票任务节点分布、按任务生成月份的人民币应开与已收、待审核比对建议
+    # 应开按关联报关单 NS 创建月份、收票按发票开票月份；缺失报关创建时间的任务另计数。
     funnel: Funnel | None = None
     nodes: NodeDistribution | None = None
     monthly: list[MonthlyReceipt] = Field(default_factory=list)
+    unknownExpectedDates: int = 0
     queue: QueueTiers | None = None
     unboundNotify: UnboundNotify | None = None
 

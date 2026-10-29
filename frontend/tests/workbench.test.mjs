@@ -66,10 +66,12 @@ test("月度收票趋势区分无应开和真实零收票，直接显示精确�
     { month: "2026-09", expected: "100.00", received: "0", percent: "0.0", unknownTasks: 0 },
     { month: "2026-10", expected: "920000.00", received: "11040.00", percent: "1.2", unknownTasks: 0 },
   ];
-  const html = renderToStaticMarkup(createElement(WorkbenchReceipts, { monthly }));
+  const html = renderToStaticMarkup(createElement(WorkbenchReceipts, { monthly, unknownExpectedDates: 3 }));
   assert.match(html, /920,000.00/);
   assert.match(html, /11,040.00/);
   assert.match(html, /1.2%/);
+  assert.match(html, /应开按报关单创建月/);
+  assert.match(html, /3 个人民币任务未取得关联报关单的创建日期/);
   assert.match(html, /value="2026-10" selected=""/);
   assert.equal((html.match(/class="ui-chart__point"/g) ?? []).length, 2);
   assert.match(html, /收票／应开比 暂无应开/);
@@ -441,7 +443,7 @@ test("关键指标：首张实底主指标，金额格式化后端值，标签�
         label: "本月应开金额",
         value: "3286400.5",
         delta: "较上月 +12.4%",
-        hint: "本月生成 3 个开票任务",
+        hint: "本月创建报关单关联 3 个开票任务",
       },
       {
         ...kpi,

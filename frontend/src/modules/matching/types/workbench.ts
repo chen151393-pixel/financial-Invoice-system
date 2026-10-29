@@ -86,7 +86,8 @@ export type Workbench = {
   funnel: { steps: FunnelStep[]; completionRate: string | null } | null;
   // 进行中开票任务按节点分布
   nodes: { total: number; nodes: { key: string; label: string; count: number; percent: string }[] } | null;
-  // 应开按任务生成月；收票按全部正常人民币进项票开票月（含未匹配）；percent 为收票/应开比
+  // 应开按关联报关单 NS 创建月；收票按全部正常人民币进项票开票月（含未匹配）
+  unknownExpectedDates: number;
   monthly: {
     month: string;
     currency: string;

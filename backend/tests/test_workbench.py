@@ -74,17 +74,18 @@ def test_review_to_task_to_receipt_and_version_review(engine, ns, world):
     assert (
         Decimal(received.value) == Decimal("120.5") and received.hint == "本月开票 1 张正常进项票（含未匹配）"
     )
-    # 漏斗与按月应开/已收：已完结的报关单走完全部环节；本月人民币应开与已收各 120.5
+    # 应开归属报关单创建的 9 月，收票归属发票开票的 10 月，不受任务生成日期影响。
     steps = result.funnel.steps
     assert [(step.key, step.count) for step in steps][-1] == ("completed", 1)
     assert all(step.count == 1 for step in steps) and steps[1].rate == "100.0"
     assert result.funnel.completionRate == "100.0" and result.nodes.total == 0
     current = result.monthly[-1]
     assert (Decimal(current.expected), Decimal(current.received), current.percent) == (
+        Decimal("0"),
         Decimal("120.5"),
-        Decimal("120.5"),
-        "100.0",
+        None,
     )
+    assert Decimal(result.monthly[-2].expected) == Decimal("120.5")
     assert result.queue.all == 0
     import_invoices(world, [invoice(number, [INK, FLUID], remark="SUB-200 换版")])
     result = read(engine)
@@ -113,14 +114,25 @@ def test_filters_pagination_and_full_export(engine, ns, world, reviewed):
     assert service.read(WorkbenchQuery(keyword="SUB-200"), export=True)["count"] == 1
 
 
-def test_monthly_receipts_by_creation_month_cny_only():
+def test_monthly_receipts_by_declaration_creation_month_cny_only():
     today = datetime(2026, 10, 19).date()
-    base = {"created_at": datetime(2026, 10, 1, 2), "currency": "CNY", "received": Decimal("40")}
+    base = {
+        "created_at": datetime(2026, 10, 29),
+        "declaration_created_at": datetime(2026, 9, 30, 16),
+        "currency": "CNY",
+        "received": Decimal("40"),
+    }
     rows = [
         {**base, "expected": Decimal("100")},
         {**base, "expected": None},  # 应开缺失：不计入金额，另计张数
         {**base, "currency": "USD", "expected": Decimal("999")},  # 非人民币不混入
-        {**base, "created_at": datetime(2026, 9, 30, 15, 59), "expected": Decimal("50")},  # 北京时间 9 月
+        {
+            **base,
+            "declaration_created_at": datetime(2026, 9, 30, 15, 59),
+            "expected": Decimal("50"),
+        },  # 北京时间 9 月
+        {**base, "declaration_created_at": None, "expected": Decimal("888")},  # 缺日期不回退
+        {**base, "declaration_created_at": datetime(2026, 4, 1), "expected": Decimal("999")},
     ]
     receipts = [
         {"date": date(2026, 10, 31), "gross": Decimal("40"), "count": 2},
@@ -141,6 +153,33 @@ def test_monthly_receipts_by_creation_month_cny_only():
     assert october["invoiceCount"] == 2
     no_tasks = monthly_receipts([], receipts, today)[-1]
     assert no_tasks["received"] == "40" and no_tasks["percent"] is None
+
+
+def test_expected_uses_source_creation_date_and_reports_missing_dates(engine, world, reviewed):
+    with engine.begin() as connection:
+        connection.execute(text("UPDATE task_tasks SET created_at = '2026-04-01 00:00:00'"))
+        connection.execute(
+            text("UPDATE source_customs_declarations SET ns_created_at = '2026-09-30 16:00:00'")
+        )
+    result = read(engine)
+    assert Decimal(result.monthly[-1].expected) == Decimal("120.5")
+    assert result.unknownExpectedDates == 0
+    assert next(k for k in result.kpis if k.key == "expected").hint == "本月创建报关单关联 1 个开票任务"
+    with engine.begin() as connection:
+        connection.execute(
+            text("UPDATE source_customs_declarations SET ns_created_at = '2026-09-30 15:59:59'")
+        )
+    moved = read(engine)
+    assert Decimal(moved.monthly[-2].expected) == Decimal("120.5")
+    assert Decimal(moved.monthly[-1].expected) == 0
+    assert read(engine, account="missing").unknownExpectedDates == 0
+    with engine.begin() as connection:
+        connection.execute(text("UPDATE source_customs_declarations SET ns_created_at = NULL"))
+    missing = read(engine)
+    assert missing.unknownExpectedDates == 1 and all(Decimal(m.expected) == 0 for m in missing.monthly)
+    with engine.begin() as connection:
+        connection.execute(text("UPDATE task_tasks SET status = 'superseded'"))
+    assert read(engine).unknownExpectedDates == 0
 
 
 def test_receipt_totals_use_invoice_date_all_normal_cny_including_unmatched(engine, world):
@@ -267,6 +306,7 @@ def test_kpis_month_change_outstanding_and_counts():
     ]
     base = {
         "created_at": datetime(2026, 10, 2),
+        "declaration_created_at": datetime(2026, 10, 2),
         "currency": "CNY",
         "status": "awaiting_invoice",
         "node": "invoices",
@@ -285,7 +325,7 @@ def test_kpis_month_change_outstanding_and_counts():
     reviews = [{"changed": True, "ns_created_at": datetime(2026, 9, 3)}, {"changed": False}]
     found = {k["key"]: k for k in kpis(monthly=monthly, tasks=tasks, reviews=reviews, today=today)}
     assert found["expected"]["delta"] == "较上月 +25.0%" and found["expected"]["direction"] == "up"
-    assert found["expected"]["hint"] == "本月生成 4 个开票任务"
+    assert found["expected"]["hint"] == "本月创建报关单关联 4 个开票任务"
     assert found["received"]["delta"] == "收票／应开比 20.0%"
     assert found["received"]["hint"] == "本月开票 1 张正常进项票（含未匹配）"
     outstanding = found["outstanding"]
