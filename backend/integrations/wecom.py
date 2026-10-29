@@ -1,15 +1,14 @@
-"""企业微信客户群只读接口；凭证、令牌和短期群缓存仅保存在服务端。"""
+"""企业微信客户群只读接口；凭证和令牌仅在服务端，目录持久化由业务模块管理。"""
 
 import json
 import time
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from hashlib import sha256
 from threading import Lock
 
 import httpx
 
 from backend.core.errors import ApiError
-
-from .wecom_group_cache import WecomGroupCache
 
 BASE_URL = "https://qyapi.weixin.qq.com/cgi-bin/"
 
@@ -26,10 +25,8 @@ class WeComGroups:
         self.client = client or httpx.Client(timeout=20, follow_redirects=False, trust_env=False)
         self._token = None
         self._token_lock = Lock()
-        self._catalog = WecomGroupCache()
 
     def close(self):
-        self._catalog.close()
         self.client.close()
 
     def _credentials(self):
@@ -173,14 +170,20 @@ class WeComGroups:
                 return None
             raise
 
-    def groups(self, *, refresh=False):
+    def directory_scope(self):
+        # 只向业务层暴露不可逆的范围标识，不将 Secret 写入目录数据库。
+        return sha256(json.dumps(self._credentials(), ensure_ascii=False).encode()).hexdigest()
+
+    def groups(self, *, progress=None, expected_scope=None):
         scope = self._credentials()
-        result = self._catalog.get(scope, lambda: self._load_groups(scope), refresh=refresh)
+        if expected_scope is not None and self.directory_scope() != expected_scope:
+            raise ApiError(409, "企微连接配置已变化，请重新查询")
+        result = self._load_groups(scope, progress)
         if self._credentials() != scope:
             raise ApiError(409, "企微连接配置已变化，请重新查询")
         return result
 
-    def _load_groups(self, scope):
+    def _load_groups(self, scope, progress=None):
         ids, seen, cursors, cursor = [], set(), set(), ""
         for _ in range(100):
             data = self._read(
@@ -198,6 +201,8 @@ class WeComGroups:
                 if chat_id not in seen:
                     seen.add(chat_id)
                     ids.append(chat_id)
+            if progress:
+                progress("listing", len(ids), 0, None)
             if len(ids) > 5000:
                 raise ApiError(502, "可见客户群超过查询上限，请缩小企微应用可见范围")
             cursor = data.get("next_cursor", "")
@@ -208,8 +213,21 @@ class WeComGroups:
             cursors.add(cursor)
         else:
             raise ApiError(502, "企微分页超过查询上限，请缩小应用可见范围")
+        rows = []
+        if progress:
+            progress("details", len(ids), 0, len(ids))
         with ThreadPoolExecutor(max_workers=6) as pool:
-            rows = tuple(pool.map(lambda chat_id: self._visible_group(chat_id, scope[0]), ids))
+            futures = [pool.submit(self._visible_group, chat_id, scope[0]) for chat_id in ids]
+            try:
+                for future in as_completed(futures):
+                    rows.append(future.result())
+                    if progress:
+                        progress("details", len(ids), len(rows), len(ids))
+            except Exception:
+                # 出错后取消尚未开始的请求，避免继续全量查询；已开始的请求由客户端超时收口。
+                for future in futures:
+                    future.cancel()
+                raise
         if self._credentials() != scope:
             raise ApiError(409, "企微连接配置已变化，请重新查询")
         return {

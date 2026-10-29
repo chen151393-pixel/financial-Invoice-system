@@ -84,6 +84,12 @@ class WecomGroupList(StrictModel):
     directoryStale: bool = False
     directoryRefreshing: bool = False
     directoryRefreshError: str = ""
+    directoryHasSnapshot: bool = False
+    directoryState: str = "queued"
+    directoryDiscovered: int = 0
+    directoryCompleted: int = 0
+    directoryTotal: int | None = None
+    directoryPercent: int | None = None
     unavailableCount: int
     items: list[WecomGroupItem]
     total: int

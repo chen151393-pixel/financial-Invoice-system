@@ -7,7 +7,16 @@ from .supplier_group import supplier_groups
 from .task import tasks
 from .task_line import task_lines
 
-__all__ = ["documents", "events", "notifications", "supplier_groups", "task_lines", "tasks"]
+__all__ = [
+    "documents",
+    "events",
+    "notifications",
+    "supplier_groups",
+    "task_lines",
+    "tasks",
+    "wecom_directories",
+    "wecom_directory_groups",
+]
 
 from .contract_job import contract_jobs as contract_jobs
 from .declaration_document import declaration_documents as declaration_documents
@@ -18,3 +27,5 @@ from .notification_group_guard import notification_group_guards as notification_
 from .signed_contract import signed_contracts as signed_contracts
 from .signed_upload_job import signed_upload_jobs as signed_upload_jobs
 from .supplier_setting import supplier_settings as supplier_settings
+from .wecom_directory import directories as wecom_directories
+from .wecom_directory import groups as wecom_directory_groups

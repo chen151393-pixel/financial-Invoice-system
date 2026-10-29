@@ -1,5 +1,35 @@
 # 当前表设计与字段字典
 
+### task_wecom_directories｜企微群目录同步
+
+迁移 `0039_task_wecom_directory` 新建，归属 task，和业务数据共用 MySQL。
+
+| 字段 | 含义 |
+| --- | --- |
+| id / scope | 自增主键 / 企业与凭证的 SHA256 范围摘要（唯一），不存原始凭证 |
+| status / has_snapshot | queued、listing、details、ready、failed / 是否有完整可用快照 |
+| run_token | 当前同步执行标识；失锁旧任务不得覆盖接续任务的进度或结果 |
+| discovered / completed / total | 本次已发现群数 / 已处理详情数（含失权群）/ 列表读取完整前为 null 的总数 |
+| unavailable_count | 上次成功目录中不可访问的群数量 |
+| synced_at / next_sync_at | 最近成功时间 / 下一次同步或失败冷却截止时间，UTC |
+| error | 脱敏后的同步失败原因 |
+| created_at / updated_at | 行创建与修改时间，UTC |
+
+### task_wecom_directory_groups｜企微群识别快照
+
+迁移 `0039_task_wecom_directory` 新建；与 Excel 导入的 `task_external_groups` 分开保存。
+
+| 字段 | 含义 |
+| --- | --- |
+| id / directory_id | 自增主键 / 本模块目录外键 |
+| chat_id | 企微群身份；与 directory_id 联合唯一 |
+| group_name / owner_name / owner_userid | 群名 / 群主姓名 / 群主企微 ID |
+| member_count / group_created_at | 群人数 / 可空的群创建时间（UTC）；不存成员名单 |
+| is_active | 是否在最近完整成功目录中；已消失或失权的群停用，不删除绑定 |
+| created_at / updated_at | 本地首次发现及最后刷新时间，UTC |
+
+成功同步在同一事务内替换可搜索快照；网络失败保留旧目录，明确授权失败停止使用旧快照。服务重启不丢目录；查询结果不能替代保存绑定时的实时核验。
+
 > 查某张表由哪个迁移新建或修改，先看自动生成的[表与迁移对照](schema-map.md)。
 
 基础字典核对日期：2026-10-16，基础章节覆盖实体与 `0001`—`0016` 迁移（27 张业务表、430 个字段）。后续新增表不计入上述历史统计；2026-10-19 补充 `0022` 企微执行台账和群守卫字段，见文末。本文不能证明目标库已升级或已有实际数据。

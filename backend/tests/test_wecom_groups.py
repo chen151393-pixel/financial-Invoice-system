@@ -28,7 +28,7 @@ def api(handler):
     return WeComGroups(settings, httpx.Client(transport=httpx.MockTransport(handler)))
 
 
-def test_cursor_cache_refresh_duplicate_names_and_fresh_detail():
+def test_cursor_progress_duplicate_names_and_fresh_detail():
     calls = []
     owner = ["buyer1"]
 
@@ -52,14 +52,15 @@ def test_cursor_cache_refresh_duplicate_names_and_fresh_detail():
 
     client = api(handler)
     try:
-        first = client.groups()
+        progress = []
+        first = client.groups(progress=lambda *args: progress.append(args))
         assert len(first["items"]) == 2 and first["unavailableCount"] == 0
         assert {r["groupName"] for r in first["items"]} == {"采购群"}
-        before = len(calls)
-        assert client.groups() == first and len(calls) == before
+        assert progress[-1] == ("details", 2, 2, 2)
+        assert progress[0] == ("listing", 1, 0, None)
         owner[0] = "new_owner"
         assert client.group("wr_1")["userid"] == "new_owner"
-        client.groups(refresh=True)
+        client.groups()
         assert calls.count("/cgi-bin/gettoken") == 1
         assert calls.count("/cgi-bin/externalcontact/groupchat/list") == 4
     finally:
@@ -114,7 +115,7 @@ def test_unavailable_groups_are_counted_but_network_errors_fail():
         assert len(result["items"]) == 1 and result["unavailableCount"] == 1
         fail[0] = True
         with pytest.raises(ApiError) as error:
-            client.groups(refresh=True)
+            client.groups()
         assert "secret" not in error.value.message
     finally:
         client.close()
@@ -170,7 +171,7 @@ def test_missing_and_local_file_credentials(tmp_path):
         client.close()
 
 
-def test_group_cache_is_invalidated_when_connection_file_credentials_change(tmp_path):
+def test_directory_scope_changes_with_credentials_without_exposing_secret(tmp_path):
     path = tmp_path / "wecom.json"
     path.write_text(json.dumps({"corpid": "corp-a", "secret": "secret-a"}))
     settings = replace(load_settings({}), wecom_connection_file=path)
@@ -189,8 +190,13 @@ def test_group_cache_is_invalidated_when_connection_file_credentials_change(tmp_
 
     client = WeComGroups(settings, httpx.Client(transport=httpx.MockTransport(handler)))
     try:
+        original_scope = client.directory_scope()
+        assert len(original_scope) == 64 and "secret" not in original_scope
         assert client.groups()["items"][0]["groupName"] == "目录-1"
         path.write_text(json.dumps({"corpid": "corp-a", "secret": "secret-b"}))
+        assert client.directory_scope() != original_scope
+        with pytest.raises(ApiError, match="已变化"):
+            client.groups(expected_scope=original_scope)
         assert client.groups()["items"][0]["groupName"] == "目录-2"
         path.write_text(json.dumps({"corpid": "corp-b", "secret": "secret-c"}))
         assert client.groups()["items"][0]["groupName"] == "目录-3"

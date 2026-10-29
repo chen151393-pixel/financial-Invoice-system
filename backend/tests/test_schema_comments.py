@@ -26,6 +26,8 @@ TABLES = ALL_TABLES - {
     "sync_lemon_plans",
     "sync_lemon_jobs",
     "task_external_groups",
+    "task_wecom_directories",
+    "task_wecom_directory_groups",
     "task_group_imports",
     "task_contract_jobs",
     "task_notification_deliveries",
@@ -54,7 +56,7 @@ TABLES = ALL_TABLES - {
 COMMENT_HEAD = "0015_sync_comments"
 
 INITIAL_REVISION = "0009_matching_ledger_versions"
-MODULES = ("source", "review", "task", "invoice", "matching", "sync", "writeback")
+MODULES = ("source", "review", "task", "invoice", "matching", "sync", "writeback", "identity")
 
 
 def test_entity_comments_cover_all_columns():

@@ -3,7 +3,7 @@
 > 本文件由 `npm.cmd run db:map` 根据迁移链离线 MySQL DDL、实体定义和字段字典生成，请勿手工修改；迁移或实体变化后重新生成，`backend/tests/test_schema_map.py` 会检查是否过期。
 > “修改”含加列、改列、索引与中文备注；数据回填仅在线执行，不在离线 DDL 中体现。
 
-当前最新迁移：`0038_source_purchase_line_tax_rate`；共 38 个迁移、60 张实体表。
+当前最新迁移：`0039_task_wecom_directory`；共 39 个迁移、62 张实体表。
 
 ## 1. 按模块查表
 
@@ -53,6 +53,8 @@
 | `task_supplier_groups` | 供应商默认企微群 | `0001` | `0012` | [查看](current-data-dictionary.md#task_supplier_groups) |
 | `task_supplier_settings` | 供应商档案人工设置：是否开启供应商通知 | `0026` | — | [查看](current-data-dictionary.md#task_supplier_settings) |
 | `task_tasks` | 开票任务：审核通过后按 供应商 × 采购公司 × 币种 分组 | `0001` | `0003`、`0007`、`0012`、`0028` | [查看](current-data-dictionary.md#task_tasks) |
+| `task_wecom_directories` | 企微群目录同步状态与持久队列，每个凭证范围一条 | `0039` | — | [查看](current-data-dictionary.md#task_wecom_directories企微群目录同步) |
+| `task_wecom_directory_groups` | 企微群识别快照，与 Excel 导入目录分开保存 | `0039` | — | [查看](current-data-dictionary.md#task_wecom_directory_groups企微群识别快照) |
 
 ### invoice
 
@@ -151,3 +153,4 @@
 | [`0036_writeback_prepare`](../../backend/migrations/versions/0036_writeback_prepare.py) | `writeback_audit`、`writeback_invoice_guards`、`writeback_plans`、`writeback_tasks` | — | 新增回写准备队列；只建新表，不触碰旧 NS 回写审计与锁。 |
 | [`0037_writeback_execution`](../../backend/migrations/versions/0037_writeback_execution.py) | `writeback_requests`、`writeback_target_locks` | — | 新增 NS 写入请求与账单目标锁；只建新表，不修改准备阶段四张表。 |
 | [`0038_source_purchase_line_tax_rate`](../../backend/migrations/versions/0038_source_purchase_line_tax_rate.py) | — | `source_purchase_order_lines` | source：子采购明细保存税率（2026-10-29）。 |
+| [`0039_task_wecom_directory`](../../backend/migrations/versions/0039_task_wecom_directory.py) | `task_wecom_directories`、`task_wecom_directory_groups` | — | 企微只读目录与同步状态；按企业及凭证摘要隔离，不存凭证或群成员清单。 |

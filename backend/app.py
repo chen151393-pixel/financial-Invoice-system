@@ -107,6 +107,8 @@ from .modules.task.service.supplier_profile_service import SupplierProfileServic
 from .modules.task.service.task_board_service import TaskBoardService
 from .modules.task.service.task_generation_service import on_review_approved
 from .modules.task.service.task_service import TaskService
+from .modules.task.service.wecom_directory_service import WecomDirectoryService
+from .modules.task.service.wecom_directory_worker import WecomDirectoryWorker
 from .modules.writeback.controller.task_controller import create_router as writeback_router
 from .modules.writeback.policy.write_gate import WriteGate
 from .modules.writeback.service.execute_service import ExecuteService as WritebackExecutor
@@ -138,6 +140,7 @@ def create_app(settings=None, ns=None, engine=None, wecom=None, lemon=None, lemo
         try:
             verify_database(engine)
             app.state.contract_worker.start()
+            app.state.wecom_directory_worker.start()
             app.state.signed_upload_worker.start()
             app.state.lemon_worker.start()
             app.state.review_calculation_worker.start()
@@ -145,6 +148,8 @@ def create_app(settings=None, ns=None, engine=None, wecom=None, lemon=None, lemo
             app.state.writeback_prepare_worker.start()
             yield
         finally:
+            if hasattr(app.state, "wecom_directory_worker"):
+                await asyncio.to_thread(app.state.wecom_directory_worker.stop)
             if hasattr(app.state, "writeback_prepare_worker"):
                 await asyncio.to_thread(app.state.writeback_prepare_worker.stop)
             if hasattr(app.state, "directory_sync_worker"):
@@ -275,9 +280,12 @@ def _register_business(app, settings, ns, contract_ns, wecom, engine, lemon_invo
         engine, directory, SourceContracts(contract_ns), archive, task_queries
     )
     app.state.contract_worker = ContractWorker(engine, documents, declaration_documents)
+    app.state.wecom_directory = WecomDirectoryService(engine, wecom)
+    app.state.wecom_directory_worker = WecomDirectoryWorker(app.state.wecom_directory)
     app.include_router(
         task_group_router(
-            TaskGroupService(engine, directory, wecom), SupplierProfileService(engine, directory)
+            TaskGroupService(engine, directory, wecom, app.state.wecom_directory),
+            SupplierProfileService(engine, directory),
         )
     )
     app.include_router(

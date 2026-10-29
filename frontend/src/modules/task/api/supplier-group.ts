@@ -14,8 +14,8 @@ const root = "/tasks/supplier-groups";
 
 export const saveSupplierGroup = (value: GroupSave) => http<GroupBinding>(`${root}/save`, "POST", value);
 
-export const matchWecomGroups = (query: SupplierGroupMatchQuery) =>
-  http<WecomGroupPage>(`${root}/wecom/match`, "POST", query);
+export const matchWecomGroups = (query: SupplierGroupMatchQuery, signal?: AbortSignal) =>
+  http<WecomGroupPage>(`${root}/wecom/match`, "POST", query, signal);
 
 export const querySupplierProfiles = (query: SupplierProfileQuery) =>
   http<SupplierProfileList>("/task/supplier-groups/profiles/query", "POST", query);

@@ -45,8 +45,11 @@ class Wecom:
         self.refreshes = []
         self.fail = False
 
-    def groups(self, *, refresh=False):
-        self.refreshes.append(refresh)
+    def directory_scope(self):
+        return "supplier-test-scope"
+
+    def groups(self, *, progress=None, expected_scope=None):
+        self.refreshes.append(True)
         if self.fail:
             raise ApiError(502, "企微网络不可用")
         return {"items": self.items, "unavailableCount": 2}
@@ -65,6 +68,9 @@ def setup(engine, ns):
     save(ns, engine, bundle([first, second], [customs("870")]))
     directory, wecom = SourceDirectory(engine), Wecom()
     groups = SupplierGroupService(engine, directory, wecom)
+    groups.catalog.groups()
+    groups.catalog.run_once()
+    wecom.refreshes.clear()
     profiles = SupplierProfileService(engine, directory)
     supplier = profiles.browse(SupplierProfileQuery(keyword="江川"), USER).items[0]
     return groups, profiles, supplier, wecom
@@ -79,7 +85,7 @@ def test_ranking_duplicate_names_pagination_and_no_automatic_binding(setup):
     assert all("一致" in item.matchReason for item in result.items)
     page2 = groups.match_wecom(query.model_copy(update={"page": 2, "refresh": False}), USER)
     assert [item.chatId for item in page2.items] == ["full", "short"]
-    assert wecom.refreshes == [True, False]
+    assert wecom.refreshes == []  # 搜索和刷新排队不在请求内访问企微。
     assert profiles.browse(SupplierProfileQuery(status="unbound"), USER).total == 2
 
 
@@ -140,8 +146,9 @@ def test_bind_filter_account_owner_and_disable(setup):
     wecom.fail = True
     groups.save(GroupSave(supplierId=supplier.supplierId, chatId="exact2", revision=1, enabled=False), USER)
     assert profiles.browse(SupplierProfileQuery(status="disabled"), USER).total == 1
+    assert groups.match_wecom(SupplierGroupMatch(supplierId=supplier.supplierId), USER).total == 4
     with pytest.raises(ApiError, match="企微网络"):
-        groups.match_wecom(SupplierGroupMatch(supplierId=supplier.supplierId), USER)
+        groups.save(GroupSave(supplierId=supplier.supplierId, chatId="exact2", revision=2), USER)
 
 
 def test_identity_and_missing_supplier(setup):
@@ -163,7 +170,7 @@ def test_directory_cache_status_is_returned_without_changing_matching(setup, mon
         "directoryRefreshError": "上次网络读取失败",
     }
     monkeypatch.setattr(
-        wecom, "groups", lambda **_: {"items": wecom.items, "unavailableCount": 2, **metadata}
+        groups.catalog, "groups", lambda **_: {"items": wecom.items, "unavailableCount": 2, **metadata}
     )
     result = groups.match_wecom(SupplierGroupMatch(supplierId=supplier.supplierId, keyword="owner2"), USER)
     assert [item.chatId for item in result.items] == ["exact2"]

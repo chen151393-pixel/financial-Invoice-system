@@ -5,7 +5,7 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { MemoryRouter } from "react-router";
 import { createServer } from "vite";
-let server, api, Table, Picker, DirectoryStatus, navigation, paths, Search;
+let server, api, Table, Picker, DirectoryStatus, navigation, paths, Search, pollDirectory;
 before(async () => {
   server = await createServer({
     configFile: fileURLToPath(new URL("../vite.config.ts", import.meta.url)),
@@ -26,6 +26,9 @@ before(async () => {
   ));
   ({ WecomDirectoryStatus: DirectoryStatus } = await server.ssrLoadModule(
     "/src/modules/task/components/WecomDirectoryStatus.tsx",
+  ));
+  ({ pollWecomDirectory: pollDirectory } = await server.ssrLoadModule(
+    "/src/modules/task/components/pollWecomDirectory.ts",
   ));
   paths = await server.ssrLoadModule("/src/app/paths.ts");
 });
@@ -121,6 +124,105 @@ test("群目录缓存明确标注时间、后台更新和失败，不冒充最�
     /群目录更新失败：企微网络不可用/,
   );
   assert.match(render(data), /保存时会实时核验所选群与群主/);
+});
+
+test("首次同步显示真实阶段和进度，失败不显示为零个匹配群", () => {
+  const render = (data) => renderToStaticMarkup(createElement(DirectoryStatus, { data }));
+  const base = { directoryHasSnapshot: false, directoryRefreshing: true };
+  assert.match(render({ ...base, directoryState: "queued" }), /等待开始/);
+  const listing = render({ ...base, directoryState: "listing", directoryDiscovered: 100 });
+  assert.match(listing, /已发现 100 个群，总数确认中/);
+  assert.doesNotMatch(listing, /progressbar|0%/);
+  const details = render({
+    ...base,
+    directoryState: "details",
+    directoryCompleted: 24,
+    directoryTotal: 100,
+    directoryPercent: 24,
+  });
+  assert.match(details, /已处理 24 \/ 100 个群/);
+  assert.match(details, /aria-valuenow="24"/);
+  assert.match(details, /关闭页面后仍会继续同步/);
+  const failed = render({
+    directoryHasSnapshot: false,
+    directoryState: "failed",
+    directoryRefreshError: "网络中断",
+  });
+  assert.match(failed, /暂无可用目录/);
+  assert.doesNotMatch(failed, /当前保留上次成功/);
+});
+
+test("目录轮询串行执行，只提交一次刷新并在完成后停止", async ({ mock }) => {
+  mock.timers.enable({ apis: ["setTimeout"] });
+  const calls = [],
+    received = [];
+  let resolve;
+  const stop = pollDirectory(
+    (query) => {
+      calls.push(query);
+      return new Promise((done) => {
+        resolve = done;
+      });
+    },
+    { supplierId: "32", keyword: "采购", page: 2, refresh: true },
+    (data) => received.push(data),
+    (error) => assert.fail(String(error)),
+  );
+  try {
+    mock.timers.tick(10000);
+    assert.equal(calls.length, 1); // 未响应时不叠加请求。
+    resolve({ directoryRefreshing: true });
+    await Promise.resolve();
+    mock.timers.tick(1500);
+    assert.equal(calls.length, 2);
+    assert.deepEqual(calls[1], { supplierId: "32", keyword: "采购", page: 2, refresh: false });
+    resolve({ directoryRefreshing: false });
+    await Promise.resolve();
+    mock.timers.tick(10000);
+    assert.equal(calls.length, 2);
+    assert.equal(received.length, 2);
+  } finally {
+    stop();
+  }
+});
+
+test("关闭或切换查询取消请求，忽略旧结果；轮询失败停止等待人工重试", async ({ mock }) => {
+  mock.timers.enable({ apis: ["setTimeout"] });
+  let resolve,
+    signal,
+    calls = 0;
+  const stop = pollDirectory(
+    (_, incoming) => {
+      calls += 1;
+      signal = incoming;
+      return new Promise((done) => {
+        resolve = done;
+      });
+    },
+    { supplierId: "32", keyword: "", page: 1, refresh: false },
+    () => assert.fail("已取消的结果不能覆盖新查询"),
+    () => assert.fail("取消不应显示错误"),
+  );
+  stop();
+  assert.equal(signal.aborted, true);
+  resolve({ directoryRefreshing: true });
+  await Promise.resolve();
+  mock.timers.tick(5000);
+  assert.equal(calls, 1);
+  let error;
+  const stopFailed = pollDirectory(
+    async () => {
+      throw new Error("断网");
+    },
+    { supplierId: "32", keyword: "", page: 1, refresh: false },
+    () => assert.fail("失败不能返回成功"),
+    (reason) => {
+      error = reason;
+    },
+  );
+  await Promise.resolve();
+  assert.equal(error.message, "断网");
+  stopFailed();
 });
 test("未绑定供应商也展示维护入口，已绑定展示群与群主身份", () => {
   const html = renderToStaticMarkup(

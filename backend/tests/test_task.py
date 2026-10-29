@@ -73,10 +73,13 @@ class FakeContracts:
 
 
 class FakeWecom:
+    def directory_scope(self):
+        return "task-test-scope"
+
     def group(self, chat_id):
         return {"groupName": "上海供应商开票群", "chatId": chat_id, "employee": "张三", "userid": "zhangsan"}
 
-    def groups(self, *, refresh=False):
+    def groups(self, *, progress=None, expected_scope=None):
         item = {**self.group("wr001"), "memberCount": 3, "createdAt": 1_700_000_000}
         return {"items": [item], "unavailableCount": 0}
 

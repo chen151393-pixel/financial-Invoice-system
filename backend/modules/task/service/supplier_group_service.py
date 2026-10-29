@@ -14,6 +14,7 @@ from ..policy.supplier_group_policy import match_group
 from ..vo.capability import Capability
 from ..vo.supplier_group_vo import GroupList, SupplierList, WecomGroupList
 from .group_binding_writer import write_binding
+from .wecom_directory_service import WecomDirectoryService
 
 
 def _pages(total, page_size):
@@ -21,8 +22,9 @@ def _pages(total, page_size):
 
 
 class SupplierGroupService:
-    def __init__(self, engine, directory, wecom=None):
+    def __init__(self, engine, directory, wecom=None, catalog=None):
         self.engine, self.directory, self.wecom = engine, directory, wecom
+        self.catalog = catalog if catalog is not None else WecomDirectoryService(engine, wecom)
 
     @staticmethod
     def capability(actor):
@@ -89,7 +91,7 @@ class SupplierGroupService:
 
     def search_wecom(self, query, actor):
         self._authorize(actor)
-        catalog = self._wecom().groups(refresh=query.refresh)
+        catalog = self.catalog.groups(refresh=query.refresh)
         selected = sorted(
             (
                 group
@@ -123,7 +125,7 @@ class SupplierGroupService:
         supplier = self.directory.describe(supplier_ids=[supplier_id])["suppliers"].get(supplier_id)
         if not supplier or not supplier["active"]:
             raise ApiError(404, "供应商不存在或已停用，请重新选择")
-        catalog = self._wecom().groups(refresh=query.refresh)
+        catalog = self.catalog.groups(refresh=query.refresh)
         ranked = []
         for group in catalog["items"]:
             match = match_group(supplier["name"], group, query.keyword)

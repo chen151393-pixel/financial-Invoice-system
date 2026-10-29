@@ -18,7 +18,7 @@ export function SupplierGroupEditor({
   onClose,
 }: {
   initial: SupplierOption & { nsInternalId?: string };
-  searchWecom: (query: SupplierGroupMatchQuery) => Promise<WecomGroupPage>;
+  searchWecom: (query: SupplierGroupMatchQuery, signal?: AbortSignal) => Promise<WecomGroupPage>;
   save: (value: GroupSave) => Promise<unknown>;
   onSaved: () => void;
   onClose: () => void;

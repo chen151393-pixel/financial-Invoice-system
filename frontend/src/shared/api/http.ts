@@ -18,12 +18,18 @@ export class HttpError extends Error {
   }
 }
 
-export async function http<T>(path: string, method = "GET", value?: unknown): Promise<T> {
+export async function http<T>(
+  path: string,
+  method = "GET",
+  value?: unknown,
+  signal?: AbortSignal,
+): Promise<T> {
   let response: Response;
   let text: string;
   try {
     response = await fetch(`/api${path}`, {
       method,
+      signal,
       credentials: "same-origin",
       headers: value !== undefined ? { "Content-Type": "application/json" } : {},
       ...(value !== undefined ? { body: JSON.stringify(value) } : {}),

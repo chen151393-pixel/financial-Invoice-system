@@ -10,6 +10,12 @@ def directory_status(catalog):
         "directoryStale": catalog.get("directoryStale", False),
         "directoryRefreshing": catalog.get("directoryRefreshing", False),
         "directoryRefreshError": catalog.get("directoryRefreshError", ""),
+        "directoryHasSnapshot": catalog.get("directoryHasSnapshot", False),
+        "directoryState": catalog.get("directoryState", "queued"),
+        "directoryDiscovered": catalog.get("directoryDiscovered", 0),
+        "directoryCompleted": catalog.get("directoryCompleted", 0),
+        "directoryTotal": catalog.get("directoryTotal"),
+        "directoryPercent": catalog.get("directoryPercent"),
     }
 
 

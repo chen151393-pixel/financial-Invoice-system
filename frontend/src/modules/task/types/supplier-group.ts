@@ -50,6 +50,12 @@ export interface WecomGroupPage extends GroupPage<WecomGroup> {
   directoryStale?: boolean;
   directoryRefreshing?: boolean;
   directoryRefreshError?: string;
+  directoryHasSnapshot?: boolean;
+  directoryState?: "queued" | "listing" | "details" | "ready" | "failed";
+  directoryDiscovered?: number;
+  directoryCompleted?: number;
+  directoryTotal?: number | null;
+  directoryPercent?: number | null;
 }
 export interface WecomGroupQuery {
   keyword: string;

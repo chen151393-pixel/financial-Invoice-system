@@ -1131,3 +1131,9 @@ API 发票默认版使用 `source=lemon_open2`、`lemon_account=open2:` 加 `SHA
 | writeback_target_locks | 按 `(ns_account, bill_id)` 唯一的账单持久锁，指向持有锁的写入请求；结果不明或部分写入时保留，人工核实后释放 |
 
 任务新增状态：待确认回写预览、待写入 NS、正在写入 NS、NS 已登记、NS 已有同号登记、部分写入、结果不明。启动不清除执行中状态或账单锁。迁移不能降级。部署见[回写操作说明](../ns-writeback-prepare.md)。
+
+## 2026-10-29：企微群目录持久化
+
+迁移 `0039_task_wecom_directory` 新建 task 模块两张表：`task_wecom_directories`（企业与凭证摘要唯一，保存同步状态、进度和最近成功时间）及 `task_wecom_directory_groups`（目录内群 ID 唯一，保存群识别快照，内部外键指向目录）。不存原始凭证、令牌或完整成员名单；与 Excel 导入目录保持独立，不改已有供应商绑定。
+
+查询只读本地快照并按需排队；后台通过 MySQL 命名锁串行同步，外部网络调用不占事务，完成后批量原子发布，消失的群停用。失败保留旧快照，明确授权失败停止使用；重启复用目录并接续中断任务。保存绑定仍实时核验企微。字段见[字段字典](../mysql/current-data-dictionary.md)，行为与接口见 [task 模块](../../backend/modules/task/README.md#企微群目录持久化与后台同步2026-10-29)。

@@ -104,17 +104,18 @@ documents_pending → notify_pending → awaiting_invoice → partially_received
 - `/query`、`/suppliers/query`、`/wecom/query` 暂留一版本兼容原维护客户端；新页面仅使用档案查询和名称匹配，下一版本确认外部调用方迁移后再删除旧接口。
 - 新验证：`backend/tests/test_supplier_profiles.py` 覆盖候选排名/歧义、分页、权限、真实保存、绑定状态筛选、环境隔离与旧版本拒绝；渠道使用假实现，不代表真实企微已联调。
 
-### 企微群目录查询缓存
+### 企微群目录持久化与后台同步（2026-10-29）
 
-`WeComGroups` 复用服务端内存目录，`wecom_group_cache.py` 管理快照与单个后台刷新任务；名称匹配仍在 task 的 `supplier_group_policy` 中完成。没有改用 Excel 导入目录，也不把文件资料视为实时企微数据。
+`WecomDirectoryService` 管理业务 MySQL 内的群目录和同步队列，`WecomDirectoryWorker` 在应用生命周期内每 2 秒检查一次；`WeComGroups` 只负责企微读取及进度回调。名称匹配复用 `supplier_group_policy`。目录独立于 Excel 导入表，不把文件资料当成企微实时核验结果。
 
-- 5 分钟内的目录直接复用；超过 5 分钟且未满 24 小时，普通查询立即使用已有目录，后台更新。多个查询共用同一次刷新，后台刷新完成后再次查找即可读取新目录。
-- 第一次查询、进程重启后首次查询、目录超过 24 小时及 `refresh=true` 的“重新拉取”需要等待完整读取；刷新依旧分页列出可见群 ID，再以最多 6 个并发读取群详情。该优化降低已有目录下的等待，不承诺冷启动查询耗时。
-- 刷新成功才整体替换目录；网络失败保留上次成功快照并返回错误说明，后台自动刷新冷却 60 秒。超过 24 小时不再返回旧目录；首次失败不能返回伪造的空结果。明确的凭证/授权失败清除旧目录；企业或 Secret 变化立即隔离缓存，旧任务不能覆盖新身份的目录。
-- `/wecom/match` 与兼容 `/wecom/query` 响应新增 `directoryUpdatedAt`（UTC 时间或 null）、`directoryStale`、`directoryRefreshing`、`directoryRefreshError`。缓存可能暂缺新增群或群名变化，页面须展示更新时间与刷新状态；保存绑定及发送前仍走原有实时群核验。
-- 仅缓存群识别字段，不缓存成员清单、不落盘、不新增数据库表；多进程各自维护缓存。应用关闭先等待目录刷新结束，再关闭企微 HTTP 客户端。
+- 搜索只读取本地数据库，无目录时创建队列并立即返回，不等待网络。首次查询启动该凭证范围的目录，此后每次成功 5 分钟后自动同步；进程重启复用目录，未完成作业重新全量读取。`refresh=true` 只排队，重复点击与并发查询复用正在运行的作业。
+- 后台先分页列出群 ID（每页 100），再最多 6 路并发查询详情。进度包括 queued / listing / details / ready / failed；分页结束前不猜总数，完成顺序按真实请求完成回报，详情进度最多每 0.5 秒写入一次。全部详情完成且快照发布后才显示 100%。
+- `task_wecom_directories` 保存范围摘要、同步状态、进度和上次成功时间；`task_wecom_directory_groups` 保存群 ID、群名、群主 ID/姓名、人数及创建时间。只存企业与 Secret 的 SHA256 摘要用于隔离，不存 Secret、令牌或完整成员名单。
+- MySQL 命名锁保证同库同范围一个消费者，网络读取不持有数据库事务。成功后短事务批量发布完整目录，已消失或失权群标为不可用；失败回滚，不发布残缺数据。普通网络故障保留上次完整快照并标明时间、错误，60 秒后重试；明确授权失败停止提供该快照。与旧内存缓存不同，旧快照不因超过 24 小时而删除，始终标注过期，保存及发送前仍实时核验。
+- 企业或凭证变化使用独立目录；同步前后检查范围，旧作业不能发布到新范围。进程关闭先等待目录工作线程结束，再关闭企微客户端与数据库。
+- `/wecom/match` 与兼容 `/wecom/query` 保留分页、匹配规则和原有 `directoryUpdatedAt`、`directoryStale`、`directoryRefreshing`、`directoryRefreshError`；新增 `directoryHasSnapshot`、`directoryState`、`directoryDiscovered`、`directoryCompleted`、`directoryTotal`（未知时 null）、`directoryPercent`（未知时 null）。`items=[]` 且 `directoryHasSnapshot=false` 表示目录尚不可用，不能提示“没有匹配群”；成功同步空目录的 `directoryHasSnapshot=true`。
 
-验证：`test_wecom_group_cache.py` 使用受控时钟和线程事件验证缓存时效、慢上游下非阻塞读取、并发共享刷新、错误冷却及身份隔离；`test_wecom_groups.py` 验证凭证文件变化后重新读取。测试不访问真实企微，不代表生产网络时延已测量。
+部署：新增迁移 `0039_task_wecom_directory`，执行 `npm.cmd run db:upgrade`、构建前端并重启后端后生效；不修改旧迁移和已有供应商绑定。验证见 `test_wecom_directory.py`（重启、进度、慢网络、失败、发布回滚与范围隔离）、`test_wecom_groups.py`（适配器）、`test_supplier_profiles.py`（本地匹配与实时保存）；`test_wecom_directory_mysql.py` 仅在专用 MySQL 上验证跨实例互斥，无连接时跳过。测试不访问真实企微。
 
 
 ## 外部群 Excel 导入与手动关联

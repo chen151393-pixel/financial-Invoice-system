@@ -11,6 +11,7 @@ import {
 } from "../../../shared/components/ui";
 import { formatTime } from "./format";
 import { WecomDirectoryStatus } from "./WecomDirectoryStatus";
+import { pollWecomDirectory } from "./pollWecomDirectory";
 import type {
   WecomGroup,
   WecomGroupPage,
@@ -29,7 +30,7 @@ export function WecomGroupPicker({
 }: {
   supplier: SupplierOption;
   selectedId?: string;
-  search: (query: SupplierGroupMatchQuery) => Promise<WecomGroupPage>;
+  search: (query: SupplierGroupMatchQuery, signal?: AbortSignal) => Promise<WecomGroupPage>;
   onChoose: (group: WecomGroup) => void;
   disabled: boolean;
   inputRef: Ref<HTMLInputElement>;
@@ -40,23 +41,23 @@ export function WecomGroupPicker({
     | { kind: "idle" }
     | { kind: "loading" }
     | { kind: "error"; message: string }
-    | { kind: "ready"; data: WecomGroupPage }
+    | { kind: "ready"; data: WecomGroupPage; pollError?: string }
   >({ kind: "idle" });
   useEffect(() => {
     if (!query) return;
-    let active = true;
-    void load(query).then(
+    return pollWecomDirectory(
+      load,
+      query,
       (data) => {
-        if (active) setState({ kind: "ready", data });
+        setState({ kind: "ready", data });
       },
       (error: unknown) => {
-        if (active)
-          setState({ kind: "error", message: error instanceof Error ? error.message : "企微群查询失败" });
+        const message = error instanceof Error ? error.message : "本地群目录查询失败";
+        setState((previous) =>
+          previous.kind === "ready" ? { ...previous, pollError: message } : { kind: "error", message },
+        );
       },
     );
-    return () => {
-      active = false;
-    };
   }, [query, load]);
   function search(refresh = false) {
     setState({ kind: "loading" });
@@ -82,8 +83,13 @@ export function WecomGroupPicker({
               {state.kind === "loading" ? "查找中…" : "查找外部群"}
             </Button>
             {query && (
-              <Button disabled={busy} onClick={() => search(true)}>
-                重新拉取
+              <Button
+                disabled={
+                  busy || (state.kind === "ready" && !!state.data.directoryRefreshing && !state.pollError)
+                }
+                onClick={() => search(true)}
+              >
+                同步群目录
               </Button>
             )}
           </>
@@ -106,7 +112,7 @@ export function WecomGroupPicker({
       {query && keyword() !== query.keyword && (
         <p className="it-help">查询条件已修改，点击查找外部群生效。</p>
       )}
-      {state.kind === "loading" && <Skeleton rows={2} label="正在查询外部群，首次拉取可能需要一些时间…" />}
+      {state.kind === "loading" && <Skeleton rows={2} label="正在查询本地群目录…" />}
       {state.kind === "error" && (
         <ErrorState
           title="外部群查询失败"
@@ -121,19 +127,26 @@ export function WecomGroupPicker({
       {state.kind === "ready" && query && (
         <>
           <WecomDirectoryStatus data={state.data} />
-          <p className="sg-picker-count">
-            找到 <strong>{state.data.total}</strong> 个候选群，请核对群主后选择。
-          </p>
-          {state.data.unavailableCount > 0 && (
+          {state.pollError && (
+            <Alert tone="warning" title="进度更新已暂停">
+              {state.pollError}。后台同步不受页面影响；点击“查找外部群”重新读取进度。
+            </Alert>
+          )}
+          {state.data.directoryHasSnapshot !== false && (
+            <p className="sg-picker-count">
+              找到 <strong>{state.data.total}</strong> 个候选群，请核对群主后选择。
+            </p>
+          )}
+          {state.data.directoryHasSnapshot !== false && state.data.unavailableCount > 0 && (
             <Alert title="部分群不可用" tone="warning">
               另有 {state.data.unavailableCount}{" "}
               个群已失去访问权限或不可用，未列入结果。找不到目标群时请管理员检查群主可见范围。
             </Alert>
           )}
-          {state.data.items.length === 0 ? (
+          {state.data.directoryHasSnapshot === false ? null : state.data.items.length === 0 ? (
             <EmptyState
               title="没有匹配的外部群"
-              description="可输入供应商简称或群主重新查找；仍找不到时，请管理员核对应用可见范围。"
+              description="可输入供应商简称、群名或群主重新查找；新建群尚未同步时，点击“同步群目录”。"
             />
           ) : (
             <ul className="sg-picker-results" aria-label="外部群候选">
@@ -166,20 +179,22 @@ export function WecomGroupPicker({
               ))}
             </ul>
           )}
-          <Pagination
-            label="企微群查询分页"
-            total={state.data.total}
-            page={state.data.page}
-            pageCount={state.data.pages}
-            pageSize={state.data.pageSize}
-            pageSizes={[20]}
-            disabled={disabled}
-            onPageChange={(page) => {
-              setState({ kind: "loading" });
-              setQuery({ ...query, page, refresh: false });
-            }}
-            onPageSizeChange={() => {}}
-          />
+          {state.data.directoryHasSnapshot !== false && (
+            <Pagination
+              label="企微群查询分页"
+              total={state.data.total}
+              page={state.data.page}
+              pageCount={state.data.pages}
+              pageSize={state.data.pageSize}
+              pageSizes={[20]}
+              disabled={disabled}
+              onPageChange={(page) => {
+                setState({ kind: "loading" });
+                setQuery({ ...query, page, refresh: false });
+              }}
+              onPageSizeChange={() => {}}
+            />
+          )}
         </>
       )}
     </section>
