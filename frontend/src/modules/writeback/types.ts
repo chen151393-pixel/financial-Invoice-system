@@ -4,6 +4,7 @@ export interface TaskSummary {
   invoiceId: string;
   invoiceNo: string;
   vendorName: string;
+  parentOrders: { id: string; number: string }[];
   amount: string;
   state: string;
   stateLabel: string;
@@ -19,6 +20,20 @@ export interface TaskList {
   page: number;
   pageSize: number;
   pages: number;
+  counts: Record<"all" | WritebackGroup, number>;
+  states: { state: string; label: string; group: WritebackGroup; count: number }[];
+}
+export type WritebackGroup = "pending" | "executing" | "applied" | "attention" | "stale";
+export interface TaskQuery {
+  keyword: string;
+  taskNo: string;
+  invoiceNo: string;
+  supplierName: string;
+  parentOrderNo: string;
+  state: string;
+  group: WritebackGroup | "";
+  page: number;
+  pageSize: number;
 }
 export interface SourceAllocation {
   allocationId: string;

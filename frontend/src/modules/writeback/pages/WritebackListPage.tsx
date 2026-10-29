@@ -1,122 +1,101 @@
-import { useEffect, useState } from "react";
 import { Link } from "react-router";
 import { writebackRequestPath } from "../../../app/paths";
 import {
-  Alert,
-  Badge,
   Button,
   Card,
   CardHeader,
+  CardFooter,
   DataTable,
   EmptyState,
   ErrorState,
-  Field,
-  FilterBar,
   Pagination,
   Skeleton,
+  Segmented,
 } from "../../../shared/components/ui";
-import { listTasks } from "../api";
-import type { TaskList } from "../types";
+import { ParentOrderNumbers } from "../components/ParentOrderNumbers";
+import { WritebackSearch } from "../components/WritebackSearch";
+import { WritebackStats, groupLabels } from "../components/WritebackStats";
+import { WritebackStateBadge } from "../components/WritebackStateBadge";
+import { useWritebackList } from "../hooks/useWritebackList";
+import type { WritebackGroup } from "../types";
 import "../writeback.css";
 
 export function WritebackListPage() {
-  const [query, setQuery] = useState({ keyword: "", state: "", page: 1, pageSize: 20 });
-  const [data, setData] = useState<TaskList | null>(null);
-  const [error, setError] = useState("");
-  const [loading, setLoading] = useState(true);
-  const [refresh, setRefresh] = useState(0);
-  useEffect(() => {
-    let active = true;
-    listTasks(query)
-      .then((result) => {
-        if (active) {
-          setData(result);
-          setError("");
-          setLoading(false);
-        }
-      })
-      .catch((e: unknown) => {
-        if (active) {
-          setError(e instanceof Error ? e.message : "任务加载失败");
-          setLoading(false);
-        }
-      });
-    return () => {
-      active = false;
-    };
-  }, [query, refresh]);
-  function change(patch: Partial<typeof query>) {
-    setLoading(true);
-    setQuery({ ...query, ...patch });
+  const { query, data, error, loading, change, reload, selected } = useWritebackList();
+  function select(group: WritebackGroup | "") {
+    change({ group, state: "", page: 1 });
   }
+  const reset = () =>
+    change({
+      keyword: "",
+      taskNo: "",
+      invoiceNo: "",
+      supplierName: "",
+      parentOrderNo: "",
+      group: "",
+      state: "",
+      page: 1,
+    });
+  const filtered = Boolean(
+    query.keyword ||
+      query.taskNo ||
+      query.invoiceNo ||
+      query.supplierName ||
+      query.parentOrderNo ||
+      query.group ||
+      query.state,
+  );
   return (
     <div className="wb-prepare">
-      <Alert title="NS 回写">
-        整张发票完整审核后自动生成任务。确认账单方案（累计与明细不一致时再确认回写预览）后，写入开关和供应商白名单都满足才会写入
-        NS。
-      </Alert>
-      <Card>
+      {data?.counts ? (
+        <WritebackStats counts={data.counts} selected={selected} onSelect={select} />
+      ) : loading ? (
+        <Skeleton rows={1} label="正在读取回写概况" />
+      ) : null}
+      <Card className="wb-task-list">
         <CardHeader
           title="回写任务"
-          description="按发票保留审核快照；历史扫描任务须人工核实。"
+          description="概况按当前查询条件统计，不受状态和分页影响；历史扫描任务须人工核实。"
           actions={
-            <Button
-              disabled={loading}
-              onClick={() => {
-                setLoading(true);
-                setRefresh((n) => n + 1);
-              }}
-            >
-              刷新列表
-            </Button>
+            <>
+              <Segmented<keyof typeof groupLabels>
+                label="按回写状态筛选"
+                value={selected}
+                disabled={loading}
+                options={(Object.keys(groupLabels) as (keyof typeof groupLabels)[]).map((key) => ({
+                  value: key,
+                  label: groupLabels[key],
+                  count: data?.counts?.[key],
+                }))}
+                onChange={(value) => select(value === "all" ? "" : value)}
+              />
+              <Button disabled={loading} onClick={reload}>
+                刷新列表
+              </Button>
+            </>
           }
         />
-        <FilterBar
-          embedded
-          onSubmit={(form) => {
-            const values = new FormData(form);
-            change({
-              keyword: String(values.get("keyword") || ""),
-              state: String(values.get("state") || ""),
-              page: 1,
-            });
-          }}
-          actions={
-            <Button type="submit" variant="primary" disabled={loading}>
-              查询
-            </Button>
-          }
-        >
-          <Field label="任务、发票或供应商" grow>
-            <input name="keyword" placeholder="输入任务号、发票号码或供应商" maxLength={100} />
-          </Field>
-          <Field label="状态">
-            <select name="state">
-              <option value="">全部状态</option>
-              <option value="queued">待匹配账单</option>
-              <option value="waiting_bill">等待账单</option>
-              <option value="needs_confirmation">待确认账单</option>
-              <option value="needs_preview">待确认回写预览</option>
-              <option value="ready">待写入 NS</option>
-              <option value="executing">正在写入 NS</option>
-              <option value="applied">NS 已登记</option>
-              <option value="conflict">NS 已有同号登记</option>
-              <option value="partial">部分写入，待核实</option>
-              <option value="unknown">结果不明，待核实</option>
-              <option value="blocked">待处理</option>
-              <option value="stale">审核已失效</option>
-            </select>
-          </Field>
-        </FilterBar>
+        <WritebackSearch
+          query={query}
+          states={data?.states}
+          busy={loading}
+          onSearch={change}
+          onReset={reset}
+        />
         {loading ? (
           <Skeleton label="正在加载回写任务" />
         ) : error ? (
-          <ErrorState title="任务加载失败" message={error} />
+          <ErrorState
+            title="任务加载失败"
+            message={error}
+            action={<Button onClick={reload}>重新加载</Button>}
+          />
         ) : data?.items.length ? (
           <DataTable
             label="回写任务"
             rows={data.items}
             rowKey={(row) => row.id}
+            minWidth={1050}
             columns={[
               {
                 key: "invoice",
@@ -128,32 +107,53 @@ export function WritebackListPage() {
                   </>
                 ),
               },
+              { key: "parent", header: "母采购单", render: (row) => <ParentOrderNumbers task={row} /> },
               { key: "vendor", header: "供应商", render: (row) => row.vendorName },
               { key: "amount", header: "含税金额（元）", align: "right", render: (row) => row.amount },
-              { key: "state", header: "状态", render: (row) => <Badge>{row.stateLabel}</Badge> },
+              { key: "state", header: "状态", render: (row) => <WritebackStateBadge task={row} /> },
               { key: "reason", header: "处理说明", render: (row) => row.reason },
             ]}
           />
         ) : (
           <EmptyState
-            title="暂无回写任务"
-            description="完成整票分配审核后自动生成任务；历史发票可在匹配详情重新检查。"
+            title={filtered ? "没有符合条件的回写任务" : "暂无回写任务"}
+            description={
+              filtered
+                ? "可调整状态或搜索条件，也可清空条件查看全部任务。"
+                : "完成整票分配审核后自动生成任务；历史发票可在匹配详情重新检查。"
+            }
+            action={filtered ? <Button onClick={reset}>查看全部任务</Button> : undefined}
           />
         )}
-        {data && (
-          <Pagination
-            label="回写任务分页"
-            total={data.total}
-            page={data.page}
-            pageCount={data.pages}
-            pageSize={data.pageSize}
-            pageSizes={[20, 50, 100]}
-            disabled={loading}
-            onPageChange={(page) => change({ page })}
-            onPageSizeChange={(pageSize) => change({ pageSize, page: 1 })}
-          />
+        {data && !loading && !error && (
+          <CardFooter>
+            <Pagination
+              label="回写任务分页"
+              total={data.total}
+              page={data.page}
+              pageCount={data.pages}
+              pageSize={data.pageSize}
+              pageSizes={[20, 50, 100]}
+              disabled={loading}
+              onPageChange={(page) => change({ page })}
+              onPageSizeChange={(pageSize) => change({ pageSize, page: 1 })}
+            />
+          </CardFooter>
         )}
       </Card>
+      <details className="wb-state-help">
+        <summary>回写状态与规则</summary>
+        <p>
+          待回写：待匹配账单、等待账单、待确认账单、待确认回写预览、待写入
+          NS。确认方案和必要的预览后，写入开关与供应商白名单均满足才可写入。
+        </p>
+        <p>回写中：正在写入 NS，请勿重复提交。NS 已登记：NS 已完整登记，或经人工核实已完整登记。</p>
+        <p>
+          需处理：待处理、NS
+          已有同号登记、部分写入及结果不明。部分写入或结果不明须先人工核实，没有直接重发入口。
+        </p>
+        <p>审核已失效：未写入任务的审核依据已变化，需重新核对；保留原任务供追溯。</p>
+      </details>
     </div>
   );
 }

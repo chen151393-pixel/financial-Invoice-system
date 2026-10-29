@@ -5,6 +5,17 @@ from decimal import Decimal
 from ..policy.order_policy import order_groups
 
 
+def parent_orders(task):
+    # 沿用任务创建时冻结的来源身份，重复商品和多个子采购单不重复展示同一母单。
+    parents = {}
+    for source in (task["snapshot"].get("sources") or {}).values():
+        parent_id = str(source.get("parent_id") or "")
+        number = str(source.get("parent_number") or "")
+        if parent_id or number:
+            parents.setdefault((parent_id, number), {"id": parent_id, "number": number})
+    return list(parents.values())
+
+
 def orders(task):
     bills = [
         bill for parent in (task["candidates"] or {}).get("purchaseOrders", []) for bill in parent["bills"]

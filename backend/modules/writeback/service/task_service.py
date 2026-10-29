@@ -8,11 +8,12 @@ from backend.core.write_lock import transaction
 from backend.modules.matching.public import read_writeback_snapshot, writeback_invoice_ids
 
 from ..dao import audit_dao, plan_dao, request_dao, task_dao
+from ..policy.list_policy import GROUP_STATES, group_counts
 from ..policy.order_policy import expand_orders
 from ..policy.plan_policy import validate_plan
 from ..policy.preview_policy import build
 from ..policy.write_gate import WriteGate
-from ..vo.task_vo import detail, summary
+from ..vo.task_vo import detail, state_options, summary
 from .queue_service import enqueue, now, still_current
 
 
@@ -35,13 +36,16 @@ class TaskService:
 
     def list(self, criteria):
         with self.engine.connect() as connection:
-            rows, total = task_dao.page(connection, criteria)
+            rows, total = task_dao.page(connection, criteria, GROUP_STATES.get(criteria.group))
+            by_state = task_dao.counts_by_state(connection, criteria)
         return {
             "items": [summary(row, self.gate) for row in rows],
             "total": total,
             "page": criteria.page,
             "pageSize": criteria.pageSize,
             "pages": max(1, (total + criteria.pageSize - 1) // criteria.pageSize),
+            "counts": group_counts(by_state),
+            "states": state_options(by_state),
         }
 
     def get(self, task_id):

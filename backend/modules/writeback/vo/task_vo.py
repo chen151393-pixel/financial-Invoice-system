@@ -4,9 +4,10 @@ from decimal import Decimal
 
 from backend.core.errors import ApiError
 
+from ..policy.list_policy import GROUP_STATES
 from ..policy.order_policy import require_whole_orders
 from ..policy.state_policy import WRITTEN_STATES, stuck
-from .order_vo import orders, plan_view
+from .order_vo import orders, parent_orders, plan_view
 
 LABELS = {
     "queued": "待匹配账单",
@@ -22,6 +23,14 @@ LABELS = {
     "blocked": "待处理",
     "stale": "审核已失效",
 }
+
+
+def state_options(by_state):
+    groups = {state: group for group, states in GROUP_STATES.items() for state in states}
+    return [
+        {"state": state, "label": label, "group": groups[state], "count": by_state.get(state, 0)}
+        for state, label in LABELS.items()
+    ]
 
 
 def writeback(task, gate):
@@ -40,6 +49,7 @@ def summary(task, gate):
         "invoiceId": str(task["invoice_id"]),
         "invoiceNo": task["invoice_no"],
         "vendorName": task["vendor_name"],
+        "parentOrders": parent_orders(task),
         "amount": format(Decimal(task["amount"]), ".2f"),
         "state": task["state"],
         "stateLabel": LABELS[task["state"]],

@@ -1,7 +1,7 @@
 import { http } from "../../shared/api/http";
-import type { ConfirmBody, InvoiceReadiness, ResolveBody, TaskDetail, TaskList } from "./types";
+import type { ConfirmBody, InvoiceReadiness, ResolveBody, TaskDetail, TaskList, TaskQuery } from "./types";
 
-export const listTasks = (query: { keyword: string; state: string; page: number; pageSize: number }) =>
+export const listTasks = (query: TaskQuery) =>
   http<TaskList>(
     `/writeback/tasks?${new URLSearchParams(Object.entries(query).map(([key, value]) => [key, String(value)]))}`,
   );

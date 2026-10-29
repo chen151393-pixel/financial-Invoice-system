@@ -9,6 +9,11 @@ Id = Annotated[str, Field(pattern=r"^[1-9][0-9]{0,18}$")]
 
 class TaskQuery(StrictModel):
     keyword: str = Field(default="", max_length=100)
+    taskNo: str = Field(default="", max_length=100)
+    invoiceNo: str = Field(default="", max_length=100)
+    supplierName: str = Field(default="", max_length=255)
+    parentOrderNo: str = Field(default="", max_length=100)
+    group: Literal["", "pending", "executing", "applied", "attention", "stale"] = ""
     state: Literal[
         "",
         "queued",

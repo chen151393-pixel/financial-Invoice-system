@@ -8,6 +8,46 @@
   color: var(--color-muted);
   overflow-wrap: anywhere;
 }
+.wb-task-list .ui-card__header {
+  flex-wrap: wrap;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--color-border);
+}
+.wb-task-list .ui-card__actions {
+  flex-wrap: wrap;
+  flex-shrink: 1;
+  max-width: 100%;
+}
+.wb-task-list .ui-filter-bar__actions {
+  flex-wrap: wrap;
+}
+.wb-task-list .ui-field--grow {
+  flex: 1 1 180px;
+  min-width: 160px;
+  max-width: 240px;
+}
+.wb-task-list .wb-parent-orders {
+  display: grid;
+  gap: 4px;
+  overflow-wrap: anywhere;
+}
+.wb-task-list .wb-legacy-search {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-small);
+  padding: 0 20px 12px;
+  color: var(--color-muted);
+  font-size: 12px;
+}
+.wb-prepare .wb-state-help {
+  color: var(--color-muted);
+  font-size: 12px;
+  line-height: 1.8;
+}
+.wb-state-help summary {
+  cursor: pointer;
+}
 .wb-prepare .wb-plan-fields {
   display: grid;
   gap: 16px;
@@ -47,6 +87,11 @@
   border-bottom: 1px solid var(--color-input-border);
 }
 @media (max-width: 700px) {
+  .wb-task-list .ui-filter-bar > .ui-field {
+    flex: 1 1 100%;
+    max-width: none;
+    min-width: 0;
+  }
   .wb-prepare .ui-card__header {
     flex-wrap: wrap;
   }

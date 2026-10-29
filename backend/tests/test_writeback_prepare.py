@@ -500,6 +500,15 @@ def test_http_routes_require_identity_and_write_needs_switch(context):
         response = client.get("/api/writeback/tasks?page=1&pageSize=20", headers=headers)
         assert response.status_code == 200, response.text
         assert response.json()["total"] == 0
+        assert response.json()["counts"]["all"] == 0
+        assert len(response.json()["states"]) == 12
+        split = client.get(
+            "/api/writeback/tasks?taskNo=NSWB&invoiceNo=2601&supplierName=example&parentOrderNo=PO-100",
+            headers=headers,
+        )
+        assert split.status_code == 200 and split.json()["total"] == 0
+        assert client.get("/api/writeback/tasks?group=attention", headers=headers).status_code == 200
+        assert client.get("/api/writeback/tasks?group=invalid", headers=headers).status_code == 400
     paths = set(app.openapi()["paths"])
     assert "/api/writeback/tasks/{task_id}/confirm" in paths
     assert "/api/writeback/tasks/{task_id}/execute" in paths

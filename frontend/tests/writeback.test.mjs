@@ -6,7 +6,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { MemoryRouter } from "react-router";
 import { createServer } from "vite";
 
-let server, api, Content, Form;
+let server, api, Content, Form, Stats, StateBadge, readTaskQuery, Search, ParentNumbers;
 before(async () => {
   server = await createServer({
     configFile: fileURLToPath(new URL("../vite.config.ts", import.meta.url)),
@@ -19,12 +19,95 @@ before(async () => {
     "/src/modules/writeback/pages/WritebackRequestPage.tsx",
   ));
   ({ PlanForm: Form } = await server.ssrLoadModule("/src/modules/writeback/components/PlanForm.tsx"));
+  ({ WritebackStats: Stats } = await server.ssrLoadModule(
+    "/src/modules/writeback/components/WritebackStats.tsx",
+  ));
+  ({ WritebackStateBadge: StateBadge } = await server.ssrLoadModule(
+    "/src/modules/writeback/components/WritebackStateBadge.tsx",
+  ));
+  ({ readTaskQuery } = await server.ssrLoadModule("/src/modules/writeback/hooks/useWritebackList.ts"));
+  ({ WritebackSearch: Search } = await server.ssrLoadModule(
+    "/src/modules/writeback/components/WritebackSearch.tsx",
+  ));
+  ({ ParentOrderNumbers: ParentNumbers } = await server.ssrLoadModule(
+    "/src/modules/writeback/components/ParentOrderNumbers.tsx",
+  ));
 });
 after(async () => {
   await server?.close();
 });
 const render = (component, props) =>
   renderToStaticMarkup(createElement(MemoryRouter, null, createElement(component, props)));
+
+test("回写概况展示后端计数并保持当前分组，徽标区分完成与阻塞", () => {
+  const html = render(Stats, {
+    counts: { all: 37, pending: 20, executing: 2, applied: 10, attention: 4, stale: 1 },
+    selected: "attention",
+    onSelect() {},
+  });
+  assert.equal((html.match(/aria-pressed="true"/g) || []).length, 1);
+  for (const value of ["20 张", "2 张", "10 张", "4 张", "需处理", "回写中"]) assert.ok(html.includes(value));
+  assert.match(
+    render(StateBadge, { task: { state: "applied", stateLabel: "NS 已登记" } }),
+    /data-tone="success"/,
+  );
+  assert.match(
+    render(StateBadge, { task: { state: "blocked", stateLabel: "待处理" } }),
+    /data-tone="danger"/,
+  );
+});
+
+test("回写筛选从网址恢复关键词、分组与分页，非法分页使用默认值", () => {
+  assert.deepEqual(
+    readTaskQuery(
+      new URLSearchParams(
+        "keyword=旧词&taskNo=NSWB-1&invoiceNo=2601&supplierName=供应商&parentOrderNo=PO-100&group=attention&state=unknown&page=2&pageSize=50",
+      ),
+    ),
+    {
+      keyword: "旧词",
+      taskNo: "NSWB-1",
+      invoiceNo: "2601",
+      supplierName: "供应商",
+      parentOrderNo: "PO-100",
+      group: "attention",
+      state: "unknown",
+      page: 2,
+      pageSize: 50,
+    },
+  );
+  assert.deepEqual(readTaskQuery(new URLSearchParams("group=other&page=-2&pageSize=999")), {
+    keyword: "",
+    taskNo: "",
+    invoiceNo: "",
+    supplierName: "",
+    parentOrderNo: "",
+    group: "",
+    state: "",
+    page: 1,
+    pageSize: 20,
+  });
+});
+test("回写查询拆成四个输入，母采购单多条完整展示且不使用模拟默认值", () => {
+  const query = readTaskQuery(
+    new URLSearchParams("taskNo=NSWB-1&invoiceNo=2601&supplierName=供应商&parentOrderNo=PO-100"),
+  );
+  const html = render(Search, { query, states: [], busy: false, onSearch() {}, onReset() {} });
+  assert.equal((html.match(/type="search"/g) || []).length, 4);
+  for (const value of ["NSWB-1", "2601", "供应商", "PO-100"]) assert.ok(html.includes(`value="${value}"`));
+  assert.doesNotMatch(html, /输入任务号、发票号码或供应商/);
+  const parents = render(ParentNumbers, {
+    task: {
+      parentOrders: [
+        { id: "100", number: "PO-100" },
+        { id: "200", number: "PO-200" },
+      ],
+    },
+  });
+  assert.match(parents, /PO-100/);
+  assert.match(parents, /PO-200/);
+  assert.match(render(ParentNumbers, { task: { parentOrders: [] } }), /未记录/);
+});
 const allocation = {
   allocationId: "1",
   orderNo: "SUB-1",
@@ -138,7 +221,17 @@ test("调用真实准备接口并原样发送金额、版本和幂等编号", as
     return new Response(JSON.stringify(task()), { status: 200 });
   };
   try {
-    await api.listTasks({ keyword: "供应商", state: "ready", page: 2, pageSize: 20 });
+    await api.listTasks({
+      keyword: "",
+      taskNo: "NSWB",
+      invoiceNo: "2601",
+      supplierName: "供应商",
+      parentOrderNo: "PO-100",
+      state: "ready",
+      group: "pending",
+      page: 2,
+      pageSize: 20,
+    });
     await api.refreshTask("1", 3);
     const body = {
       revision: 3,
@@ -150,6 +243,12 @@ test("调用真实准备接口并原样发送金额、版本和幂等编号", as
     await api.confirmPlan("1", body);
     assert.match(calls[0].url, /\/api\/writeback\/tasks\?/);
     assert.match(calls[0].url, /page=2/);
+    assert.match(calls[0].url, /group=pending/);
+    const sent = new URL(calls[0].url, "http://localhost").searchParams;
+    assert.equal(sent.get("supplierName"), "供应商");
+    assert.equal(sent.get("parentOrderNo"), "PO-100");
+    assert.equal(sent.get("invoiceNo"), "2601");
+    assert.equal(sent.get("taskNo"), "NSWB");
     assert.equal(calls[1].url, "/api/writeback/tasks/1/refresh");
     assert.deepEqual(JSON.parse(calls[1].options.body), { revision: 3 });
     assert.deepEqual(JSON.parse(calls[2].options.body), body);
