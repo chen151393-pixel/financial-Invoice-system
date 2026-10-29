@@ -523,7 +523,10 @@ def test_currency_unresolved_without_parent_order(ns, engine):
     assert order["parent_relation_status"] == "no_parent" and "合同" in order["currency_issue"]
 
 
-def test_ns_read_holds_only_account_lock_and_ledger_only_while_writing(ns, engine, monkeypatch):
+@pytest.mark.parametrize("other_database_activity", [False, True])
+def test_ns_read_holds_only_account_lock_and_ledger_only_while_writing(
+    ns, engine, monkeypatch, other_database_activity
+):
     """读取 NS 期间不得持有全局账本锁；账本锁只在提交写库时短暂持有。"""
     from backend.core import named_lock, write_lock
 
@@ -532,13 +535,16 @@ def test_ns_read_holds_only_account_lock_and_ledger_only_while_writing(ns, engin
     acquire, release = named_lock.acquire, named_lock.release
 
     def tracked_acquire(connection, name, timeout=0):
-        held.add(name)
-        events.append(("acquire", name == ledger, timeout))
+        # 只观察本用例数据库，其他隔离库的后台任务不能污染锁顺序断言。
+        if connection.engine is engine:
+            held.add(name)
+            events.append(("acquire", name == ledger, timeout))
         return acquire(connection, name, timeout)
 
     def tracked_release(connection, name):
-        held.discard(name)
-        events.append(("release", name == ledger, None))
+        if connection.engine is engine:
+            held.discard(name)
+            events.append(("release", name == ledger, None))
         release(connection, name)
 
     monkeypatch.setattr(named_lock, "acquire", tracked_acquire)
@@ -546,6 +552,16 @@ def test_ns_read_holds_only_account_lock_and_ledger_only_while_writing(ns, engin
     data = bundle([purchase()], [customs()])
 
     def collect():
+        if other_database_activity:
+            # 模拟另一个测试库在本次读取期间获取并释放锁，仍严格核验本库的全部事件。
+            other_engine = make_engine("sqlite://")
+            try:
+                with other_engine.connect() as connection:
+                    named_lock.acquire(connection, "other-test-lock")
+                    assert ledger not in held and len(held) == 1
+                    named_lock.release(connection, "other-test-lock")
+            finally:
+                other_engine.dispose()
         assert ledger not in held and len(held) == 1, "读取 NS 时只能持账户锁"
         return deepcopy(data)
 
