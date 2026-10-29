@@ -79,6 +79,11 @@ export type InvoiceItem = {
   unit: string | null;
   quantity: string | null;
   amount: string | null;
+  // 票面展示：单价、不含税金额、税率（如“13%”）、税额
+  unitPrice: string | null;
+  net: string | null;
+  taxRate: string | null;
+  tax: string | null;
   confirmedQuantity: string;
   confirmedAmount: string;
   allocations: Allocation[];
@@ -98,6 +103,14 @@ export type InvoiceMatching = {
     currency: string;
     gross: string | null;
     remark: string | null;
+  };
+  paper: {
+    invoiceType: string | null;
+    buyerTaxNo: string | null;
+    sellerTaxNo: string | null;
+    net: string | null;
+    tax: string | null;
+    gross: string | null;
   };
   items: InvoiceItem[];
   generate: Capability;

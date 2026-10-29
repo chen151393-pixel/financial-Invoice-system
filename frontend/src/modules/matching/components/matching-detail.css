@@ -1,4 +1,73 @@
-/* 单票核对工作区：左侧明细导航，右侧核对与候选。 */
+/* 票面：整票购销双方、商品明细与合计，置于核对工作区上方。 */
+.matching-paper {
+  overflow: hidden;
+}
+.matching-paper > .ui-card__header {
+  flex-wrap: wrap;
+  border-bottom: 2px solid var(--color-nav-bg);
+}
+.matching-paper__parties {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  border-bottom: 1px solid var(--color-border);
+}
+.matching-paper__parties section {
+  display: grid;
+  gap: 4px;
+  padding: var(--space-control) 20px;
+  overflow-wrap: anywhere;
+}
+.matching-paper__parties section + section {
+  border-left: 1px solid var(--color-border);
+}
+.matching-paper__parties small,
+.matching-paper__parties span {
+  color: var(--color-muted);
+  font-size: 12px;
+}
+.matching-paper__totals {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  align-items: baseline;
+  gap: var(--space-small) var(--space-layout);
+  margin: 0;
+  padding: var(--space-control) 20px;
+  border-top: 1px solid var(--color-border);
+}
+.matching-paper__totals div {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-small);
+}
+.matching-paper__totals dt {
+  color: var(--color-muted);
+  font-size: 12px;
+}
+.matching-paper__totals dd {
+  margin: 0;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.matching-paper__gross dd {
+  font-size: 20px;
+  font-weight: 700;
+}
+.matching-paper__remark {
+  display: flex;
+  gap: var(--space-control);
+  margin: 0;
+  padding: var(--space-control) 20px;
+  border-top: 1px solid var(--color-border);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+.matching-paper__remark span {
+  flex: none;
+  color: var(--color-muted);
+}
+
+/* 单票核对工作区：左侧发票商品明细，右侧所选行与子采购逐项比对。 */
 .matching-detail {
   display: grid;
   grid-template-columns: 280px minmax(0, 1fr);
@@ -57,6 +126,54 @@
   font-weight: 600;
   font-variant-numeric: tabular-nums;
 }
+/* 同一发票行的多条待处理比对：一次展开一条 */
+.matching-proposals {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: var(--space-small);
+  max-height: 260px;
+  margin: 0;
+  padding: 0 20px 20px;
+  overflow-y: auto;
+  list-style: none;
+}
+.matching-proposal {
+  display: grid;
+  gap: 4px;
+  width: 100%;
+  padding: 10px var(--space-control);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-control);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font: inherit;
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+  overflow-wrap: anywhere;
+}
+.matching-proposal:hover {
+  background: var(--color-canvas);
+}
+.matching-proposal[aria-current="true"] {
+  border-color: var(--color-primary);
+  background: var(--color-primary-soft);
+}
+.matching-proposal:disabled {
+  cursor: wait;
+}
+.matching-proposal__title {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--space-small);
+}
+.matching-proposal small {
+  color: var(--color-muted);
+}
+.matching-proposal__amount {
+  font-variant-numeric: tabular-nums;
+}
 .matching-line-panel {
   display: grid;
   gap: var(--space-layout);
@@ -113,20 +230,9 @@
   border-top: 1px solid var(--color-border);
   padding-top: var(--space-control);
 }
-.matching-invoice-remark {
-  margin: 0;
-  padding: 0 20px var(--space-control);
-  color: var(--color-muted);
-  font-size: 12px;
-  overflow-wrap: anywhere;
-}
-.matching-invoice-header .ui-card__header,
 .matching-comparison .ui-card__header,
 .matching-line-panel > .ui-card > .ui-card__header {
   flex-wrap: wrap;
-}
-.matching-invoice-header .ui-card__title {
-  overflow-wrap: anywhere;
 }
 .matching-line-panel .matching-form label {
   min-width: 0;
@@ -172,6 +278,16 @@
   }
 }
 @media (max-width: 760px) {
+  .matching-paper__parties {
+    grid-template-columns: 1fr;
+  }
+  .matching-paper__parties section + section {
+    border-left: 0;
+    border-top: 1px solid var(--color-border);
+  }
+  .matching-paper__totals {
+    justify-content: flex-start;
+  }
   .matching-detail {
     grid-template-columns: minmax(0, 1fr);
   }

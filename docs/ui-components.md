@@ -57,7 +57,7 @@ import { Card, CardHeader, CardContent, MetricCard, MetricGrid, Badge } from "..
 
 页面外壳（`AppFrame`）为固定格式白色页头：面包屑、标题、一句说明 `description`，右侧只放只读信息 `meta`（如数据来源）；业务按钮一律放在页面内容里。
 
-已从组件库组合：开票跟进（`StatCard compact` 节点卡、列表卡片内嵌 `FilterBar embedded`、任务卡片）、任务详情（概览 + 当前节点卡片 + 应开明细 + 右侧资料与记录）、财务核对（`StatCard` 概况、列表卡片 + `Segmented` 状态切换 + 内嵌查询栏、紧凑来源对照表）、进项发票（指标卡、`TrendChart`/`DonutChart`/`Progress` 分布图、列表卡片）、比对审核队列、供应商档案、总体工作台（待办标签）、NS 回写列表。外部群导入、数据同步、采购报关联查、发票比对详情仍为原页面样式，修改时迁移。
+已从组件库组合：开票跟进（`StatCard compact` 节点卡、列表卡片内嵌 `FilterBar embedded`、任务卡片）、任务详情（概览 + 当前节点卡片 + 应开明细 + 右侧资料与记录）、财务核对（`StatCard` 概况、列表卡片 + `Segmented` 状态切换 + 内嵌查询栏、紧凑来源对照表）、进项发票（指标卡、`TrendChart`/`DonutChart`/`Progress` 分布图、列表卡片）、比对审核队列、供应商档案、总体工作台（待办标签）、NS 回写列表、发票比对详情（2026-10-28：`Card` 票面 + 紧凑 `DataTable` 商品明细 + `Badge`，下方左右分栏核对）。外部群导入、数据同步、采购报关联查仍为原页面样式，修改时迁移。
 
 ## 紧凑表格与行底色
 

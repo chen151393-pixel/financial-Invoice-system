@@ -1,6 +1,12 @@
 import { Badge, Card, CardHeader } from "../../../shared/components/ui";
-import type { InvoiceItem } from "../types/matching";
+import type { Allocation, InvoiceItem } from "../types/matching";
 import { groupAllocations } from "./allocation-groups";
+
+// 整单拆分的多条建议通常同属一张子采购单，导航只列出涉及的单号，逐条内容在右侧查看。
+function orderNames(pending: Allocation[]) {
+  const names = [...new Set(pending.map((row) => row.purchase?.orderNo || "待核对子采购行"))];
+  return names.length > 2 ? `${names.slice(0, 2).join("、")} 等 ${names.length} 张` : names.join("、");
+}
 
 /** 同一张发票内切换明细；导航始终保留全部行与历史记录入口。 */
 export function InvoiceLineNav({
@@ -16,7 +22,7 @@ export function InvoiceLineNav({
 }) {
   return (
     <Card className="matching-lines" aria-label="发票明细导航">
-      <CardHeader title="发票明细" description={`共 ${items.length} 行 · 逐行核对建议`} />
+      <CardHeader title="发票商品明细" description={`共 ${items.length} 行 · 选择后在右侧逐项比对`} />
       <div className="matching-lines__list">
         {items.map((item) => {
           const { linked, pending } = groupAllocations(item.allocations);
@@ -43,11 +49,7 @@ export function InvoiceLineNav({
                         : "无关联"}
                 </Badge>
               </span>
-              {pending.map((allocation) => (
-                <small key={allocation.id}>
-                  {allocation.purchase?.orderNo || "待核对子采购行"} · {allocation.confidence ?? "—"}%
-                </small>
-              ))}
+              {pending.length > 0 && <small>{orderNames(pending)}</small>}
               <span className="matching-line__amount">
                 {item.amount ?? "—"} <small>含税</small>
               </span>

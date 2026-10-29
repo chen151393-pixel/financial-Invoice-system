@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Button, Card, CardContent, CardHeader, EmptyState } from "../../../shared/components/ui";
+import { Badge, Button, Card, CardContent, CardHeader, EmptyState } from "../../../shared/components/ui";
 import type { Candidate, ConfirmBody, InvoiceItem, InvoiceMatching, ManualBody } from "../types/matching";
 import { AllocationCard } from "./AllocationCard";
 import { groupAllocations } from "./allocation-groups";
@@ -34,7 +34,10 @@ export function InvoiceLinePanel({
   invoice: InvoiceMatching["invoice"];
 }) {
   const [manual, setManual] = useState(false);
+  const [activeId, setActiveId] = useState<string | null>(null);
   const { linked, pending, history } = groupAllocations(item.allocations);
+  // 一次只展开一条待处理比对；处理后列表变化时回到第一条。
+  const active = pending.find((row) => row.id === activeId) ?? pending[0];
   const card = (allocation: (typeof pending)[number]) => (
     <AllocationCard
       key={`${allocation.id}:${allocation.status}:${allocation.verificationStatus}:${allocation.currentInvoiceVersionId}`}
@@ -50,8 +53,42 @@ export function InvoiceLinePanel({
   );
   return (
     <section className="matching-line-panel" aria-label="发票行比对">
-      {pending.length > 0 ? (
-        pending.map(card)
+      {pending.length > 1 && (
+        <Card aria-label="待处理比对">
+          <CardHeader
+            title={`待处理比对（${pending.length}）`}
+            description="同一发票行拆分到多条子采购行时逐条核对；选择一条在下方查看逐项比对。"
+          />
+          <ul className="matching-proposals">
+            {pending.map((row) => (
+              <li key={row.id}>
+                <button
+                  type="button"
+                  className="matching-proposal"
+                  aria-current={row.id === active?.id ? "true" : undefined}
+                  disabled={busy}
+                  onClick={() => setActiveId(row.id)}
+                >
+                  <span className="matching-proposal__title">
+                    <strong>{row.purchase?.orderNo || "待核对子采购行"}</strong>
+                    <Badge tone={row.tier === "high" ? "success" : row.tier === "low" ? "danger" : "warning"}>
+                      {row.confidence === null ? row.statusLabel : `${row.confidence}%`}
+                    </Badge>
+                  </span>
+                  <small>
+                    {row.purchase?.item || "—"} {row.purchase?.specification || ""}
+                  </small>
+                  <span className="matching-proposal__amount">
+                    {row.quantity} {item.unit || ""} · 含税 {row.amount}
+                  </span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        </Card>
+      )}
+      {active ? (
+        card(active)
       ) : (
         <Card>
           <EmptyState
