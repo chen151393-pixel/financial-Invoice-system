@@ -21,6 +21,10 @@ from .request_stats import record_request
 logger = logging.getLogger("ns_api.netsuite")
 
 
+class WriteOutcomeUnknown(Exception):
+    """写入请求已发出但没有得到可解析的成功响应；NS 可能已部分或全部写入，禁止直接重发。"""
+
+
 def log_failure(operation, method, started_at, *, error_type, status=None):
     # 不输出异常原文或 HTTP 对象，避免 URL、令牌和业务正文进入日志。
     logger.error(
@@ -74,6 +78,63 @@ class NetSuite:
                 "purchaseOrderIds": criteria["purchaseOrderIds"],
             },
         )
+
+    def vendor_bill_writeback(self, payload):
+        """供应商发票登记写入；不重试。发送前失败抛 ApiError（未写入），发出后失败抛 WriteOutcomeUnknown。"""
+        settings = self.settings
+        if not settings.write_enabled:
+            raise ApiError(409, "NS 写入开关未开启")
+        if not settings.vendor_bill_writeback_script or not settings.vendor_bill_writeback_deploy:
+            raise ApiError(503, "NS 发票登记写入接口尚未配置")
+        if "restlets" not in settings.scope:
+            raise ApiError(503, "NS 集成尚未配置 restlets 授权范围，请管理员完成授权")
+        access_token = self.token()
+        url = f"https://{settings.account}.restlets.api.netsuite.com/app/site/hosting/restlet.nl"
+        started_at = time.monotonic()
+        try:
+            response = self.client.post(
+                url,
+                params={
+                    "script": settings.vendor_bill_writeback_script,
+                    "deploy": settings.vendor_bill_writeback_deploy,
+                },
+                headers={"Authorization": f"Bearer {access_token}", "Accept": "application/json"},
+                json=payload,
+                timeout=120,
+                follow_redirects=False,
+            )
+        except (httpx.ConnectError, httpx.ConnectTimeout) as error:
+            # 连接未建立，请求没有到达 NS。
+            log_failure("restlet_write", "POST", started_at, error_type=type(error).__name__)
+            raise ApiError(502, "NS 连接失败，写入请求未发出") from None
+        except httpx.HTTPError as error:
+            log_failure("restlet_write", "POST", started_at, error_type=type(error).__name__)
+            raise WriteOutcomeUnknown(type(error).__name__) from None
+        if response.status_code in (401, 403):
+            # 认证或部署受众拒绝发生在脚本执行前。
+            if response.status_code == 401:
+                with self._lock:
+                    if self._cached and self._cached[0] == access_token:
+                        self._cached = None
+            log_failure(
+                "restlet_write", "POST", started_at, error_type="HTTPStatusError", status=response.status_code
+            )
+            raise ApiError(
+                502, f"NS 拒绝写入请求（HTTP {response.status_code}），未写入，请核对部署受众及权限"
+            )
+        if not response.is_success:
+            log_failure(
+                "restlet_write", "POST", started_at, error_type="HTTPStatusError", status=response.status_code
+            )
+            raise WriteOutcomeUnknown(f"HTTP {response.status_code}")
+        record_request("restlet", started_at)
+        try:
+            return response.json()
+        except ValueError:
+            log_failure(
+                "restlet_write", "POST", started_at, error_type="InvalidJSON", status=response.status_code
+            )
+            raise WriteOutcomeUnknown("InvalidJSON") from None
 
     def relation_rows(self, kind, ids):
         return read_relation_rows(self, kind, ids)

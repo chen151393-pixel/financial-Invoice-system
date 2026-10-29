@@ -108,6 +108,8 @@ from .modules.task.service.task_board_service import TaskBoardService
 from .modules.task.service.task_generation_service import on_review_approved
 from .modules.task.service.task_service import TaskService
 from .modules.writeback.controller.task_controller import create_router as writeback_router
+from .modules.writeback.policy.write_gate import WriteGate
+from .modules.writeback.service.execute_service import ExecuteService as WritebackExecutor
 from .modules.writeback.service.prepare_worker import PrepareWorker
 from .modules.writeback.service.query_service import QueryService as WritebackQueries
 from .modules.writeback.service.queue_service import on_matching_changed
@@ -299,13 +301,22 @@ def _register_business(app, settings, ns, contract_ns, wecom, engine, lemon_invo
         invoice_router(ImportService(engine, events), InvoiceService(engine), InvoiceStatsService(engine))
     )
     matching_queries = MatchingQueryService(engine)
-    writeback_tasks = WritebackTasks(engine, settings.account, queue_enabled=settings.writeback_queue_enabled)
+    writeback_tasks = WritebackTasks(
+        engine,
+        settings.account,
+        queue_enabled=settings.writeback_queue_enabled,
+        gate=WriteGate(settings),
+    )
     writeback_queries = WritebackQueries(writeback_tasks, VendorBillQueryService(ns))
-    app.include_router(writeback_router(writeback_tasks, writeback_queries))
+    writeback_executor = WritebackExecutor(writeback_tasks, ns)
+    app.include_router(writeback_router(writeback_tasks, writeback_queries, writeback_executor))
+    # 写入开关开启且写入接口已配置时，后台自动写入已就绪任务；白名单在每个任务上再判断。
+    auto_write = settings.write_enabled and bool(settings.vendor_bill_writeback_script)
     app.state.writeback_prepare_worker = PrepareWorker(
         writeback_tasks,
         writeback_queries,
         enabled=settings.writeback_query_enabled and bool(settings.vendor_bill_query_script),
+        executor=writeback_executor if auto_write else None,
     )
     app.include_router(workbench_router(WorkbenchService(engine)))
     app.include_router(

@@ -11,7 +11,7 @@ export interface TaskSummary {
   revision: number;
   historical: boolean;
   updatedAt: string;
-  writeback: { allowed: false; reason: string };
+  writeback: { allowed: boolean; reason: string };
 }
 export interface TaskList {
   items: TaskSummary[];
@@ -56,9 +56,47 @@ export interface TaskDetail extends TaskSummary {
     purchaseOrders: { id: string; number?: string; reason: string; bills: Bill[] }[];
   } | null;
   plan: Plan | null;
-  actions: { refresh: boolean; confirm: boolean };
+  request: WriteRequest | null;
+  actions: {
+    refresh: boolean;
+    confirm: boolean;
+    confirmPreview: boolean;
+    execute: boolean;
+    resolve: boolean;
+    markNotWritten: boolean;
+  };
   querying: boolean;
   audit: { action: string; actor: string; detail: { reason?: string; evidence?: string }; at: string }[];
+}
+export interface PreviewLine {
+  billId: string;
+  billNumber: string;
+  purchaseOrderId: string;
+  before: string;
+  amount: string;
+  after: string;
+  available: string;
+  detailsTotal: string;
+  difference: string;
+  consistent: boolean;
+}
+export interface WriteRequest {
+  requestId: string;
+  state: string;
+  invoice: { number: string; date: string; amount: string };
+  preview: PreviewLine[];
+  needsConfirmation: boolean;
+  confirmedBy: string | null;
+  confirmedAt: string | null;
+  nsRecordId: string | null;
+  sentAt: string | null;
+  finishedAt: string | null;
+}
+export interface ResolveBody {
+  revision: number;
+  outcome: "applied" | "not_written";
+  evidence: string;
+  nsRecordId: string | null;
 }
 export interface InvoiceReadiness {
   ready: boolean;

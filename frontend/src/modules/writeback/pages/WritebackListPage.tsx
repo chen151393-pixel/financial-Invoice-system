@@ -51,8 +51,9 @@ export function WritebackListPage() {
   }
   return (
     <div className="wb-prepare">
-      <Alert title="回写准备">
-        整张发票完整审核后自动生成任务。当前可查询和确认账单方案，尚不执行 NS 写入。
+      <Alert title="NS 回写">
+        整张发票完整审核后自动生成任务。确认账单方案（累计与明细不一致时再确认回写预览）后，写入开关和供应商白名单都满足才会写入
+        NS。
       </Alert>
       <Card>
         <CardHeader
@@ -95,7 +96,13 @@ export function WritebackListPage() {
               <option value="queued">待匹配账单</option>
               <option value="waiting_bill">等待账单</option>
               <option value="needs_confirmation">待确认账单</option>
-              <option value="ready">方案已确认</option>
+              <option value="needs_preview">待确认回写预览</option>
+              <option value="ready">待写入 NS</option>
+              <option value="executing">正在写入 NS</option>
+              <option value="applied">NS 已登记</option>
+              <option value="conflict">NS 已有同号登记</option>
+              <option value="partial">部分写入，待核实</option>
+              <option value="unknown">结果不明，待核实</option>
               <option value="blocked">待处理</option>
               <option value="stale">审核已失效</option>
             </select>

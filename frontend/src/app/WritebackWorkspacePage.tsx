@@ -15,7 +15,7 @@ export default function WritebackWorkspacePage() {
       activeId="writeback"
       onNavigate={navigateView}
       title={requestId ? "回写详情" : "NS 回写"}
-      description="整票审核后生成任务，查询候选账单并确认分配方案；当前尚不执行 NS 写入"
+      description="整票审核后生成任务，确认账单分配与回写预览后写入 NS"
       breadcrumb={requestId ? <Link to={paths.writeback}>NS 回写</Link> : undefined}
     >
       {requestId ? <WritebackRequestPage key={requestId} requestId={requestId} /> : <WritebackListPage />}

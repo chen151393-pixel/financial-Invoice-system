@@ -1120,3 +1120,14 @@ API 发票默认版使用 `source=lemon_open2`、`lemon_account=open2:` 加 `SHA
 | writeback_audit | 准备阶段审计，任务外键；保留生成、失效、查询、确认事实 |
 
 跨模块不建外键，不复用旧 `ns_previews/ns_target_locks/ns_audit`。任务的只读查询租约可到期重查，不是 NS 写入锁。本阶段没有 executing/unknown/succeeded 状态或真实写调用。准备记录不自动降级删除。金额列使用 DECIMAL(18,2)，快照金额使用十进制字符串，时间统一 UTC。字段见[当前字典](../mysql/current-data-dictionary.md)，部署见[准备操作说明](../ns-writeback-prepare.md)。
+
+## 2026-10-28：回写阶段 C（简化口径）
+
+新增 writeback 模块两张表，迁移 `0037_writeback_execution`：
+
+| 表 | 归属与关键约束 |
+| --- | --- |
+| writeback_requests | 每个冻结方案一条写入请求，`plan_id` 与发送 NS 的 `request_id` 均唯一；正文与预览生成后不修改，记录预览确认、发送、结果与 NS 记录 ID |
+| writeback_target_locks | 按 `(ns_account, bill_id)` 唯一的账单持久锁，指向持有锁的写入请求；结果不明或部分写入时保留，人工核实后释放 |
+
+任务新增状态：待确认回写预览、待写入 NS、正在写入 NS、NS 已登记、NS 已有同号登记、部分写入、结果不明。启动不清除执行中状态或账单锁。迁移不能降级。部署见[回写操作说明](../ns-writeback-prepare.md)。

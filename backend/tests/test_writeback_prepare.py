@@ -351,7 +351,7 @@ def test_splits_across_bills_preserve_each_approved_amount(prepared):
     assert prepared.service.confirm(prepared.task_id, ConfirmPlan(**body), USER)["state"] == "ready"
 
 
-def test_http_routes_require_identity_and_have_no_execution_endpoint(context):
+def test_http_routes_require_identity_and_write_needs_switch(context):
     from backend.app import create_app
     from fastapi.testclient import TestClient
 
@@ -364,6 +364,8 @@ def test_http_routes_require_identity_and_have_no_execution_endpoint(context):
         assert response.json()["total"] == 0
     paths = set(app.openapi()["paths"])
     assert "/api/writeback/tasks/{task_id}/confirm" in paths
-    assert not any(
-        path.startswith("/api/writeback") and ("execute" in path or "apply" in path) for path in paths
-    )
+    assert "/api/writeback/tasks/{task_id}/execute" in paths
+    assert "/api/writeback/tasks/{task_id}/resolve" in paths
+    # 没有通用 apply/重发入口；执行只针对已冻结请求，开关关闭时后台不写入。
+    assert not any(path.startswith("/api/writeback") and "apply" in path for path in paths)
+    assert app.state.writeback_prepare_worker.executor is None

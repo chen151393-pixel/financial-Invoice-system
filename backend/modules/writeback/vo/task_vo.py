@@ -2,17 +2,34 @@
 
 from decimal import Decimal
 
+from ..policy.state_policy import WRITTEN_STATES, stuck
+
 LABELS = {
     "queued": "待匹配账单",
     "waiting_bill": "等待账单",
     "needs_confirmation": "待确认账单",
-    "ready": "方案已确认",
+    "needs_preview": "待确认回写预览",
+    "ready": "待写入 NS",
+    "executing": "正在写入 NS",
+    "applied": "NS 已登记",
+    "conflict": "NS 已有同号登记",
+    "partial": "部分写入，待核实",
+    "unknown": "结果不明，待核实",
     "blocked": "待处理",
     "stale": "审核已失效",
 }
 
 
-def summary(task):
+def writeback(task, gate):
+    if task["state"] == "applied":
+        return {"allowed": False, "reason": "NS 已登记"}
+    if task["state"] != "ready":
+        return {"allowed": False, "reason": LABELS[task["state"]]}
+    allowed, reason = gate.check(task)
+    return {"allowed": allowed, "reason": reason}
+
+
+def summary(task, gate):
     return {
         "id": str(task["id"]),
         "taskNo": task["task_no"],
@@ -26,11 +43,32 @@ def summary(task):
         "revision": task["revision"],
         "historical": task["historical"],
         "updatedAt": task["updated_at"].isoformat(),
-        "writeback": {"allowed": False, "reason": "当前只准备与确认方案，NS 写入尚未接入"},
+        "writeback": writeback(task, gate),
     }
 
 
-def detail(task, plan, audit, busy):
+def iso(value):
+    return value.isoformat() if value else None
+
+
+def request_view(request):
+    if not request:
+        return None
+    return {
+        "requestId": request["request_id"],
+        "state": request["state"],
+        "invoice": request["payload"]["invoice"],
+        "preview": request["preview"],
+        "needsConfirmation": request["needs_confirmation"],
+        "confirmedBy": request["confirmed_by"],
+        "confirmedAt": iso(request["confirmed_at"]),
+        "nsRecordId": request["ns_record_id"],
+        "sentAt": iso(request["sent_at"]),
+        "finishedAt": iso(request["finished_at"]),
+    }
+
+
+def detail(task, plan, request, audit, busy, gate, stamp):
     snapshot = task["snapshot"]
     rows = []
     for row in snapshot["allocations"]:
@@ -44,12 +82,14 @@ def detail(task, plan, audit, busy):
                 "amount": format(Decimal(row["amount"]), ".2f"),
             }
         )
+    halted = stuck(task, request, stamp)
     return {
-        **summary(task),
+        **summary(task, gate),
         "allocations": rows,
         "invoice": snapshot["invoice"],
         "candidates": task["candidates"],
         "plan": plan["body"] if plan else None,
+        "request": request_view(request),
         "audit": [
             {
                 "action": a["action"],
@@ -60,8 +100,12 @@ def detail(task, plan, audit, busy):
             for a in audit
         ],
         "actions": {
-            "refresh": task["state"] != "stale" and not busy,
+            "refresh": task["state"] not in ("stale", *WRITTEN_STATES) and not busy,
             "confirm": task["state"] == "needs_confirmation" and not busy,
+            "confirmPreview": task["state"] == "needs_preview" and not busy,
+            "execute": writeback(task, gate)["allowed"] and not busy,
+            "resolve": task["state"] in ("unknown", "partial") or halted,
+            "markNotWritten": task["state"] == "unknown" or halted,
         },
         "querying": busy,
     }

@@ -12,9 +12,11 @@ import {
   ErrorState,
   Skeleton,
 } from "../../../shared/components/ui";
-import { confirmPlan, getTask, refreshTask } from "../api";
+import { confirmPlan, confirmPreview, executeWrite, getTask, refreshTask, resolveWrite } from "../api";
 import { PlanForm } from "../components/PlanForm";
-import type { ConfirmBody, TaskDetail } from "../types";
+import { ResolveForm } from "../components/ResolveForm";
+import { WritePanel } from "../components/WritePanel";
+import type { ConfirmBody, ResolveBody, TaskDetail } from "../types";
 import "../writeback.css";
 
 const actionLabels: Record<string, string> = {
@@ -23,26 +25,33 @@ const actionLabels: Record<string, string> = {
   queried: "查询完成",
   query_failed: "查询失败",
   plan_confirmed: "确认方案",
+  preview_confirmed: "确认回写预览",
+  write_started: "开始写入 NS",
+  write_finished: "写入结束",
+  write_resolved: "人工核实写入结果",
+  changed_after_write: "写入后审核变化",
 };
 export function TaskContent({
   task,
   busy,
   onRefresh,
   onConfirm,
+  onConfirmPreview,
+  onExecute,
+  onResolve,
 }: {
   task: TaskDetail;
   busy: boolean;
   onRefresh: () => void;
   onConfirm: (body: ConfirmBody) => void;
+  onConfirmPreview: () => void;
+  onExecute: () => void;
+  onResolve: (body: ResolveBody) => void;
 }) {
   const bills = task.candidates?.purchaseOrders.flatMap((order) => order.bills) ?? [];
   return (
     <>
-      <Alert title={task.stateLabel}>
-        {task.reason}
-        <br />
-        {task.writeback.reason}
-      </Alert>
+      <Alert title={task.stateLabel}>{task.reason}</Alert>
       <Card>
         <CardHeader
           title={`发票 ${task.invoiceNo}`}
@@ -110,7 +119,7 @@ export function TaskContent({
       {task.plan && (
         <Card>
           <CardHeader
-            title={task.state === "ready" ? "已冻结方案" : "历史冻结方案（当前不可用）"}
+            title={task.state === "stale" ? "历史冻结方案（当前不可用）" : "已冻结方案"}
             description={`${task.plan.confirmedBy} · ${task.plan.confirmedAt}`}
           />
           <DataTable
@@ -126,6 +135,16 @@ export function TaskContent({
           />
           <CardContent>{task.plan.evidence}</CardContent>
         </Card>
+      )}
+      <WritePanel
+        key={`write-${task.revision}`}
+        task={task}
+        busy={busy}
+        onConfirmPreview={onConfirmPreview}
+        onExecute={onExecute}
+      />
+      {task.actions.resolve && (
+        <ResolveForm key={`resolve-${task.revision}`} task={task} busy={busy} onResolve={onResolve} />
       )}
       <Card>
         <CardHeader title="处理记录" />
@@ -202,6 +221,9 @@ export function WritebackRequestPage({ requestId }: { requestId: string }) {
           busy={busy}
           onRefresh={() => void run(() => refreshTask(requestId, task.revision))}
           onConfirm={(body) => void run(() => confirmPlan(requestId, body))}
+          onConfirmPreview={() => void run(() => confirmPreview(requestId, task.revision))}
+          onExecute={() => void run(() => executeWrite(requestId, task.revision))}
+          onResolve={(body) => void run(() => resolveWrite(requestId, body))}
         />
       ) : (
         !error && <Skeleton label="正在加载回写任务" />

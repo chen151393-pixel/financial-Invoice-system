@@ -3,7 +3,7 @@
 > 本文件由 `npm.cmd run db:map` 根据迁移链离线 MySQL DDL、实体定义和字段字典生成，请勿手工修改；迁移或实体变化后重新生成，`backend/tests/test_schema_map.py` 会检查是否过期。
 > “修改”含加列、改列、索引与中文备注；数据回填仅在线执行，不在离线 DDL 中体现。
 
-当前最新迁移：`0036_writeback_prepare`；共 36 个迁移、58 张实体表。
+当前最新迁移：`0037_writeback_execution`；共 37 个迁移、60 张实体表。
 
 ## 1. 按模块查表
 
@@ -105,6 +105,8 @@
 | `writeback_audit` | 回写准备审计 | `0036` | — | [查看](current-data-dictionary.md#writeback_audit回写准备审计) |
 | `writeback_invoice_guards` | 同一发票当前准备任务 | `0036` | — | [查看](current-data-dictionary.md#writeback_invoice_guards同一发票当前准备任务) |
 | `writeback_plans` | 仅追加的账单分配方案 | `0036` | — | [查看](current-data-dictionary.md#writeback_plans仅追加的账单分配方案) |
+| `writeback_requests` | 发票回写的 NS 写入请求 | `0037` | — | [查看](current-data-dictionary.md#writeback_requests发票回写的-ns-写入请求) |
+| `writeback_target_locks` | 回写目标账单持久锁 | `0037` | — | [查看](current-data-dictionary.md#writeback_target_locks回写目标账单持久锁) |
 | `writeback_tasks` | 发票回写准备任务，不执行 NS 写操作 | `0036` | — | [查看](current-data-dictionary.md#writeback_tasks发票回写准备任务不执行-ns-写操作) |
 
 ## 2. 按迁移查表
@@ -147,3 +149,4 @@
 | [`0034_source_customs_declared_unit_price`](../../backend/migrations/versions/0034_source_customs_declared_unit_price.py) | — | `source_customs_lines` | source：报关明细保存申报单价（2026-10-28）。 |
 | [`0035_identity_member_selection`](../../backend/migrations/versions/0035_identity_member_selection.py) | `identity_directory_previews`、`identity_user_sync_scopes` | `identity_users` | 人员选择预览与独立启用开关；保留已有账号，不允许降级丢失权限状态。 |
 | [`0036_writeback_prepare`](../../backend/migrations/versions/0036_writeback_prepare.py) | `writeback_audit`、`writeback_invoice_guards`、`writeback_plans`、`writeback_tasks` | — | 新增回写准备队列；只建新表，不触碰旧 NS 回写审计与锁。 |
+| [`0037_writeback_execution`](../../backend/migrations/versions/0037_writeback_execution.py) | `writeback_requests`、`writeback_target_locks` | — | 新增 NS 写入请求与账单目标锁；只建新表，不修改准备阶段四张表。 |

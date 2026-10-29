@@ -6,9 +6,9 @@ from uuid import uuid4
 from backend.core.errors import ApiError
 from backend.core.write_lock import transaction
 
-from ..dao import audit_dao, plan_dao, task_dao
+from ..dao import audit_dao, task_dao
 from ..policy.plan_policy import automatic_targets, candidates
-from ..vo.task_vo import detail
+from ..policy.state_policy import WRITTEN_STATES
 from .queue_service import now, still_current
 from .task_service import save_plan
 
@@ -21,6 +21,8 @@ class QueryService:
         lease, claimed = None, None
         with transaction(self.tasks.engine) as connection:
             task = self.tasks.scoped(connection, task_id)
+            if task["state"] in WRITTEN_STATES:
+                raise ApiError(409, "任务已发出或完成 NS 写入，不能重新查询")
             if still_current(connection, task):
                 stamp = now()
                 if revision != task["revision"] or (task["lease_until"] and task["lease_until"] > stamp):
@@ -55,63 +57,55 @@ class QueryService:
         # 不吞掉程序错误；进程退出或异常后只读租约到期即可重查。
         with transaction(self.tasks.engine) as connection:
             task = self.tasks.scoped(connection, task_id)
-            if task["lease_token"] != lease or not still_current(connection, task):
-                current = task_dao.get(connection, task_id)
-                plan = (
-                    plan_dao.get(connection, current["current_plan_id"])
-                    if current["current_plan_id"]
-                    else None
-                )
-                return detail(
-                    current,
-                    plan,
-                    audit_dao.recent(connection, task_id),
-                    bool(current["lease_until"] and current["lease_until"] > now()),
-                )
-            stamp = now()
-            state, reason, targets = "blocked", failure, None
-            if result:
-                try:
-                    candidates(task, result)
-                    if any(o["status"] == "NO_BILLS" for o in result["purchaseOrders"]):
-                        state, reason = "waiting_bill", "部分母采购尚无可见账单，稍后重查"
-                    else:
-                        targets = automatic_targets(task, result)
-                        state, reason = "needs_confirmation", "请核实实际采购子公司、账单归属及各笔分配金额"
-                except ApiError as error:
-                    reason = error.message
-            task_dao.change(
-                connection,
-                task_id,
-                {
-                    "state": state,
-                    "reason": reason,
-                    "candidates": result,
-                    "queried_at": stamp,
-                    "revision": task["revision"] + 1,
-                    "lease_token": None,
-                    "lease_until": None,
-                    "next_query_at": stamp + timedelta(minutes=10),
-                },
-                stamp,
-            )
-            audit_dao.add(
-                connection,
-                task_id,
-                "queried" if result else "query_failed",
-                actor,
-                {"reason": reason, "queryId": result.get("queryId") if result else None},
-                stamp,
-            )
-            if targets:
-                current = task_dao.get(connection, task_id)
-                save_plan(
+            # 租约已被取代或审核已失效：丢弃本次结果，按当前状态返回。
+            if task["lease_token"] == lease and still_current(connection, task):
+                stamp = now()
+                state, reason, targets = "blocked", failure, None
+                if result:
+                    try:
+                        candidates(task, result)
+                        if any(o["status"] == "NO_BILLS" for o in result["purchaseOrders"]):
+                            state, reason = "waiting_bill", "部分母采购尚无可见账单，稍后重查"
+                        else:
+                            targets = automatic_targets(task, result)
+                            state, reason = (
+                                "needs_confirmation",
+                                "请核实实际采购子公司、账单归属及各笔分配金额",
+                            )
+                    except ApiError as error:
+                        reason = error.message
+                task_dao.change(
                     connection,
-                    current,
-                    targets,
-                    str(uuid4()),
-                    "automatic",
-                    "system",
-                    "精确子采购关联及真实子公司映射唯一，所有金额校验通过",
+                    task_id,
+                    {
+                        "state": state,
+                        "reason": reason,
+                        "candidates": result,
+                        "queried_at": stamp,
+                        "revision": task["revision"] + 1,
+                        "lease_token": None,
+                        "lease_until": None,
+                        "next_query_at": stamp + timedelta(minutes=10),
+                    },
+                    stamp,
                 )
+                audit_dao.add(
+                    connection,
+                    task_id,
+                    "queried" if result else "query_failed",
+                    actor,
+                    {"reason": reason, "queryId": result.get("queryId") if result else None},
+                    stamp,
+                )
+                if targets:
+                    current = task_dao.get(connection, task_id)
+                    save_plan(
+                        connection,
+                        current,
+                        targets,
+                        str(uuid4()),
+                        "automatic",
+                        "system",
+                        "精确子采购关联及真实子公司映射唯一，所有金额校验通过",
+                    )
         return self.tasks.get(task_id)

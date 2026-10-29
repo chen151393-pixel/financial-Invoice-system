@@ -1797,3 +1797,35 @@ NS 来源按批后台保存记录与结果，不保存令牌。
 | detail | JSON | 否 | 审计事实，不含密钥 |
 | created_at | DATETIME | 否 | 本地记录创建时间，UTC |
 | updated_at | DATETIME | 否 | 本地记录最后更新时间，UTC；由 DAO 更新 |
+
+### writeback_requests｜发票回写的 NS 写入请求
+
+| 字段 | 类型 | 可空 | 说明 |
+| --- | --- | --- | --- |
+| id | BIGINT | 否 | 写入请求主键 |
+| task_id | BIGINT | 否 | 所属回写任务 |
+| plan_id | BIGINT | 否 | 对应冻结方案；唯一 |
+| request_id | VARCHAR(36) | 否 | 发送 NS 的请求编号；唯一 |
+| payload | JSON | 否 | 发送 NS 的冻结正文 |
+| preview | JSON | 否 | 逐账单写前、本次与写后累计预览 |
+| needs_confirmation | BOOLEAN | 否 | 账单累计与明细不一致，须人工确认预览 |
+| confirmed_by | VARCHAR(200) | 是 | 预览确认身份 |
+| confirmed_at | DATETIME | 是 | 预览确认时间，UTC |
+| state | VARCHAR(32) | 否 | 请求状态：pending / executing / applied / conflict / rejected / partial / unknown |
+| result | JSON | 是 | NS 返回结果或人工核实结论 |
+| ns_record_id | VARCHAR(20) | 是 | NS 供应商发票记录内部 ID |
+| sent_at | DATETIME | 是 | 最近发送时间，UTC |
+| finished_at | DATETIME | 是 | 得到最终结果时间，UTC |
+| created_at | DATETIME | 否 | 本地记录创建时间，UTC |
+| updated_at | DATETIME | 否 | 本地记录最后更新时间，UTC；由 DAO 更新 |
+
+### writeback_target_locks｜回写目标账单持久锁
+
+| 字段 | 类型 | 可空 | 说明 |
+| --- | --- | --- | --- |
+| id | BIGINT | 否 | 目标锁主键 |
+| ns_account | VARCHAR(100) | 否 | 目标账套 |
+| bill_id | VARCHAR(20) | 否 | NS 供应商账单内部 ID；与账套组合唯一 |
+| request_id | BIGINT | 否 | 持有锁的写入请求 |
+| created_at | DATETIME | 否 | 本地记录创建时间，UTC |
+| updated_at | DATETIME | 否 | 本地记录最后更新时间，UTC；由 DAO 更新 |

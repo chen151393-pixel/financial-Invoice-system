@@ -18,6 +18,8 @@ TABLES = ALL_TABLES - {
     "writeback_plans",
     "writeback_audit",
     "writeback_invoice_guards",
+    "writeback_requests",
+    "writeback_target_locks",
     "sync_lemon_bindings",
     "sync_lemon_runs",
     "sync_ns_runs",

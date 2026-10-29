@@ -6,6 +6,7 @@ from uuid import uuid4
 from backend.modules.matching.public import read_writeback_snapshot
 
 from ..dao import audit_dao, task_dao
+from ..policy.state_policy import WRITTEN_STATES
 
 
 def now():
@@ -14,6 +15,13 @@ def now():
 
 def stale(connection, task, reason):
     if task["state"] == "stale":
+        return
+    if task["state"] in WRITTEN_STATES:
+        note = f"审核内容在写入 NS 后已变化（{reason}），须人工核对 NS 登记"[:500]
+        if task["reason"] != note:
+            stamp = now()
+            task_dao.change(connection, task["id"], {"reason": note}, stamp)
+            audit_dao.add(connection, task["id"], "changed_after_write", "system", {"reason": reason}, stamp)
         return
     stamp = now()
     task_dao.change(

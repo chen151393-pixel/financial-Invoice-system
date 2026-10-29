@@ -52,10 +52,10 @@ def validate_plan(task, result, targets):
             raise ApiError(409, "账单与子采购的母单、供应商或币种不一致")
         if bill["subPurchaseOrderId"] and bill["subPurchaseOrderId"] != source["subpo_id"]:
             raise ApiError(409, "账单已明确关联其他子采购，不能人工覆盖")
+        # 累计与明细不一致的账单不在此阻断，冻结后生成回写预览交人工确认（方案第 1.1 节）。
         if (
             bill["approvalStatus"] != "2"
             or bill["voided"]
-            or not bill["consistent"]
             or bill["currency"] != "CNY"
             or Decimal(bill["amounts"]["received"]) < 0
         ):

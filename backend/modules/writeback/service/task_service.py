@@ -1,13 +1,16 @@
-"""准备任务查询及人工目标确认；没有 NS 写入入口。"""
+"""准备任务查询、人工目标确认与写入请求冻结；NS 写入调用在 execute_service。"""
 
 import hashlib
+from uuid import uuid4
 
 from backend.core.errors import ApiError
 from backend.core.write_lock import transaction
 from backend.modules.matching.public import read_writeback_snapshot, writeback_invoice_ids
 
-from ..dao import audit_dao, plan_dao, task_dao
+from ..dao import audit_dao, plan_dao, request_dao, task_dao
 from ..policy.plan_policy import validate_plan
+from ..policy.preview_policy import build
+from ..policy.write_gate import WriteGate
 from ..vo.task_vo import detail, summary
 from .queue_service import enqueue, now, still_current
 
@@ -18,9 +21,10 @@ def require_user(actor):
 
 
 class TaskService:
-    def __init__(self, engine, account, *, queue_enabled=True):
+    def __init__(self, engine, account, *, queue_enabled=True, gate=None):
         self.engine, self.account = engine, account
         self.queue_enabled = queue_enabled
+        self.gate = gate or WriteGate()
 
     def scoped(self, connection, task_id):
         task = task_dao.get(connection, task_id)
@@ -32,7 +36,7 @@ class TaskService:
         with self.engine.connect() as connection:
             rows, total = task_dao.page(connection, self.account, criteria)
         return {
-            "items": [summary(row) for row in rows],
+            "items": [summary(row, self.gate) for row in rows],
             "total": total,
             "page": criteria.page,
             "pageSize": criteria.pageSize,
@@ -45,8 +49,9 @@ class TaskService:
             still_current(connection, task)
             task = self.scoped(connection, task_id)
             plan = plan_dao.get(connection, task["current_plan_id"]) if task["current_plan_id"] else None
+            request = request_dao.by_plan(connection, plan["id"]) if plan else None
             busy = bool(task["lease_until"] and task["lease_until"] > now())
-            return detail(task, plan, audit_dao.recent(connection, task_id), busy)
+            return detail(task, plan, request, audit_dao.recent(connection, task_id), busy, self.gate, now())
 
     def invoice(self, invoice_id):
         with self.engine.connect() as connection:
@@ -56,7 +61,7 @@ class TaskService:
         return {
             "ready": result["ready"],
             "reason": result["reason"],
-            "task": summary(task) if visible else None,
+            "task": summary(task, self.gate) if visible else None,
         }
 
     def recheck(self, invoice_id, actor):
@@ -130,15 +135,32 @@ def save_plan(connection, task, targets, request_id, digest, actor, evidence):
         },
         stamp,
     )
+    # 方案冻结时同时冻结发送 NS 的正文；累计与明细不一致的账单须先人工确认预览。
+    state, reason = "ready", "方案已冻结，等待写入 NS；查询额度未预留"
+    try:
+        payload, preview, needs_confirmation = build(task, targets, task["candidates"], str(uuid4()))
+    except ApiError as error:
+        state, reason = "blocked", error.message
+    else:
+        request_dao.add(
+            connection,
+            {
+                "task_id": task["id"],
+                "plan_id": plan_id,
+                "request_id": payload["requestId"],
+                "payload": payload,
+                "preview": preview,
+                "needs_confirmation": needs_confirmation,
+                "state": "pending",
+            },
+            stamp,
+        )
+        if needs_confirmation:
+            state, reason = "needs_preview", "账单累计已收与明细合计不一致，请核对回写预览后确认"
     task_dao.change(
         connection,
         task["id"],
-        {
-            "current_plan_id": plan_id,
-            "state": "ready",
-            "reason": "方案已冻结；NS 写入尚未接入，查询额度未预留",
-            "revision": task["revision"] + 1,
-        },
+        {"current_plan_id": plan_id, "state": state, "reason": reason, "revision": task["revision"] + 1},
         stamp,
     )
     audit_dao.add(

@@ -17,7 +17,7 @@
     "typecheck": "npm --prefix frontend run typecheck",
     "test": "npm run build && npm run test:web && npm run test:netsuite && npm run test:api",
     "test:web": "npm --prefix frontend test",
-    "test:netsuite": "node --test netsuite/tests/ns-finance-source.test.mjs netsuite/tests/ns-declaration-documents.test.mjs netsuite/tests/ns-vendor-bill-query.test.mjs",
+    "test:netsuite": "node --test netsuite/tests/ns-finance-source.test.mjs netsuite/tests/ns-declaration-documents.test.mjs netsuite/tests/ns-vendor-bill-query.test.mjs netsuite/tests/ns-vendor-bill-writeback.test.mjs",
     "test:api": "node scripts/python.mjs -m pytest backend/tests",
     "lint:api": "node scripts/python.mjs -m ruff check backend",
     "format:web": "npm --prefix frontend run format",

@@ -99,3 +99,14 @@ def pending(connection, account, stamp):
             .limit(4)
         ).mappings()
     )
+
+
+def ready_to_write(connection, account):
+    return list(
+        connection.execute(
+            select(tasks.c.id, tasks.c.revision, tasks.c.vendor_id)
+            .where(tasks.c.ns_account == account, tasks.c.state == "ready")
+            .order_by(tasks.c.id)
+            .limit(4)
+        ).mappings()
+    )

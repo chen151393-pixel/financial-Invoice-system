@@ -35,6 +35,10 @@ class Settings:
     vendor_bill_query_deploy: str = ""
     writeback_query_enabled: bool = False
     writeback_queue_enabled: bool = True
+    vendor_bill_writeback_script: str = ""
+    vendor_bill_writeback_deploy: str = ""
+    # 允许写入 NS 的供应商内部 ID；空为全部不允许，"*" 为全部允许。
+    writeback_vendor_allowlist: tuple[str, ...] = ()
     subpo_contract_script: str = ""
     subpo_contract_deploy: str = ""
     declaration_doc_script: str = ""
@@ -226,6 +230,13 @@ def load_settings(source=None):
     queue_enabled = get("WRITEBACK_QUEUE_ENABLED", "true").lower()
     if queue_enabled not in {"true", "false"}:
         raise ValueError("WRITEBACK_QUEUE_ENABLED 须为 true 或 false")
+    writeback_script = get("NETSUITE_VENDOR_BILL_WRITEBACK_SCRIPT").strip()
+    writeback_deploy = get("NETSUITE_VENDOR_BILL_WRITEBACK_DEPLOY").strip()
+    if bool(writeback_script) != bool(writeback_deploy):
+        raise ValueError("发票登记写入接口的脚本和部署编号须同时填写")
+    allowlist = tuple(v.strip() for v in get("WRITEBACK_VENDOR_ALLOWLIST").split(",") if v.strip())
+    if allowlist != ("*",) and any(not re.fullmatch(r"[1-9][0-9]{0,19}", v) for v in allowlist):
+        raise ValueError("WRITEBACK_VENDOR_ALLOWLIST 须为逗号分隔的 NS 供应商内部 ID，或单独的 *")
     return Settings(
         account=account,
         client_id=get("NETSUITE_CLIENT_ID"),
@@ -247,6 +258,9 @@ def load_settings(source=None):
         vendor_bill_query_deploy=bill_deploy,
         writeback_query_enabled=prepare_enabled == "true",
         writeback_queue_enabled=queue_enabled == "true",
+        vendor_bill_writeback_script=writeback_script,
+        vendor_bill_writeback_deploy=writeback_deploy,
+        writeback_vendor_allowlist=allowlist,
         subpo_contract_script=contract_script,
         subpo_contract_deploy=contract_deploy,
         declaration_doc_script=declaration_script,

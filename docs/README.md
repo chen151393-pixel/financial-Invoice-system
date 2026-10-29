@@ -50,7 +50,7 @@
 | [字段映射](netsuite-pl-lookup.json) | NS 来源读取的字段配置依据 |
 | [PL 来源保存](pl-storage.md) | 既有本地保存用例与边界 |
 | [NS 权限](netsuite-vendor-invoice-permissions.md) | 记录访问权限专题 |
-| [NS 回写准备部署](ns-writeback-prepare.md) | 已实现整票审核入队、候选查询和方案确认；无 NS 写入 |
+| [NS 回写部署与验证](ns-writeback-prepare.md) | 已实现整票审核入队、候选查询、方案确认、回写预览与写入；写入脚本待 NS 部署和首笔验收 |
 | [NS 供应商账单回写方案](ns-vendor-bill-writeback-plan.md)、[按母单查询账单](ns-vendor-bill-query-api.md) | 后续写入方案与第 0 期统计；只读查询 RESTlet 已部署（线上修订号须部署时核实） |
 | [MySQL 资料入口](mysql/README.md) | 当前迁移导读与历史基础建表说明 |
 | [八张来源表](mysql/eight-table-relations.md) | 母采购、子采购、报关和发票来源关系 |
