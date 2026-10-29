@@ -3,7 +3,7 @@
 > 本文件由 `npm.cmd run db:map` 根据迁移链离线 MySQL DDL、实体定义和字段字典生成，请勿手工修改；迁移或实体变化后重新生成，`backend/tests/test_schema_map.py` 会检查是否过期。
 > “修改”含加列、改列、索引与中文备注；数据回填仅在线执行，不在离线 DDL 中体现。
 
-当前最新迁移：`0037_writeback_execution`；共 37 个迁移、60 张实体表。
+当前最新迁移：`0038_source_purchase_line_tax_rate`；共 38 个迁移、60 张实体表。
 
 ## 1. 按模块查表
 
@@ -17,7 +17,7 @@
 | `source_customs_purchase_links` | 报关单与子采购单的关联，支持多对多与行级 | `0001` | `0010` | [查看](current-data-dictionary.md#source_customs_purchase_links) |
 | `source_parent_order_lines` | 母采购行 | `0001` | `0010` | [查看](current-data-dictionary.md#source_parent_order_lines) |
 | `source_parent_orders` | 母采购单 | `0001` | `0004`、`0005`、`0010` | [查看](current-data-dictionary.md#source_parent_orders) |
-| `source_purchase_order_lines` | 子采购行：开票单元 | `0001` | `0010` | [查看](current-data-dictionary.md#source_purchase_order_lines) |
+| `source_purchase_order_lines` | 子采购行：开票单元 | `0001` | `0010`、`0038` | [查看](current-data-dictionary.md#source_purchase_order_lines) |
 | `source_purchase_orders` | 子采购单 | `0001` | `0002`、`0004`、`0005`、`0010`、`0029` | [查看](current-data-dictionary.md#source_purchase_orders) |
 | `source_raw_records` | NS 原始数据；内容变化时追加一行，主表指向最新一行 | `0001` | `0010` | [查看](current-data-dictionary.md#source_raw_records) |
 | `source_sales_orders` | 销售单单头（币种、汇率），用于申报幅度与发票价格校验；不参与报关单内容摘要 | `0029` | — | [查看](current-data-dictionary.md#source_sales_orders) |
@@ -150,3 +150,4 @@
 | [`0035_identity_member_selection`](../../backend/migrations/versions/0035_identity_member_selection.py) | `identity_directory_previews`、`identity_user_sync_scopes` | `identity_users` | 人员选择预览与独立启用开关；保留已有账号，不允许降级丢失权限状态。 |
 | [`0036_writeback_prepare`](../../backend/migrations/versions/0036_writeback_prepare.py) | `writeback_audit`、`writeback_invoice_guards`、`writeback_plans`、`writeback_tasks` | — | 新增回写准备队列；只建新表，不触碰旧 NS 回写审计与锁。 |
 | [`0037_writeback_execution`](../../backend/migrations/versions/0037_writeback_execution.py) | `writeback_requests`、`writeback_target_locks` | — | 新增 NS 写入请求与账单目标锁；只建新表，不修改准备阶段四张表。 |
+| [`0038_source_purchase_line_tax_rate`](../../backend/migrations/versions/0038_source_purchase_line_tax_rate.py) | — | `source_purchase_order_lines` | source：子采购明细保存税率（2026-10-29）。 |

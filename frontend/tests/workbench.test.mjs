@@ -123,6 +123,7 @@ test("明细导航保持选中行；提交期间禁止切换，候选限制取�
         allocations: [],
       },
     ],
+    groups: [],
     selectedId: "1",
     busy: true,
     onSelect() {},

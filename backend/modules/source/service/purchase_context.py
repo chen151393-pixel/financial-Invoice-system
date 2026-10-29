@@ -61,6 +61,8 @@ def purchase_lines(connection, line_ids, *, lock=False):
         context["digest"] = line_digest(context)
         # NS 单位存编号，比对须用字典名称；不参与摘要，字典调整不会使已有建议过期
         context["unit_name"] = unit_label(row["unit"], names)
+        # 税率供发票整单比对核对税额；不参与摘要，补同步税率不会使已有建议过期
+        context["tax_rate"] = row["tax_rate"]
         # 对应报关行的人民币申报价（价格校验用）；只读参考，不参与摘要
         context["declared"] = None
         context["source_refs"] = {

@@ -118,7 +118,14 @@
 - 报关单读取门面（第 4b 步加入，供 review 使用）：`DeclarationService`（索引、分页内容、账户锁 `locked`）、`snapshot`（锁内读取完整内容）、`digest`（重算内容摘要）。2026-10-22 起索引返回真实报关单号并可按供应商筛选；`suppliers(account)` 返回有效报关单关联的供应商选项。
 - 报关单准入（2026-10-22 加入）：`admission_issues(declaration_no, order_count)` 返回未出库原因列表，`admission_reason(issues)` 返回提示文案。2026-10-23 起拉取时即按此跳过（见下节）；review 保留同一判断，只用于拦截库中遗留的旧数据。
 - 归档用报关单头（2026-10-23 加入，供 task 使用）：`SourceDirectory.declarations(ids)` 返回 `{id: {record_no, declaration_no, created_at}}`，`created_at` 为 NS 创建时间（UTC）。
-- 子采购行比对上下文（第 4d 步加入，供 matching 使用）：`purchase_lines(connection, line_ids)`——子采购单号、供应商与采购公司（含规范化名称）、品名、单位、数量金额、币种及来源、是否有效、内容摘要 `digest`（建议生成后来源变化即改变）。2026-10-28 新增 `unit_name`：单位编号经单位字典解析的名称，供 matching 判断是否同单位；不参与摘要。
+- 子采购行比对上下文（第 4d 步加入，供 matching 使用）：`purchase_lines(connection, line_ids)`——子采购单号、供应商与采购公司（含规范化名称）、品名、单位、数量金额、币种及来源、是否有效、内容摘要 `digest`（建议生成后来源变化即改变）。2026-10-28 新增 `unit_name`：单位编号经单位字典解析的名称，供 matching 判断是否同单位；不参与摘要。2026-10-29 新增 `tax_rate`：子采购明细税率。
+
+## 子采购明细税率（2026-10-29）
+
+- NS 子采购明细的 `custrecord_swc_subpo_item_tax` 是税码引用（显示名如“13%”），不是税额。配置键 `purchase_line.storage_fields.tax_rate` 映射该字段，`policy/tax_rate_policy.py` 只从显示名解析百分数，存入 `source_purchase_order_lines.tax_rate`（迁移 `0038`，0.13 表示 13%）；未填写或无法解析为 NULL。批量明细读取把它作为显示引用读取（`line_read_policy.py`）。
+- 字段可选（`optional_field_policy.py`），未配置映射或未返回时不影响同步。**部署环境的 `NETSUITE_PL_LOOKUP` 需在 `purchase_line.storage_fields` 增加 `"tax_rate": "custrecord_swc_subpo_item_tax"`，并重新同步子采购**，已有数据补齐前 matching 的税额比对显示“未校验”。
+- 税率不进入报关单内容摘要和子采购行比对摘要：补同步税率不会使已审核报关单或已有比对建议过期。
+
 - 来源目录（第 4c 步加入，供 task 使用）：`SourceDirectory`（`service/directory_service.py`）——按 ID 批量取供应商、采购公司、子采购单号与行品名（含已停用记录，保证历史任务可显示），按名称 / 单号搜索 ID，有效供应商分页。
 
 ## 4e 切换

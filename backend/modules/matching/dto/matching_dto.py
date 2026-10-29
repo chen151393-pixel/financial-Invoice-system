@@ -48,6 +48,24 @@ class RejectBody(StrictModel):
     note: Note = ""
 
 
+GroupId = Annotated[
+    str, StringConstraints(pattern=r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")
+]
+
+
+class GroupConfirmBody(StrictModel):
+    """整单建议整组通过：发票行与一张或多张整张子采购单。"""
+
+    invoiceId: Id
+    invoiceVersionId: Id | None = None
+    note: Note = ""
+
+
+class GroupRejectBody(StrictModel):
+    invoiceId: Id
+    note: Note = ""
+
+
 class CancelBody(StrictModel):
     reason: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=300)]
 

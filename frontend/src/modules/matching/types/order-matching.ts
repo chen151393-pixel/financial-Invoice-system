@@ -32,7 +32,7 @@ export type OrderCandidate = {
 };
 
 export type OrderCandidates = { rows: OrderCandidate[]; total: number; page: number; pages: number };
-export type OrderConfirmBody = Conversion & {
+export type OrderConfirmBody = Partial<Conversion> & {
   requestId: string;
   invoiceId: string;
   invoiceVersionId: string | null;

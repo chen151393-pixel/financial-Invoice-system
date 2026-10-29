@@ -11,6 +11,7 @@ from backend.modules.invoice.service.invoice_service import InvoiceService
 from backend.modules.matching.dto.invoice_totals_dto import InvoiceTotalsQuery
 from backend.modules.matching.dto.matching_dto import CancelBody, ConfirmBody
 from backend.tests.invoice_files import invoice
+from backend.tests.matching_helpers import confirm_groups
 from backend.tests.test_matching import FLUID, INK, import_invoices, invoice_id, proposals
 from backend.tests.test_matching import engine as engine
 from backend.tests.test_matching import ns as ns
@@ -47,31 +48,33 @@ def test_empty_and_proposals_do_not_reduce_pending(engine, world, reviewed):
 
 def test_confirm_partial_complete_cancel(engine, world, reviewed):
     first, second = prepare(engine, world)
-    world["allocations"].confirm(int(first.id), ConfirmBody(), USER)
-    assert amount(totals(world)[0], "pendingAmount") == Decimal("20")
-    world["allocations"].confirm(int(second.id), ConfirmBody(), USER)
+    confirm_groups(world, invoice_id(engine, NUMBER), USER)
     assert amount(totals(world)[0], "pendingAmount") == 0 and totals(world)[0].pendingCount == 0
     world["allocations"].cancel(int(first.id), CancelBody(reason="统计撤销回归"), USER)
     assert amount(totals(world)[0], "pendingAmount") == Decimal("100.50")
+    world["allocations"].cancel(int(second.id), CancelBody(reason="统计撤销回归"), USER)
+    assert amount(totals(world)[0], "pendingAmount") == Decimal("120.50")
 
 
 def test_version_review_history_and_cancellation(engine, world, reviewed):
-    first, _ = prepare(engine, world)
-    world["allocations"].confirm(int(first.id), ConfirmBody(), USER)
+    first, second = prepare(engine, world)
+    confirm_groups(world, invoice_id(engine, NUMBER), USER)
     import_invoices(world, [invoice(NUMBER, [INK, FLUID], remark="SUB-200 补充说明")])
     result = totals(world)[0]
     assert amount(result, "pendingAmount") == Decimal("120.50")
-    assert amount(result, "reviewAmount") == Decimal("100.50") and result.reviewCount == 1
+    assert amount(result, "reviewAmount") == Decimal("120.50") and result.reviewCount == 1
     world["allocations"].reverify(int(first.id), ConfirmBody(note="核实新版本"), USER)
     assert amount(totals(world)[0], "pendingAmount") == Decimal("20")
+    assert amount(totals(world)[0], "reviewAmount") == Decimal("20")
+    world["allocations"].reverify(int(second.id), ConfirmBody(note="核实新版本"), USER)
+    assert amount(totals(world)[0], "pendingAmount") == 0
     assert amount(totals(world)[0], "reviewAmount") == 0
 
 
 @pytest.mark.parametrize("status", ["作废", "已红冲", "未知状态"])
 def test_invalid_invoice_excluded_from_pending_keeps_review(engine, world, reviewed, status):
     found = prepare(engine, world)
-    for row in found:
-        world["allocations"].confirm(int(row.id), ConfirmBody(), USER)
+    confirm_groups(world, invoice_id(engine, NUMBER), USER)
     import_invoices(world, [invoice(NUMBER, [INK, FLUID], remark="SUB-200", status=status)])
     result = totals(world)[0]
     assert amount(result, "pendingAmount") == 0

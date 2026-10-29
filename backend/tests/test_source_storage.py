@@ -76,6 +76,8 @@ def purchase(order_id="200", customs_id="870", amounts=("100.50", "20.00")):
                     "custrecord_swc_subpo_item_bgqty": Decimal("5"),
                     "custrecord_swc_subpo_item_ratewithrate": Decimal("10.05"),
                     "custrecord_swc_subpo_item_amountwithtax": Decimal(amount) if amount else None,
+                    # NS 税码引用，显示名为税率
+                    "custrecord_swc_subpo_item_tax": {"id": "920", "refName": "13%"},
                     # 行级定位依据（local_relation_policy）
                     "custrecord_swc_subpo_item_item": {"id": key},
                     "custrecord_swc_subpo_item_mainpo_lineid": key,

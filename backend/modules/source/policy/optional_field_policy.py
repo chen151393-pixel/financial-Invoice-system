@@ -6,9 +6,18 @@ OPTIONAL_CUSTOMS_FIELDS = {
     "declared_unit_price": "custrecord_swc_grossamountzj",
 }
 
+# 子采购明细的税码可能未填写；缺失时税率为 NULL，发票比对的税额项显示“未校验”。
+OPTIONAL_PURCHASE_FIELDS = {"tax_rate": "custrecord_swc_subpo_item_tax"}
+
 
 def allows_missing(kind, spec, key):
-    # 只放行已知报关明细的规格型号与申报单价；拼错映射、其他记录类型及金额等字段仍失败。
+    # 只放行已知字段；拼错映射、其他记录类型及金额等字段仍失败。
+    if kind == "purchase_line":
+        return (
+            spec.type == "customrecord_swc_subpo_item"
+            and key in OPTIONAL_PURCHASE_FIELDS
+            and spec.storage_fields.get(key) == OPTIONAL_PURCHASE_FIELDS[key]
+        )
     return (
         kind == "customs_line"
         and spec.type == "customrecord_swc_delare_detail"

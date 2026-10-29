@@ -8,6 +8,7 @@
 import re
 import unicodedata
 from decimal import Decimal
+from difflib import SequenceMatcher
 
 from backend.core.names import normalize_name
 
@@ -21,7 +22,20 @@ WEIGHTS = {
     "amount": 15,
     "price": 0,
 }
+# 整单比对（发票行 ↔ 一张或多张整张子采购单合计）增加税额项，合计仍为 100。
+GROUP_WEIGHTS = {
+    "order": 15,
+    "seller": 15,
+    "buyer": 5,
+    "item": 15,
+    "unit": 10,
+    "quantity": 15,
+    "amount": 15,
+    "tax": 10,
+    "price": 0,
+}
 LABELS = {
+    "tax": "税额",
     "order": "子采购单号",
     "seller": "销售方与供应商",
     "buyer": "购买方与采购公司",
@@ -34,6 +48,22 @@ LABELS = {
 PRICE_TOLERANCE = Decimal("0.01")
 HIGH, MEDIUM = Decimal(80), Decimal(50)
 AMOUNT_TOLERANCE = Decimal("0.01")
+# 子采购税额按含税合计 × 税率 ÷（1 + 税率）推算，票面逐行四舍五入，允许 0.05 元差异。
+TAX_TOLERANCE = Decimal("0.05")
+# 供应商核心名称相似度达到该值算部分一致（须填写说明），低于则不一致。
+SUPPLIER_SIMILARITY = 0.6
+# 去掉的公司后缀，长的在前；“股份有限公司”去掉后不残留“股份”。
+_COMPANY_SUFFIXES = ("股份有限公司", "有限责任公司", "有限公司", "公司")
+# 名称开头的地名前缀：省级简称与常见城市；以“省/市/区/县”结尾的行政区名另按规则去掉。
+_PLACES = (
+    "北京 天津 上海 重庆 河北 山西 辽宁 吉林 黑龙江 江苏 浙江 安徽 福建 江西 山东 河南 湖北 湖南 广东 海南 "
+    "四川 贵州 云南 陕西 甘肃 青海 台湾 内蒙古 广西 西藏 宁夏 新疆 香港 澳门 广州 深圳 东莞 佛山 中山 珠海 惠州 "
+    "江门 汕头 肇庆 揭阳 潮州 清远 韶关 湛江 茂名 汕尾 河源 梅州 阳江 云浮 杭州 宁波 温州 嘉兴 湖州 绍兴 金华 "
+    "义乌 台州 丽水 衢州 舟山 南京 苏州 无锡 常州 南通 扬州 镇江 泰州 徐州 盐城 淮安 连云港 宿迁 昆山 江阴 张家港 "
+    "合肥 芜湖 福州 厦门 泉州 漳州 莆田 晋江 石狮 南昌 济南 青岛 烟台 潍坊 临沂 淄博 威海 郑州 武汉 长沙 成都 "
+    "西安 昆明 贵阳 南宁 海口 沈阳 大连 长春 哈尔滨 石家庄 太原 天津滨海"
+).split()
+_ADMIN_PREFIX = re.compile(r"^[一-鿿]{2,4}?(?:省|市|自治区|特别行政区|区|县)")
 # 发票品名开头的税收分类，例如 "*计算机设备*服务器"
 _TAX_PREFIX = re.compile(r"^\*[^*]*\*")
 
@@ -60,6 +90,38 @@ def name_result(invoice_name, purchase_name):
     if invoice_name == purchase_name:
         return "match"
     return "partial" if invoice_name in purchase_name or purchase_name in invoice_name else "mismatch"
+
+
+def supplier_core(value):
+    """去掉括号内容、公司后缀与开头地名，用于开票名称与 NS 供应商名称的模糊比较。"""
+    name = normalize_name(value)
+    name = re.sub(r"\([^()]*\)|\[[^\[\]]*\]", "", name)
+    for suffix in _COMPANY_SUFFIXES:
+        if name.endswith(suffix) and len(name) > len(suffix):
+            name = name[: -len(suffix)]
+            break
+    changed = True
+    while changed and name:
+        changed = False
+        administrative = _ADMIN_PREFIX.match(name)
+        if administrative and len(name) > administrative.end():
+            name, changed = name[administrative.end() :], True
+            continue
+        for place in sorted(_PLACES, key=len, reverse=True):
+            if name.startswith(place) and len(name) > len(place):
+                name, changed = name[len(place) :], True
+                break
+    return name
+
+
+def supplier_result(invoice_name, purchase_name):
+    """核心名称相同或互相包含为一致；否则相似度达到阈值为部分一致（须说明），再低为不一致。"""
+    left, right = supplier_core(invoice_name), supplier_core(purchase_name)
+    if not left or not right:
+        return "missing"
+    if left == right or left in right or right in left:
+        return "match"
+    return "partial" if SequenceMatcher(None, left, right).ratio() >= SUPPLIER_SIMILARITY else "mismatch"
 
 
 def same_unit(invoice_unit, purchase_unit_name):
@@ -96,8 +158,11 @@ def order_reference(remark, line):
     return None
 
 
-def _check(key, invoice_value, purchase_value, result, difference=None, note=""):
-    weight = WEIGHTS[key]
+SUPPLIER_NOTE = "去掉括号内容、公司后缀和开头地名后比较；部分一致表示名称相近，须核实后填写说明"
+
+
+def _check(key, invoice_value, purchase_value, result, difference=None, note="", weights=None):
+    weight = (weights or WEIGHTS)[key]
     score = weight if result == "match" else Decimal(weight) / 2 if result == "partial" else 0
     return {
         "key": key,
@@ -123,6 +188,7 @@ def compare(invoice, item, line, remaining_quantity, remaining_amount):
         else "发票没有备注"
     )
     unit_match = same_unit(item["unit"], line["unit_name"])
+    seller = supplier_result(invoice["seller_name"], line["supplier_name"])
     checks = [
         _check(
             "order",
@@ -137,7 +203,8 @@ def compare(invoice, item, line, remaining_quantity, remaining_amount):
             "seller",
             invoice["seller_name"],
             line["supplier_name"],
-            name_result(invoice["seller_name_normalized"], line["supplier_name_normalized"]),
+            seller,
+            note="" if seller == "match" else SUPPLIER_NOTE,
         ),
         _check(
             "buyer",

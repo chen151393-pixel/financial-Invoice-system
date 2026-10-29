@@ -14,7 +14,7 @@ from backend.modules.task.dto.task_dto import TaskListQuery
 from backend.modules.task.policy.stage_policy import declaration_stage, task_stage
 from backend.modules.task.service.supplier_profile_service import SupplierProfileService
 from backend.tests.invoice_files import invoice
-from backend.tests.test_matching import INK, import_invoices
+from backend.tests.test_matching import FLUID, INK, import_invoices
 from backend.tests.test_matching import world as world  # 共用夹具
 from backend.tests.test_source_storage import bundle, customs, purchase, rows, save
 from backend.tests.test_source_storage import engine as engine  # 共用夹具
@@ -114,7 +114,7 @@ def test_workbench_supplier_and_created_date_filters(engine, seeded):
 
 
 def test_queue_filters_by_supplier_and_invoice_date(engine, world, seeded):
-    import_invoices(world, [invoice("26000000000000004401", [INK], remark="SUB-200")])
+    import_invoices(world, [invoice("26000000000000004401", [INK, FLUID], remark="SUB-200")])
     queries = world["queries"]
     everything = queries.queue(QueueQuery())
     assert everything.total >= 1 and everything.suppliers

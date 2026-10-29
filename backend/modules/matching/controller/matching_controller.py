@@ -14,6 +14,9 @@ from ..dto.matching_dto import (
     CandidateQuery,
     ConfirmBody,
     GenerateBody,
+    GroupConfirmBody,
+    GroupId,
+    GroupRejectBody,
     ManualBody,
     QueueQuery,
     RejectBody,
@@ -85,6 +88,15 @@ def create_router(queries, allocations, proposals, invoice_lists):
     @router.post("/allocations", response_model=InvoiceMatching)
     def create(body: ManualBody, owner: Owner):
         return allocations.create_manual(body, owner)
+
+    @router.post("/groups/{group_id}/confirm", response_model=InvoiceMatching)
+    def confirm_group(group_id: GroupId, body: GroupConfirmBody, owner: Owner):
+        """整单建议整组通过：发票行对应的一张或多张整张子采购单全部明细一次记账。"""
+        return allocations.confirm_group(group_id, body, owner)
+
+    @router.post("/groups/{group_id}/reject", response_model=InvoiceMatching)
+    def reject_group(group_id: GroupId, body: GroupRejectBody, owner: Owner):
+        return allocations.reject_group(group_id, body, owner)
 
     @router.post("/allocations/confirm-batch", response_model=BatchResult)
     def confirm_batch(body: BatchBody, owner: Owner):

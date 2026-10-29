@@ -20,7 +20,8 @@ from ..dto.matching_dto import ConfirmBody
 from ..policy import allocation_policy as rules
 from ..policy.comparison_policy import HIGH
 from ..public import InvoiceMatchingChanged
-from . import approval_service, ledger_service
+from . import approval_service, group_view_service, ledger_service
+from .group_view_service import GroupBatch, group_id
 
 
 def _now():
@@ -57,6 +58,14 @@ class AllocationService:
         _require_user(actor)
         return confirm(self, body, actor)
 
+    def confirm_group(self, key, body, actor):
+        _require_user(actor)
+        return self.queries.invoice(group_view_service.confirm(self, key, body, actor))
+
+    def reject_group(self, key, body, actor):
+        _require_user(actor)
+        return self.queries.invoice(group_view_service.reject(self, key, body, actor))
+
     def _approve(self, connection, allocation, body, actor, now, *, reverify=False):
         return approval_service.approve(self, connection, allocation, body, actor, now, reverify=reverify)
 
@@ -89,6 +98,8 @@ class AllocationService:
                 return current["invoice_id"]  # 同一操作重复提交，返回原结果
             if current["status"] != "proposed":
                 raise ApiError(409, f"该记录{rules.STATUS_LABELS[current['status']]}，请刷新后核对")
+            if group_id(current):
+                raise ApiError(409, "整单建议须整组通过，请在发票比对详情中审核整单")
             self._approve(connection, current, body, actor, _now())
             return current["invoice_id"]
 
@@ -101,6 +112,8 @@ class AllocationService:
             current = allocation_dao.get(connection, allocation_id)
             if current is None:
                 raise ApiError(404, "比对记录不存在")
+            if current["status"] == "proposed" and group_id(current):
+                raise ApiError(409, "整单建议须整组驳回，请在发票比对详情中处理整单")
             if current["status"] == "proposed":
                 now = _now()
                 values = {"status": "rejected", "reviewed_by": actor, "reviewed_at": now}
@@ -192,7 +205,15 @@ class AllocationService:
         """批量通过高置信度且无需说明的建议；逐条独立事务，返回通过与跳过数量及原因。"""
         _require_user(actor)
         confirmed, skipped = 0, []
-        for allocation_id in dict.fromkeys(int(value) for value in body.ids):
+        groups = GroupBatch(self.engine, body.ids)
+        for key, invoice_id, ids in groups.items:
+            # 整单建议整组通过；组内任一条不满足条件时整组跳过，不会只通过部分明细。
+            try:
+                group_view_service.confirm(self, key, GroupBatch.body(invoice_id), actor, batch=True)
+                confirmed += len(ids)
+            except ApiError as error:
+                skipped += [{"id": value, "reason": error.message} for value in ids]
+        for allocation_id in dict.fromkeys(int(value) for value in body.ids if value not in groups.ids):
 
             def action(connection, allocation_id=allocation_id):
                 current = allocation_dao.get(connection, allocation_id)

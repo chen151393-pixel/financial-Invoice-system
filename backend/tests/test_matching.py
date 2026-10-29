@@ -17,6 +17,8 @@ from backend.modules.matching.dto.matching_dto import (
     CancelBody,
     CandidateQuery,
     ConfirmBody,
+    GroupConfirmBody,
+    GroupRejectBody,
     ManualBody,
     QueueQuery,
     RejectBody,
@@ -34,6 +36,7 @@ from backend.tests.test_source_storage import engine as engine  # 共用夹具
 from backend.tests.test_source_storage import ns as ns  # 共用夹具
 from backend.tests.test_task import USER, approve
 from fastapi.testclient import TestClient
+from sqlalchemy import text
 
 INK = ("墨水", "个", "10", "88.94", "11.56")  # 含税 100.50，与子采购行一致
 FLUID = ("清洗液", "个", "10", "17.70", "2.30")  # 含税 20.00
@@ -88,6 +91,32 @@ def proposals(world, number_id):
     ]
 
 
+def group(world, number_id):
+    """该发票唯一一组待审核整单建议。"""
+    (found,) = world["queries"].invoice(number_id).groups
+    return found
+
+
+def confirm_group(world, number_id, note=""):
+    body = GroupConfirmBody(invoiceId=str(number_id), note=note)
+    return world["allocations"].confirm_group(group(world, number_id).id, body, USER)
+
+
+def manual(world, engine, number_id, line_index, item_index=0, *, quantity="10", amount, note="人工核对"):
+    view = world["queries"].invoice(number_id)
+    line = rows(engine, "SELECT id FROM source_purchase_order_lines ORDER BY id")[line_index]["id"]
+    body = ManualBody(
+        requestId=uuid4(),
+        invoiceId=str(number_id),
+        invoiceItemId=view.items[item_index].id,
+        purchaseLineId=str(line),
+        quantity=quantity,
+        amount=amount,
+        note=note,
+    )
+    return world["allocations"].create_manual(body, USER), body
+
+
 def test_queue_counts_with_all_confidence_tiers(engine, world, reviewed):
     assert world["queries"].queue(QueueQuery()).counts == {
         "all": 0,
@@ -99,10 +128,19 @@ def test_queue_counts_with_all_confidence_tiers(engine, world, reviewed):
         world,
         [
             invoice("26000000000000008901", [INK, FLUID], remark="SUB-200"),
-            invoice("26000000000000008902", [INK]),
+            # 备注未写单号、销售方名称相近：按供应商模糊召回整单，中置信度
+            invoice("26000000000000008902", [INK, FLUID], seller="上海供货商有限公司"),
             invoice("26000000000000008903", [("其他商品", "箱", "1000", "100000", "0")]),
         ],
     )
+    # 整单建议几乎不会是低置信度；模拟一条低置信建议以覆盖三档非空时的计数类型
+    with engine.begin() as connection:
+        lowest = connection.execute(
+            text("SELECT MAX(id) FROM matching_allocations WHERE status = 'proposed'")
+        ).scalar()
+        connection.execute(
+            text("UPDATE matching_allocations SET confidence = 40 WHERE id = :i"), {"i": lowest}
+        )
     expected = {"all": 4, "high": 2, "medium": 1, "low": 1}
     for tier, total in expected.items():
         result = world["queries"].queue(QueueQuery(tier=tier, pageSize=1))
@@ -114,13 +152,19 @@ def test_queue_counts_with_all_confidence_tiers(engine, world, reviewed):
 def test_full_chain_from_review_to_completed_task(engine, world, reviewed):
     import_invoices(world, [invoice("26000000000000008001", [INK, FLUID], remark="请款 SUB-200")])
     target = invoice_id(engine, "26000000000000008001")
-    found = proposals(world, target)
-    assert len(found) == 2 and all(p.tier == "high" and p.confidence == "90" for p in found)
-    assert all(p.confirm.allowed and p.noteReasons == [] for p in found)  # 购买方未提供不要求说明
-    first, second = found
-    world["allocations"].confirm(int(first.id), ConfirmBody(), USER)
-    assert task(engine)["status"] == "partially_received"
-    view = world["allocations"].confirm(int(second.id), ConfirmBody(), USER)
+    found = group(world, target)
+    # 整单合计：订单、供应商、品名、单位、数量、金额、税额一致；购买方未提供只扣分不要求说明
+    assert (found.tier, found.confidence, found.noteReasons) == ("high", "95", [])
+    assert found.confirm.allowed and [order.orderNo for order in found.orders] == ["SUB-200"]
+    assert {check.key: check.result for check in found.items[0].checks}["tax"] == "match"
+    assert len(proposals(world, target)) == 2
+    # 整单建议不能逐条通过或驳回
+    with pytest.raises(ApiError, match="整组"):
+        world["allocations"].confirm(int(found.allocationIds[0]), ConfirmBody(), USER)
+    with pytest.raises(ApiError, match="整组"):
+        world["allocations"].reject(int(found.allocationIds[0]), RejectBody(), USER)
+    view = confirm_group(world, target)
+    assert view.groups == []
     assert all(a.status == "confirmed" for item in view.items for a in item.allocations)
     waiting = task(engine)
     # 发票已收齐但资料未到齐：停在"资料待补齐"，完成节点写明尚缺的资料
@@ -137,95 +181,107 @@ def test_full_chain_from_review_to_completed_task(engine, world, reviewed):
         ("received", Decimal("20")),
     ]
     events = [e["to_status"] for e in rows(engine, "SELECT to_status FROM task_events ORDER BY id")]
-    assert events == ["documents_pending", "partially_received", "documents_incomplete", "completed"]
+    assert events[0] == "documents_pending" and events[-2:] == ["documents_incomplete", "completed"]
     summary = world["queries"].summaries(SummaryBody(invoiceIds=[str(target)])).rows[0]
     assert (summary.status, summary.confirmed) == ("confirmed", 2)
 
 
 def test_cancel_rolls_task_back_to_actual_progress(engine, world, reviewed):
     import_invoices(world, [invoice("26000000000000008002", [INK, FLUID], remark="SUB-200")])
-    first, second = proposals(world, invoice_id(engine, "26000000000000008002"))
-    for proposal in (first, second):
-        world["allocations"].confirm(int(proposal.id), ConfirmBody(), USER)
+    target = invoice_id(engine, "26000000000000008002")
+    first, second = proposals(world, target)
+    confirm_group(world, target)
     world["allocations"].cancel(int(first.id), CancelBody(reason="发票录错"), USER)
     assert task(engine)["status"] == "partially_received"
     world["allocations"].cancel(int(second.id), CancelBody(reason="发票录错"), USER)
     assert task(engine)["status"] == "documents_pending"
     assert {r["status"] for r in rows(engine, "SELECT status FROM task_lines")} == {"open"}
-    target = invoice_id(engine, "26000000000000008002")
     assert world["proposals"].generate_now([target], USER) == 2
     with pytest.raises(ApiError, match="只有已通过"):
         world["allocations"].cancel(int(proposals(world, target)[0].id), CancelBody(reason="x"), USER)
 
 
 def test_reject_and_regenerate(engine, world, reviewed):
-    import_invoices(world, [invoice("26000000000000008003", [INK], remark="SUB-200")])
+    import_invoices(world, [invoice("26000000000000008003", [INK, FLUID], remark="SUB-200")])
     target = invoice_id(engine, "26000000000000008003")
-    (proposal,) = proposals(world, target)
-    world["allocations"].reject(int(proposal.id), RejectBody(note="品名待核"), USER)
-    assert proposals(world, target) == []
-    assert world["proposals"].generate_now([target], USER) == 1
-    assert len(proposals(world, target)) == 1
+    found = group(world, target)
+    body = GroupRejectBody(invoiceId=str(target), note="品名待核")
+    view = world["allocations"].reject_group(found.id, body, USER)
+    assert view.groups == [] and proposals(world, target) == []
+    assert world["proposals"].generate_now([target], USER) == 2
+    assert len(proposals(world, target)) == 2
 
 
-def test_inconsistent_items_require_note_and_overinvoice_is_flagged(engine, world, reviewed):
-    over = ("墨水", "个", "12", "106.73", "13.87")  # 含税 120.60，超过应开 100.50
-    import_invoices(world, [invoice("26000000000000008004", [over], remark="SUB-200")])
-    (proposal,) = proposals(world, invoice_id(engine, "26000000000000008004"))
-    assert proposal.tier == "medium" and "数量不一致" in proposal.noteReasons
+def test_partial_invoice_gets_no_proposal_and_uses_manual(engine, world, reviewed):
+    # 只开了子采购单的一部分：不自动建议，人工关联作为例外入口
+    import_invoices(world, [invoice("26000000000000008012", [INK], remark="SUB-200")])
+    target = invoice_id(engine, "26000000000000008012")
+    assert proposals(world, target) == [] and world["queries"].invoice(target).groups == []
+    view, _ = manual(world, engine, target, 0, amount="100.50")
+    assert [a.status for a in view.items[0].allocations] == ["confirmed"]
+    assert task(engine)["status"] == "partially_received"
+
+
+def test_supplier_difference_requires_note_and_overinvoice_is_flagged(engine, world, reviewed):
+    import_invoices(
+        world,
+        [invoice("26000000000000008004", [INK, FLUID], remark="SUB-200", seller="上海供货商有限公司")],
+    )
+    target = invoice_id(engine, "26000000000000008004")
+    found = group(world, target)
+    assert found.tier == "high" and "销售方与供应商不一致" in found.noteReasons
     with pytest.raises(ApiError, match="请填写审核说明") as error:
-        world["allocations"].confirm(int(proposal.id), ConfirmBody(), USER)
+        confirm_group(world, target)
     assert error.value.status == 400
-    world["allocations"].confirm(int(proposal.id), ConfirmBody(note="供应商多开两件，已确认"), USER)
-    saved = rows(engine, "SELECT exceeds_expected, review_note FROM matching_allocations")[0]
-    assert saved["exceeds_expected"] and saved["review_note"] == "供应商多开两件，已确认"
-    line = rows(engine, "SELECT * FROM task_lines ORDER BY purchase_line_id")[0]
-    assert line["status"] == "partial" and line["over_invoiced"]
+    confirm_group(world, target, note="开票名称与 NS 供应商为同一主体")
+    notes = {row["review_note"] for row in rows(engine, "SELECT review_note FROM matching_allocations")}
+    assert notes == {"开票名称与 NS 供应商为同一主体"}
+    # 超开只能人工关联，须填写说明并标记
+    over = ("墨水", "个", "12", "106.73", "13.87")  # 含税 120.60，超过应开
+    import_invoices(world, [invoice("26000000000000008013", [over], remark="SUB-200")], "o.xlsx")
+    extra = invoice_id(engine, "26000000000000008013")
+    assert proposals(world, extra) == []
+    manual(world, engine, extra, 0, quantity="2", amount="20.10", note="供应商多开两件，已确认")
+    saved = rows(engine, "SELECT exceeds_expected FROM matching_allocations WHERE invoice_id = :i", i=extra)
+    assert saved[0]["exceeds_expected"]
 
 
 def test_unresolved_currency_and_red_offset_block(ns, engine, world):
     save(ns, engine, bundle([purchase()], [customs("870")], parents={}))
     approve(world, "CD870")
-    import_invoices(world, [invoice("26000000000000008005", [INK], remark="SUB-200")])
-    (proposal,) = proposals(world, invoice_id(engine, "26000000000000008005"))
-    assert not proposal.confirm.allowed and "币种待核实" in proposal.confirm.reason
+    import_invoices(world, [invoice("26000000000000008005", [INK, FLUID], remark="SUB-200")])
+    target = invoice_id(engine, "26000000000000008005")
+    # 子采购币种待核实的整单不会被建议，人工关联同样被拒绝
+    assert proposals(world, target) == []
     with pytest.raises(ApiError, match="币种待核实"):
-        world["allocations"].confirm(int(proposal.id), ConfirmBody(note="x"), USER)
+        manual(world, engine, target, 0, amount="100.50")
     import_invoices(
-        world, [invoice("26000000000000008006", [INK], remark="SUB-200", status="已红冲")], "r.xlsx"
+        world, [invoice("26000000000000008006", [INK, FLUID], remark="SUB-200", status="已红冲")], "r.xlsx"
     )
     assert proposals(world, invoice_id(engine, "26000000000000008006")) == []
 
 
 def test_capacity_and_stale_source_block(ns, engine, world, reviewed):
-    import_invoices(world, [invoice("26000000000000008007", [INK], remark="SUB-200")])
+    import_invoices(world, [invoice("26000000000000008007", [INK, FLUID], remark="SUB-200")])
     target = invoice_id(engine, "26000000000000008007")
-    (proposal,) = proposals(world, target)
-    item_id = proposal.invoiceItemId
-    fluid_line = rows(engine, "SELECT id FROM source_purchase_order_lines ORDER BY id")[1]["id"]
-    manual = ManualBody(
-        requestId=uuid4(),
-        invoiceId=str(target),
-        invoiceItemId=item_id,
-        purchaseLineId=str(fluid_line),
-        quantity="1",
-        amount="20.00",
-        note="同票部分分给清洗液",
-    )
-    world["allocations"].create_manual(manual, USER)
+    group(world, target)
+    # 同票墨水行先人工分出一部分：整单再通过会超过发票行本身
+    manual(world, engine, target, 1, quantity="1", amount="20.00", note="同票部分分给清洗液")
+    blocked = group(world, target)
+    assert not blocked.confirm.allowed and "超过发票行本身" in blocked.confirm.reason
     with pytest.raises(ApiError, match="超过发票行本身"):
-        world["allocations"].confirm(int(proposal.id), ConfirmBody(note="x"), USER)
+        confirm_group(world, target, note="x")
     save(ns, engine, bundle([purchase(amounts=("99.00", "20.00"))], [customs("870")]))
-    stale = next(a for a in world["queries"].invoice(target).items[0].allocations if a.status == "rejected")
-    assert not stale.confirm.allowed
-    assert "变化" in stale.reviewNote
+    view = world["queries"].invoice(target)
+    stale = [a for item in view.items for a in item.allocations if a.status == "rejected"]
+    assert stale and all(not a.confirm.allowed and "变化" in a.reviewNote for a in stale)
 
 
 def test_manual_allocation_is_idempotent(engine, world, reviewed):
     import_invoices(world, [invoice("26000000000000008008", [FLUID], remark="")])
     target = invoice_id(engine, "26000000000000008008")
     item = world["queries"].invoice(target).items[0]
-    (proposal,) = [a for a in item.allocations if a.status == "proposed"]  # 销售方名称召回的建议
+    assert proposals(world, target) == []  # 只开清洗液，不是整张子采购单
     candidates = world["queries"].candidates(
         CandidateQuery(invoiceId=str(target), invoiceItemId=item.id, keyword="清洗")
     )
@@ -239,20 +295,18 @@ def test_manual_allocation_is_idempotent(engine, world, reviewed):
         amount="20.00",
         note="备注未写子采购单号，人工核对",
     )
+    world["allocations"].create_manual(body, USER)
+    world["allocations"].create_manual(body, USER)
     with pytest.raises(ApiError, match="已有有效记录") as error:
-        world["allocations"].create_manual(body, USER)
+        world["allocations"].create_manual(body.model_copy(update={"requestId": uuid4()}), USER)
     assert error.value.status == 409
-    world["allocations"].reject(int(proposal.id), RejectBody(), USER)
-    world["allocations"].create_manual(body, USER)
-    world["allocations"].create_manual(body, USER)
     confirmed = rows(engine, "SELECT confidence, status FROM matching_allocations WHERE status = 'confirmed'")
     assert len(confirmed) == 1 and confirmed[0]["confidence"] is None
 
 
 def test_reapproval_carries_received_progress(ns, engine, world, reviewed):
     import_invoices(world, [invoice("26000000000000008009", [INK], remark="SUB-200")])
-    (proposal,) = proposals(world, invoice_id(engine, "26000000000000008009"))
-    world["allocations"].confirm(int(proposal.id), ConfirmBody(), USER)
+    manual(world, engine, invoice_id(engine, "26000000000000008009"), 0, amount="100.50")
     save(ns, engine, bundle([purchase(amounts=("100.50", "25.00"))], [customs("870")]))
     approve(world, "CD870")
     current = task(engine)

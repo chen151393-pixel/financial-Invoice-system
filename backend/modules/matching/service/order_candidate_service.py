@@ -105,7 +105,7 @@ def _candidate(invoice, order_id, lines, tasks, bases, units, query, allocation_
         )
         if not same_unit(item["unit"], unit_label(basis["unit"], units)):
             warnings.append(
-                f"发票单位 {item['unit']} 与采购单位 {unit_label(basis['unit'], units)} 不同，确认时必须填写换算证据"
+                f"发票单位 {item['unit']} 与采购单位 {unit_label(basis['unit'], units)} 不同，确认时请在审核说明中写明数量口径"
             )
         previews.append(
             {

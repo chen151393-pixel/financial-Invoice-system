@@ -1,14 +1,18 @@
 """整票审核队列：多明细不跨页，按整票最低分与异常筛选，审核后刷新。"""
 
 import pytest
-from backend.modules.matching.dto.matching_dto import ConfirmBody, QueueQuery
+from backend.modules.matching.dto.matching_dto import QueueQuery
 from backend.tests.invoice_files import invoice
-from backend.tests.test_matching import FLUID, INK, USER, import_invoices
+from backend.tests.matching_helpers import confirm_groups
+from backend.tests.test_matching import FLUID, INK, USER, import_invoices, invoice_id
 from backend.tests.test_matching import engine as engine
 from backend.tests.test_matching import ns as ns
 from backend.tests.test_matching import reviewed as reviewed
 from backend.tests.test_matching import world as world
 from pydantic import ValidationError
+from sqlalchemy import text
+
+SIMILAR = "上海供货商有限公司"  # 与 NS 供应商名称相近：部分一致，须填写说明
 
 
 def test_invoice_queue_groups_before_paging(engine, world, reviewed):
@@ -16,10 +20,17 @@ def test_invoice_queue_groups_before_paging(engine, world, reviewed):
         world,
         [
             invoice("26000000000000009901", [INK, FLUID], remark="SUB-200"),
-            invoice("26000000000000009902", [INK]),
-            invoice("26000000000000009903", [("其他商品", "箱", "1000", "100000", "0")]),
+            invoice("26000000000000009902", [INK, FLUID], seller=SIMILAR),
+            invoice("26000000000000009903", [INK, FLUID], seller=SIMILAR),
+            invoice("26000000000000009904", [("其他商品", "箱", "1000", "100000", "0")]),
         ],
     )
+    # 整单建议不会是低置信度；模拟一张低置信票以覆盖三档
+    with engine.begin() as connection:
+        connection.execute(
+            text("UPDATE matching_allocations SET confidence = 40 WHERE invoice_id = :i"),
+            {"i": invoice_id(engine, "26000000000000009903")},
+        )
     first = world["queries"].invoice_queue(QueueQuery(pageSize=1))
     second = world["queries"].invoice_queue(QueueQuery(pageSize=1, page=2))
     assert first.total == first.pages == 3
@@ -34,15 +45,16 @@ def test_invoice_queue_groups_before_paging(engine, world, reviewed):
 
 
 def test_invoice_queue_minimum_tier_and_whole_invoice_anomaly(world, reviewed):
+    # 票面税额与子采购按税率推算的税额不符：整单比对税额不一致，属于异常
+    wrong_tax = ("墨水", "个", "10", "88.00", "12.50")
     import_invoices(
-        world,
-        [invoice("26000000000000009911", [INK, ("未知品名", "箱", "10", "17.70", "2.30")], remark="SUB-200")],
+        world, [invoice("26000000000000009911", [wrong_tax, FLUID], remark="SUB-200", seller=SIMILAR)]
     )
     result = world["queries"].invoice_queue(QueueQuery(anomaly="abnormal"))
     row = result.rows[0]
     assert result.total == 1 and row.proposalCount == 2
     assert row.tier != "high"
-    assert "单位" in row.anomalies and not row.batch.allowed and row.batchIds == []
+    assert {"税额", "供应商"} <= set(row.anomalies) and not row.batch.allowed and row.batchIds == []
     assert world["queries"].invoice_queue(QueueQuery(anomaly="normal")).total == 0
     assert world["queries"].invoice_queue(QueueQuery(supplierId="999999")).total == 0
     assert (
@@ -51,14 +63,12 @@ def test_invoice_queue_minimum_tier_and_whole_invoice_anomaly(world, reviewed):
     )
 
 
-def test_invoice_queue_refresh_after_confirmation(world, reviewed):
+def test_invoice_queue_refresh_after_confirmation(engine, world, reviewed):
     import_invoices(world, [invoice("26000000000000009921", [INK, FLUID], remark="SUB-200")])
     first = world["queries"].invoice_queue(QueueQuery()).rows[0]
-    world["allocations"].confirm(int(first.batchIds[0]), ConfirmBody(), USER)
-    remaining = world["queries"].invoice_queue(QueueQuery())
-    assert remaining.total == 1 and remaining.rows[0].proposalCount == 1
-    assert remaining.rows[0].batchIds == first.batchIds[1:]
-    world["allocations"].confirm(int(first.batchIds[1]), ConfirmBody(), USER)
+    assert first.proposalCount == 2
+    # 整单建议整组通过后整票离开队列
+    confirm_groups(world, invoice_id(engine, "26000000000000009921"), USER)
     empty = world["queries"].invoice_queue(QueueQuery())
     assert empty.total == 0 and empty.rows == [] and empty.counts["all"] == 0
 
@@ -68,8 +78,8 @@ def test_invoice_number_and_supplier_bulk_search_before_paging(world, reviewed):
         world,
         [
             invoice("26000000000000009931", [INK, FLUID], remark="SUB-200"),
-            invoice("26000000000000009932", [INK]),
-            invoice("26000000000000009933", [FLUID]),
+            invoice("26000000000000009932", [INK, FLUID]),
+            invoice("26000000000000009933", [INK, FLUID], seller=SIMILAR),
         ],
     )
 

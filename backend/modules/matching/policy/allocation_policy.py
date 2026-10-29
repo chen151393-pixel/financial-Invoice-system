@@ -74,8 +74,8 @@ def note_reasons(checks, exceeds, closes_line):
         for check in checks
         if check["result"] != "match"
         and not (check["key"] == "buyer" and check["invoiceValue"] is None)
-        # 申报价无法换算时只提示"未校验"，不要求说明
-        and not (check["key"] == "price" and check["result"] == "missing")
+        # 申报价无法换算、税率未同步时只提示"未校验"，不要求说明
+        and not (check["key"] in ("price", "tax") and check["result"] == "missing")
     ]
     if exceeds:
         reasons.append("超过子采购剩余应开（超开）")

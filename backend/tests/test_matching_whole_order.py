@@ -1,5 +1,6 @@
 """整单候选、汇总票拆分、原子确认、过期及重复请求；使用隔离 SQLite 数据。"""
 
+import json
 from decimal import Decimal
 from uuid import uuid4
 
@@ -119,20 +120,21 @@ def test_multi_item_invoice_matches_whole_order(engine, world, reviewed):
     assert all(item.confirmedQuantity == "10" for item in view.items)
 
 
-def test_unit_evidence_required_and_converted_quantity_conserved(engine, world, aggregate):
+def test_unit_difference_uses_note_as_quantity_basis(engine, world, aggregate):
     with engine.begin() as connection:
         connection.execute(text("UPDATE invoice_items SET unit = '箱', quantity = 10"))
     query = {"conversionNumerator": Decimal(2), "conversionDenominator": Decimal(1)}
     found = candidate(world, aggregate, **query)
     assert found.confirm.allowed
     assert sum(Decimal(part.invoiceQuantity) for part in found.allocations) == 10
-    body = confirmation(aggregate, found, **query)
-    with pytest.raises(ApiError, match="证据"):
-        world["allocations"].confirm_order(body, USER)
-    view = world["allocations"].confirm_order(
-        body.model_copy(update={"conversionEvidence": "包装证据：每箱 2 个"}), USER
-    )
+    # 页面不再填写换算证据：单位不同时以审核说明作为数量口径依据并随记录保存
+    body = confirmation(aggregate, found, **query).model_copy(update={"note": "包装证据：每箱 2 个"})
+    view = world["allocations"].confirm_order(body, USER)
     assert view.items[0].confirmedQuantity == "10"
+    evidence = rows(engine, "SELECT conversion_evidence FROM matching_allocations WHERE status = 'confirmed'")
+    assert all(
+        json.loads(row["conversion_evidence"])["reference"] == "包装证据：每箱 2 个" for row in evidence
+    )
     assert all(
         row["received_quantity"] == 10 for row in rows(engine, "SELECT received_quantity FROM task_lines")
     )

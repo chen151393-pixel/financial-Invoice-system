@@ -39,7 +39,8 @@ def context(connection, allocation):
     return invoice, item, line, task_lines[0] if task_lines else None, basis
 
 
-def approve(service, connection, allocation, body, actor, now, *, reverify=False):
+def approve(service, connection, allocation, body, actor, now, *, reverify=False, grouped=False):
+    """grouped：整单建议整组通过时，说明已按整单合计比对要求过，不再逐行要求。"""
     invoice, item, line, task_line, basis = context(connection, allocation)
     note = body.note.strip()
     _validate(connection, allocation, body, invoice, item, line, task_line, basis, reverify)
@@ -70,7 +71,7 @@ def approve(service, connection, allocation, body, actor, now, *, reverify=False
     checks, _ = compare(invoice, compared_item, line, *rules.remaining(task_line))
     exceeds = rules.exceeds_expected(task_line, converted["purchase_quantity"], allocation["amount"])
     reasons = rules.note_reasons(checks, exceeds, False)
-    if (reasons or reverify) and not note:
+    if (reasons or reverify) and not note and not grouped:
         raise ApiError(400, "请填写审核说明：" + "、".join(reasons or ["重新核实版本"]))
     history_row = {**allocation, **converted, "review_note": note, "verification_issues": []}
     history = (allocation["verification_history"] or []) + [

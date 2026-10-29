@@ -10,7 +10,6 @@ from pathlib import Path
 import pytest
 from backend.app import create_app
 from backend.core.errors import ApiError
-from backend.modules.matching.dto.matching_dto import ConfirmBody
 from backend.modules.source.public import SourceDirectory
 from backend.modules.task.dto.signed_contract_dto import SignedContractUpload
 from backend.modules.task.service.contract_worker import ContractWorker
@@ -18,6 +17,7 @@ from backend.modules.task.service.declaration_document_service import Declaratio
 from backend.modules.task.service.progress_service import refresh_tasks
 from backend.modules.task.service.signed_contract_service import SignedContractService
 from backend.tests.invoice_files import invoice
+from backend.tests.matching_helpers import confirm_groups
 from backend.tests.test_matching import FLUID, INK, import_invoices, invoice_id, proposals
 from backend.tests.test_matching import world as world  # 共用夹具
 from backend.tests.test_source_storage import bundle, customs, purchase, rows, save
@@ -189,8 +189,8 @@ def test_ambiguous_filename_needs_order_number(ns, engine, services):
 
 def test_completion_requires_invoices_and_all_documents(engine, services, world, approved):
     import_invoices(world, [invoice("26000000000000006601", [INK, FLUID], remark="SUB-200")])
-    for proposal in proposals(world, invoice_id(engine, "26000000000000006601")):
-        world["allocations"].confirm(int(proposal.id), ConfirmBody(), USER)
+    assert proposals(world, invoice_id(engine, "26000000000000006601"))
+    confirm_groups(world, invoice_id(engine, "26000000000000006601"), USER)
     assert status(engine) == "documents_incomplete"
     services["worker"].run_once()  # 子采购合同与报关资料归档
     assert status(engine) == "documents_incomplete"

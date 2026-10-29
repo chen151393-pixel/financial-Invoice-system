@@ -1,4 +1,3 @@
-import { ConversionFields, defaultConversion } from "./ConversionFields";
 import { useState } from "react";
 import { Badge, Button, Card, CardContent, CardHeader, ProgressRing } from "../../../shared/components/ui";
 import {
@@ -36,7 +35,6 @@ export function AllocationCard({
 }) {
   const [mode, setMode] = useState<Mode>(null);
   const [note, setNote] = useState("");
-  const [conversion, setConversion] = useState(defaultConversion);
   const purchase = allocation.purchase;
   const noteRequired = allocation.noteReasons.length > 0 || mode === "reverify";
   return (
@@ -185,7 +183,6 @@ export function AllocationCard({
               event.preventDefault();
               const body = {
                 note,
-                ...conversion,
                 invoiceVersionId: allocation.currentInvoiceVersionId,
                 purchaseBasisId: purchase?.purchaseBasisId,
               };
@@ -195,9 +192,6 @@ export function AllocationCard({
               else onCancel(note);
             }}
           >
-            {(mode === "confirm" || mode === "reverify") && (
-              <ConversionFields value={conversion} onChange={setConversion} busy={busy} />
-            )}
             <label>
               {mode === "cancel"
                 ? "取消原因（必填）"

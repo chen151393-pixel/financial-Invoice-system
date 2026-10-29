@@ -41,6 +41,9 @@ def evaluate(row, invoice, item, line, task_line, used):
             )
         checks, _ = compare(invoice, compared, line, *rules.remaining(task_line))
         exceeds = rules.exceeds_expected(task_line, row["quantity"], row["amount"])
+        if (row["checks"] or {}).get("group"):
+            # 整单建议按发票行对整单合计比对（详情页实时重算），逐条记录沿用生成时的整单比对项
+            checks = row["checks"].get("items", [])
         reasons = rules.note_reasons(checks, exceeds, False)
     capabilities["confirm"] = Capability(
         allowed=not block, reason=block or ("通过时需填写说明" if reasons else "无需填写说明，可直接通过")

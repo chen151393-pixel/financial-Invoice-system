@@ -113,7 +113,50 @@ export type InvoiceMatching = {
     gross: string | null;
   };
   items: InvoiceItem[];
+  // 待审核的整单建议；组内记录也出现在各发票行 allocations 中
+  groups: MatchingGroup[];
   generate: Capability;
+};
+
+export type GroupLine = {
+  purchaseLineId: string;
+  orderNo: string;
+  item: string;
+  specification: string;
+  unit: string;
+  quantity: string;
+  amount: string;
+  taxRate: string | null;
+};
+
+// 发票行与所选整张子采购单合计的比对，后端实时重算
+export type GroupItem = {
+  invoiceItemId: string;
+  checks: Check[];
+  confidence: string;
+  tier: Tier;
+  quantity: string;
+  amount: string;
+  lines: GroupLine[];
+};
+
+export type MatchingGroup = {
+  id: string;
+  orders: {
+    purchaseOrderId: string;
+    orderNo: string;
+    parentOrderNo: string;
+    supplier: string;
+    company: string;
+    lineCount: number;
+  }[];
+  items: GroupItem[];
+  confidence: string;
+  tier: Tier;
+  noteReasons: string[];
+  confirm: Capability;
+  reject: Capability;
+  allocationIds: string[];
 };
 
 export type QueueRow = {

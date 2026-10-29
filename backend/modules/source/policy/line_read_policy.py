@@ -6,7 +6,8 @@ PURCHASE_REFERENCES = {
     "custrecord_swc_subpo_item_ifreqid",
 }
 # 报关单位是 NS 列表引用。编号只能在该字段所属列表中解释，不能套用本地通用字典。
-PURCHASE_DISPLAY_REFERENCES = {"custrecord_swc_subpo_item_bgunit"}
+# 税码同样只看显示名（如“13%”），由 tax_rate_policy 解析为税率。
+PURCHASE_DISPLAY_REFERENCES = {"custrecord_swc_subpo_item_bgunit", "custrecord_swc_subpo_item_tax"}
 PURCHASE_VALUES = {
     "custrecord_swc_subpo_item_lineid",
     "custrecord_swc_subpo_item_name",

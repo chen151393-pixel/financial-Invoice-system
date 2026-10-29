@@ -5,12 +5,12 @@ from datetime import datetime, timezone
 
 import pytest
 from backend.core.errors import ApiError
-from backend.modules.matching.dto.matching_dto import ConfirmBody
 from backend.modules.source.service.parent_order_service import save_header
 from backend.modules.writeback.dto.task_dto import TaskQuery
 from backend.modules.writeback.service.task_service import TaskService
 from backend.tests.invoice_files import invoice
-from backend.tests.test_matching import FLUID, INK, USER, approve, import_invoices, invoice_id, proposals
+from backend.tests.matching_helpers import confirm_groups
+from backend.tests.test_matching import FLUID, INK, USER, approve, import_invoices, invoice_id
 from backend.tests.test_matching import world as world
 from backend.tests.test_source_storage import ACCOUNT, PARENT, bundle, customs, purchase, rows, save
 from backend.tests.test_source_storage import engine as engine
@@ -100,8 +100,7 @@ def test_synced_parent_supplier_allows_missing_buyer_invoice_to_enqueue(ns, engi
     number = "26000000000000008888"
     import_invoices(world, [invoice(number, [INK, FLUID], remark="SUB-200")])
     target = invoice_id(engine, number)
-    for proposal in proposals(world, target):
-        world["allocations"].confirm(int(proposal.id), ConfirmBody(), USER)
+    confirm_groups(world, target, USER)
     service = TaskService(engine, ACCOUNT)
     ready = service.invoice(target)
     assert ready["ready"], ready

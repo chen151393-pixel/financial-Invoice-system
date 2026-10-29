@@ -5,10 +5,11 @@ from decimal import Decimal
 import pytest
 from backend.app import create_app
 from backend.modules.matching.dto.invoice_list_dto import InvoiceListQuery
-from backend.modules.matching.dto.matching_dto import ConfirmBody, SummaryBody
+from backend.modules.matching.dto.matching_dto import CancelBody, SummaryBody
 from backend.modules.matching.policy.invoice_match_policy import match_status
 from backend.modules.matching.service.invoice_list_service import InvoiceListService
 from backend.tests.invoice_files import invoice
+from backend.tests.matching_helpers import confirm_groups
 from backend.tests.test_matching import FLUID, INK, import_invoices, invoice_id, proposals
 from backend.tests.test_matching import engine as engine
 from backend.tests.test_matching import ns as ns
@@ -96,12 +97,13 @@ def test_counts_filter_and_summaries(engine, world, listed):
 
 
 def test_progress_through_partial_confirmed_and_review(engine, world, listed):
-    first, second = proposals(world, invoice_id(engine, MATCHED))
-    world["allocations"].confirm(int(first.id), ConfirmBody(), USER)
-    assert numbers(listed.query(query(matchStatus="partial"))) == [MATCHED]
-    world["allocations"].confirm(int(second.id), ConfirmBody(), USER)
+    first, _ = proposals(world, invoice_id(engine, MATCHED))
+    confirm_groups(world, invoice_id(engine, MATCHED), USER)
     done = listed.query(query(matchStatus="confirmed"))
     assert numbers(done) == [MATCHED] and done.summaries[0].label == "已匹配"
+    # 整单通过后取消其中一条明细：发票变为部分匹配
+    world["allocations"].cancel(int(first.id), CancelBody(reason="撤回一条"), USER)
+    assert numbers(listed.query(query(matchStatus="partial"))) == [MATCHED]
     import_invoices(world, [invoice(MATCHED, [INK, FLUID], remark="SUB-200 换版")], name="changed.xlsx")
     review = listed.query(query(matchStatus="needs_review"))
     assert numbers(review) == [MATCHED] and review.counts["needs_review"] == 1

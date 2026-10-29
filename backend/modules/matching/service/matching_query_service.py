@@ -28,6 +28,7 @@ from ..vo.matching_vo import (
     Summaries,
     SupplierOption,
 )
+from . import group_view_service
 from .invoice_queue_service import invoice_queue
 from .invoice_totals_service import InvoiceTotalsService
 from .queue_scope import queue_scope
@@ -168,9 +169,13 @@ class MatchingQueryService:
                     )
                 )
             normal = invoice["status"] == "normal"
+            # 整单建议按当前来源重算发票行对整单合计的比对
+            grouped = [row for own in group_view_service.grouped(rows).values() for row in own]
+            group_lines = self._context(connection, grouped)[0] if grouped else {}
             return InvoiceMatching(
                 invoice=mapper.invoice_side(invoice),
                 paper=mapper.invoice_paper(invoice, paper),
+                groups=group_view_service.views(invoice, paper, rows, views, group_lines),
                 items=items,
                 generate=Capability(
                     allowed=normal,

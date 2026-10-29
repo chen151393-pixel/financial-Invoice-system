@@ -1,11 +1,12 @@
 """比对建议异常分类（"只看异常"），纯函数。
 
 异常 = 需要填写说明才能通过，或当前不能通过；分类取自不一致的比对项，不能通过时另记"不能通过"。
-购买方未提供、申报价未校验属于数据缺失，不算异常（与填写说明规则一致）。
+购买方未提供、申报价未校验、税率未同步属于数据缺失，不算异常（与填写说明规则一致）。
 """
 
 CATEGORIES = {
     "price": "价格",
+    "tax": "税额",
     "quantity": "数量",
     "unit": "单位",
     "amount": "金额",
@@ -27,7 +28,7 @@ def check_categories(checks):
             for key, label, result, invoice_value in checks
             if result != "match"
             and not (key == "buyer" and invoice_value is None)
-            and not (key == "price" and result == "missing")
+            and not (key in ("price", "tax") and result == "missing")
         )
     )
 

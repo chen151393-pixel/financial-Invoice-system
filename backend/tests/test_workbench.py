@@ -5,7 +5,6 @@ from decimal import Decimal
 
 from backend.app import create_app
 from backend.core.config import load_settings
-from backend.modules.matching.dto.matching_dto import ConfirmBody
 from backend.modules.matching.dto.workbench_dto import WorkbenchQuery
 from backend.modules.matching.policy.workbench_flow import funnel, node_distribution
 from backend.modules.matching.policy.workbench_kpis import kpis
@@ -13,6 +12,7 @@ from backend.modules.matching.policy.workbench_reports import monthly_receipts, 
 from backend.modules.matching.service.workbench_service import WorkbenchService
 from backend.tests.documents_ready import complete_documents
 from backend.tests.invoice_files import invoice
+from backend.tests.matching_helpers import confirm_groups
 from backend.tests.test_matching import FLUID, INK, import_invoices, invoice_id, proposals
 from backend.tests.test_matching import engine as engine
 from backend.tests.test_matching import ns as ns
@@ -62,9 +62,8 @@ def test_review_to_task_to_receipt_and_version_review(engine, ns, world):
     import_invoices(world, [invoice(number, [INK, FLUID], remark="SUB-200")])
     result = read(engine)
     assert result.counts.matching == 1 and result.counts.reverify == 0
-    found = proposals(world, invoice_id(engine, number))
-    for row in found:
-        world["allocations"].confirm(int(row.id), ConfirmBody(), USER)
+    assert proposals(world, invoice_id(engine, number))
+    confirm_groups(world, invoice_id(engine, number), USER)
     result = read(engine)
     assert result.counts.matching == result.counts.task == 0
     received = next(k for k in result.kpis if k.key == "received")

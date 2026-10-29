@@ -13,8 +13,9 @@ import pytest
 from backend.core.database import make_business_engine
 from backend.core.errors import ApiError
 from backend.manage import upgrade_schema
-from backend.modules.matching.dto.matching_dto import ConfirmBody, ManualBody, RejectBody
+from backend.modules.matching.dto.matching_dto import ManualBody, RejectBody
 from backend.tests.invoice_files import invoice
+from backend.tests.matching_helpers import confirm_groups, manual_allocation
 from backend.tests.test_matching import FLUID, INK, import_invoices, invoice_id, proposals, task
 from backend.tests.test_matching import (
     test_queue_counts_with_all_confidence_tiers as test_queue_counts_with_all_confidence_tiers,
@@ -83,7 +84,7 @@ def reviewed(ns, engine, world):
 
 
 def test_concurrent_allocations_cannot_exceed_invoice_item(engine, world, reviewed):
-    import_invoices(world, [invoice("26000000000000007001", [INK])])  # 无备注：仍按销售方召回一条建议
+    import_invoices(world, [invoice("26000000000000007001", [INK])])  # 只开墨水：部分开票不自动建议
     target = invoice_id(engine, "26000000000000007001")
     item_id = world["queries"].invoice(target).items[0].id
     for proposal in proposals(world, target):
@@ -110,15 +111,15 @@ def test_concurrent_confirms_on_same_purchase_line_keep_totals(engine, world, re
     half = ("墨水", "个", "5", "44.47", "5.78")  # 含税 50.25，两张合计等于应开 100.50
     import_invoices(world, [invoice("26000000000000007002", [half, FLUID], remark="SUB-200")], "a.xlsx")
     import_invoices(world, [invoice("26000000000000007003", [half], remark="SUB-200")], "b.xlsx")
-    first = next(
-        p for p in proposals(world, invoice_id(engine, "26000000000000007002")) if p.amount == "50.25"
-    )
-    second = proposals(world, invoice_id(engine, "26000000000000007003"))[0]
-    note = ConfirmBody(note="分两张票开具")
-    results = race(
-        lambda: world["allocations"].confirm(int(first.id), note, USER),
-        lambda: world["allocations"].confirm(int(second.id), note, USER),
-    )
+    # 分两张票开同一子采购行属于部分开票：人工关联，两张并发提交
+    line = rows(engine, "SELECT id FROM source_purchase_order_lines ORDER BY id")[0]["id"]
+
+    def allocate(number):
+        target = invoice_id(engine, number)
+        item = world["queries"].invoice(target).items[0].id
+        return lambda: manual_allocation(world, target, item, line, "5", "50.25", USER, "分两张票开具")
+
+    results = race(allocate("26000000000000007002"), allocate("26000000000000007003"))
     assert results == ["ok", "ok"]
     line = rows(engine, "SELECT * FROM task_lines ORDER BY purchase_line_id")[0]
     assert str(line["received_amount"]).rstrip("0").rstrip(".") == "100.5" and line["status"] == "received"
@@ -134,11 +135,12 @@ def test_concurrent_reapproval_only_one_successor(ns, engine, world, reviewed):
 
 
 def test_source_refresh_racing_confirmation_never_leaves_stale_valid_receipt(ns, engine, world, reviewed):
-    import_invoices(world, [invoice("26000000000000007004", [INK], remark="SUB-200")])
-    proposal = proposals(world, invoice_id(engine, "26000000000000007004"))[0]
+    import_invoices(world, [invoice("26000000000000007004", [INK, FLUID], remark="SUB-200")])
+    target = invoice_id(engine, "26000000000000007004")
+    assert proposals(world, target)
     results = race(
         lambda: save(ns, engine, bundle([purchase(amounts=("120.50", "20.00"))], [customs("870")])),
-        lambda: world["allocations"].confirm(int(proposal.id), ConfirmBody(), USER),
+        lambda: confirm_groups(world, target, USER),
     )
     assert results in (["ok", "ok"], [409, "ok"])
     first = rows(engine, "SELECT * FROM task_lines ORDER BY purchase_line_id")[0]
@@ -152,12 +154,12 @@ def test_cancel_racing_invoice_refresh_has_no_lost_progress(engine, world, revie
     from backend.modules.matching.dto.matching_dto import CancelBody
 
     number = "26000000000000007005"
-    import_invoices(world, [invoice(number, [INK], remark="SUB-200")])
+    import_invoices(world, [invoice(number, [INK, FLUID], remark="SUB-200")])
     proposal = proposals(world, invoice_id(engine, number))[0]
-    world["allocations"].confirm(int(proposal.id), ConfirmBody(), USER)
+    confirm_groups(world, invoice_id(engine, number), USER)
     assert race(
         lambda: world["allocations"].cancel(int(proposal.id), CancelBody(reason="撤回"), USER),
-        lambda: import_invoices(world, [invoice(number, [INK], remark="SUB-200 changed")]),
+        lambda: import_invoices(world, [invoice(number, [INK, FLUID], remark="SUB-200 changed")]),
     ) == ["ok", "ok"]
     first = rows(engine, "SELECT * FROM task_lines ORDER BY purchase_line_id")[0]
     assert first["received_amount"] == 0 and first["pending_amount"] == 0

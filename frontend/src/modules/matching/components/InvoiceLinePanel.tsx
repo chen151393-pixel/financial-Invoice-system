@@ -1,8 +1,16 @@
 import { useState } from "react";
 import { Badge, Button, Card, CardContent, CardHeader, EmptyState } from "../../../shared/components/ui";
-import type { Candidate, ConfirmBody, InvoiceItem, InvoiceMatching, ManualBody } from "../types/matching";
+import type {
+  Candidate,
+  ConfirmBody,
+  InvoiceItem,
+  InvoiceMatching,
+  ManualBody,
+  MatchingGroup,
+} from "../types/matching";
 import { AllocationCard } from "./AllocationCard";
 import { groupAllocations } from "./allocation-groups";
+import { GroupComparisonCard } from "./GroupComparisonCard";
 import { LinkedAllocations } from "./LinkedAllocations";
 import { ManualAllocation } from "./ManualAllocation";
 
@@ -13,9 +21,11 @@ type Actions = {
   cancel: (id: string, reason: string) => Promise<boolean>;
   create: (body: ManualBody, replaceId: string, reason: string) => Promise<boolean>;
   search: (keyword: string) => Promise<{ rows: Candidate[]; total: number }>;
+  confirmGroup: (groupId: string, note: string) => Promise<boolean>;
+  rejectGroup: (groupId: string, note: string) => Promise<boolean>;
 };
 
-/** 选中发票行的详情：手动关联、已关联、待处理建议与历史记录。 */
+/** 选中发票行的详情：整单比对、手动关联、已关联、其他待处理建议与历史记录。 */
 export function InvoiceLinePanel({
   item,
   invoiceId,
@@ -24,6 +34,7 @@ export function InvoiceLinePanel({
   busy,
   actions,
   invoice,
+  groups,
 }: {
   item: InvoiceItem;
   invoiceId: string;
@@ -32,10 +43,16 @@ export function InvoiceLinePanel({
   busy: boolean;
   actions: Actions;
   invoice: InvoiceMatching["invoice"];
+  groups: MatchingGroup[];
 }) {
   const [manual, setManual] = useState(false);
   const [activeId, setActiveId] = useState<string | null>(null);
-  const { linked, pending, history } = groupAllocations(item.allocations);
+  // 整单建议整组展示与审核，组内逐条记录不再单独列为待处理比对
+  const own = groups.filter((group) => group.items.some((row) => row.invoiceItemId === item.id));
+  const inGroups = new Set(own.flatMap((group) => group.allocationIds));
+  const { linked, pending, history } = groupAllocations(
+    item.allocations.filter((allocation) => !inGroups.has(allocation.id)),
+  );
   // 一次只展开一条待处理比对；处理后列表变化时回到第一条。
   const active = pending.find((row) => row.id === activeId) ?? pending[0];
   const card = (allocation: (typeof pending)[number]) => (
@@ -53,6 +70,17 @@ export function InvoiceLinePanel({
   );
   return (
     <section className="matching-line-panel" aria-label="发票行比对">
+      {own.map((group) => (
+        <GroupComparisonCard
+          key={`${group.id}:${group.confidence}:${group.confirm.allowed}`}
+          group={group}
+          item={item}
+          invoice={invoice}
+          busy={busy}
+          onConfirm={(note) => actions.confirmGroup(group.id, note)}
+          onReject={(note) => actions.rejectGroup(group.id, note)}
+        />
+      ))}
       {pending.length > 1 && (
         <Card aria-label="待处理比对">
           <CardHeader
@@ -87,16 +115,16 @@ export function InvoiceLinePanel({
           </ul>
         </Card>
       )}
-      {active ? (
-        card(active)
-      ) : (
-        <Card>
-          <EmptyState
-            title="本行没有待审核建议"
-            description="可在下方查看已关联记录或选择子采购行手动关联。"
-          />
-        </Card>
-      )}
+      {active
+        ? card(active)
+        : own.length === 0 && (
+            <Card>
+              <EmptyState
+                title="本行没有待审核建议"
+                description="只有整张子采购单的数量、含税合计与发票行完全一致时才自动建议；部分开票或单位不同请手动关联。"
+              />
+            </Card>
+          )}
       <Card aria-label="候选子采购行">
         <CardHeader
           title="候选子采购行"

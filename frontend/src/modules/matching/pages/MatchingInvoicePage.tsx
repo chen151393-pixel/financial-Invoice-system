@@ -6,11 +6,13 @@ import { openLocalSession } from "../../identity/api";
 import {
   cancelAllocation,
   confirmAllocation,
+  confirmGroup,
   createAllocation,
   findCandidates,
   generateProposals,
   getInvoiceMatching,
   rejectAllocation,
+  rejectGroup,
   reverifyAllocation,
   replaceAllocation,
 } from "../api";
@@ -105,10 +107,11 @@ export function MatchingInvoicePage({ invoiceId }: { invoiceId: string }) {
         }
       />
     );
-  const { invoice, items, generate } = state.data;
+  const { invoice, items, generate, groups } = state.data;
   // 默认选中第一条有待处理事项的发票行，否则选第一行；仅是展示选择，不改变业务数据。
   const selected =
     items.find((item) => item.id === selectedId) ??
+    items.find((item) => groups.some((group) => group.items.some((row) => row.invoiceItemId === item.id))) ??
     items.find((item) => groupAllocations(item.allocations).pending.length > 0) ??
     items[0];
   const replacements = items.flatMap((row) =>
@@ -135,11 +138,18 @@ export function MatchingInvoicePage({ invoiceId }: { invoiceId: string }) {
       {feedback && <Alert tone={feedback.error ? "danger" : "success"}>{feedback.text}</Alert>}
       {selected ? (
         <div className="matching-detail">
-          <InvoiceLineNav items={items} selectedId={selected.id} onSelect={setSelectedId} busy={busy} />
+          <InvoiceLineNav
+            items={items}
+            groups={groups}
+            selectedId={selected.id}
+            onSelect={setSelectedId}
+            busy={busy}
+          />
           <InvoiceLinePanel
             key={selected.id}
             item={selected}
             invoice={invoice}
+            groups={groups}
             invoiceId={invoiceId}
             invoiceVersionId={invoice.versionId}
             replacements={replacements}
@@ -158,6 +168,13 @@ export function MatchingInvoicePage({ invoiceId }: { invoiceId: string }) {
                   replaceId ? "已替换原关联，新关联已通过。" : "手动关联已保存并通过。",
                 ),
               search: (keyword) => findCandidates(invoiceId, selected.id, keyword),
+              confirmGroup: (groupId, note) =>
+                act(
+                  () => confirmGroup(groupId, invoiceId, invoice.versionId, note),
+                  "整单已通过，全部子采购明细已记入收票进度。",
+                ),
+              rejectGroup: (groupId, note) =>
+                act(() => rejectGroup(groupId, invoiceId, note), "已驳回整单建议。"),
             }}
           />
         </div>

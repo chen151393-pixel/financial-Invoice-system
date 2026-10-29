@@ -6,10 +6,10 @@ from pathlib import Path
 import pytest
 from backend.core.errors import ApiError
 from backend.modules.matching.dto.invoice_file_dto import InvoiceFileUpload
-from backend.modules.matching.dto.matching_dto import ConfirmBody
 from backend.modules.matching.service.invoice_file_service import InvoiceFileService, _numbers
 from backend.modules.source.public import SourceDirectory
 from backend.tests.invoice_files import invoice
+from backend.tests.matching_helpers import confirm_groups
 from backend.tests.test_matching import FLUID, INK, import_invoices, invoice_id, proposals
 from backend.tests.test_matching import world as world  # 共用夹具
 from backend.tests.test_source_storage import bundle, customs, purchase, rows, save
@@ -36,8 +36,8 @@ def imported(ns, engine, app_services, world):
 
 
 def confirm_all(world, number_id):
-    for proposal in proposals(world, number_id):
-        world["allocations"].confirm(int(proposal.id), ConfirmBody(), USER)
+    assert proposals(world, number_id)
+    confirm_groups(world, number_id, USER)
 
 
 def upload(files, items, actor=USER):

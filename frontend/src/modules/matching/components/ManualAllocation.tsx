@@ -1,4 +1,3 @@
-import { ConversionFields, defaultConversion } from "./ConversionFields";
 import { useEffect, useRef, useState } from "react";
 import { Button, EmptyState, ErrorState, Skeleton } from "../../../shared/components/ui";
 import type { Candidate, InvoiceItem, ManualBody } from "../types/matching";
@@ -33,7 +32,6 @@ export function ManualAllocation({
 }) {
   const [replaceId, setReplaceId] = useState("");
   const [reason, setReason] = useState("");
-  const [conversion, setConversion] = useState(defaultConversion);
   const [keyword, setKeyword] = useState("");
   const [state, setState] = useState<Search>({ kind: "loading" });
   const initialSearch = useRef(search);
@@ -167,7 +165,6 @@ export function ManualAllocation({
                 quantity: form.quantity,
                 amount: form.amount,
                 note: form.note,
-                ...conversion,
                 invoiceVersionId,
                 purchaseBasisId: chosen.purchase.purchaseBasisId,
               },
@@ -205,7 +202,6 @@ export function ManualAllocation({
               />
             </label>
           </div>
-          <ConversionFields value={conversion} onChange={setConversion} busy={busy} />
           <label>
             审核说明（有不一致项或超开时必填）
             <textarea

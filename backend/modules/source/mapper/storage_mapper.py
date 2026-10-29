@@ -24,6 +24,7 @@ from ..entity import (
 )
 from ..policy.optional_field_policy import allows_missing
 from ..policy.parent_reference_policy import PARENT_FIELD
+from ..policy.tax_rate_policy import parse_tax_rate
 from ..policy.unit_price_policy import normalize as normalize_unit_price
 from .ns_fields import normalize, reference, text
 
@@ -55,6 +56,7 @@ FIELDS = {
         "declaration_unit": "declared_unit",
         "tax_inclusive_price": "unit_price",
         "amount": "amount",
+        "tax_rate": "tax_rate",
     },
     "customs": {
         "record_no": "record_no",
@@ -172,6 +174,8 @@ def project(record, kind, spec):
             column = table.c[target]
             if target in ("unit_price", "declared_unit_price") and kind in ("purchase_line", "customs_line"):
                 value = normalize_unit_price(value, column.type.precision, column.type.scale)
+            if target == "tax_rate":
+                value = parse_tax_rate(value)
             columns[target] = column_value(value, column)
     return columns, references
 

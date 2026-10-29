@@ -45,6 +45,11 @@ purchase_order_lines = Table(
     Column("unit_price", Numeric(24, 8), comment="子采购含税单价；NS ratewithrate 是单价，不是汇率"),
     Column("amount", Numeric(24, 6), comment="子采购行含税金额；来源缺失为 NULL，不得以零替代"),
     Column(
+        "tax_rate",
+        Numeric(8, 6),
+        comment="税率小数（0.13 表示 13%），由 NS 税码显示名解析；无法解析或未返回时为 NULL",
+    ),
+    Column(
         "amount_status",
         String(24),
         comment="金额来源状态：matched 已取得；source_missing 来源缺失；不表示发票匹配通过",

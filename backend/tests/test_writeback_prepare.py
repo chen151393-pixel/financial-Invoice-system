@@ -7,7 +7,7 @@ from uuid import uuid4
 import pytest
 from backend.core.errors import ApiError
 from backend.core.write_lock import transaction
-from backend.modules.matching.dto.matching_dto import CancelBody, ConfirmBody
+from backend.modules.matching.dto.matching_dto import CancelBody
 from backend.modules.source.service.vendor_bill_query_service import VendorBillQueryService
 from backend.modules.writeback.dao import task_dao
 from backend.modules.writeback.dto.task_dto import ConfirmPlan, TaskQuery
@@ -16,6 +16,7 @@ from backend.modules.writeback.service.query_service import QueryService
 from backend.modules.writeback.service.queue_service import enqueue
 from backend.modules.writeback.service.task_service import TaskService
 from backend.tests.invoice_files import invoice
+from backend.tests.matching_helpers import confirm_groups
 from backend.tests.test_matching import FLUID, INK, USER, approve, import_invoices, invoice_id, proposals
 from backend.tests.test_matching import engine as engine
 from backend.tests.test_matching import ns as ns
@@ -44,8 +45,7 @@ def prepared(engine, ns, world):
             {"id": target},
         )
     found = proposals(world, target)
-    for proposal in found:
-        world["allocations"].confirm(int(proposal.id), ConfirmBody(), USER)
+    confirm_groups(world, target, USER)
     service = TaskService(engine, "prod")
     ready = service.invoice(target)
     assert ready["ready"], ready
@@ -177,8 +177,7 @@ def test_buyer_missing_or_matching_can_enqueue_but_mismatch_requires_review(
             ),
             {"buyer": buyer, "normalized": normalized, "id": target},
         )
-    for proposal in proposals(world, target):
-        world["allocations"].confirm(int(proposal.id), ConfirmBody(note="已核实发票分配"), USER)
+    confirm_groups(world, target, USER, "已核实发票分配")
     service = TaskService(engine, "prod")
     readiness = service.invoice(target)
     assert readiness["ready"] is allowed
@@ -302,19 +301,21 @@ def test_service_identity_and_account_isolation(prepared):
 def test_queue_failure_rolls_back_matching_confirmation(engine, ns, world, monkeypatch):
     save(ns, engine, bundle([purchase()], [customs()]))
     approve(world, "CD870")
-    import_invoices(world, [invoice("26000000000000008888", [INK], remark="SUB-200")])
-    proposal = proposals(world, invoice_id(engine, "26000000000000008888"))[0]
+    import_invoices(world, [invoice("26000000000000008888", [INK, FLUID], remark="SUB-200")])
+    target = invoice_id(engine, "26000000000000008888")
+    found = proposals(world, target)
 
     def fail(*args, **kwargs):
         raise RuntimeError("queue failure")
 
     monkeypatch.setattr("backend.modules.writeback.service.queue_service.enqueue", fail)
     with pytest.raises(RuntimeError, match="queue failure"):
-        world["allocations"].confirm(int(proposal.id), ConfirmBody(), USER)
-    assert (
+        confirm_groups(world, target, USER)
+    # 整组通过与回写入队同一事务：入队失败时整组保持待审核
+    assert {
         rows(engine, "SELECT status FROM matching_allocations WHERE id=:id", id=int(proposal.id))[0]["status"]
-        == "proposed"
-    )
+        for proposal in found
+    } == {"proposed"}
 
 
 def test_snapshot_is_immutable_and_readiness_detects_incomplete_amount(engine, prepared):

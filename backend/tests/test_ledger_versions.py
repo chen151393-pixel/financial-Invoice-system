@@ -6,12 +6,19 @@ from uuid import uuid4
 
 import pytest
 from backend.core.errors import ApiError
-from backend.modules.matching.dto.matching_dto import CancelBody, CandidateQuery, ConfirmBody, ReplaceBody
+from backend.modules.matching.dto.matching_dto import (
+    CancelBody,
+    CandidateQuery,
+    ConfirmBody,
+    ManualBody,
+    ReplaceBody,
+)
 from backend.modules.review.dto.review_dto import ApproveRequest, DeclarationListQuery
 from backend.modules.task.dto.task_dto import ClosureRequest
 from backend.modules.task.service.closure_service import ClosureService
 from backend.tests.documents_ready import complete_documents
 from backend.tests.invoice_files import invoice
+from backend.tests.matching_helpers import confirm_groups
 from backend.tests.test_matching import FLUID, INK, import_invoices, invoice_id, proposals, task
 from backend.tests.test_matching import reviewed as reviewed
 from backend.tests.test_matching import world as world
@@ -30,8 +37,7 @@ def confirm_all(engine, world, number="26000000000000008801"):
     import_invoices(world, [invoice(number, [INK, FLUID], remark="SUB-200")])
     target = invoice_id(engine, number)
     found = proposals(world, target)
-    for row in found:
-        world["allocations"].confirm(int(row.id), ConfirmBody(), USER)
+    confirm_groups(world, target, USER)
     return target, found
 
 
@@ -104,20 +110,34 @@ def test_unit_conversion_exactness_and_difference_closure_revoked(engine, world,
     number = "26000000000000008802"
     import_invoices(world, [invoice(number, [("墨水", "箱", "1", "88.94", "11.56")], remark="SUB-200")])
     target = invoice_id(engine, number)
-    row = proposals(world, target)[0]
-    with pytest.raises(ApiError, match="换算证据"):
-        world["allocations"].confirm(int(row.id), ConfirmBody(note="确认"), USER)
+    # 单位不同不自动建议，人工关联时仍可经接口提交换算因子
+    assert proposals(world, target) == []
+    item = world["queries"].invoice(target).items[0]
+    line_id = rows(engine, "SELECT id FROM source_purchase_order_lines ORDER BY id")[0]["id"]
+    body = ManualBody(
+        requestId=uuid4(),
+        invoiceId=str(target),
+        invoiceItemId=item.id,
+        purchaseLineId=str(line_id),
+        quantity="1",
+        amount="100.50",
+        note="确认",
+        conversionDenominator="3",
+    )
     with pytest.raises(ApiError, match="8 位小数"):
-        world["allocations"].confirm(
-            int(row.id),
-            ConfirmBody(note="确认", conversionDenominator="3", conversionEvidence="装箱单"),
-            USER,
-        )
-    world["allocations"].confirm(
-        int(row.id),
-        ConfirmBody(note="一箱十二个", conversionNumerator="12", conversionEvidence="合同第3页"),
+        world["allocations"].create_manual(body, USER)
+    world["allocations"].create_manual(
+        body.model_copy(
+            update={
+                "requestId": uuid4(),
+                "note": "一箱十二个",
+                "conversionNumerator": Decimal(12),
+                "conversionDenominator": Decimal(1),
+            }
+        ),
         USER,
     )
+    row = world["queries"].invoice(target).items[0].allocations[0]
     line = active_lines(engine)[0]
     assert Decimal(str(line["received_quantity"])) == 12 and line["status"] == "partial"
     service = ClosureService(engine, world["tasks"])

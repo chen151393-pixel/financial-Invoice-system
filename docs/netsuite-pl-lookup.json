@@ -43,7 +43,8 @@
       "declaration_quantity": "custrecord_swc_subpo_item_bgqty",
       "declaration_unit": "custrecord_swc_subpo_item_bgunit",
       "tax_inclusive_price": "custrecord_swc_subpo_item_ratewithrate",
-      "amount": "custrecord_swc_subpo_item_amountwithtax"
+      "amount": "custrecord_swc_subpo_item_amountwithtax",
+      "tax_rate": "custrecord_swc_subpo_item_tax"
     }
   },
   "customs": {

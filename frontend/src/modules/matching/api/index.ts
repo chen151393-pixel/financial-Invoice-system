@@ -32,13 +32,8 @@ async function read<T>(path: string, method = "GET", body?: unknown): Promise<T>
 export const getInvoiceMatching = (invoiceId: string) =>
   read<InvoiceMatching>(`/matching/invoices/${encodeURIComponent(invoiceId)}`);
 
-export const findOrderCandidates = (body: {
-  invoiceId: string;
-  keyword: string;
-  page: number;
-  conversionNumerator: string;
-  conversionDenominator: string;
-}) => read<OrderCandidates>("/matching/order-candidates/query", "POST", body);
+export const findOrderCandidates = (body: { invoiceId: string; keyword: string; page: number }) =>
+  read<OrderCandidates>("/matching/order-candidates/query", "POST", body);
 
 export const confirmOrder = (body: OrderConfirmBody) =>
   http<InvoiceMatching>("/matching/orders/confirm", "POST", body);
@@ -82,6 +77,23 @@ export const cancelAllocation = (id: string, reason: string) =>
   http<InvoiceMatching>(`${allocation(id)}/cancel`, "POST", { reason });
 export const createAllocation = (body: ManualBody) =>
   http<InvoiceMatching>("/matching/allocations", "POST", body);
+// 整单建议整组通过 / 驳回：发票行对应的一张或多张整张子采购单
+export const confirmGroup = (
+  groupId: string,
+  invoiceId: string,
+  invoiceVersionId: string | null,
+  note: string,
+) =>
+  http<InvoiceMatching>(`/matching/groups/${encodeURIComponent(groupId)}/confirm`, "POST", {
+    invoiceId,
+    invoiceVersionId,
+    note,
+  });
+export const rejectGroup = (groupId: string, invoiceId: string, note: string) =>
+  http<InvoiceMatching>(`/matching/groups/${encodeURIComponent(groupId)}/reject`, "POST", {
+    invoiceId,
+    note,
+  });
 export const confirmBatch = (ids: string[]) =>
   http<{ confirmed: number; skipped: { id: string; reason: string }[] }>(
     "/matching/allocations/confirm-batch",

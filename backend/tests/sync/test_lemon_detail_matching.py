@@ -11,9 +11,10 @@ from backend.integrations.lemon.professional_invoice_details import LemonProfess
 from backend.integrations.lemon.professional_invoices import LemonProfessionalInvoices
 from backend.modules.invoice.entity import headers, items, versions
 from backend.modules.invoice.public import InvoicesImported
-from backend.modules.matching.dto.matching_dto import CancelBody, ConfirmBody
+from backend.modules.matching.dto.matching_dto import CancelBody
 from backend.modules.sync.dto.lemon_invoice_dto import PullLemonInvoices
 from backend.tests.documents_ready import complete_documents
+from backend.tests.matching_helpers import confirm_groups
 from backend.tests.sync.lemon_detail_fixtures import full_invoice
 from backend.tests.sync.test_lemon_account_services import adapter, reply
 from backend.tests.sync.test_lemon_invoices import OWNER, body, count, make_services
@@ -111,8 +112,7 @@ def test_professional_read_confirm_complete_cancel_and_repeat(engine, world, rev
     assert flow[1].pull(OWNER, request) == first and flow[0]["detail_calls"] == 1
     found = proposals(world, target(engine))
     assert len(found) == 2
-    for candidate in found:
-        world["allocations"].confirm(int(candidate.id), ConfirmBody(), OWNER)
+    confirm_groups(world, target(engine), OWNER)
     assert task(engine)["status"] == "completed"
     assert pull(flow)["result"]["unchanged"] == 1
     assert count(engine, versions) == 1 and not proposals(world, target(engine))
@@ -122,9 +122,8 @@ def test_professional_read_confirm_complete_cancel_and_repeat(engine, world, rev
 
 def test_reordering_no_new_version_changed_quantity_reopens_review(engine, world, reviewed, flow):
     pull(flow)
-    found = proposals(world, target(engine))
-    for candidate in found:
-        world["allocations"].confirm(int(candidate.id), ConfirmBody(), OWNER)
+    assert proposals(world, target(engine))
+    confirm_groups(world, target(engine), OWNER)
     before = rows(engine, "SELECT id, item_name FROM invoice_items ORDER BY id")
     entries = flow[0]["raw"]["Detail"]["invoiceEntries"]
     entries.reverse()
@@ -152,8 +151,8 @@ def test_invoice_first_then_review_and_regenerate(engine, world, ns, flow):
 def test_detail_failure_and_subscriber_failure_preserve_previous_ledger(engine, world, reviewed, flow):
     complete_documents(engine)  # 完结需资料齐全；本测试关注收票与账本
     pull(flow)
-    for candidate in proposals(world, target(engine)):
-        world["allocations"].confirm(int(candidate.id), ConfirmBody(), OWNER)
+    assert proposals(world, target(engine))
+    confirm_groups(world, target(engine), OWNER)
     before = deepcopy(rows(engine, "SELECT * FROM matching_allocations"))
     flow[0]["fail"] = True
     with pytest.raises(ApiError, match="HTTP 503"):
@@ -175,8 +174,8 @@ def test_detail_failure_and_subscriber_failure_preserve_previous_ledger(engine, 
 @pytest.mark.parametrize("status", [1, 2])
 def test_void_or_red_invoice_removes_effective_receipts(engine, world, reviewed, flow, status):
     pull(flow)
-    for candidate in proposals(world, target(engine)):
-        world["allocations"].confirm(int(candidate.id), ConfirmBody(), OWNER)
+    assert proposals(world, target(engine))
+    confirm_groups(world, target(engine), OWNER)
     flow[0]["raw"]["IsInvalid"] = status
     flow[0]["raw"]["Detail"]["isInvalid"] = status
     pull(flow)

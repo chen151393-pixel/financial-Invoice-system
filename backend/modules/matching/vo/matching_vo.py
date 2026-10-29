@@ -115,6 +115,54 @@ class InvoiceSide(StrictModel):
     remark: str | None
 
 
+class GroupOrder(StrictModel):
+    purchaseOrderId: str
+    orderNo: str
+    parentOrderNo: str
+    supplier: str
+    company: str
+    lineCount: int
+
+
+class GroupLine(StrictModel):
+    """整单所含子采购明细（只读展开）。"""
+
+    purchaseLineId: str
+    orderNo: str
+    item: str
+    specification: str
+    unit: str
+    quantity: str
+    amount: str
+    taxRate: str | None
+
+
+class GroupItem(StrictModel):
+    """一条发票行与所选整单合计的比对。"""
+
+    invoiceItemId: str
+    checks: list[Check]
+    confidence: str
+    tier: str
+    quantity: str
+    amount: str
+    lines: list[GroupLine]
+
+
+class GroupView(StrictModel):
+    """整单建议：整组通过或驳回；allocationIds 为组内逐条记账的分配记录。"""
+
+    id: str
+    orders: list[GroupOrder]
+    items: list[GroupItem]
+    confidence: str
+    tier: str
+    noteReasons: list[str]
+    confirm: Capability
+    reject: Capability
+    allocationIds: list[str]
+
+
 class InvoicePaper(StrictModel):
     """比对详情页票面补充信息；只读展示，不参与比对。"""
 
@@ -129,6 +177,8 @@ class InvoicePaper(StrictModel):
 class InvoiceMatching(StrictModel):
     invoice: InvoiceSide
     paper: InvoicePaper
+    # 待审核的整单建议；组内分配同时出现在各发票行 allocations 中
+    groups: list[GroupView] = Field(default_factory=list)
     items: list[ItemView]
     generate: Capability
 

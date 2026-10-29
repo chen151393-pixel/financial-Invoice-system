@@ -17,7 +17,7 @@ after(async () => {
   await server?.close();
 });
 
-test("整单候选传递查询和换算参数，确认绑定预览摘要及同一请求号", async () => {
+test("整单候选传递查询参数，确认绑定预览摘要及同一请求号；页面不再提交换算字段", async () => {
   const original = globalThis.fetch,
     calls = [];
   globalThis.fetch = async (url, options) => {
@@ -29,8 +29,6 @@ test("整单候选传递查询和换算参数，确认绑定预览摘要及同�
       invoiceId: "28",
       keyword: "YE-DQ20260624-Z010",
       page: 2,
-      conversionNumerator: "1",
-      conversionDenominator: "1",
     };
     await api.findOrderCandidates(query);
     const body = {
@@ -39,9 +37,6 @@ test("整单候选传递查询和换算参数，确认绑定预览摘要及同�
       invoiceVersionId: "7",
       purchaseOrderId: "248",
       fingerprint: "a".repeat(64),
-      conversionNumerator: "1",
-      conversionDenominator: "1",
-      conversionEvidence: "真实证据",
       note: "已核实整单",
     };
     await api.confirmOrder(body);
@@ -65,6 +60,29 @@ test("整单确认冲突保留后端原因，且不自动重试写操作", async
   try {
     await assert.rejects(() => api.confirmOrder({}), /采购来源已变化/);
     assert.equal(calls, 1);
+  } finally {
+    globalThis.fetch = original;
+  }
+});
+
+test("整单建议整组通过与驳回：只提交发票、版本与选填说明", async () => {
+  const original = globalThis.fetch,
+    calls = [];
+  globalThis.fetch = async (url, options) => {
+    calls.push({ url, body: JSON.parse(options.body) });
+    return new Response(JSON.stringify({ items: [], groups: [] }));
+  };
+  try {
+    const group = "8f0c9a52-6f2e-4a51-9c33-0d1f2a3b4c5d";
+    await api.confirmGroup(group, "28", "7", "");
+    await api.rejectGroup(group, "28", "金额待核");
+    assert.deepEqual(calls, [
+      {
+        url: `/api/matching/groups/${group}/confirm`,
+        body: { invoiceId: "28", invoiceVersionId: "7", note: "" },
+      },
+      { url: `/api/matching/groups/${group}/reject`, body: { invoiceId: "28", note: "金额待核" } },
+    ]);
   } finally {
     globalThis.fetch = original;
   }
