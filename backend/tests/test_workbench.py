@@ -356,7 +356,6 @@ def test_anomaly_counts_only_proposals_and_skip_missing_data():
     ]
     assert anomaly_counts(rows) == [
         {"label": "单位", "count": 2, "percent": "100.0"},
-        {"label": "价格", "count": 1, "percent": "50.0"},
     ]
 
 

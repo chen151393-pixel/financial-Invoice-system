@@ -8,6 +8,7 @@ from ..entity import (
     purchase_order_lines,
     purchase_orders,
     raw_records,
+    sales_orders,
     suppliers,
 )
 from . import document_dao
@@ -111,16 +112,6 @@ def with_declarations(connection, *, exact=None, within=None):
     return rows if exact is not None else [row for row in rows if row["order_no"] in within]
 
 
-def sales_order_ids(connection, order_ids):
-    """{子采购单 ID: 销售单本地 ID 或 None}。"""
-    if not order_ids:
-        return {}
-    query = select(purchase_orders.c.id, purchase_orders.c.sales_order_id).where(
-        purchase_orders.c.id.in_(order_ids)
-    )
-    return {row.id: row.sales_order_id for row in connection.execute(query)}
-
-
 def line_ids_by_supplier(connection, supplier_id=None, *, name_terms=()):
     """该供应商子采购单下的子采购行 ID（含已停用，供比对队列按供应商筛选）。"""
     query = select(purchase_order_lines.c.id).join(
@@ -178,6 +169,7 @@ def line_context(connection, line_ids, *, lock=False):
             purchase_orders.c.currency_raw_record_id,
             purchase_orders.c.order_no,
             purchase_orders.c.parent_order_no,
+            sales_orders.c.order_no.label("sales_order_no"),
             purchase_orders.c.currency,
             purchase_orders.c.currency_source,
             purchase_orders.c.currency_issue,
@@ -193,6 +185,11 @@ def line_context(connection, line_ids, *, lock=False):
             )
             .outerjoin(suppliers, suppliers.c.id == purchase_orders.c.supplier_id)
             .outerjoin(companies, companies.c.id == purchase_orders.c.company_id)
+            .outerjoin(
+                sales_orders,
+                (sales_orders.c.id == purchase_orders.c.sales_order_id)
+                & (sales_orders.c.ns_account == purchase_orders.c.ns_account),
+            )
         )
         .where(purchase_order_lines.c.id.in_(line_ids))
     )

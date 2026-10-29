@@ -2,7 +2,7 @@
 
 parts 为 [(子采购行上下文, 分配数量, 含税金额)]，数量与金额是该发票行在这些子采购单上的合计口径。
 子采购税额 = 各税率的含税合计 × 税率 ÷（1 + 税率），按税率分组四舍五入到分；缺少税率时不校验。
-申报价按所涉报关行（去重）的人民币申报金额合计，与发票行不含税金额比较。
+合计金额按发票行价税合计与对应子采购明细含税合计比较。
 """
 
 from decimal import ROUND_HALF_UP, Decimal
@@ -10,7 +10,6 @@ from decimal import ROUND_HALF_UP, Decimal
 from .comparison_policy import (
     AMOUNT_TOLERANCE,
     GROUP_WEIGHTS,
-    PRICE_TOLERANCE,
     SUPPLIER_NOTE,
     TAX_TOLERANCE,
     _check,
@@ -71,7 +70,11 @@ def compare_group(invoice, item, item_tax, parts):
             "、".join(orders) + (f"（母采购单 {'、'.join(parents)}）" if parents else ""),
             "match" if all(references) else "mismatch",
             note=f"整单比对 {len(orders)} 张子采购单"
-            + ("" if all(references) else "；部分子采购单未被备注命中"),
+            + (
+                "；" + "；".join(dict.fromkeys(f"备注命中{kind} {number}" for kind, number in references))
+                if all(references)
+                else "；部分子采购单、母采购单或关联销售订单未被备注命中"
+            ),
         ),
         _check_group(
             "seller",
@@ -129,7 +132,6 @@ def compare_group(invoice, item, item_tax, parts):
             note="发票行价税合计对子采购单含税合计",
         ),
         _tax_check(item_tax, purchase_tax(parts), parts),
-        _price_check(item, parts),
     ]
     return checks, sum(Decimal(check["score"]) for check in checks)
 
@@ -150,27 +152,4 @@ def _tax_check(item_tax, expected, parts):
         "match" if abs(item_tax - expected) <= TAX_TOLERANCE else "mismatch",
         difference=item_tax - expected,
         note=f"子采购税额按含税合计 × {labels} ÷（1 + 税率）推算，容差 {TAX_TOLERANCE} 元",
-    )
-
-
-def _price_check(item, parts):
-    excluding = item.get("amount_excluding_tax")
-    declared = {}
-    for line, _, _ in parts:
-        value = line.get("declared")
-        if not value:
-            return _check_group("price", None, None, "missing", note="未校验：部分子采购行没有行级报关关联")
-        if value["amount_cny"] is None:
-            return _check_group("price", None, None, "missing", note=f"未校验：{value['reason']}")
-        declared[value["customs_line_id"]] = value["amount_cny"]
-    if excluding is None:
-        return _check_group("price", None, None, "missing", note="未校验：发票缺少不含税金额")
-    total = sum(declared.values(), Decimal(0))
-    over = excluding - total > PRICE_TOLERANCE
-    return _check_group(
-        "price",
-        f"不含税 {excluding.quantize(CENT)}",
-        f"申报 {total.quantize(CENT)}（{len(declared)} 条报关行合计）",
-        "mismatch" if over else "match",
-        note=f"不含税总价超出申报价 {(excluding - total).quantize(CENT)}" if over else "",
     )

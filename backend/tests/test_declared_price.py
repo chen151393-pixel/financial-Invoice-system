@@ -1,4 +1,4 @@
-"""申报幅度与价格校验（2026-10-23）：销售单汇率换算申报价、财务核对申报幅度、比对申报价校验与"只看异常"。
+"""申报幅度与含税比对：财务核对保留申报幅度；发票比对按含税合计，不依赖申报价与汇率。
 
 SQLite 隔离库，合成 NS 数据：报关行 15 USD，销售单汇率 7.1，申报价 106.5 元；子采购含税 100.5 / 20 元。
 """
@@ -9,7 +9,6 @@ from types import SimpleNamespace
 import pytest
 from backend.core.errors import ApiError
 from backend.modules.matching.dto.matching_dto import BatchBody, QueueQuery
-from backend.modules.matching.policy.comparison_policy import price_check
 from backend.modules.review.mapper.declaration_mapper import declaration
 from backend.modules.review.policy.margin_policy import declared_margin
 from backend.modules.source.policy.declared_price_policy import (
@@ -206,19 +205,7 @@ def test_review_page_estimates_missing_declared_price(ns, engine, service):
     assert shown[0].declaredUnitPriceCny == "10.65" and shown[0].margin == "-12.68%"
 
 
-def test_price_check_labels_estimated_declared_price():
-    item = {"amount_excluding_tax": Decimal("50"), "unit": "个", "quantity": Decimal("10")}
-    declared = {
-        "amount_cny": Decimal("106.5"),
-        "unit": "个",
-        "unit_price_cny": Decimal("10.65"),
-        "unit_price_estimated": True,
-        "reason": "",
-    }
-    check = price_check(item, {"declared": declared}, True)
-    assert check["purchaseValue"] == "申报 106.50，单价 10.65（试算）"
-    filled = price_check(item, {"declared": {**declared, "unit_price_estimated": False}}, True)
-    assert filled["purchaseValue"] == "申报 106.50，单价 10.65"
+def test_estimated_declared_unit_price_preserves_precision():
     assert declared_unit_price(
         {"declared_unit_price": None, "amount": Decimal("2423.14"), "declared_quantity": Decimal("11760")}
     ) == (Decimal("0.20604932"), True)
@@ -243,34 +230,41 @@ def test_purchase_sales_rate_preserves_precision_and_requires_own_relation(ns, e
     assert displayed() == ""
 
 
-def price(world, engine, number):
-    """整单建议：发票行对整单合计的申报价比对（所涉报关行申报金额合计）。"""
+def total_amount(world, engine, number):
+    """整单建议按发票行与采购明细的含税合计比对。"""
     (found,) = world["queries"].invoice(invoice_id(engine, number)).groups
-    return found, next(check for check in found.items[0].checks if check.key == "price")
+    return found, next(check for check in found.items[0].checks if check.key == "amount")
 
 
-def test_invoice_above_declared_price_needs_note_and_blocks_batch(engine, world, reviewed):
-    set_rate(engine, Decimal("5"))  # 申报价 15×5=75 元、单价 7.5 元，低于发票不含税 88.94 元、单价 8.894 元
-    import_invoices(world, [invoice("26000000000000005501", [INK, FLUID], remark="SUB-200")])
+def test_invoice_gross_difference_needs_note_and_blocks_batch(engine, world, reviewed):
+    # 不含税金额不变，仅增加税额：合计金额必须识别这 1 元差异。
+    higher = (*INK[:4], "12.56")
+    import_invoices(world, [invoice("26000000000000005501", [higher, FLUID], remark="SUB-200")])
     target = invoice_id(engine, "26000000000000005501")
-    found, check = price(world, engine, "26000000000000005501")
-    assert check.result == "mismatch" and "不含税总价超出申报价" in check.note
-    assert "发票不含税价格高于申报价" in found.noteReasons
+    found, check = total_amount(world, engine, "26000000000000005501")
+    assert check.label == "合计金额" and check.result == "mismatch"
+    assert check.invoiceValue == "101.5" and check.purchaseValue == "100.5"
+    assert check.difference == "1"
+    assert "合计金额不一致" in found.noteReasons
     batch = world["allocations"].confirm_batch(BatchBody(ids=found.allocationIds), USER)
     assert batch["confirmed"] == 0 and len(batch["skipped"]) == 2
     with pytest.raises(ApiError) as error:
         confirm_groups(world, target, USER)
-    assert error.value.status == 400 and "高于申报价" in error.value.message
-    confirm_groups(world, target, USER, note="与销售确认按合同价开票")
+    assert error.value.status == 400 and "合计金额不一致" in error.value.message
+    confirm_groups(world, target, USER, note="已核实含税差额")
     assert {row["status"] for row in rows(engine, "SELECT status FROM matching_allocations")} == {"confirmed"}
 
 
-def test_missing_rate_is_not_an_anomaly(engine, world, reviewed):
-    set_rate(engine, None)
+@pytest.mark.parametrize("rate", [None, Decimal("5")])
+def test_matching_total_does_not_depend_on_declared_price(engine, world, reviewed, rate):
+    set_rate(engine, rate)
     import_invoices(world, [invoice("26000000000000005502", [INK, FLUID], remark="SUB-200")])
-    found, check = price(world, engine, "26000000000000005502")
-    assert check.result == "missing" and "汇率" in check.note
-    assert not any("申报价" in reason for reason in found.noteReasons)
+    found, check = total_amount(world, engine, "26000000000000005502")
+    assert check.result == "match"
+    assert check.invoiceValue == check.purchaseValue == "100.5"
+    assert all(check.key != "price" for item in found.items for check in item.checks)
+    assert not found.noteReasons
+    confirm_groups(world, invoice_id(engine, "26000000000000005502"), USER)
 
 
 def test_queue_only_abnormal_or_normal(engine, world, reviewed):
@@ -279,14 +273,12 @@ def test_queue_only_abnormal_or_normal(engine, world, reviewed):
     normal = queries.queue(QueueQuery(anomaly="normal"))
     assert normal.total == 2 and normal.rows[0].anomalies == [] and normal.counts["all"] == 2
     assert queries.queue(QueueQuery(anomaly="abnormal")).total == 0
-    # 汇率变化后重新生成：整单比对的申报价按新汇率核对
     set_rate(engine, Decimal("5"))
-    world["proposals"].generate_now([invoice_id(engine, "26000000000000005503")], USER)
+    higher = (*INK[:4], "12.56")
+    import_invoices(world, [invoice("26000000000000005504", [higher, FLUID], remark="SUB-200")])
     abnormal = queries.queue(QueueQuery(anomaly="abnormal"))
-    # 只有墨水行的不含税金额超过其报关行申报价；清洗液行仍正常
-    assert abnormal.total == 1 and "价格" in abnormal.rows[0].anomalies
-    assert queries.queue(QueueQuery(anomaly="normal")).total == 1
-    assert queries.queue(QueueQuery()).rows[0].anomalies == abnormal.rows[0].anomalies
+    assert abnormal.total == 1 and "金额" in abnormal.rows[0].anomalies
+    assert queries.queue(QueueQuery(anomaly="normal")).total == 3
 
 
 def test_sales_rate_read_failure_does_not_block_saving():

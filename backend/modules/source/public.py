@@ -14,7 +14,6 @@ from .policy.declared_price_policy import (
 from .policy.unit_policy import unit_label
 from .service.contract_service import SubpoContractSource
 from .service.declaration_service import DeclarationService, digest, snapshot
-from .service.declared_price_reader import declared_prices
 from .service.directory_service import SourceDirectory, china_day_range
 from .service.pl_comparison_service import PlScriptService
 from .service.purchase_context import line_declarations, purchase_lines, supplier_line_ids
@@ -45,13 +44,12 @@ __all__ = [
     "supplier_line_ids",
     # 子采购行所属子采购单号与报关单 ID（matching 归档发票文件）
     "line_declarations",
-    # 申报价换算为人民币（按对应销售单汇率）：review 申报幅度、matching 价格校验；
+    # 申报价换算为人民币（按对应销售单汇率）：review 申报幅度；
     # declared_unit_price 给出原币申报单价及是否试算（NS 未填时按报关金额 ÷ 报关数量）
     "declared_cny",
     "declared_unit_price",
     "declared_unit_price_cny",
     "pick_sales_order",
-    "declared_prices",
     # 中国日期区间换算为 UTC 区间（报关单创建日期筛选）
     "china_day_range",
     "SourceChanged",

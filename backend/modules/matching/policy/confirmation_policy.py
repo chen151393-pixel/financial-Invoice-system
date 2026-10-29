@@ -35,10 +35,6 @@ def evaluate(row, invoice, item, line, task_line, used):
         block = rules.capacity_block(item, *used, row["quantity"], row["amount"])
     if line is not None and task_line is not None:
         compared = {**item, "quantity": row["quantity"], "amount_including_tax": row["amount"]}
-        if item.get("amount_excluding_tax") is not None and item["amount_including_tax"]:
-            compared["amount_excluding_tax"] = (
-                item["amount_excluding_tax"] * row["amount"] / item["amount_including_tax"]
-            )
         checks, _ = compare(invoice, compared, line, *rules.remaining(task_line))
         exceeds = rules.exceeds_expected(task_line, row["quantity"], row["amount"])
         if (row["checks"] or {}).get("group"):

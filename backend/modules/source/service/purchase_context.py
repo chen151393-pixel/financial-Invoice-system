@@ -10,7 +10,6 @@ from ..dao import purchase_order_dao
 from ..dao.unit_dictionary_dao import unit_names
 from ..policy.content_digest import canonical
 from ..policy.unit_policy import unit_label
-from .declared_price_reader import declared_prices
 
 FIELDS = (
     "ns_account",
@@ -63,15 +62,13 @@ def purchase_lines(connection, line_ids, *, lock=False):
         context["unit_name"] = unit_label(row["unit"], names)
         # 税率供发票整单比对核对税额；不参与摘要，补同步税率不会使已有建议过期
         context["tax_rate"] = row["tax_rate"]
-        # 对应报关行的人民币申报价（价格校验用）；只读参考，不参与摘要
-        context["declared"] = None
+        # 备注可填写关联销售单号；与单位名称一样实时核验，不改变既有分配摘要。
+        context["sales_order_no"] = row["sales_order_no"]
         context["source_refs"] = {
             "purchase_raw_record_id": row["raw_record_id"],
             "currency_raw_record_id": row["currency_raw_record_id"],
         }
         result[row["id"]] = context
-    for line_id, declared in declared_prices(connection, list(result)).items():
-        result[line_id]["declared"] = declared
     return result
 
 
