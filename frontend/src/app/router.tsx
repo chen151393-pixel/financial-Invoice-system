@@ -45,7 +45,10 @@ export const router = createBrowserRouter([
           { path: legacyPaths.finance, element: <Navigate to={paths.review} replace /> },
           { path: paths.tasks, element: page("开票跟进", <TaskWorkspacePage />) },
           { path: legacyPaths.taskBoard, element: <TaskBoardRedirect /> },
-          { path: paths.taskWorkflowDemo, element: page("开票跟进优化示例", <TaskWorkflowDemoWorkspacePage />) },
+          {
+            path: paths.taskWorkflowDemo,
+            element: page("开票跟进优化示例", <TaskWorkflowDemoWorkspacePage />),
+          },
           { path: paths.externalGroups, element: page("外部群导入与关联", <TaskWorkspacePage />) },
           { path: paths.supplierGroups, element: page("供应商档案", <TaskWorkspacePage />) },
           { path: `${paths.tasks}/:taskId`, element: page("开票任务详情", <TaskWorkspacePage />) },

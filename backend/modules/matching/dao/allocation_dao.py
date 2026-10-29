@@ -4,8 +4,6 @@ from sqlalchemy import case, false, func, insert, select, update
 
 from ..entity import allocations
 
-ACTIVE = ("proposed", "confirmed")
-
 
 def confirmed_invoice_ids(connection, after_id, limit):
     return list(
@@ -81,16 +79,6 @@ def confirmed_for_totals(connection, invoice_ids):
         )
     ).mappings()
     return [dict(row) for row in result]
-
-
-def active_item_ids(connection, item_ids):
-    """已有待审核建议或已通过分配的发票行。"""
-    if not item_ids:
-        return set()
-    query = select(allocations.c.invoice_item_id).where(
-        allocations.c.invoice_item_id.in_(item_ids), allocations.c.status.in_(ACTIVE)
-    )
-    return set(connection.execute(query).scalars())
 
 
 def confirmed_by_item(connection, item_id, *, exclude_id=None):

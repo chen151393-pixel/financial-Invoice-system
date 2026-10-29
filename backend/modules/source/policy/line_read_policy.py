@@ -5,6 +5,8 @@ PURCHASE_REFERENCES = {
     "custrecord_swc_subpo_item_item",
     "custrecord_swc_subpo_item_ifreqid",
 }
+# 报关单位是 NS 列表引用。编号只能在该字段所属列表中解释，不能套用本地通用字典。
+PURCHASE_DISPLAY_REFERENCES = {"custrecord_swc_subpo_item_bgunit"}
 PURCHASE_VALUES = {
     "custrecord_swc_subpo_item_lineid",
     "custrecord_swc_subpo_item_name",
@@ -12,7 +14,6 @@ PURCHASE_VALUES = {
     "custrecord_swc_subpo_item_qty",
     "custrecord_swc_subpo_item_unit",
     "custrecord_swc_subpo_item_bgqty",
-    "custrecord_swc_subpo_item_bgunit",
     "custrecord_swc_subpo_item_ratewithrate",
     "custrecord_swc_subpo_item_amountwithtax",
     "custrecord_swc_subpo_item_mainpo_lineid",
@@ -48,8 +49,8 @@ def line_projection(spec):
         # 商品等引用仅取 ID 定位；其 SuiteQL 显示名可能与 REST 不同，作为展示映射时仍走原通道。
         if configured & PURCHASE_REFERENCES:
             return None
-        references, values = PURCHASE_REFERENCES, PURCHASE_VALUES
-        required = references | {
+        references, values = PURCHASE_REFERENCES | PURCHASE_DISPLAY_REFERENCES, PURCHASE_VALUES
+        required = PURCHASE_REFERENCES | {
             "custrecord_swc_subpo_item_mainpo_lineid",
             "custrecord_swc_subpo_item_solineid",
             "custrecord_swc_subpo_item_bgname",

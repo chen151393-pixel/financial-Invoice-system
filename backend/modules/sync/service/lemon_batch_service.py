@@ -19,8 +19,6 @@ class LemonBatchService:
         self.executing = set()
 
     def scope(self, owner):
-        if owner != f"user:{self.accounts.binding.settings.admin_user}":
-            raise ApiError(403, "只有本系统管理员可访问同步任务")
         return self.accounts.binding._scope(owner)
 
     def submit(self, owner, body):

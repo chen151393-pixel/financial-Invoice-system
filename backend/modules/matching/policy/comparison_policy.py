@@ -22,8 +22,8 @@ WEIGHTS = {
     "price": 0,
 }
 LABELS = {
-    "order": "采购订单号",
-    "seller": "供应商名称",
+    "order": "子采购单号",
+    "seller": "销售方与供应商",
     "buyer": "购买方与采购公司",
     "item": "品名",
     "unit": "单位",
@@ -67,15 +67,23 @@ def order_in_remark(remark, order_no):
     if not remark or not order_no:
         return False
     haystack = unicodedata.normalize("NFKC", remark).upper()
-    needle = re.escape(unicodedata.normalize("NFKC", order_no).upper())
+    needle = re.escape(order_number(order_no))
+    if not needle:
+        return False
     return re.search(rf"(?<![A-Z0-9_-]){needle}(?![A-Z0-9_-])", haystack) is not None
+
+
+def order_number(value):
+    """NS 引用显示名可能带记录类型；仅清理已知前缀，不截取任意文本中的单号。"""
+    value = unicodedata.normalize("NFKC", value or "").strip().upper()
+    return re.sub(r"^(?:采购订单|PURCHASE ORDER)\s*#\s*", "", value).strip()
 
 
 def order_reference(remark, line):
     """返回备注命中的订单类型、单号；母单仅召回来源明确关联的子采购行。"""
     for kind, key in (("子采购单", "order_no"), ("母采购单", "parent_order_no")):
         if order_in_remark(remark, line.get(key)):
-            return kind, line[key]
+            return kind, order_number(line[key])
     return None
 
 

@@ -126,6 +126,30 @@ def test_line_projection_keeps_rule_fields_and_custom_mapping_compatibility(ns):
     assert line_projection(config.purchase_line) is None
 
 
+def test_purchase_declaration_unit_keeps_ns_display_name(ns):
+    from backend.modules.source.mapper.storage_mapper import project
+
+    config = parse_config(ns.settings)
+    config.purchase_line.storage_fields = {
+        "unit_name": "custrecord_swc_subpo_item_bgunit",
+        "declaration_unit": "custrecord_swc_subpo_item_bgunit",
+    }
+    projection = line_projection(config.purchase_line)
+    assert projection["custrecord_swc_subpo_item_bgunit"] is True
+    calls = []
+    response = {"items": [{"id": "32801", "f0": "20", "t0": "卷"}], "hasMore": False}
+    source = client(json.dumps(response).encode(), calls)
+    try:
+        record = source.projected_records(TYPE, ["32801"], {"custrecord_swc_subpo_item_bgunit": True})[
+            "32801"
+        ]
+    finally:
+        source.close()
+    assert "BUILTIN.DF(custrecord_swc_subpo_item_bgunit)" in json.loads(calls[0].content)["q"]
+    columns, _ = project(record, "purchase_line", config.purchase_line)
+    assert columns == {"unit": "卷", "declared_unit": "卷"}
+
+
 @pytest.mark.parametrize("duplicate", [False, True])
 def test_shared_query_transport_keeps_composite_parent_line_identity(duplicate):
     calls = []

@@ -14,19 +14,30 @@ from ..policy.lemon_binding_policy import configuration_reason, mask_mobile
 
 
 class LemonBindingService:
-    def __init__(self, settings, engine, client):
+    def __init__(self, settings, engine, client, *, require_admin=None):
         self.settings, self.engine, self.client = settings, engine, client
+        self._authorize_admin = require_admin
         self.pending = {}
         self.lock = Lock()
 
+    def require_admin(self, owner):
+        if self._authorize_admin is not None:
+            self._authorize_admin(owner)
+        elif owner != f"user:{self.settings.admin_user}":
+            # 未装配身份读取器时保持原有应急账号限制，不能默认放行。
+            raise ApiError(403, "需要系统管理员角色才能管理同步配置与任务")
+
     def _scope(self, owner):
+        self.require_admin(owner)
+        # 系统同步由管理员共同管理；沿用旧作用域兼容已有绑定、计划和后台消费者。
+        # 原始操作者仍写入 owner / started_by，授权回调也仍绑定实际发起者。
+        scope_owner = f"user:{self.settings.admin_user}"
         return hashlib.sha256(
-            f"{self.settings.lemon_host}|{self.settings.lemon_app_id}|{owner}".encode()
+            f"{self.settings.lemon_host}|{self.settings.lemon_app_id}|{scope_owner}".encode()
         ).hexdigest()
 
     def _check(self, owner):
-        if owner != f"user:{self.settings.admin_user}":
-            raise ApiError(403, "只有本系统管理员可以配置柠檬云绑定")
+        self.require_admin(owner)
         reason = configuration_reason(self.settings)
         if reason:
             raise ApiError(503, reason)
@@ -41,8 +52,7 @@ class LemonBindingService:
         return attempt
 
     def status(self, owner, cookie=None):
-        if owner != f"user:{self.settings.admin_user}":
-            raise ApiError(403, "只有本系统管理员可以配置柠檬云绑定")
+        self.require_admin(owner)
         reason = configuration_reason(self.settings)
         scope = self._scope(owner)
         with self.engine.connect() as connection:

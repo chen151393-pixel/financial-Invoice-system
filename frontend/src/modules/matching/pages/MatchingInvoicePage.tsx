@@ -13,9 +13,11 @@ import {
 } from "../../../shared/components/ui";
 import { openLocalSession } from "../../identity/api";
 import { InvoiceWritebackStatus } from "../components/InvoiceWritebackStatus";
+import { OrderMatchingPanel } from "../components/OrderMatchingPanel";
 import {
   cancelAllocation,
   confirmAllocation,
+  confirmOrder,
   createAllocation,
   findCandidates,
   generateProposals,
@@ -151,37 +153,49 @@ export function MatchingInvoicePage({ invoiceId }: { invoiceId: string }) {
         {!generate.allowed && <p className="matching-help matching-body">{generate.reason}</p>}
       </Card>
       {feedback && <Alert tone={feedback.error ? "danger" : "success"}>{feedback.text}</Alert>}
-      {selected ? (
-        <div className="matching-detail">
-          <InvoiceLineNav items={items} selectedId={selected.id} onSelect={setSelectedId} busy={busy} />
-          <InvoiceLinePanel
-            key={selected.id}
-            item={selected}
-            invoice={invoice}
-            invoiceId={invoiceId}
-            invoiceVersionId={invoice.versionId}
-            replacements={replacements}
-            busy={busy}
-            actions={{
-              confirm: (id, body) =>
-                void act(() => confirmAllocation(id, body), "已通过，任务收票进度已更新。"),
-              reverify: (id, body) =>
-                void act(() => reverifyAllocation(id, body), "已重新核实，任务收票进度已更新。"),
-              reject: (id, note) => void act(() => rejectAllocation(id, note), "已驳回该建议。"),
-              cancel: (id, reason) =>
-                act(() => cancelAllocation(id, reason), "已删除关联，任务收票进度已回退。"),
-              create: (body, replaceId, reason) =>
-                act(
-                  () => (replaceId ? replaceAllocation(replaceId, body, reason) : createAllocation(body)),
-                  replaceId ? "已替换原关联，新关联已通过。" : "手动关联已保存并通过。",
-                ),
-              search: (keyword) => findCandidates(invoiceId, selected.id, keyword),
-            }}
-          />
-        </div>
-      ) : (
-        <EmptyState title="这张发票没有可比对的明细" description="请先在进项发票中补齐商品明细。" />
-      )}
+      <OrderMatchingPanel
+        key={invoiceId}
+        invoiceId={invoiceId}
+        value={state.data}
+        busy={busy}
+        onConfirm={(body) =>
+          act(() => confirmOrder(body), "整单匹配已保存，全部明细分配和任务收票进度已同步更新。")
+        }
+      />
+      <details>
+        <summary>逐行分配与历史记录（部分开票、差异处理）</summary>
+        {selected ? (
+          <div className="matching-detail">
+            <InvoiceLineNav items={items} selectedId={selected.id} onSelect={setSelectedId} busy={busy} />
+            <InvoiceLinePanel
+              key={selected.id}
+              item={selected}
+              invoice={invoice}
+              invoiceId={invoiceId}
+              invoiceVersionId={invoice.versionId}
+              replacements={replacements}
+              busy={busy}
+              actions={{
+                confirm: (id, body) =>
+                  void act(() => confirmAllocation(id, body), "已通过，任务收票进度已更新。"),
+                reverify: (id, body) =>
+                  void act(() => reverifyAllocation(id, body), "已重新核实，任务收票进度已更新。"),
+                reject: (id, note) => void act(() => rejectAllocation(id, note), "已驳回该建议。"),
+                cancel: (id, reason) =>
+                  act(() => cancelAllocation(id, reason), "已删除关联，任务收票进度已回退。"),
+                create: (body, replaceId, reason) =>
+                  act(
+                    () => (replaceId ? replaceAllocation(replaceId, body, reason) : createAllocation(body)),
+                    replaceId ? "已替换原关联，新关联已通过。" : "手动关联已保存并通过。",
+                  ),
+                search: (keyword) => findCandidates(invoiceId, selected.id, keyword),
+              }}
+            />
+          </div>
+        ) : (
+          <EmptyState title="这张发票没有可比对的明细" description="请先在进项发票中补齐商品明细。" />
+        )}
+      </details>
     </div>
   );
 }

@@ -2,6 +2,7 @@
 
 from dataclasses import dataclass
 
+from .dao.purchase_order_dao import lines as purchase_order_lines
 from .dao.unit_dictionary_dao import unit_names
 from .policy.admission_policy import admission_issues, admission_reason
 from .policy.declared_price_policy import declared_cny, declared_unit_price_cny, pick_sales_order
@@ -16,6 +17,7 @@ from .service.workbench_reader import workbench_declarations
 from .service.writeback_context import writeback_context
 
 __all__ = [
+    "purchase_order_lines",
     "writeback_context",
     # 报关单准入（已出库）：有真实报关单号且有关联子采购单
     "admission_issues",

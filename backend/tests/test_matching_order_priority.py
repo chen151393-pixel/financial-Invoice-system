@@ -3,7 +3,8 @@
 from decimal import Decimal
 
 import pytest
-from backend.modules.matching.dto.matching_dto import CandidateQuery, QueueQuery
+from backend.modules.matching.dao import allocation_dao
+from backend.modules.matching.dto.matching_dto import CandidateQuery, ConfirmBody, QueueQuery
 from backend.modules.matching.policy.comparison_policy import order_in_remark
 from backend.modules.matching.service.proposal_service import best_candidate
 from backend.tests.invoice_files import invoice
@@ -12,8 +13,8 @@ from backend.tests.test_matching import engine as engine
 from backend.tests.test_matching import ns as ns
 from backend.tests.test_matching import reviewed as reviewed
 from backend.tests.test_matching import world as world
-from backend.tests.test_source_storage import bundle, customs, purchase, save
-from backend.tests.test_task import approve
+from backend.tests.test_source_storage import bundle, customs, purchase, rows, save
+from backend.tests.test_task import USER, approve
 
 
 def context(order, parent, *, supplier="甲公司", unit="个", item="墨水", active=True):
@@ -128,10 +129,75 @@ def test_inactive_order_is_never_selected():
         ("PO-100_2", "PO-100", False),
         ("", "PO-100", False),
         ("PO-100", None, False),
+        ("YE-DQ20260624-Z010；VIG260610-01", "采购订单 #YE-DQ20260624-Z010", True),
+        ("PO-100", "Purchase Order #PO-100", True),
+        ("PO-100", "采购订单 ＃ＰＯ－１００", True),
+        ("PO-1001", "采购订单 #PO-100", False),
+        ("PO-100-2", "采购订单 #PO-100", False),
+        ("PO-100", "其他说明 #PO-100", False),
+        ("任何备注", "采购订单 #", False),
     ],
 )
 def test_complete_order_number_boundaries(remark, number, matches):
     assert order_in_remark(remark, number) is matches
+
+
+def test_ns_parent_display_prefix_preserves_order_priority():
+    winner = choose(
+        "YE-DQ20260624-Z010；VIG260610-01",
+        {
+            1: context("SUB-300", "PO-999"),
+            2: context("YE-DQ20260624-Z010-1", "采购订单 #YE-DQ20260624-Z010", unit="卷"),
+        },
+    )
+    assert winner[0]["purchase_line_id"] == 2
+    assert winner[3][0]["result"] == "match"
+
+
+def late_task(ns, engine, world):
+    save(ns, engine, bundle([purchase(), purchase("201", "871")], [customs("870"), customs("871")]))
+    approve(world, "CD870")
+    number = "26000000000000009193"
+    import_invoices(world, [invoice(number, [INK], remark="SUB-201")])
+    target = invoice_id(engine, number)
+    original = proposals(world, target)[0]
+    assert original.purchase.orderNo == "SUB-200"
+    approve(world, "CD871")
+    return target, original
+
+
+def test_regenerate_replaces_old_pending_and_repeated_call_is_unchanged(ns, engine, world):
+    target, original = late_task(ns, engine, world)
+    assert world["proposals"].generate_now([target], USER) == 1
+    found = proposals(world, target)
+    assert len(found) == 1 and found[0].purchase.orderNo == "SUB-201"
+    assert found[0].status == "proposed"
+    old = rows(engine, "SELECT * FROM matching_allocations WHERE id=:id", id=int(original.id))[0]
+    assert old["status"] == "rejected" and old["reviewed_by"] == USER
+    assert "重新生成建议" in old["review_note"]
+    assert world["proposals"].generate_now([target], USER) == 0
+    assert len(rows(engine, "SELECT id FROM matching_allocations WHERE invoice_id=:id", id=target)) == 2
+
+
+def test_regenerate_preserves_confirmed_allocation(ns, engine, world):
+    target, original = late_task(ns, engine, world)
+    world["allocations"].confirm(int(original.id), ConfirmBody(note="测试：人工核实原分配"), USER)
+    before = rows(engine, "SELECT * FROM matching_allocations WHERE invoice_id=:id", id=target)
+    assert world["proposals"].generate_now([target], USER) == 0
+    assert rows(engine, "SELECT * FROM matching_allocations WHERE invoice_id=:id", id=target) == before
+
+
+def test_regenerate_failure_rolls_back_old_pending_rejection(ns, engine, world, monkeypatch):
+    target, original = late_task(ns, engine, world)
+
+    def fail(*args, **kwargs):
+        raise RuntimeError("模拟插入失败")
+
+    monkeypatch.setattr(allocation_dao, "insert_allocation", fail)
+    with pytest.raises(RuntimeError, match="模拟插入失败"):
+        world["proposals"].generate_now([target], USER)
+    found = proposals(world, target)
+    assert len(found) == 1 and found[0].id == original.id
 
 
 def test_parent_reference_survives_import_query_and_manual_search(engine, world, reviewed):

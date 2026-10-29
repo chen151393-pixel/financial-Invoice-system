@@ -83,20 +83,31 @@ def test_changed_content_creates_immutable_version(engine, imports):
     assert len(rows(engine, "SELECT id FROM invoice_versions")) == 3
 
 
-def test_only_fixed_asset_purchases_are_imported(engine, imports):
+def test_default_purchase_types_are_imported_and_other_types_excluded(engine, imports):
     content = workbook(
         [
             invoice("26000000000000009011", [("墨水", "个", "1", "1.00", "0.13")]),
             invoice(
                 "26000000000000009012", [("办公用品", "个", "1", "1.00", "0.13")], business="采购办公用品"
             ),
+            invoice("26000000000000009013", [("刻字贴", "卷", "2", "10.00", "1.30")], business="采购支出"),
         ]
     )
     preview, saved = run(imports, content, "c.xlsx")
-    assert (preview.sourceInvoiceCount, preview.invoiceCount, preview.excludedCount) == (2, 1, 1)
-    assert [h["invoice_no"] for h in rows(engine, "SELECT invoice_no FROM invoice_headers")] == [
-        "26000000000000009011"
-    ]
+    assert (preview.sourceInvoiceCount, preview.invoiceCount, preview.excludedCount) == (3, 2, 1)
+    assert saved.created == 2 and saved.amount == "12.43"
+    assert preview.rows[1].businessType == "采购支出"
+    assert [
+        h["invoice_no"] for h in rows(engine, "SELECT invoice_no FROM invoice_headers ORDER BY invoice_no")
+    ] == ["26000000000000009011", "26000000000000009013"]
+    assert (
+        rows(engine, "SELECT business_type FROM invoice_headers WHERE invoice_no='26000000000000009013'")[0][
+            "business_type"
+        ]
+        == "采购支出"
+    )
+    duplicate, _ = run(imports, content, "c.xlsx")
+    assert duplicate.unchanged == 2 and duplicate.excludedCount == 1
 
 
 def test_token_and_identity_checks(imports):

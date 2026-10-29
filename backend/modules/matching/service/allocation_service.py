@@ -51,6 +51,12 @@ class AllocationService:
     def _publish(self, connection, purchase_line_id, actor, reason):
         ledger_service.publish(connection, [purchase_line_id], self.events, actor, reason)
 
+    def confirm_order(self, body, actor):
+        from .order_confirmation_service import confirm
+
+        _require_user(actor)
+        return confirm(self, body, actor)
+
     def _approve(self, connection, allocation, body, actor, now, *, reverify=False):
         return approval_service.approve(self, connection, allocation, body, actor, now, reverify=reverify)
 

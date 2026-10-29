@@ -89,7 +89,7 @@ export function InvoiceImportPage() {
       <div className="sync-page__heading">
         <div>
           <h2>导入进项发票</h2>
-          <p>上传柠檬云导出的 Excel，仅导入业务类型为“采购固定资产”的发票。</p>
+          <p>上传柠檬云格式的 Excel，导入业务类型为“采购固定资产”或“采购支出”的发票。</p>
         </div>
         <span className="sync-page__tag">Excel 导入 · 含商品明细</span>
       </div>
@@ -155,7 +155,7 @@ export function InvoiceImportPage() {
             文件不超过 4MB，支持票头与商品在同一张表的 34
             列合并格式（表名不限），也支持“发票信息”和“货物信息”双表格式。 每次最多 1000
             张数电进项票；合计行用于核对，不作为商品重复导入。预览不会写入数据库。
-            仅导入原表业务类型为“采购固定资产”的发票，其他类型跳过。
+            仅导入原表业务类型为“采购固定资产”或“采购支出”的发票，其他类型跳过。
           </p>
           <Button type="submit" variant="primary" disabled={!file || Boolean(busy)}>
             {result ? "重新预览并核实" : "解析并预览"}

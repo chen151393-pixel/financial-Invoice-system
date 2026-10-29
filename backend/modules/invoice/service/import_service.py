@@ -1,6 +1,6 @@
 """柠檬云 Excel 导入：预览不写数据；确认时重新解析、复核去重并整批原子保存。
 
-- 只导入业务类型为"采购固定资产"的发票；其他类型跳过，不改写原业务类型。
+- 导入范围复用柠檬云默认采购类型；其他类型跳过，不改写原业务类型。
 - 同账套同 invoice_key：业务内容相同则跳过；变化追加版本，不覆盖历史；跨来源冲突拒绝。
 - 确认事务中发布 InvoicesImported，matching 订阅后在同一事务中生成比对建议；任何一方失败整批回滚。
 """
@@ -19,18 +19,20 @@ from backend.core.errors import ApiError
 
 from ..dao import header_dao, item_dao, lemon_invoice_dao
 from ..mapper import import_mapper
+from ..policy.lemon_scope_policy import lemon_import_defaults
 from ..policy.version_policy import digest as business_digest
 from ..public import InvoicesImported
 from ..vo.import_vo import ImportConfiguration, ImportResult
 from .excel_parser import parse_file
 from .version_service import save_version
 
-BUSINESS_TYPE = "采购固定资产"
+BUSINESS_TYPES = tuple(lemon_import_defaults())
+BUSINESS_TYPE_LABEL = "、".join(BUSINESS_TYPES)
 MAX_BYTES = 4 * 1024 * 1024
 TOKEN_SECONDS = 1800
 WARNINGS = [
     "柠檬云 Excel 不含购买方与币种：币种按人民币保存，购买方在比对中记为发票未提供。",
-    "仅导入采购固定资产发票；含税金额为筛选后的带符号合计，不代表可抵扣或已比对金额。",
+    f"仅导入{BUSINESS_TYPE_LABEL}发票；含税金额为筛选后的带符号合计，不代表可抵扣或已比对金额。",
 ]
 
 
@@ -77,12 +79,12 @@ class ImportService:
         if self.engine is None:
             raise ApiError(503, "业务数据库未配置")
         parsed, file_hash = parse_file(body.filename, body.content)
-        documents = [doc for doc in parsed if doc["head"]["business_type_name"] == BUSINESS_TYPE]
+        documents = [doc for doc in parsed if doc["head"]["business_type_name"] in BUSINESS_TYPES]
         expected_state = None
         if commit:
             expected_state = self._verify_token(body, actor, file_hash)
             if not documents:
-                raise ApiError(422, "文件中没有业务类型为“采购固定资产”的发票，未写入数据")
+                raise ApiError(422, f"文件中没有业务类型为{BUSINESS_TYPE_LABEL}的发票，未写入数据")
         prepared = [self._prepare(doc) for doc in documents]
         lock = hashlib.sha256(f"invoice-import:{self.engine.url.database}".encode()).hexdigest()
         try:
@@ -172,7 +174,7 @@ class ImportService:
             invoiceCount=len(prepared),
             sourceInvoiceCount=source_count,
             excludedCount=source_count - len(prepared),
-            businessType=BUSINESS_TYPE,
+            businessType=BUSINESS_TYPE_LABEL,
             lineCount=sum(len(item["document"]["lines"]) for item in prepared),
             created=actions.count("new"),
             updated=actions.count("updated"),
@@ -181,7 +183,7 @@ class ImportService:
             amount=format(sum(head["amount_including_tax"] for head in heads), "f") if heads else "0",
             saved=commit,
             allowed=bool(prepared) and not conflict,
-            reason="没有采购固定资产发票，无需导入"
+            reason=f"没有{BUSINESS_TYPE_LABEL}发票，无需导入"
             if not prepared
             else "存在冲突，整批不能导入"
             if conflict

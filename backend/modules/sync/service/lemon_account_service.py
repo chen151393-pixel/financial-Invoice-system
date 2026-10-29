@@ -27,8 +27,7 @@ class LemonAccountService:
         return scope, row
 
     def configuration(self, owner):
-        if owner != f"user:{self.binding.settings.admin_user}":
-            raise ApiError(403, "只有本系统管理员可同步柠檬云发票")
+        self.binding.require_admin(owner)
         scope = self.binding._scope(owner)
         with self.engine.connect() as connection:
             row = bindings.get(connection, scope)

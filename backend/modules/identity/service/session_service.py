@@ -136,6 +136,11 @@ class IdentityService:
         if not can_manage_access(self.roles_of(actor)):
             raise ApiError(403, "需要系统管理员角色才能管理人员与权限")
 
+    def require_admin(self, actor):
+        """业务管理入口复用实时角色校验，不把飞书管理员限定为应急账号。"""
+        if not can_manage_access(self.roles_of(actor)):
+            raise ApiError(403, "需要系统管理员角色才能管理同步配置与任务")
+
     def logout(self, session_token):
         with self.lock:
             self.sessions.pop(session_token, None)

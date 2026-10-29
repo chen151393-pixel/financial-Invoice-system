@@ -1,6 +1,7 @@
 import { http, HttpError } from "../../../shared/api/http";
 import { openLocalSession } from "../../identity/api";
 import type { InvoiceTotals, InvoiceTotalsFilters } from "../types/invoice-totals";
+import type { OrderCandidates, OrderConfirmBody } from "../types/order-matching";
 import type {
   Candidate,
   ConfirmBody,
@@ -30,6 +31,17 @@ async function read<T>(path: string, method = "GET", body?: unknown): Promise<T>
 
 export const getInvoiceMatching = (invoiceId: string) =>
   read<InvoiceMatching>(`/matching/invoices/${encodeURIComponent(invoiceId)}`);
+
+export const findOrderCandidates = (body: {
+  invoiceId: string;
+  keyword: string;
+  page: number;
+  conversionNumerator: string;
+  conversionDenominator: string;
+}) => read<OrderCandidates>("/matching/order-candidates/query", "POST", body);
+
+export const confirmOrder = (body: OrderConfirmBody) =>
+  http<InvoiceMatching>("/matching/orders/confirm", "POST", body);
 // 日期为空时提交 null，由后端按"不限"处理
 export const getMatchingQueue = (query: QueueQuery) =>
   read<InvoiceQueue>("/matching/invoice-queue/query", "POST", {

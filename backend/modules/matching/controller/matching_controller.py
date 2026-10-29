@@ -20,10 +20,12 @@ from ..dto.matching_dto import (
     ReplaceBody,
     SummaryBody,
 )
+from ..dto.order_matching_dto import OrderCandidateQuery, OrderConfirmBody
 from ..vo.invoice_list_vo import InvoiceListResult
 from ..vo.invoice_queue_vo import InvoiceQueue
 from ..vo.invoice_totals_vo import InvoiceTotals
 from ..vo.matching_vo import BatchResult, Candidates, GenerateResult, InvoiceMatching, Queue, Summaries
+from ..vo.order_matching_vo import OrderCandidates
 
 Id = Annotated[int, Path(ge=1, le=2**63 - 1)]
 
@@ -59,6 +61,14 @@ def create_router(queries, allocations, proposals, invoice_lists):
     @router.post("/candidates/query", response_model=Candidates)
     def candidates(body: CandidateQuery, owner: Owner):
         return queries.candidates(body)
+
+    @router.post("/order-candidates/query", response_model=OrderCandidates)
+    def order_candidates(body: OrderCandidateQuery, owner: Owner):
+        return queries.order_candidates(body)
+
+    @router.post("/orders/confirm", response_model=InvoiceMatching)
+    def confirm_order(body: OrderConfirmBody, owner: Owner):
+        return allocations.confirm_order(body, owner)
 
     @router.post("/allocations/{allocation_id}/confirm", response_model=InvoiceMatching)
     def confirm(allocation_id: Id, body: ConfirmBody, owner: Owner):

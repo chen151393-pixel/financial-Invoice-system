@@ -11,8 +11,7 @@ from ..policy.lemon_detail_policy import account_namespace
 
 def invoice_accounts(binding, owner):
     settings = binding.settings
-    if owner != f"user:{settings.admin_user}":
-        raise ApiError(403, "只有本系统管理员可查询发票账套")
+    binding.require_admin(owner)
     if binding.engine is None:
         raise ApiError(503, "业务数据库未配置")
     scope = binding._scope(owner)

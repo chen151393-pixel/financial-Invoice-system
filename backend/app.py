@@ -193,7 +193,9 @@ def create_app(settings=None, ns=None, engine=None, wecom=None, lemon=None, lemo
             DirectoryPreviewService(engine, identity, feishu),
         )
     )
-    app.state.lemon_binding = LemonBindingService(settings, engine, lemon)
+    app.state.lemon_binding = LemonBindingService(
+        settings, engine, lemon, require_admin=identity.require_admin
+    )
     app.include_router(lemon_binding_router(app.state.lemon_binding))
     _register_business(app, settings, ns, contract_ns, wecom, engine, lemon_invoices)
 
