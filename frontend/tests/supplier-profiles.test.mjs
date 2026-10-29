@@ -85,7 +85,7 @@ test("供应商组合条件原样传给新模块接口，由后端搜索", async
   }
 });
 
-test("外部群初始展示待查询，输入与查找可用，说明留空自动匹配", () => {
+test("外部群预填当前供应商名称，初始待查询且不自动访问企微", () => {
   const html = renderToStaticMarkup(
     createElement(Picker, {
       supplier: { supplierId: "32", supplierName: "浙江洪皓工贸有限公司" },
@@ -98,7 +98,9 @@ test("外部群初始展示待查询，输入与查找可用，说明留空自�
     }),
   );
   assert.match(html, /尚未查询外部群/);
-  assert.match(html, /输入框留空时，自动按“浙江洪皓工贸有限公司”匹配/);
+  assert.match(html, /value="浙江洪皓工贸有限公司"/);
+  assert.match(html, /placeholder="浙江洪皓工贸有限公司"/);
+  assert.doesNotMatch(html, /留空按供应商名称匹配/);
   assert.doesNotMatch(html, /disabled|正在|没有匹配的外部群|重新拉取/);
 });
 test("供应商档案在采购分组导航中，并保留旧入口兼容路径", () => {

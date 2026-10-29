@@ -1,6 +1,14 @@
 import { useEffect, useState, type Ref } from "react";
-import { Button } from "../../../shared/components/Button";
-import { Pagination } from "../../../shared/components/Pagination";
+import {
+  Alert,
+  Button,
+  EmptyState,
+  ErrorState,
+  Field,
+  FilterBar,
+  Pagination,
+  Skeleton,
+} from "../../../shared/components/ui";
 import { formatTime } from "./format";
 import { WecomDirectoryStatus } from "./WecomDirectoryStatus";
 import type {
@@ -9,6 +17,7 @@ import type {
   SupplierGroupMatchQuery,
   SupplierOption,
 } from "../types/supplier-group";
+import "./supplier-group-editor.css";
 
 export function WecomGroupPicker({
   supplier,
@@ -25,7 +34,7 @@ export function WecomGroupPicker({
   disabled: boolean;
   inputRef: Ref<HTMLInputElement>;
 }) {
-  const [input, setInput] = useState("");
+  const [input, setInput] = useState(supplier.supplierName);
   const [query, setQuery] = useState<SupplierGroupMatchQuery | null>(null);
   const [state, setState] = useState<
     | { kind: "idle" }
@@ -51,94 +60,103 @@ export function WecomGroupPicker({
   }, [query, load]);
   function search(refresh = false) {
     setState({ kind: "loading" });
-    setQuery({ supplierId: supplier.supplierId, keyword: input.trim(), page: 1, refresh });
+    setQuery({ supplierId: supplier.supplierId, keyword: keyword(), page: 1, refresh });
+  }
+  // 默认名称仍使用服务端的供应商自动匹配；仅修改后的关键词进入手工查找。
+  function keyword() {
+    return input.trim() === supplier.supplierName.trim() ? "" : input.trim();
   }
   const busy = disabled || state.kind === "loading";
   return (
-    <section className="sg-lookup" aria-label="匹配企微外部群">
-      <h3>匹配外部群与群主</h3>
-      <p className="it-help">点击“查找外部群”开始查询；输入框留空时，自动按“{supplier.supplierName}”匹配。</p>
-      <form
-        className="sg-row"
-        onSubmit={(event) => {
-          event.preventDefault();
-          search();
-        }}
+    <section className="sg-picker" aria-label="匹配企微外部群">
+      <div className="sg-picker-heading">
+        <h4>查找外部群</h4>
+        <p>已带入当前供应商名称，也可输入简称、群名、群主或群 ID 查找。</p>
+      </div>
+      <FilterBar
+        embedded
+        onSubmit={() => search()}
+        actions={
+          <>
+            <Button type="submit" variant="primary" disabled={busy}>
+              {state.kind === "loading" ? "查找中…" : "查找外部群"}
+            </Button>
+            {query && (
+              <Button disabled={busy} onClick={() => search(true)}>
+                重新拉取
+              </Button>
+            )}
+          </>
+        }
       >
-        <label>
-          群名、群主或群 ID（可选）
+        <Field label="群名、群主或群 ID" grow>
           <input
             ref={inputRef}
             type="search"
             value={input}
             disabled={busy}
             onChange={(event) => setInput(event.target.value)}
-            placeholder="留空按供应商名称匹配，或输入简称查找"
+            placeholder={supplier.supplierName}
           />
-        </label>
-        <Button type="submit" disabled={busy}>
-          查找外部群
-        </Button>
-        {query && (
-          <Button disabled={busy} onClick={() => search(true)}>
-            重新拉取
-          </Button>
-        )}
-      </form>
-      {state.kind === "idle" && <p className="it-help">尚未查询外部群。</p>}
-      {query && input.trim() !== query.keyword && (
+        </Field>
+      </FilterBar>
+      {state.kind === "idle" && (
+        <EmptyState title="尚未查询外部群" description="点击“查找外部群”获取候选，核对群主后选择。" />
+      )}
+      {query && keyword() !== query.keyword && (
         <p className="it-help">查询条件已修改，点击查找外部群生效。</p>
       )}
-      {state.kind === "loading" && (
-        <p role="status">
-          {query?.keyword
-            ? "正在从企微查询客户群，首次拉取可能需要一些时间…"
-            : `正在按“${supplier.supplierName}”自动匹配外部群，首次拉取可能需要一些时间…`}
-        </p>
-      )}
+      {state.kind === "loading" && <Skeleton rows={2} label="正在查询外部群，首次拉取可能需要一些时间…" />}
       {state.kind === "error" && (
-        <p role="alert" className="sg-feedback">
-          {state.message}{" "}
-          <Button disabled={busy} onClick={() => search()}>
-            重新查询
-          </Button>
-        </p>
+        <ErrorState
+          title="外部群查询失败"
+          message={state.message}
+          action={
+            <Button disabled={busy} onClick={() => search()}>
+              重新查询
+            </Button>
+          }
+        />
       )}
       {state.kind === "ready" && query && (
         <>
           <WecomDirectoryStatus data={state.data} />
-          <p className="it-help">
-            查询“{query.keyword || supplier.supplierName}”：共 {state.data.total}{" "}
-            个候选群。重名时请核对群主、人数及创建时间，系统不会自动绑定。
+          <p className="sg-picker-count">
+            找到 <strong>{state.data.total}</strong> 个候选群，请核对群主后选择。
           </p>
           {state.data.unavailableCount > 0 && (
-            <p className="sg-feedback" role="status">
+            <Alert title="部分群不可用" tone="warning">
               另有 {state.data.unavailableCount}{" "}
               个群已失去访问权限或不可用，未列入结果。找不到目标群时请管理员检查群主可见范围。
-            </p>
+            </Alert>
           )}
           {state.data.items.length === 0 ? (
-            <p>
-              没有匹配的外部群。可输入供应商简称、群名或群主重新查找；仍找不到时，请管理员核对应用可见范围。
-            </p>
+            <EmptyState
+              title="没有匹配的外部群"
+              description="可输入供应商简称或群主重新查找；仍找不到时，请管理员核对应用可见范围。"
+            />
           ) : (
-            <ul className="sg-options">
+            <ul className="sg-picker-results" aria-label="外部群候选">
               {state.data.items.map((group) => (
-                <li key={group.chatId}>
-                  <span>
+                <li key={group.chatId} data-selected={selectedId === group.chatId || undefined}>
+                  <div>
                     <strong>{group.groupName}</strong>
                     <small>{group.matchReason}</small>
-                    <small>
+                    <p>
                       群主：{group.employee}（{group.userid}）· {group.memberCount} 人
-                    </small>
-                    <small>
-                      创建时间：
-                      {group.createdAt ? formatTime(group.createdAt) : "未提供"}
-                    </small>
-                    <small>群标识：{group.chatId}</small>
-                  </span>
+                    </p>
+                    <details>
+                      <summary>查看群详情</summary>
+                      <p>
+                        创建时间：
+                        {group.createdAt ? formatTime(group.createdAt) : "未提供"}
+                      </p>
+                      <p>群标识：{group.chatId}</p>
+                    </details>
+                  </div>
                   <Button
                     disabled={disabled}
+                    variant={selectedId === group.chatId ? "primary" : "secondary"}
                     aria-pressed={selectedId === group.chatId}
                     onClick={() => onChoose(group)}
                   >

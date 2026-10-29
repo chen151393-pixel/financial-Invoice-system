@@ -1,0 +1,214 @@
+/* 供应商档案维护弹窗；样式仅作用于此编辑器和外部群选择器。 */
+.ui-dialog.sg-editor-dialog {
+  width: min(1040px, calc(100vw - 32px));
+  max-width: none;
+}
+.sg-editor-supplier {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+  margin-top: 20px;
+  padding-bottom: 20px;
+  border-bottom: 1px solid var(--color-border);
+}
+.sg-editor-supplier > div {
+  min-width: 0;
+}
+.sg-editor-supplier strong {
+  font-size: 18px;
+  overflow-wrap: anywhere;
+}
+.sg-editor-supplier p,
+.sg-editor-help,
+.sg-editor-footer p {
+  margin: 4px 0 0;
+  color: var(--color-muted);
+  font-size: 12px;
+  line-height: 1.7;
+  overflow-wrap: anywhere;
+}
+.sg-editor-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 280px;
+  gap: 24px;
+  padding: 24px 0;
+}
+.sg-editor-binding {
+  min-width: 0;
+  padding-left: 24px;
+  border-left: 1px solid var(--color-border);
+}
+.sg-editor-binding h4,
+.sg-picker-heading h4 {
+  margin: 0;
+  font-size: 14px;
+}
+.sg-editor-binding form {
+  margin-top: 20px;
+}
+.sg-editor-binding .ui-field select {
+  width: 100%;
+}
+.sg-editor-dialog .ui-field {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+}
+.sg-editor-binding .sg-editor-help {
+  margin-top: 8px;
+}
+.sg-editor-chosen,
+.sg-editor-no-group {
+  margin-top: 16px;
+  overflow-wrap: anywhere;
+}
+.sg-editor-chosen > strong {
+  display: block;
+  margin-top: 8px;
+  font-size: 14px;
+}
+.sg-editor-chosen p,
+.sg-editor-no-group p {
+  margin: 6px 0 0;
+  color: var(--color-muted);
+  font-size: 12px;
+}
+.sg-editor-dialog .sg-editor-chosen summary,
+.sg-editor-dialog .sg-picker-results summary {
+  padding: 4px 0;
+  color: var(--color-primary);
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 400;
+}
+.sg-editor-footer {
+  position: sticky;
+  bottom: -24px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 0 -24px -24px;
+  padding: 16px 24px;
+  border-top: 1px solid var(--color-border);
+  background: var(--color-surface);
+}
+.sg-editor-footer p {
+  margin: 0;
+}
+.sg-editor-footer > div {
+  display: flex;
+  gap: var(--space-small);
+  margin-left: auto;
+}
+.sg-picker {
+  min-width: 0;
+}
+.sg-picker-heading p {
+  margin: 4px 0 16px;
+  color: var(--color-muted);
+  font-size: 12px;
+}
+.sg-picker .ui-filter-bar {
+  padding: 0;
+  border: 0;
+  box-shadow: none;
+}
+.sg-picker .ui-field--grow {
+  flex: 1 1 240px;
+  min-width: 0;
+  max-width: none;
+}
+.sg-picker .ui-filter-bar__actions {
+  flex-wrap: wrap;
+}
+.sg-picker .ui-state {
+  margin-top: 16px;
+  padding: 32px 16px;
+  background: var(--color-canvas);
+  border-radius: var(--radius-control);
+}
+.sg-picker .it-help,
+.sg-picker-count {
+  margin: 12px 0 0;
+  color: var(--color-muted);
+  font-size: 12px;
+  line-height: 1.7;
+}
+.sg-picker .it-help p {
+  margin: 4px 0;
+}
+.sg-picker-results {
+  list-style: none;
+  padding: 0;
+  margin: 12px 0;
+  max-height: 360px;
+  overflow-y: auto;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-control);
+}
+.sg-picker-results li {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 14px;
+  border-bottom: 1px solid var(--color-border);
+}
+.sg-picker-results li:last-child {
+  border-bottom: 0;
+}
+.sg-picker-results li[data-selected] {
+  background: var(--color-primary-soft);
+}
+.sg-picker-results li > div {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.sg-picker-results strong {
+  font-size: 13px;
+}
+.sg-picker-results small {
+  display: block;
+  color: var(--color-muted);
+  font-size: 12px;
+}
+.sg-picker-results p {
+  margin: 4px 0;
+  color: var(--color-muted);
+  font-size: 12px;
+}
+.sg-picker-results li > button {
+  flex-shrink: 0;
+}
+.sg-picker .ui-pagination {
+  flex-wrap: wrap;
+}
+@media (max-width: 760px) {
+  .ui-dialog.sg-editor-dialog {
+    width: calc(100vw - 24px);
+    padding: 16px;
+  }
+  .sg-editor-layout {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 20px;
+    padding: 20px 0;
+  }
+  .sg-editor-binding {
+    padding: 20px 0 0;
+    border-left: 0;
+    border-top: 1px solid var(--color-border);
+  }
+  .sg-editor-supplier {
+    flex-wrap: wrap;
+    margin-top: 16px;
+    padding-bottom: 16px;
+  }
+  .sg-editor-footer {
+    bottom: -16px;
+    margin: 0 -16px -16px;
+    padding: 16px;
+  }
+}
