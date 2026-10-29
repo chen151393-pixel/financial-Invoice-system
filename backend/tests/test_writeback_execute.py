@@ -86,6 +86,22 @@ def locks(engine):
         return [row.bill_id for row in connection.execute(select(target_locks))]
 
 
+def test_execution_uses_current_connection_for_result_and_target_lock(prepared):
+    tasks, _, _ = setup(prepared)
+    current = TaskService(tasks.engine, "other", gate=WriteGate(OPEN))
+
+    def respond(payload):
+        with tasks.engine.connect() as connection:
+            held = list(connection.execute(select(target_locks)).mappings())
+        assert held and {row["ns_account"] for row in held} == {"other"}
+        return response(payload, account="other")
+
+    gateway = Gateway(respond)
+    result = execute(current, ExecuteService(current, gateway), prepared)
+    assert result["state"] == "applied"
+    assert len(gateway.calls) == 1 and not locks(tasks.engine)
+
+
 def test_applied_freezes_payload_and_records_ns_result(engine, prepared):
     tasks, executor, gateway = setup(prepared)
     task = tasks.get(prepared.task_id)
@@ -326,3 +342,25 @@ def test_client_separates_not_sent_from_unknown():
         with pytest.raises(ApiError):
             client_for(lambda request: sent.append(request), **changes).vendor_bill_writeback({})
         assert sent == []
+
+
+def test_old_split_plan_cannot_execute_and_remains_auditable(engine, prepared):
+    from backend.modules.writeback.entity import plans
+    from sqlalchemy import update
+
+    tasks, executor, gateway = setup(prepared)
+    with engine.begin() as connection:
+        plan = dict(connection.execute(select(plans)).mappings().one())
+        old_body = deepcopy(plan["body"])
+        old_body["allocations"][1]["billId"] = "395763"
+        connection.execute(update(plans).where(plans.c.id == plan["id"]).values(body=old_body))
+    detail = tasks.get(prepared.task_id)
+    assert not detail["actions"]["execute"]
+    assert "重新查询账单" in detail["reason"]
+    assert len(detail["plan"]["orders"]) == 2
+    with pytest.raises(ApiError, match="同一子采购单"):
+        executor.execute(prepared.task_id, detail["revision"], USER)
+    assert not gateway.calls
+    assert locks(engine) == []
+    with engine.connect() as connection:
+        assert connection.execute(select(plans.c.body)).scalar_one() == old_body

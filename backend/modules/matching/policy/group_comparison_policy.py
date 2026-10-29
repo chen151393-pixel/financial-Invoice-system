@@ -14,10 +14,10 @@ from .comparison_policy import (
     SUPPLIER_NOTE,
     TAX_TOLERANCE,
     _check,
-    item_name,
     name_result,
     order_number,
     order_reference,
+    purchase_item_match,
     same_unit,
     supplier_result,
 )
@@ -56,7 +56,8 @@ def compare_group(invoice, item, item_tax, parts):
     amount = sum((value for _, _, value in parts), Decimal(0))
     suppliers = list(dict.fromkeys(line["supplier_name"] for line in lines))
     companies = list(dict.fromkeys(line["company_name"] for line in lines))
-    names = list(dict.fromkeys(line["declaration_name"] or line["item_name"] for line in lines))
+    item_matches = [purchase_item_match(item["item_name"], line) for line in lines]
+    names = list(dict.fromkeys(name or "" for name, _ in item_matches))
     units = list(dict.fromkeys(line["unit_name"] for line in lines))
     unit_ok = all(same_unit(item["unit"], unit) for unit in units)
     seller = _worst([supplier_result(invoice["seller_name"], name) for name in suppliers])
@@ -95,7 +96,7 @@ def compare_group(invoice, item, item_tax, parts):
             "item",
             item["item_name"],
             "、".join(names),
-            _worst([name_result(item_name(item["item_name"]), item_name(name)) for name in names]),
+            _worst([result for _, result in item_matches]),
         ),
         _check_group(
             "unit",

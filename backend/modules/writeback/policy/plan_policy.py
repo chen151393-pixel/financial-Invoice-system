@@ -5,13 +5,14 @@ from decimal import Decimal
 
 from backend.core.errors import ApiError
 
+from .order_policy import require_whole_orders
+
 
 def candidates(task, result):
     sources = task["snapshot"]["sources"]
     expected = {s["parent_id"] for s in sources.values()}
     orders = result["purchaseOrders"]
-    if result["account"].lower().replace("-", "_") != task["ns_account"].lower().replace("-", "_"):
-        raise ApiError(409, "候选结果属于其他 NS 账套")
+    # 查询适配器已按当前连接校验返回账套；来源账套仅用于追溯，不作为任务隔离条件。
     if result["status"] != "OK" or not result["vendor"] or result["vendor"]["id"] != task["vendor_id"]:
         raise ApiError(409, "NS 供应商身份不一致或不存在")
     if {o["id"] for o in orders} != expected or len(orders) != len(expected):
@@ -32,6 +33,7 @@ def candidates(task, result):
 
 def validate_plan(task, result, targets):
     bills = candidates(task, result)
+    require_whole_orders(task, targets)
     allocations = {str(row["id"]): row for row in task["snapshot"]["allocations"]}
     allocation_sums, bill_sums = defaultdict(Decimal), defaultdict(Decimal)
     seen, prepared = set(), []

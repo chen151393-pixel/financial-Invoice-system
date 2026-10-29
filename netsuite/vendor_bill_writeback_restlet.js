@@ -9,7 +9,7 @@
 // 写前按“发票号码＋供应商”只读查一次已有记录，并要求账单累计等于调用方冻结的写前值，任一不符整单不写。
 // 账单读取口径与 vendor_bill_query_restlet.js 相同；两个脚本独立部署，故各自保留检索代码。
 define(["N/search", "N/record", "N/runtime", "N/log"], (search, record, runtime, log) => {
-  const REVISION = "2026-10-28.1";
+  const REVISION = "2026-10-29.1";
   const MAX_BILLS = 20;
   const MAX_ROWS = 1000;
   const INVOICE = "customrecord_swc_vendor_invoice";
@@ -53,10 +53,17 @@ define(["N/search", "N/record", "N/runtime", "N/log"], (search, record, runtime,
 
   function rows(type, filters, columns, limit) {
     budget(150);
-    const found = search
-      .create({ type, filters, columns })
-      .run()
-      .getRange({ start: 0, end: limit + 1 });
+    const resultSet = search.create({ type, filters, columns }).run();
+    const found = [];
+    // 多读一条检测超量，但每次最多读取 1000 条（与只读查询脚本保持一致）。
+    while (found.length <= limit) {
+      budget(150);
+      const start = found.length;
+      const end = Math.min(start + 1000, limit + 1);
+      const page = resultSet.getRange({ start, end });
+      found.push(...page);
+      if (page.length < end - start) break;
+    }
     if (found.length > limit) fail("QUERY_LIMIT");
     return found;
   }

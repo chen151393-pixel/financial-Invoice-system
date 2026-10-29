@@ -10,14 +10,14 @@ from ..policy.order_group_policy import order_parts, plan_groups, totals
 
 
 def recall_orders(invoice, task_contexts):
-    """备注命中子单或母单的子采购单优先；都未命中时按供应商模糊匹配召回。"""
+    """单号命中及供应商相近的子单共同召回，由综合评分决定默认建议。"""
     by_remark, by_supplier = set(), set()
     for line in task_contexts.values():
         if order_reference(invoice["remark"], line):
             by_remark.add(line["purchase_order_id"])
         elif supplier_result(invoice["seller_name"], line["supplier_name"]) in ("match", "partial"):
             by_supplier.add(line["purchase_order_id"])
-    return sorted(by_remark or by_supplier)
+    return sorted(by_remark | by_supplier)
 
 
 def order_contexts(connection, order_ids, tasks):
@@ -55,7 +55,22 @@ def plan(connection, invoice, items, task_lines):
     paper = read_invoice_paper(connection, invoice["id"]) or {"items": {}}
     by_item = {item["id"]: item for item in items}
     result = []
-    for chosen, item_ids in plan_groups(items, order_ids, contributions):
+    combinations = plan_groups(items, order_ids, contributions)
+    exact_count = len(combinations)
+    # 数量或金额有差异也保留整单候选，评分后默认展示最高分；确认时仍执行容量和换算校验。
+    alternatives = [
+        ([order_id], sorted(own))
+        for order_id, own in contributions.items()
+        if set(own) == set(by_item)
+        and all(
+            by_item[key]["quantity"] is not None
+            and quantity <= by_item[key]["quantity"]
+            and amount <= by_item[key]["amount_including_tax"]
+            for key, (quantity, amount) in own.items()
+        )
+    ]
+    combinations.extend(candidate for candidate in alternatives if candidate not in combinations)
+    for chosen, item_ids in combinations:
         rows = [
             part
             for order_id in chosen
@@ -81,4 +96,10 @@ def plan(connection, invoice, items, task_lines):
                 "checks": checks,
             }
         )
-    return result
+    if not result:
+        return []
+    options = ([result[:exact_count]] if exact_count else []) + [[group] for group in result[exact_count:]]
+    scores = [min(score for group in option for _, score in group["checks"].values()) for option in options]
+    best = max(scores)
+    # 同分不能靠数据库顺序决定账务归属，保留人工选择。
+    return options[scores.index(best)] if best > 0 and scores.count(best) == 1 else []

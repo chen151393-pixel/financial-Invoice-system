@@ -61,8 +61,9 @@ def change(connection, task_id, values, stamp):
     connection.execute(tasks.update().where(tasks.c.id == task_id).values(**values, updated_at=stamp))
 
 
-def page(connection, account, criteria):
-    clauses = [tasks.c.ns_account == account]
+def page(connection, criteria):
+    # 本地队列跨连接环境可见；任务原有来源身份和执行校验保持不变。
+    clauses = []
     if criteria.state:
         clauses.append(tasks.c.state == criteria.state)
     if criteria.keyword:
@@ -85,12 +86,11 @@ def page(connection, account, criteria):
     return [dict(row) for row in rows], total
 
 
-def pending(connection, account, stamp):
+def pending(connection, stamp):
     return list(
         connection.execute(
             select(tasks.c.id, tasks.c.revision)
             .where(
-                tasks.c.ns_account == account,
                 tasks.c.state.in_(["queued", "waiting_bill"]),
                 or_(tasks.c.next_query_at.is_(None), tasks.c.next_query_at <= stamp),
                 or_(tasks.c.lease_until.is_(None), tasks.c.lease_until <= stamp),
@@ -101,11 +101,11 @@ def pending(connection, account, stamp):
     )
 
 
-def ready_to_write(connection, account):
+def ready_to_write(connection):
     return list(
         connection.execute(
             select(tasks.c.id, tasks.c.revision, tasks.c.vendor_id)
-            .where(tasks.c.ns_account == account, tasks.c.state == "ready")
+            .where(tasks.c.state == "ready")
             .order_by(tasks.c.id)
             .limit(4)
         ).mappings()

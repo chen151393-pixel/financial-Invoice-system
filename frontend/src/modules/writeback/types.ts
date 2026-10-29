@@ -37,6 +37,20 @@ export interface Bill {
   availableInvoiceAmount: string;
   issues: string[];
 }
+export interface SourceOrder {
+  subPurchaseOrderId: string;
+  orderNo: string;
+  parentOrderNo: string;
+  parentOrderId: string;
+  amount: string;
+  lineCount: number;
+  eligibleBillIds: string[];
+  allocations: { allocationId: string; purchaseLineId: string; amount: string }[];
+}
+export interface OrderTarget {
+  subPurchaseOrderId: string;
+  billId: string;
+}
 export interface TargetLine {
   allocationId: string;
   billId: string;
@@ -44,12 +58,14 @@ export interface TargetLine {
 }
 export interface Plan {
   allocations: TargetLine[];
+  orders: (OrderTarget & { orderNo: string; amount: string })[];
   evidence: string;
   confirmedBy: string;
   confirmedAt: string;
 }
 export interface TaskDetail extends TaskSummary {
   allocations: SourceAllocation[];
+  orders: SourceOrder[];
   candidates: {
     queryId: string;
     readCompletedAt: string;
@@ -108,5 +124,5 @@ export interface ConfirmBody {
   requestId: string;
   confirmScope: true;
   evidence: string;
-  allocations: TargetLine[];
+  orders: OrderTarget[];
 }

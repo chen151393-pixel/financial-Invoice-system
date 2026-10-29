@@ -141,7 +141,7 @@ def test_queue_counts_with_all_confidence_tiers(engine, world, reviewed):
         connection.execute(
             text("UPDATE matching_allocations SET confidence = 40 WHERE id = :i"), {"i": lowest}
         )
-    expected = {"all": 4, "high": 2, "medium": 1, "low": 1}
+    expected = {"all": 6, "high": 2, "medium": 2, "low": 2}
     for tier, total in expected.items():
         result = world["queries"].queue(QueueQuery(tier=tier, pageSize=1))
         assert result.total == total and len(result.rows) == 1

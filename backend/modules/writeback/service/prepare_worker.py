@@ -32,7 +32,7 @@ class PrepareWorker:
         if self.enabled:
             self.cursor = self.tasks.scan(self.cursor)
             with self.tasks.engine.connect() as connection:
-                rows = task_dao.pending(connection, self.tasks.account, now())
+                rows = task_dao.pending(connection, now())
             for row in rows:
                 if self.stop_event.is_set():
                     break

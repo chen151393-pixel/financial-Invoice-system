@@ -2,7 +2,11 @@
 
 from decimal import Decimal
 
+from backend.core.errors import ApiError
+
+from ..policy.order_policy import require_whole_orders
 from ..policy.state_policy import WRITTEN_STATES, stuck
+from .order_vo import orders, plan_view
 
 LABELS = {
     "queued": "待匹配账单",
@@ -83,12 +87,23 @@ def detail(task, plan, request, audit, busy, gate, stamp):
             }
         )
     halted = stuck(task, request, stamp)
+    capability = writeback(task, gate)
+    plan_issue = ""
+    if plan and task["state"] in ("ready", "needs_preview"):
+        try:
+            require_whole_orders(task, plan["body"]["allocations"])
+        except ApiError:
+            plan_issue = "历史方案按明细拆分了子采购单，请重新查询账单并按整单确认"
+            capability = {"allowed": False, "reason": plan_issue}
     return {
         **summary(task, gate),
+        "writeback": capability,
+        "reason": plan_issue or task["reason"],
         "allocations": rows,
+        "orders": orders(task),
         "invoice": snapshot["invoice"],
         "candidates": task["candidates"],
-        "plan": plan["body"] if plan else None,
+        "plan": plan_view(task, plan),
         "request": request_view(request),
         "audit": [
             {
@@ -102,8 +117,8 @@ def detail(task, plan, request, audit, busy, gate, stamp):
         "actions": {
             "refresh": task["state"] not in ("stale", *WRITTEN_STATES) and not busy,
             "confirm": task["state"] == "needs_confirmation" and not busy,
-            "confirmPreview": task["state"] == "needs_preview" and not busy,
-            "execute": writeback(task, gate)["allowed"] and not busy,
+            "confirmPreview": task["state"] == "needs_preview" and not busy and not plan_issue,
+            "execute": capability["allowed"] and not busy,
             "resolve": task["state"] in ("unknown", "partial") or halted,
             "markNotWritten": task["state"] == "unknown" or halted,
         },

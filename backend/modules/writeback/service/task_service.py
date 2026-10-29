@@ -8,6 +8,7 @@ from backend.core.write_lock import transaction
 from backend.modules.matching.public import read_writeback_snapshot, writeback_invoice_ids
 
 from ..dao import audit_dao, plan_dao, request_dao, task_dao
+from ..policy.order_policy import expand_orders
 from ..policy.plan_policy import validate_plan
 from ..policy.preview_policy import build
 from ..policy.write_gate import WriteGate
@@ -26,15 +27,15 @@ class TaskService:
         self.queue_enabled = queue_enabled
         self.gate = gate or WriteGate()
 
-    def scoped(self, connection, task_id):
+    def require_task(self, connection, task_id):
         task = task_dao.get(connection, task_id)
-        if not task or task["ns_account"].lower().replace("-", "_") != self.account.lower().replace("-", "_"):
-            raise ApiError(404, "任务不存在或不属于当前 NS 账套")
+        if not task:
+            raise ApiError(404, "任务不存在")
         return task
 
     def list(self, criteria):
         with self.engine.connect() as connection:
-            rows, total = task_dao.page(connection, self.account, criteria)
+            rows, total = task_dao.page(connection, criteria)
         return {
             "items": [summary(row, self.gate) for row in rows],
             "total": total,
@@ -45,9 +46,9 @@ class TaskService:
 
     def get(self, task_id):
         with transaction(self.engine) as connection:
-            task = self.scoped(connection, task_id)
+            task = self.require_task(connection, task_id)
             still_current(connection, task)
-            task = self.scoped(connection, task_id)
+            task = self.require_task(connection, task_id)
             plan = plan_dao.get(connection, task["current_plan_id"]) if task["current_plan_id"] else None
             request = request_dao.by_plan(connection, plan["id"]) if plan else None
             busy = bool(task["lease_until"] and task["lease_until"] > now())
@@ -57,11 +58,10 @@ class TaskService:
         with self.engine.connect() as connection:
             result = read_writeback_snapshot(connection, invoice_id)
             task = task_dao.current(connection, invoice_id)
-        visible = task and task["ns_account"] == self.account
         return {
             "ready": result["ready"],
             "reason": result["reason"],
-            "task": summary(task, self.gate) if visible else None,
+            "task": summary(task, self.gate) if task else None,
         }
 
     def recheck(self, invoice_id, actor):
@@ -83,10 +83,10 @@ class TaskService:
 
     def confirm(self, task_id, body, actor):
         require_user(actor)
-        digest = hashlib.sha256((actor + body.model_dump_json()).encode()).hexdigest()
+        digest = hashlib.sha256((actor + body.model_dump_json(exclude_none=True)).encode()).hexdigest()
         invalid = False
         with transaction(self.engine) as connection:
-            task = self.scoped(connection, task_id)
+            task = self.require_task(connection, task_id)
             if not still_current(connection, task):
                 invalid = True
             else:
@@ -102,9 +102,12 @@ class TaskService:
                         raise ApiError(409, "任务或候选版本已变化，请刷新后确认")
                     if len(body.evidence.strip()) < 5:
                         raise ApiError(422, "请填写实际公司与账单归属的核实依据")
-                    targets = validate_plan(
-                        task, task["candidates"], [t.model_dump() for t in body.allocations]
+                    selected = (
+                        expand_orders(task, [t.model_dump() for t in body.orders])
+                        if body.orders is not None
+                        else [t.model_dump() for t in body.allocations]
                     )
+                    targets = validate_plan(task, task["candidates"], selected)
                     save_plan(
                         connection, task, targets, str(body.requestId), digest, actor, body.evidence.strip()
                     )

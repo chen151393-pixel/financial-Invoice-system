@@ -88,6 +88,18 @@ const task = (changes = {}) => ({
   updatedAt: "2026-10-28",
   writeback: { allowed: false, reason: "NS 写入开关未开启" },
   allocations: [allocation],
+  orders: [
+    {
+      subPurchaseOrderId: "200",
+      orderNo: "SUB-1",
+      parentOrderNo: "PO-1",
+      parentOrderId: "100",
+      amount: "100.50",
+      lineCount: 1,
+      eligibleBillIds: ["9"],
+      allocations: [{ allocationId: "1", purchaseLineId: "10", amount: "100.50" }],
+    },
+  ],
   candidates: {
     queryId: "q1",
     readCompletedAt: "2026-10-28",
@@ -133,7 +145,7 @@ test("调用真实准备接口并原样发送金额、版本和幂等编号", as
       requestId: "request-fixed",
       confirmScope: true,
       evidence: "核实依据",
-      allocations: [{ allocationId: "1", billId: "9", amount: "100.50" }],
+      orders: [{ subPurchaseOrderId: "200", billId: "9" }],
     };
     await api.confirmPlan("1", body);
     assert.match(calls[0].url, /\/api\/writeback\/tasks\?/);
@@ -187,6 +199,7 @@ test("失效任务保留历史方案，隐藏确认入口", () => {
       actions: noActions,
       plan: {
         allocations: [{ allocationId: "1", billId: "9", amount: "100.50" }],
+        orders: [{ subPurchaseOrderId: "200", orderNo: "SUB-1", billId: "9", amount: "100.50" }],
         evidence: "原归属凭据",
         confirmedBy: "财务",
         confirmedAt: "2026-10-28",
@@ -224,7 +237,8 @@ test("确认表单保留十进制文本，提交中禁用编辑", () => {
   assert.match(html, /fieldset disabled/);
   assert.match(html, /value="100.50"/);
   assert.match(html, /采购子公司/);
-  assert.match(html, /新增分配行/);
+  assert.doesNotMatch(html, /新增分配行|移除/);
+  assert.match(html, /readOnly/);
 });
 
 test("累计与明细不一致时展示预览差额，确认前没有回写按钮", () => {
@@ -285,4 +299,23 @@ test("部分完成只能标记已登记；结果不明可标记未写入，均�
   const unknown = view("unknown", true);
   assert.match(unknown, /NS 没有任何写入，可重新写入/);
   assert.doesNotMatch(unknown, /重试|回写到 NS/);
+});
+
+test("同一子采购单三条明细只需选择一次目标账单，后端金额原样展示", () => {
+  const value = task();
+  value.orders[0] = {
+    ...value.orders[0],
+    amount: "1011.00",
+    lineCount: 3,
+    allocations: [1, 2, 3].map((id) => ({
+      allocationId: String(id),
+      purchaseLineId: String(id),
+      amount: "337.00",
+    })),
+  };
+  const html = render(Form, { task: value, busy: false, onConfirm() {} });
+  assert.equal((html.match(/<select/g) || []).length, 1);
+  assert.match(html, /value="1011.00"/);
+  assert.doesNotMatch(html, /337.00|新增分配行|移除/);
+  assert.match(render(Content, { task: value, busy: false, ...handlers }), /3 条明细/);
 });

@@ -321,8 +321,8 @@ class MatchingQueryService:
                 )
             rows.sort(
                 key=lambda row: (
-                    not any(check.key == "order" and check.result == "match" for check in row.checks),
                     -Decimal(row.confidence),
+                    not any(check.key == "order" and check.result == "match" for check in row.checks),
                     int(row.purchase.purchaseLineId),
                 )
             )

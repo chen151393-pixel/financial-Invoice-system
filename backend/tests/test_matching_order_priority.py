@@ -35,9 +35,9 @@ def recall(remark, contexts):
 
 
 @pytest.mark.parametrize("remark", ["对应 SUB-200", "采购单 PO-100"])
-def test_order_scope_wins_over_supplier(remark):
+def test_order_and_supplier_both_recall_candidates(remark):
     found = recall(remark, [context("SUB-300", "PO-999"), context("SUB-200", "PO-100", supplier="乙公司")])
-    assert found == [200]
+    assert found == [200, 300]
 
 
 def test_parent_scope_recalls_all_its_children():
@@ -45,7 +45,7 @@ def test_parent_scope_recalls_all_its_children():
         "母采购单 PO-100",
         [context("SUB-300", "PO-999"), context("SUB-200", "PO-100"), context("SUB-201", "PO-100")],
     )
-    assert found == [200, 201]
+    assert found == [200, 201, 300]
 
 
 def test_multiple_order_references_form_candidate_scope():
@@ -53,7 +53,7 @@ def test_multiple_order_references_form_candidate_scope():
         "对应 SUB-200、PO-101",
         [context("SUB-200", "PO-100"), context("SUB-201", "PO-101"), context("SUB-300", "PO-999")],
     )
-    assert found == [200, 201]
+    assert found == [200, 201, 300]
 
 
 @pytest.mark.parametrize("remark", ["", "采购单 PO-UNKNOWN"])
@@ -68,7 +68,7 @@ def test_ns_parent_display_prefix_preserves_order_priority():
         "YE-DQ20260624-Z010；VIG260610-01",
         [context("SUB-300", "PO-999"), context("SUB-201", "采购订单 #YE-DQ20260624-Z010")],
     )
-    assert found == [201]
+    assert found == [201, 300]
 
 
 @pytest.mark.parametrize(
@@ -231,9 +231,12 @@ def test_manual_candidates_and_proposals_share_order_priority(ns, engine, world)
     number = "26000000000000009192"
     import_invoices(world, [invoice(number, [INK, FLUID], remark="对应 SUB-201")])
     target = invoice_id(engine, number)
-    # 备注命中 SUB-201：即使供应商不同、SUB-200 金额同样吻合，也只在命中范围内组合
+    # 两张订单均召回，SUB-201 的综合得分最高。
     assert [order.orderNo for order in group_of(world, target).orders] == ["SUB-201"]
     item = world["queries"].invoice(target).items[0]
     result = world["queries"].candidates(CandidateQuery(invoiceId=str(target), invoiceItemId=item.id))
     assert result.total == 4
-    assert [row.purchase.orderNo for row in result.rows] == ["SUB-201", "SUB-201", "SUB-200", "SUB-200"]
+    assert [row.purchase.orderNo for row in result.rows] == ["SUB-201", "SUB-200", "SUB-201", "SUB-200"]
+    assert [Decimal(row.confidence) for row in result.rows] == sorted(
+        (Decimal(row.confidence) for row in result.rows), reverse=True
+    )

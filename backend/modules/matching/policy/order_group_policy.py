@@ -1,16 +1,13 @@
 """整单分组规划：发票行对应一张或多张完整子采购单，不拆分子采购明细行。
 
-一张子采购单只有在其全部有效明细都按品名唯一对应到发票行时才可整单分配；所选子采购单的剩余应开数量与
-含税金额合计须与对应发票行完全相等（同单位，单位按字典名称判断）。只在恰好一种组合时自动建议，
-多种组合或没有组合时不猜测，由人工在“整张子采购单匹配”或手动关联中处理。
+子采购全部有效明细按综合得分定位发票行，不以品名单项作门槛。完全匹配组合及其他未超出发票容量的
+整单候选由 group_plan_service 比较置信度；并列时不猜测归属。建议本身不代表审核通过。
 """
 
 from decimal import Decimal
 
-from backend.modules.source.public import unit_label
-
 from .allocation_policy import hard_block, remaining
-from .comparison_policy import item_name, name_result, same_unit
+from .group_comparison_policy import compare_group
 
 # 组合搜索上限：候选单数与搜索节点数；超出时视为无法唯一确定，不自动建议。
 MAX_ORDERS = 24
@@ -39,17 +36,16 @@ def order_parts(invoice, items, lines, tasks, bases, units):
             continue
         if quantity <= 0 or amount <= 0:
             return [], "明细数量与金额进度不一致"
-        purchase_name = item_name(line["declaration_name"] or line["item_name"])
-        matches = [
-            item
+        # 不一致项只影响得分；同一采购行按综合得分定位发票行，不以品名作准入门槛。
+        ranked = [
+            (item, compare_group(invoice, item, item.get("tax_amount"), [(line, quantity, amount)])[1])
             for item in items
-            if name_result(item_name(item["item_name"]), purchase_name) in ("match", "partial")
         ]
+        best = max((score for _, score in ranked), default=0)
+        matches = [item for item, score in ranked if score == best and score > 0]
         if len(matches) != 1:
-            return [], "品名无法唯一对应发票行"
+            return [], "最高置信度并列或缺少匹配证据，须人工选择发票行"
         item = matches[0]
-        if not same_unit(item["unit"], unit_label(basis["unit"], units)):
-            return [], "发票与采购单位不同，须人工核实换算"
         parts.append(
             {
                 "invoice_item_id": item["id"],

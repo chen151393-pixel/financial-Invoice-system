@@ -9,7 +9,8 @@ from backend.core.errors import ApiError
 from backend.core.write_lock import transaction
 from backend.integrations.netsuite.client import WriteOutcomeUnknown
 
-from ..dao import audit_dao, lock_dao, request_dao, task_dao
+from ..dao import audit_dao, lock_dao, plan_dao, request_dao, task_dao
+from ..policy.order_policy import require_whole_orders
 from ..policy.result_policy import interpret, unknown
 from ..policy.state_policy import stuck
 from .queue_service import now, still_current
@@ -34,7 +35,7 @@ class ExecuteService:
         require_user(actor)
         invalid = False
         with transaction(self.tasks.engine) as connection:
-            task = self.tasks.scoped(connection, task_id)
+            task = self.tasks.require_task(connection, task_id)
             if not still_current(connection, task):
                 invalid = True
             else:
@@ -71,7 +72,7 @@ class ExecuteService:
         require_user(actor)
         invalid = False
         with transaction(self.tasks.engine) as connection:
-            task = self.tasks.scoped(connection, task_id)
+            task = self.tasks.require_task(connection, task_id)
             if revision != task["revision"]:
                 raise ApiError(409, "任务已变化，请刷新后再写入")
             if task["state"] != "ready":
@@ -101,6 +102,11 @@ class ExecuteService:
         allowed, reason = self.tasks.gate.check(task)
         if not allowed:
             raise ApiError(409, reason)
+        plan = plan_dao.get(connection, task["current_plan_id"])
+        if not plan:
+            raise ApiError(409, "冻结方案不存在，请重新查询账单")
+        # 历史正文保持不可变；旧的拆单方案须重查确认后再执行。
+        require_whole_orders(task, plan["body"]["allocations"])
         request = request_dao.by_plan(connection, task["current_plan_id"])
         if (
             not request
@@ -109,11 +115,11 @@ class ExecuteService:
         ):
             raise ApiError(409, "写入请求未就绪，请先确认回写预览")
         bill_ids = [line["billId"] for line in request["payload"]["bills"]]
-        held = lock_dao.holders(connection, task["ns_account"], bill_ids)
+        held = lock_dao.holders(connection, self.tasks.account, bill_ids)
         if held:
             raise ApiError(409, f"账单 {'、'.join(sorted(held))} 正被其他回写占用，请先处理该回写结果")
         stamp = now()
-        lock_dao.acquire(connection, task["ns_account"], bill_ids, request["id"], stamp)
+        lock_dao.acquire(connection, self.tasks.account, bill_ids, request["id"], stamp)
         request_dao.change(connection, request["id"], {"state": "executing", "sent_at": stamp}, stamp)
         task_dao.change(
             connection,
@@ -157,7 +163,7 @@ class ExecuteService:
     def resolve(self, task_id, body, actor):
         require_user(actor)
         with transaction(self.tasks.engine) as connection:
-            task = self.tasks.scoped(connection, task_id)
+            task = self.tasks.require_task(connection, task_id)
             request = (
                 request_dao.by_plan(connection, task["current_plan_id"]) if task["current_plan_id"] else None
             )
@@ -204,7 +210,7 @@ class ExecuteService:
     def run_ready(self):
         """后台自动写入：只处理已就绪且通过写入开关和白名单的任务，每轮最多 4 个。"""
         with self.tasks.engine.connect() as connection:
-            rows = task_dao.ready_to_write(connection, self.tasks.account)
+            rows = task_dao.ready_to_write(connection)
         for row in rows:
             if not self.tasks.gate.check(row)[0]:
                 continue

@@ -9,6 +9,7 @@ const code = await readFile(new URL("../vendor_bill_writeback_restlet.js", impor
 function service(data = {}, options = {}) {
   let api;
   const searches = [];
+  const ranges = [];
   const writes = { created: [], submitted: [] };
   const fixtures = {
     customrecord_swc_vendor_invoice: [],
@@ -29,10 +30,14 @@ function service(data = {}, options = {}) {
       );
       return {
         run: () => ({
-          getRange: ({ start, end }) =>
-            rows
+          getRange: ({ start, end }) => {
+            ranges.push({ type: input.type, start, end });
+            // 模拟 NS 单次范围限制；结果为空时也不能请求 1001 条。
+            if (end - start > 1000) throw new Error("SSS_SEARCH_RESULT_LIMIT_EXCEEDED");
+            return rows
               .slice(start, end)
-              .map((row) => ({ id: row.id, getValue: (column) => row.values[column.label] ?? "" })),
+              .map((row) => ({ id: row.id, getValue: (column) => row.values[column.label] ?? "" }));
+          },
         }),
       };
     },
@@ -86,7 +91,7 @@ function service(data = {}, options = {}) {
       );
     },
   });
-  return { api: { post: (input) => JSON.parse(JSON.stringify(api.post(input))) }, searches, writes };
+  return { api: { post: (input) => JSON.parse(JSON.stringify(api.post(input))) }, searches, writes, ranges };
 }
 
 function bill(id, purchaseOrderId, values = {}) {
@@ -176,6 +181,64 @@ test("同号发票已登记时返回冲突，不写入任何记录", () => {
   assert.ok(
     duplicate.filters.some((filter) => filter[0] === "custrecord_swc_vi_vendor" && filter[2] === "88"),
   );
+  assert.ok(
+    duplicate.filters.some(
+      (filter) => filter[0] === "name" && filter[1] === "is" && filter[2] === request().invoice.number,
+    ),
+  );
+  assert.ok(duplicate.filters.some((filter) => filter[0] === "isinactive" && filter[2] === "F"));
+});
+
+test("重复检查在 0、1、999、1000、1001 条边界均遵守单次 1000 条限制", () => {
+  for (const count of [0, 1, 999, 1000, 1001]) {
+    const existing = Array.from({ length: count }, (_, index) => ({
+      id: String(50000 + index),
+      values: { name: request().invoice.number, date: "2026/3/20" },
+    }));
+    const { api, writes, ranges } = service({ customrecord_swc_vendor_invoice: existing });
+    const result = api.post(request());
+    assert.ok(ranges.every(({ start, end }) => end - start <= 1000));
+    if (count === 0) {
+      assert.equal(result.status, "APPLIED");
+    } else {
+      assert.equal(writes.created.length + writes.submitted.length, 0);
+      if (count <= 1000) {
+        assert.equal(result.status, "CONFLICT");
+        assert.equal(result.existing.length, count);
+      } else {
+        assert.equal(result.error.code, "QUERY_LIMIT");
+        assert.equal(result.written, false);
+      }
+    }
+    if (count >= 1000)
+      assert.deepEqual(
+        ranges
+          .filter(({ type }) => type === "customrecord_swc_vendor_invoice")
+          .map(({ start, end }) => [start, end]),
+        [
+          [0, 1000],
+          [1000, 1001],
+        ],
+      );
+  }
+});
+
+test("账单核销展开恰好 1000 行可完整校验；超过限制整单不写入", () => {
+  for (const count of [1000, 1001]) {
+    const { api, writes, ranges } = service({
+      vendorbill: Array.from({ length: count }, () => bill("9001", "501")),
+    });
+    const result = api.post(request());
+    assert.ok(ranges.every(({ start, end }) => end - start <= 1000));
+    if (count === 1000) {
+      assert.equal(result.status, "APPLIED");
+      assert.equal(writes.submitted.length, 1);
+    } else {
+      assert.equal(result.error.code, "QUERY_LIMIT");
+      assert.equal(result.written, false);
+      assert.equal(writes.created.length + writes.submitted.length, 0);
+    }
+  }
 });
 
 test("账单归属、审批、作废、累计变化或超额时整单拒绝，不写入", () => {

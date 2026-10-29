@@ -66,14 +66,29 @@ export function TaskContent({
           }
         />
         <DataTable
-          label="已审核分配"
-          rows={task.allocations}
-          rowKey={(row) => row.allocationId}
+          label="已审核子采购单"
+          rows={task.orders}
+          rowKey={(row) => row.subPurchaseOrderId}
           minWidth={580}
           columns={[
-            { key: "id", header: "分配编号", render: (row) => row.allocationId },
             { key: "subpo", header: "子采购", render: (row) => row.orderNo },
             { key: "parent", header: "母采购", render: (row) => row.parentOrderNo },
+            {
+              key: "lines",
+              header: "商品明细",
+              render: (row) => (
+                <details>
+                  <summary>{row.lineCount} 条明细</summary>
+                  <ul>
+                    {row.allocations.map((line) => (
+                      <li key={line.allocationId}>
+                        采购行 {line.purchaseLineId} · 分配 {line.allocationId} · {line.amount} 元
+                      </li>
+                    ))}
+                  </ul>
+                </details>
+              ),
+            },
             { key: "amount", header: "含税金额（元）", align: "right", render: (row) => row.amount },
           ]}
         />
@@ -124,11 +139,11 @@ export function TaskContent({
           />
           <DataTable
             label="冻结方案"
-            rows={task.plan.allocations}
-            rowKey={(row) => `${row.allocationId}-${row.billId}`}
+            rows={task.plan.orders}
+            rowKey={(row) => `${row.subPurchaseOrderId}-${row.billId}`}
             minWidth={480}
             columns={[
-              { key: "allocation", header: "分配编号", render: (row) => row.allocationId },
+              { key: "order", header: "子采购单", render: (row) => row.orderNo },
               { key: "bill", header: "账单 ID", render: (row) => row.billId },
               { key: "amount", header: "金额（元）", align: "right", render: (row) => row.amount },
             ]}

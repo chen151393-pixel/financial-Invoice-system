@@ -286,16 +286,65 @@ def test_target_conservation_and_duplicate_pairs(prepared):
             prepared.service.confirm(prepared.task_id, body.model_copy(update={"allocations": targets}), USER)
 
 
-def test_service_identity_and_account_isolation(prepared):
+def test_local_queue_and_actions_do_not_depend_on_source_account(prepared):
     task = query(prepared)
     with pytest.raises(ApiError) as error:
         prepared.service.confirm(prepared.task_id, confirmation(task), "service:test")
     assert error.value.status == 403
     other = TaskService(prepared.service.engine, "other")
-    assert other.list(TaskQuery())["total"] == 0
-    with pytest.raises(ApiError) as error:
-        other.get(prepared.task_id)
-    assert error.value.status == 404
+    listing = other.list(TaskQuery())
+    assert listing["total"] == 1
+    assert listing["items"][0]["id"] == str(prepared.task_id)
+    assert other.invoice(prepared.invoice_id)["task"]["id"] == str(prepared.task_id)
+    viewed = other.get(prepared.task_id)
+    assert viewed["invoiceNo"] == task["invoiceNo"]
+    assert viewed["reason"] == task["reason"]
+    assert viewed["actions"] == task["actions"]
+    assert not viewed["writeback"]["allowed"]
+    # 切换展示环境不会修改任务归属、版本或冻结的候选。
+    assert prepared.service.get(prepared.task_id) == task
+
+
+def test_refresh_uses_current_connection_and_can_confirm_local_task(prepared):
+    other = TaskService(prepared.service.engine, "other")
+    data = result()
+    data["account"] = "other"
+    calls = []
+
+    def read(criteria):
+        calls.append(criteria)
+        return deepcopy(data)
+
+    gateway = VendorBillQueryService(
+        SimpleNamespace(settings=SimpleNamespace(account="other"), vendor_bill_query=read)
+    )
+    task = other.get(prepared.task_id)
+    updated = QueryService(other, gateway).refresh(prepared.task_id, task["revision"], USER)
+    assert calls == [{"vendorId": "77", "purchaseOrderIds": ["100"]}]
+    assert updated["state"] == "needs_confirmation"
+    assert updated["candidates"]["account"] == "other"
+    confirmed = other.confirm(prepared.task_id, confirmation(updated), USER)
+    assert confirmed["state"] == "ready"
+    with other.engine.connect() as connection:
+        assert task_dao.get(connection, prepared.task_id)["ns_account"] == "prod"
+
+
+def test_background_queue_does_not_filter_source_account(prepared):
+    from backend.modules.writeback.service.queue_service import now
+
+    with prepared.service.engine.connect() as connection:
+        assert [r["id"] for r in task_dao.pending(connection, now())] == [prepared.task_id]
+    task = query(prepared)
+    prepared.service.confirm(prepared.task_id, confirmation(task), USER)
+    with prepared.service.engine.connect() as connection:
+        assert [r["id"] for r in task_dao.ready_to_write(connection)] == [prepared.task_id]
+
+
+def test_visible_queue_keeps_keyword_and_state_filters(prepared):
+    other = TaskService(prepared.service.engine, "other")
+    assert other.list(TaskQuery(keyword="26000000000000008999"))["total"] == 1
+    assert other.list(TaskQuery(keyword="not-found"))["total"] == 0
+    assert other.list(TaskQuery(state="applied"))["total"] == 0
 
 
 def test_queue_failure_rolls_back_matching_confirmation(engine, ns, world, monkeypatch):
@@ -395,7 +444,7 @@ def test_automatic_only_with_exact_child_company_and_nonhistorical_snapshot(engi
     assert automatic_targets(task, candidates) is None
 
 
-def test_splits_across_bills_preserve_each_approved_amount(prepared):
+def test_splits_across_bills_are_rejected_even_with_conserved_total(prepared):
     payload = result()
     other = deepcopy(payload["purchaseOrders"][0]["bills"][0])
     other.update(billId="395763", billNumber="TEST-2")
@@ -405,7 +454,39 @@ def test_splits_across_bills_preserve_each_approved_amount(prepared):
     first = body["allocations"][0]
     first["amount"] = "50.00"
     body["allocations"].append({**first, "billId": "395763", "amount": "50.50"})
-    assert prepared.service.confirm(prepared.task_id, ConfirmPlan(**body), USER)["state"] == "ready"
+    with pytest.raises(ApiError, match="整单分配"):
+        prepared.service.confirm(prepared.task_id, ConfirmPlan(**body), USER)
+
+
+def test_whole_order_confirmation_freezes_one_bill_and_keeps_line_evidence(engine, prepared):
+    from backend.modules.writeback.entity import requests
+
+    task = query(prepared)
+    assert len(task["orders"]) == 1
+    order = task["orders"][0]
+    assert order["amount"] == task["amount"] == "120.50"
+    assert order["lineCount"] == 2
+    body = ConfirmPlan(
+        revision=task["revision"],
+        requestId=uuid4(),
+        confirmScope=True,
+        evidence="已核实整张子采购单与账单归属",
+        orders=[{"subPurchaseOrderId": order["subPurchaseOrderId"], "billId": "395762"}],
+    )
+    done = prepared.service.confirm(prepared.task_id, body, USER)
+    assert done["state"] == "ready"
+    assert len(done["plan"]["orders"]) == 1
+    assert len(done["plan"]["allocations"]) == 2
+    assert done["request"]["preview"][0]["amount"] == "120.50"
+    assert not done["writeback"]["allowed"]
+    prepared.service.confirm(prepared.task_id, body, USER)
+    with engine.connect() as connection:
+        saved = connection.execute(select(requests)).mappings().all()
+        assert len(saved) == 1
+        assert saved[0]["payload"]["bills"] == [
+            {"billId": "395762", "purchaseOrderId": "100", "amount": "120.50", "expectedBefore": "0.00"}
+        ]
+        assert saved[0]["sent_at"] is None
 
 
 def test_http_routes_require_identity_and_write_needs_switch(context):

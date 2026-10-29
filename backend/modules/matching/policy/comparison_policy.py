@@ -92,6 +92,14 @@ def name_result(invoice_name, purchase_name):
     return "partial" if invoice_name in purchase_name or purchase_name in invoice_name else "mismatch"
 
 
+def purchase_item_match(invoice_name, line):
+    """商品名称和报关品名均是来源证据，取匹配程度较高的一项展示和计分。"""
+    names = list(dict.fromkeys(filter(None, (line.get("item_name"), line.get("declaration_name")))))
+    ranked = [(name, name_result(item_name(invoice_name), item_name(name))) for name in names]
+    rank = {"match": 3, "partial": 2, "mismatch": 1, "missing": 0}
+    return max(ranked, key=lambda pair: rank[pair[1]]) if ranked else (None, "missing")
+
+
 def supplier_core(value):
     """去掉括号内容、公司后缀与开头地名，用于开票名称与 NS 供应商名称的模糊比较。"""
     name = normalize_name(value)
@@ -178,7 +186,7 @@ def _check(key, invoice_value, purchase_value, result, difference=None, note="",
 
 def compare(invoice, item, line, remaining_quantity, remaining_amount):
     """invoice、item 来自 invoice 门面；line 为子采购行上下文。返回 (checks, confidence)。"""
-    purchase_item = line["declaration_name"] or line["item_name"]
+    purchase_item, item_result = purchase_item_match(item["item_name"], line)
     reference = order_reference(invoice["remark"], line)
     order_note = (
         f"备注命中{reference[0]} {reference[1]}，对应子采购单 {line['order_no']}"
@@ -217,7 +225,7 @@ def compare(invoice, item, line, remaining_quantity, remaining_amount):
             "item",
             item["item_name"],
             purchase_item,
-            name_result(item_name(item["item_name"]), item_name(purchase_item)),
+            item_result,
         ),
         _check(
             "unit",

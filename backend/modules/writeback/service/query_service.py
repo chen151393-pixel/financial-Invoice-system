@@ -20,7 +20,7 @@ class QueryService:
     def refresh(self, task_id, revision, actor):
         lease, claimed = None, None
         with transaction(self.tasks.engine) as connection:
-            task = self.tasks.scoped(connection, task_id)
+            task = self.tasks.require_task(connection, task_id)
             if task["state"] in WRITTEN_STATES:
                 raise ApiError(409, "任务已发出或完成 NS 写入，不能重新查询")
             if still_current(connection, task):
@@ -56,7 +56,7 @@ class QueryService:
             failure = error.message
         # 不吞掉程序错误；进程退出或异常后只读租约到期即可重查。
         with transaction(self.tasks.engine) as connection:
-            task = self.tasks.scoped(connection, task_id)
+            task = self.tasks.require_task(connection, task_id)
             # 租约已被取代或审核已失效：丢弃本次结果，按当前状态返回。
             if task["lease_token"] == lease and still_current(connection, task):
                 stamp = now()
