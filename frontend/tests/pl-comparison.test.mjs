@@ -601,3 +601,17 @@ test("报关数量与原始采购含税单价分别注明单位", () => {
   assert.match(detail, /采购单位<\/dt><dd>卷/);
   assert.match(detail, /采购含税单价（按采购单位）<\/dt><dd>81.13/);
 });
+
+test("报关数量不一致时提示核对，不显示低价异常或旧幅度", () => {
+  const item = group();
+  Object.assign(item.customsLines[0], {
+    margin: "",
+    marginStatus: "unavailable",
+    marginNote: "数量口径待核对（报关行 10，子采购报关合计 9）",
+    declaredUnitPriceCny: "",
+    combinedPurchaseUnitPrice: "",
+  });
+  const html = customs(item);
+  assert.match(html, /数量口径待核对（报关行 10，子采购报关合计 9）/);
+  assert.doesNotMatch(html, /单价异常|申报单价低于采购折算报关单价|fr-margin--negative/);
+});

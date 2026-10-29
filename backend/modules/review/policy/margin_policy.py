@@ -6,6 +6,7 @@
   （source 规则），不先舍入；NS 未填申报单价时按报关金额 ÷ 报关数量试算（source declared_unit_price），
   页面标注“试算”；
 - 采购折算报关单价 = 关联采购行含税总金额 ÷ 总报关数量，不先舍入；
+- 比较前要求报关行数量与关联子采购行报关数量合计一致；否则提示数量口径待核对；
 - 双方报关单位不一致、采购币种不是人民币、金额数量或申报单价汇率缺失时不计算，不显示 0；
 - 采购折算报关单价超过人民币申报单价且差额大于配置容差时才标异常；容差内保留真实幅度。
 """
@@ -45,16 +46,27 @@ def declared_margin(
         return unavailable("报关单位缺失，无法计算采购折算报关单价")
     if any(unit_label(row["declared_unit"], unit_names) != customs_unit for row in purchase_rows):
         return unavailable("报关行与子采购行报关单位不一致，不计算申报幅度")
+    declared_quantity = customs_row["declared_quantity"]
+    if declared_quantity is None:
+        return unavailable("数量口径待核对（报关行数量缺失）")
+    if declared_quantity <= 0:
+        return unavailable("数量口径待核对（报关行数量须大于 0）")
+    if any(row["declared_quantity"] is None for row in purchase_rows):
+        return unavailable("数量口径待核对（子采购报关数量缺失）")
+    if any(row["declared_quantity"] <= 0 for row in purchase_rows):
+        return unavailable("数量口径待核对（子采购报关数量须大于 0）")
+    quantity = sum((row["declared_quantity"] for row in purchase_rows), Decimal(0))
+    # 使用同一报关行下全部关联子采购的报关数量，不用采购数量，也不先舍入或套用价格容差。
+    if quantity != declared_quantity:
+        return unavailable(
+            f"数量口径待核对（报关行 {declared_quantity.normalize():f}，"
+            f"子采购报关合计 {quantity.normalize():f}）"
+        )
     currencies = {(orders[row["purchase_order_id"]]["currency"] or "") for row in purchase_rows}
     if currencies != {CNY}:
         return unavailable("采购币种待核实" if "" in currencies else "采购币种不是人民币，不计算申报幅度")
     if any(row["amount"] is None for row in purchase_rows):
         return unavailable("采购含税金额缺失，无法计算采购折算报关单价")
-    if any(row["declared_quantity"] is None for row in purchase_rows):
-        return unavailable("子采购报关数量缺失，无法计算采购折算报关单价")
-    if any(row["declared_quantity"] <= 0 for row in purchase_rows):
-        return unavailable("子采购报关数量须大于 0，无法计算采购折算报关单价")
-    quantity = sum((row["declared_quantity"] for row in purchase_rows), Decimal(0))
     purchase = sum((row["amount"] for row in purchase_rows), Decimal(0)) / quantity
     candidates = [
         sales_orders.get(orders[row["purchase_order_id"]].get("sales_order_id")) for row in purchase_rows

@@ -75,6 +75,7 @@ def test_margin_uses_unit_prices_and_skips_unit_mismatch(currency):
         "quantity": Decimal("5"),
         "purchase_order_id": 1,
     }
+    single_customs = {**customs_row, "declared_quantity": Decimal("5"), "amount": Decimal("7.5")}
     result = declared_margin(customs_row, [line, {**line, "amount": Decimal("40.5")}], orders, sales)
     assert (result["status"], result["margin"], result["declared"]) == (
         "ok",
@@ -82,36 +83,39 @@ def test_margin_uses_unit_prices_and_skips_unit_mismatch(currency):
         Decimal("10.65"),
     )
     assert result["purchase"] == Decimal("10.05")
-    negative = declared_margin(customs_row, [line], orders, sales)
+    negative = declared_margin(single_customs, [line], orders, sales)
     assert negative["status"] == "negative" and negative["margin"] == Decimal("-12.68")
     assert negative["note"] == "申报单价低于采购折算报关单价"
     weighted = declared_margin(
-        customs_row,
+        {**customs_row, "declared_quantity": Decimal("15")},
         [line, {**line, "amount": Decimal("20"), "declared_quantity": Decimal("10")}],
         orders,
         sales,
     )
     assert weighted["purchase"] == Decimal("80") / Decimal("15")
-    assert declared_margin({**customs_row, "amount": None}, [line], orders, sales) == (
-        declared_margin(customs_row, [line], orders, sales)
+    assert declared_margin({**single_customs, "amount": None}, [line], orders, sales) == (
+        declared_margin(single_customs, [line], orders, sales)
     )
     assert (
-        declared_margin({**customs_row, "declared_unit_price": Decimal(0)}, [line], orders, sales)["margin"]
+        declared_margin({**single_customs, "declared_unit_price": Decimal(0)}, [line], orders, sales)[
+            "margin"
+        ]
         is None
     )
-    # NS 未填申报单价：按报关金额 15 ÷ 报关数量 10 = 1.5 试算，结果与填写 1.5 相同
-    estimated = declared_margin({**customs_row, "declared_unit_price": None}, [line], orders, sales)
+    # NS 未填申报单价：按报关金额 7.5 ÷ 报关数量 5 = 1.5 试算，结果与填写 1.5 相同
+    estimated = declared_margin({**single_customs, "declared_unit_price": None}, [line], orders, sales)
     assert estimated == negative
     for field, value in (("amount", None), ("declared_quantity", None), ("declared_quantity", Decimal(0))):
         missing_price = declared_margin(
-            {**customs_row, "declared_unit_price": None, field: value}, [line], orders, sales
+            {**single_customs, "declared_unit_price": None, field: value}, [line], orders, sales
         )
-        assert missing_price["margin"] is None and "无法试算" in missing_price["note"]
+        assert missing_price["margin"] is None
+        assert ("无法试算" if field == "amount" else "数量口径待核对") in missing_price["note"]
     for field, value in (("amount", None), ("declared_quantity", None), ("declared_quantity", Decimal(0))):
-        assert declared_margin(customs_row, [{**line, field: value}], orders, sales)["margin"] is None
-    mismatch = declared_margin(customs_row, [{**line, "declared_unit": "千克"}], orders, sales)
+        assert declared_margin(single_customs, [{**line, field: value}], orders, sales)["margin"] is None
+    mismatch = declared_margin(single_customs, [{**line, "declared_unit": "千克"}], orders, sales)
     assert mismatch["status"] == "unavailable" and "单位不一致" in mismatch["note"]
-    missing = declared_margin(customs_row, [line], orders, {})
+    missing = declared_margin(single_customs, [line], orders, {})
     assert missing["status"] == "unavailable" and missing["margin"] is None
 
 
@@ -141,6 +145,7 @@ def test_margin_does_not_display_negative_zero():
     result = declared_margin(
         {
             "declared_unit": "片",
+            "declared_quantity": Decimal("1"),
             "amount": Decimal("2127.27"),
             "declared_unit_price": Decimal("35.45"),
             "currency": "US Dollar",

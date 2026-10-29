@@ -28,6 +28,7 @@ def test_unit_price_tolerance_boundary(difference, status):
     result = declared_margin(
         {
             "declared_unit": "片",
+            "declared_quantity": Decimal("60"),
             "declared_unit_price": Decimal("35.45"),
             "currency": "USD",
             "sales_order_no": "SO1",
