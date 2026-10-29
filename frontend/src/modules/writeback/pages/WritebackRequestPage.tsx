@@ -1,4 +1,3 @@
-import { useEffect, useState } from "react";
 import { Link } from "react-router";
 import { matchingInvoicePath } from "../../../app/paths";
 import {
@@ -12,11 +11,12 @@ import {
   ErrorState,
   Skeleton,
 } from "../../../shared/components/ui";
-import { confirmPlan, confirmPreview, executeWrite, getTask, refreshTask, resolveWrite } from "../api";
+import { confirmPlan, confirmPreview, executeWrite, refreshTask, resolveWrite } from "../api";
 import { PlanForm } from "../components/PlanForm";
 import { ResolveForm } from "../components/ResolveForm";
 import { WritePanel } from "../components/WritePanel";
 import type { ConfirmBody, ResolveBody, TaskDetail } from "../types";
+import { useWritebackRequest } from "../hooks/useWritebackRequest";
 import "../writeback.css";
 
 const actionLabels: Record<string, string> = {
@@ -34,6 +34,8 @@ const actionLabels: Record<string, string> = {
 export function TaskContent({
   task,
   busy,
+  writing = false,
+  unverified = false,
   onRefresh,
   onConfirm,
   onConfirmPreview,
@@ -42,6 +44,8 @@ export function TaskContent({
 }: {
   task: TaskDetail;
   busy: boolean;
+  writing?: boolean;
+  unverified?: boolean;
   onRefresh: () => void;
   onConfirm: (body: ConfirmBody) => void;
   onConfirmPreview: () => void;
@@ -51,7 +55,13 @@ export function TaskContent({
   const bills = task.candidates?.purchaseOrders.flatMap((order) => order.bills) ?? [];
   return (
     <>
-      <Alert title={task.stateLabel}>{task.reason}</Alert>
+      <Alert title={writing ? "正在回写 NS" : unverified ? "回写结果待核实" : task.stateLabel}>
+        {writing
+          ? "正在提交回写请求并等待 NS 处理结果，请勿重复提交。"
+          : unverified
+            ? "请先刷新任务状态，取得最新结果后再处理；不要重复提交回写。"
+            : task.reason}
+      </Alert>
       <Card>
         <CardHeader
           title={`发票 ${task.invoiceNo}`}
@@ -155,6 +165,8 @@ export function TaskContent({
         key={`write-${task.revision}`}
         task={task}
         busy={busy}
+        writing={writing}
+        unverified={unverified}
         onConfirmPreview={onConfirmPreview}
         onExecute={onExecute}
       />
@@ -181,41 +193,11 @@ export function TaskContent({
 }
 
 export function WritebackRequestPage({ requestId }: { requestId: string }) {
-  const [task, setTask] = useState<TaskDetail | null>(null);
-  const [error, setError] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [reload, setReload] = useState(0);
-  useEffect(() => {
-    let active = true;
-    getTask(requestId)
-      .then((data) => {
-        if (active) {
-          setTask(data);
-          setError("");
-        }
-      })
-      .catch((e: unknown) => {
-        if (active) setError(e instanceof Error ? e.message : "任务加载失败");
-      });
-    return () => {
-      active = false;
-    };
-  }, [requestId, reload]);
-  async function run(operation: () => Promise<TaskDetail>) {
-    setBusy(true);
-    setError("");
-    try {
-      setTask(await operation());
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "操作失败，请刷新后核对");
-    } finally {
-      setBusy(false);
-    }
-  }
+  const { task, error, busy, writing, unverified, run, refresh } = useWritebackRequest(requestId);
   return (
     <div className="wb-prepare">
       <div>
-        <Button disabled={busy} onClick={() => setReload((value) => value + 1)}>
+        <Button disabled={busy} onClick={refresh}>
           刷新任务状态
         </Button>
       </div>
@@ -224,20 +206,22 @@ export function WritebackRequestPage({ requestId }: { requestId: string }) {
           title="操作未完成"
           message={error}
           action={
-            <Button disabled={busy} onClick={() => setReload((n) => n + 1)}>
+            <Button disabled={busy} onClick={refresh}>
               重新加载
             </Button>
           }
         />
       )}
-      {task ? (
+      {task && task.id === requestId ? (
         <TaskContent
           task={task}
-          busy={busy}
+          busy={busy || unverified}
+          writing={writing}
+          unverified={unverified}
           onRefresh={() => void run(() => refreshTask(requestId, task.revision))}
           onConfirm={(body) => void run(() => confirmPlan(requestId, body))}
           onConfirmPreview={() => void run(() => confirmPreview(requestId, task.revision))}
-          onExecute={() => void run(() => executeWrite(requestId, task.revision))}
+          onExecute={() => void run(() => executeWrite(requestId, task.revision), true)}
           onResolve={(body) => void run(() => resolveWrite(requestId, body))}
         />
       ) : (

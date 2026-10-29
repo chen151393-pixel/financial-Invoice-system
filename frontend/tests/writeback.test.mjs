@@ -280,6 +280,27 @@ test("后端允许写入时才显示回写按钮；不允许时展示原因", ()
   assert.match(ready(false), /暂不能写入：该供应商尚未列入回写白名单/);
 });
 
+test("提交即显示正在回写，后端执行中即使保留旧允许动作也不能重复点击", () => {
+  for (const [state, writing] of [
+    ["ready", true],
+    ["executing", false],
+  ]) {
+    const html = render(Content, {
+      task: task({
+        state,
+        request: request({ state: state === "executing" ? "executing" : "pending" }),
+        actions: { ...noActions, execute: true },
+      }),
+      busy: writing,
+      writing,
+      ...handlers,
+    });
+    assert.match(html, /disabled="" aria-busy="true"[^>]*>正在回写…/);
+    assert.doesNotMatch(html, />回写到 NS</);
+    if (writing) assert.match(html, /正在回写 NS/);
+  }
+});
+
 test("部分完成只能标记已登记；结果不明可标记未写入，均无直接重发", () => {
   const view = (state, markNotWritten) =>
     render(Content, {

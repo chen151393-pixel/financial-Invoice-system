@@ -102,6 +102,23 @@ def test_execution_uses_current_connection_for_result_and_target_lock(prepared):
     assert len(gateway.calls) == 1 and not locks(tasks.engine)
 
 
+def test_second_execute_is_rejected_while_gateway_is_running(prepared):
+    tasks, executor, gateway = setup(prepared)
+    revision = tasks.get(prepared.task_id)["revision"]
+
+    def slow_response(payload):
+        running = tasks.get(prepared.task_id)
+        assert running["state"] == "executing" and not running["actions"]["execute"]
+        with pytest.raises(ApiError) as error:
+            executor.execute(prepared.task_id, revision, USER)
+        assert error.value.status == 409
+        return response(payload)
+
+    gateway.respond = slow_response
+    assert executor.execute(prepared.task_id, revision, USER)["state"] == "applied"
+    assert len(gateway.calls) == 1
+
+
 def test_applied_freezes_payload_and_records_ns_result(engine, prepared):
     tasks, executor, gateway = setup(prepared)
     task = tasks.get(prepared.task_id)

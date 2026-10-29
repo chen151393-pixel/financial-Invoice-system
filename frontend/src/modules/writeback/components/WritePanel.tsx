@@ -15,11 +15,15 @@ import type { TaskDetail } from "../types";
 export function WritePanel({
   task,
   busy,
+  writing = false,
+  unverified = false,
   onConfirmPreview,
   onExecute,
 }: {
   task: TaskDetail;
   busy: boolean;
+  writing?: boolean;
+  unverified?: boolean;
   onConfirmPreview: () => void;
   onExecute: () => void;
 }) {
@@ -28,15 +32,21 @@ export function WritePanel({
   const request = task.request;
   if (!request) return null;
   const { invoice } = request;
+  const executing = writing || task.state === "executing" || request.state === "executing";
   return (
     <Card>
       <CardHeader
         title="NS 回写预览"
         description={`发票 ${invoice.number} · 开票日期 ${invoice.date} · 含税 ${invoice.amount} 元 · 账单 ${request.preview.length} 张`}
         actions={
-          task.actions.execute ? (
-            <Button variant="primary" disabled={busy} onClick={() => setAsking(true)}>
-              回写到 NS
+          task.actions.execute || executing ? (
+            <Button
+              variant="primary"
+              disabled={busy || executing || unverified}
+              aria-busy={executing}
+              onClick={() => setAsking(true)}
+            >
+              {executing ? "正在回写…" : unverified ? "回写结果待核实" : "回写到 NS"}
             </Button>
           ) : undefined
         }
@@ -103,7 +113,7 @@ export function WritePanel({
         )}
       </CardContent>
       {asking && (
-        <Dialog title="确认回写到 NS" busy={busy} onClose={() => setAsking(false)}>
+        <Dialog title="确认回写到 NS" busy={busy || executing} onClose={() => setAsking(false)}>
           <p>
             将在 NS 新建发票 {invoice.number} 的供应商发票记录及 {request.preview.length}{" "}
             行明细，并更新上表账单的累计已收发票金额。
@@ -113,18 +123,19 @@ export function WritePanel({
             核实后标记，不会自动重发。
           </p>
           <div className="wb-dialog-actions">
-            <Button disabled={busy} onClick={() => setAsking(false)}>
+            <Button disabled={busy || executing} onClick={() => setAsking(false)}>
               取消
             </Button>
             <Button
               variant="primary"
-              disabled={busy}
+              disabled={busy || executing}
               onClick={() => {
+                if (busy || executing) return;
                 setAsking(false);
                 onExecute();
               }}
             >
-              确认回写
+              {executing ? "正在回写…" : "确认回写"}
             </Button>
           </div>
         </Dialog>
