@@ -97,7 +97,7 @@ def test_review_task_matching_display_preserves_evidence(engine, ns, dictionary)
     before = rows(engine, "SELECT * FROM source_purchase_order_lines")
     assert all(line.unit == "幅" for line in group.customsLines)
     purchase_views = group.unlinkedLines + [p for c in group.customsLines for p in c.purchaseLines]
-    assert all(line.unit == "台" and "幅" in line.note for line in purchase_views)
+    assert all(line.unit == "幅" and "台" in line.note for line in purchase_views)
     digest = group.contentSha256
     review.approve(int(group.id), ApproveRequest(contentSha256=digest), "user:admin")
     frozen = rows(engine, "SELECT unit,quantity,amount FROM review_lines")

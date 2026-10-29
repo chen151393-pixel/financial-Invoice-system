@@ -13,7 +13,8 @@ from backend.modules.review.dto.review_dto import ApproveRequest, BatchApproveRe
 from backend.modules.review.public import ReviewApproved
 from backend.modules.source.public import DeclarationService, digest, snapshot
 from backend.tests.review_helpers import MaterializedReviewService as ReviewService
-from backend.tests.test_source_storage import ACCOUNT, bundle, customs, purchase, rows, save
+from backend.tests.review_helpers import comparable_purchase as purchase
+from backend.tests.test_source_storage import ACCOUNT, bundle, customs, rows, save
 from backend.tests.test_source_storage import engine as engine  # 共用夹具
 from backend.tests.test_source_storage import ns as ns  # 共用夹具
 from fastapi.testclient import TestClient
@@ -113,8 +114,12 @@ def test_list_states_counts_and_purchase_basis(service, seeded, engine):
     assert pending.review.allowed and pending.review.status == "pending"
     assert pending.customsCount == 2 and pending.purchaseCount == 2 and pending.unlinkedLines == []
     line = pending.customsLines[0].purchaseLines[0]
-    assert (line.quantity, line.unit, line.amount) == ("10", "个", "100.5")  # 开票口径：采购数量与单位
-    assert "报关数量 5 千克" in line.note
+    assert (line.quantity, line.unit, line.amount) == (
+        "10",
+        "个",
+        "100.5",
+    )  # 本夹具采购与报关数量相同，异单位换算见专项回归
+    assert "采购单价直接取来源含税单价" in line.note
     assert pending.salesOrders == "SO1"  # 同一销售单在多个报关行出现，只在单头展示一次
     assert pending.company == "采购公司A"
     assert pending.customsLines[0].originPlace == "深圳"
@@ -132,7 +137,7 @@ def test_negative_margin_is_alerted_and_not_auto_approvable(service, ns, engine)
     assert result.counts["marginAlert"] == 1 and result.counts["autoApprovable"] == 0
     item = result.groups[0]
     assert item.marginAlert and not item.autoReview.eligible
-    assert "采购单价高于人民币报关单价且超出容差" in item.autoReview.reasons
+    assert "采购折算报关单价高于人民币申报单价且超出容差" in item.autoReview.reasons
     assert [g.recordNumber for g in service.browse(query(status="margin_alert")).groups] == ["CD870"]
 
 

@@ -63,8 +63,8 @@ export function CustomsRows({
         row.kind === "purchase" ? (
           <span className="fr-order-no">
             {row.line.child || "—"}
-            {/* 订单口径的数量金额是整张子单，不是本次报关范围，须保留标注 */}
-            {row.line.scope === "order" && <small className="fr-order-tag">订单口径</small>}
+            {/* 数量和单价口径由后端明确返回。 */}
+            <small className="fr-order-tag">{row.line.scope === "order" ? "订单口径" : "报关数量"}</small>
             {Boolean(row.line.members?.length) && (
               <small className="fr-order-tag">合并 {row.line.members?.length} 行</small>
             )}
@@ -95,7 +95,7 @@ export function CustomsRows({
       render: (row) => (
         <span
           aria-label={
-            row.kind === "customs" ? "申报数量" : row.line.scope === "order" ? "子单数量" : "本次数量"
+            row.kind === "customs" ? "申报数量" : row.line.scope === "order" ? "子单数量" : "子采购报关数量"
           }
         >
           {row.line.quantity || "未提供"}
@@ -130,6 +130,9 @@ export function CustomsRows({
         ) : (
           <span aria-label={row.kind === "customs" ? "申报单价" : "采购含税单价"}>
             {row.line.price || "未提供"}
+            {row.kind === "purchase" && row.line.scope === "declared" && (
+              <small> / {row.line.purchaseUnit || "采购单位未提供"}</small>
+            )}
           </span>
         ),
     },
@@ -141,7 +144,7 @@ export function CustomsRows({
       render: (row) => (
         <span
           aria-label={
-            row.kind === "customs" ? "报关金额" : row.line.scope === "order" ? "订单金额" : "本次采购金额"
+            row.kind === "customs" ? "报关金额" : row.line.scope === "order" ? "订单金额" : "采购含税金额"
           }
         >
           <strong>{row.line.amount || "未提供"}</strong>

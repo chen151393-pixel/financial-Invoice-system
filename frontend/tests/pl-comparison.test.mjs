@@ -485,7 +485,7 @@ test("采购合并行展示后端合计，查看弹窗保留原始数量单价�
   assert.match(customs(item), /合并 2 行/);
   const html = renderToStaticMarkup(createElement(PurchaseDialog, { line: merged, onClose() {} }));
   assert.match(html, /合并前采购明细/);
-  assert.match(html, /原始数量/);
+  assert.match(html, /报关数量/);
   assert.match(html, /原含税金额/);
   assert.match(html, /可上下及横向滚动/);
   for (const value of ["180", "160", "20", "18"]) assert.ok(html.includes(value));
@@ -501,7 +501,7 @@ test("采购详情字段独立对应，保留零值和缺失值，不虚构原�
   );
   assert.match(html, /<dt>子单数量<\/dt><dd>0<\/dd>/);
   assert.match(html, /<dt>单位<\/dt><dd>千克<\/dd>/);
-  assert.match(html, /<dt>采购含税单价<\/dt><dd>0<\/dd>/);
+  assert.match(html, /<dt>采购含税单价（按采购单位）<\/dt><dd>0<\/dd>/);
   assert.match(html, /<dt>订单含税金额（未分摊）<\/dt><dd>来源未提供<\/dd>/);
   assert.doesNotMatch(html, /<table/);
 });
@@ -511,15 +511,15 @@ test("单价异常由后端判定，舍入为零仍突出显示", () => {
   Object.assign(item.customsLines[0], {
     margin: "0.00%",
     marginStatus: "negative",
-    marginNote: "报关单价低于采购价",
+    marginNote: "申报单价低于采购折算报关单价",
     declaredUnitPriceCny: "237.8695",
     combinedPurchaseUnitPrice: "237.87",
   });
-  assert.match(customs(item), /data-tone="danger"[\s\S]*报关单价低于采购价/);
+  assert.match(customs(item), /data-tone="danger"[\s\S]*申报单价低于采购折算报关单价/);
   item.customsLines[0].marginStatus = "ok";
   item.customsLines[0].margin = "-0.01%";
   item.customsLines[0].marginNote = "精度范围内一致（人民币单价差额 0.0305 元，容差 0.10 元）";
-  assert.doesNotMatch(customs(item), /data-tone="danger"|报关单价低于采购价/);
+  assert.doesNotMatch(customs(item), /data-tone="danger"|申报单价低于采购折算报关单价/);
   assert.match(customs(item), /精度范围内一致/);
   assert.match(customs(item), /-0.01%/);
 });
@@ -531,7 +531,7 @@ test("报关行最后一列显示后端计算的申报幅度；负数与无法�
       ...item.customsLines[0],
       margin: "-12.68%",
       marginStatus: "negative",
-      marginNote: "报关单价低于采购价",
+      marginNote: "申报单价低于采购折算报关单价",
       declaredUnitPriceCny: "10.65",
       combinedPurchaseUnitPrice: "12",
     },
@@ -546,8 +546,11 @@ test("报关行最后一列显示后端计算的申报幅度；负数与无法�
   ];
   const html = customs(item);
   assert.match(html, /申报幅度/);
-  assert.match(html, /fr-margin--negative[\s\S]*-12.68%[\s\S]*data-tone="danger"[\s\S]*报关单价低于采购价/);
-  assert.match(html, /报关单价 10.65 \/ 合并采购单价 12 元/);
+  assert.match(
+    html,
+    /fr-margin--negative[\s\S]*-12.68%[\s\S]*data-tone="danger"[\s\S]*申报单价低于采购折算报关单价/,
+  );
+  assert.match(html, /报关单价 10.65 \/ 采购金额折算报关单价 12 元/);
   assert.match(html, /fr-margin--unavailable[\s\S]*—[\s\S]*单位不一致，不计算申报幅度/);
 });
 
@@ -560,7 +563,7 @@ test("NS 未填申报单价时显示后端试算值并标注“试算”，不�
       priceEstimated: true,
       margin: "-12.68%",
       marginStatus: "negative",
-      marginNote: "报关单价低于采购价",
+      marginNote: "申报单价低于采购折算报关单价",
       declaredUnitPriceCny: "10.65",
       combinedPurchaseUnitPrice: "12",
     },
@@ -571,6 +574,30 @@ test("NS 未填申报单价时显示后端试算值并标注“试算”，不�
     html,
     /aria-label="申报单价 1.5，NS 未填写，按报关金额除以报关数量试算"[^>]*>1.5<span class="ui-badge" data-tone="info">试算<\/span>/,
   );
-  assert.match(html, /报关单价 10.65（试算） \/ 合并采购单价 12 元/);
+  assert.match(html, /报关单价 10.65（试算） \/ 采购金额折算报关单价 12 元/);
   assert.equal(html.match(/>试算</g).length, 1);
+});
+
+test("报关数量与原始采购含税单价分别注明单位", () => {
+  const item = group();
+  const line = {
+    ...item.customsLines[0].purchaseLines[0],
+    scope: "declared",
+    quantity: "1525",
+    unit: "平方米",
+    price: "81.13",
+    purchaseQuantity: "100",
+    purchaseUnit: "卷",
+    amount: "8113",
+  };
+  item.customsLines[0].purchaseLines = [line];
+  const html = customs(item);
+  assert.match(html, /子采购报关数量[^>]*>1525/);
+  assert.match(html, /平方米/);
+  assert.match(html, /采购含税单价[^>]*>81.13<small> \/ 卷/);
+  assert.doesNotMatch(html, /订单口径/);
+  const detail = renderToStaticMarkup(createElement(PurchaseDialog, { line, onClose() {} }));
+  assert.match(detail, /采购数量<\/dt><dd>100/);
+  assert.match(detail, /采购单位<\/dt><dd>卷/);
+  assert.match(detail, /采购含税单价（按采购单位）<\/dt><dd>81.13/);
 });

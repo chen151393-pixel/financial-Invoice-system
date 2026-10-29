@@ -4,7 +4,7 @@ export type ReviewStatus = "pending" | "approved" | "unshipped";
 // margin_alert：待审核且采购单价超出报关单价容差；auto：待审核且满足可自动审核条件（后端判定）
 export type ReviewFilter = "all" | "pending" | "approved" | "margin_alert" | "auto";
 export interface UnitPriceMargin {
-  // 后端按人民币报关单价与合并采购单价（含税总金额 / 总数量）比较，前端只展示。
+  // 后端按人民币申报单价与采购金额折算报关单价（含税总金额 / 总报关数量）比较。
   margin?: string;
   marginStatus?: "ok" | "negative" | "unavailable";
   marginNote?: string;
@@ -21,6 +21,8 @@ export interface PurchaseLine {
   quantity: string;
   unit: string;
   price: string;
+  purchaseQuantity?: string;
+  purchaseUnit?: string;
   amount: string;
   currency: string;
   salesOrderExchangeRate?: string;

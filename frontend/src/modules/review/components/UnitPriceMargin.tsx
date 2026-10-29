@@ -11,7 +11,7 @@ export function UnitPriceMargin({ line }: { line: Margin & { priceEstimated?: bo
           <Badge tone="danger" dot={false}>
             单价异常
           </Badge>
-          <small>{line.marginNote || "报关单价低于采购价"}</small>
+          <small>{line.marginNote || "申报单价低于采购折算报关单价"}</small>
         </>
       )}
       {line.marginStatus === "unavailable" || !line.marginStatus ? (
@@ -19,7 +19,7 @@ export function UnitPriceMargin({ line }: { line: Margin & { priceEstimated?: bo
       ) : (
         <small>
           报关单价 {line.declaredUnitPriceCny}
-          {line.priceEstimated && "（试算）"} / 合并采购单价 {line.combinedPurchaseUnitPrice} 元
+          {line.priceEstimated && "（试算）"} / 采购金额折算报关单价 {line.combinedPurchaseUnitPrice} 元
         </small>
       )}
     </div>

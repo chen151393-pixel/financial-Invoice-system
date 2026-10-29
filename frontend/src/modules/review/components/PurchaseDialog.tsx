@@ -11,10 +11,12 @@ export function PurchaseDialog({ line, onClose }: { line: PurchaseLine; onClose:
     ["采购品名", line.name],
     ["规格型号", line.model],
     ["采购币种", line.currency],
-    [line.scope === "order" ? "子单数量" : "本次数量", line.quantity],
+    [line.scope === "order" ? "子单数量" : "子采购报关数量", line.quantity],
     ["单位", line.unit],
-    ["采购含税单价", line.price],
-    [line.scope === "order" ? "订单含税金额（未分摊）" : "本次采购含税金额", line.amount],
+    ["采购数量", line.purchaseQuantity],
+    ["采购单位", line.purchaseUnit],
+    ["采购含税单价（按采购单位）", line.price],
+    [line.scope === "order" ? "订单含税金额（未分摊）" : "采购含税金额", line.amount],
     ["销售订单汇率", line.salesOrderExchangeRate],
   ];
   return (
@@ -53,7 +55,7 @@ export function PurchaseDialog({ line, onClose }: { line: PurchaseLine; onClose:
                 { key: "model", header: "规格型号", width: "20%", render: (member) => member.model || "—" },
                 {
                   key: "quantity",
-                  header: "原始数量",
+                  header: "报关数量",
                   width: "15%",
                   align: "right",
                   render: (member) => member.quantity || "未提供",
@@ -61,10 +63,11 @@ export function PurchaseDialog({ line, onClose }: { line: PurchaseLine; onClose:
                 { key: "unit", header: "单位", width: "9%", render: (member) => member.unit || "未提供" },
                 {
                   key: "price",
-                  header: "原含税单价",
+                  header: "采购含税单价",
                   width: "16%",
                   align: "right",
-                  render: (member) => member.price || "未提供",
+                  render: (member) =>
+                    `${member.price || "未提供"} / ${member.purchaseUnit || "采购单位未提供"}`,
                 },
                 {
                   key: "amount",

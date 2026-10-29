@@ -13,7 +13,8 @@ from backend.modules.review.service.calculation_service import CalculationServic
 from backend.modules.review.service.calculation_worker import CalculationWorker
 from backend.modules.review.service.review_service import ReviewService
 from backend.modules.source.public import DeclarationService
-from backend.tests.test_source_storage import ACCOUNT, bundle, customs, purchase, rows, save
+from backend.tests.review_helpers import comparable_purchase as purchase
+from backend.tests.test_source_storage import ACCOUNT, bundle, customs, rows, save
 from backend.tests.test_source_storage import engine as engine
 from backend.tests.test_source_storage import ns as ns
 from sqlalchemy import event, text

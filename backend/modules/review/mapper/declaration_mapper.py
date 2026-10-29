@@ -47,10 +47,12 @@ def line_bindings(content):
 
 
 def purchase_line(order, row, basis=None, unit_names=None, sales_order=None):
-    declared = f"{text(row['declared_quantity'])} {unit_label(row['declared_unit'], unit_names)}".strip()
-    note = "开票口径：子采购数量、单位与含税金额，审核通过后冻结为应开数量和金额。"
-    if declared:
-        note += f"报关数量 {declared}。"
+    note = "数量、单位取子采购行的报关字段；采购单价直接取来源含税单价，按采购单位计价。"
+    note += (
+        f"原采购数量 {text(row['quantity']) or '未提供'} {unit_label(row['unit'], unit_names) or '单位未提供'}，"
+        f"原采购含税单价 {text(row['unit_price']) or '未提供'}。"
+        "审核开票依据仍为原采购数量、单位与含税金额。"
+    )
     if row["amount_status"] == "source_missing":
         note += "来源金额缺失，开票后只能人工按差异结束。"
     return PurchaseLine(
@@ -60,13 +62,15 @@ def purchase_line(order, row, basis=None, unit_names=None, sales_order=None):
         parent=text(order["parent_order_no"]),
         child=text(order["order_no"]),
         supplier=text(order["supplier_name"]),
-        quantity=text(row["quantity"]),
-        unit=unit_label(row["unit"], unit_names),
+        quantity=text(row["declared_quantity"]),
+        unit=unit_label(row["declared_unit"], unit_names),
         price=text(row["unit_price"]),
+        purchaseQuantity=text(row["quantity"]),
+        purchaseUnit=unit_label(row["unit"], unit_names),
         amount=text(row["amount"]),
         currency=text(basis["currency"] if basis and basis["allowed"] else order["currency"]),
         salesOrderExchangeRate=text((sales_order or {}).get("exchange_rate")),
-        scope="order",
+        scope="declared",
         note=note,
     )
 

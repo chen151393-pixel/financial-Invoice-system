@@ -1,13 +1,13 @@
 """申报幅度（2026-10-23 业务确认），纯函数。
 
-申报幅度 =（人民币报关单价 − 合并采购单价）÷ 人民币报关单价：
+申报幅度 =（人民币报关单价 − 采购折算报关单价）÷ 人民币报关单价：
 - 报关单价取报关行的申报单价 declared_unit_price（NS custrecord_swc_grossamountzj，与报关数量、
   报关单位配套；2026-10-28 用户确认，不用 custrecord_swc_unitprice），按对应销售单汇率换算为人民币
   （source 规则），不先舍入；NS 未填申报单价时按报关金额 ÷ 报关数量试算（source declared_unit_price），
   页面标注“试算”；
-- 合并采购单价 = 关联采购行含税总金额 ÷ 总数量，不先舍入；
-- 报关单位与子采购单位不一致、采购币种不是人民币、金额数量或申报单价汇率缺失时不计算，不显示 0；
-- 采购单价超过人民币报关单价且差额大于配置容差时才标异常；容差内保留真实幅度。
+- 采购折算报关单价 = 关联采购行含税总金额 ÷ 总报关数量，不先舍入；
+- 双方报关单位不一致、采购币种不是人民币、金额数量或申报单价汇率缺失时不计算，不显示 0；
+- 采购折算报关单价超过人民币申报单价且差额大于配置容差时才标异常；容差内保留真实幅度。
 """
 
 from decimal import ROUND_HALF_UP, Decimal
@@ -41,20 +41,20 @@ def declared_margin(
     if not purchase_rows:
         return unavailable("没有行级关联的子采购行")
     customs_unit = unit_label(customs_row["declared_unit"], unit_names)
-    if any(unit_label(row["unit"], unit_names) != customs_unit for row in purchase_rows):
-        return unavailable("报关行与子采购行单位不一致，不计算申报幅度")
+    if not customs_unit or any(not unit_label(row["declared_unit"], unit_names) for row in purchase_rows):
+        return unavailable("报关单位缺失，无法计算采购折算报关单价")
+    if any(unit_label(row["declared_unit"], unit_names) != customs_unit for row in purchase_rows):
+        return unavailable("报关行与子采购行报关单位不一致，不计算申报幅度")
     currencies = {(orders[row["purchase_order_id"]]["currency"] or "") for row in purchase_rows}
     if currencies != {CNY}:
         return unavailable("采购币种待核实" if "" in currencies else "采购币种不是人民币，不计算申报幅度")
-    if not customs_unit or any(not unit_label(row["unit"], unit_names) for row in purchase_rows):
-        return unavailable("单位缺失，无法计算合并采购单价")
     if any(row["amount"] is None for row in purchase_rows):
-        return unavailable("采购含税金额缺失，无法计算合并采购单价")
-    if any(row["quantity"] is None for row in purchase_rows):
-        return unavailable("采购数量缺失，无法计算合并采购单价")
-    quantity = sum((row["quantity"] for row in purchase_rows), Decimal(0))
-    if quantity <= 0:
-        return unavailable("采购总数量须大于 0，无法计算合并采购单价")
+        return unavailable("采购含税金额缺失，无法计算采购折算报关单价")
+    if any(row["declared_quantity"] is None for row in purchase_rows):
+        return unavailable("子采购报关数量缺失，无法计算采购折算报关单价")
+    if any(row["declared_quantity"] <= 0 for row in purchase_rows):
+        return unavailable("子采购报关数量须大于 0，无法计算采购折算报关单价")
+    quantity = sum((row["declared_quantity"] for row in purchase_rows), Decimal(0))
     purchase = sum((row["amount"] for row in purchase_rows), Decimal(0)) / quantity
     candidates = [
         sales_orders.get(orders[row["purchase_order_id"]].get("sales_order_id")) for row in purchase_rows
@@ -74,7 +74,7 @@ def declared_margin(
     # 按未舍入的人民币单价差额判断，避免把刚超出阈值的差额舍入后放行。
     difference = purchase - declared
     abnormal = difference > tolerance
-    note = "报关单价低于采购价" if abnormal else ""
+    note = "申报单价低于采购折算报关单价" if abnormal else ""
     if Decimal(0) < difference <= tolerance:
         difference_text = format(difference, "f")
         if "." in difference_text:

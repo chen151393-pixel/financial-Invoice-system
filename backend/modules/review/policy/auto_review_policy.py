@@ -6,13 +6,13 @@
 - 子采购行全部有行级关联（没有未关联报关行的子采购行）；
 - 全部子采购行含税金额齐全；
 - 全部子采购单币种已确定（来源给出或已人工核实）；
-- 每条报关行的申报幅度都已算出，采购单价超过报关单价的差额未超出容差。
+- 每条报关行的申报幅度都已算出，采购折算报关单价超过申报单价的差额未超出容差。
 供应商白名单待业务确认，暂未纳入。
 """
 
 
 def margin_alert(margins):
-    """任一报关行的采购单价超出报关单价容差即提醒。"""
+    """任一报关行的采购折算报关单价超出申报单价容差即提醒。"""
     return any(margin["status"] == "negative" for margin in margins)
 
 
@@ -32,7 +32,7 @@ def auto_review_reasons(state, changed, unlinked_count, purchase_rows, currencie
     if not currencies_known:
         reasons.append("子采购币种待核实")
     if margin_alert(margins):
-        reasons.append("采购单价高于人民币报关单价且超出容差")
+        reasons.append("采购折算报关单价高于人民币申报单价且超出容差")
     unavailable = [margin["note"] for margin in margins if margin["status"] == "unavailable"]
     if unavailable:
         reasons.append(f"申报幅度无法计算：{unavailable[0]}")

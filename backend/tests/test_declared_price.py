@@ -67,7 +67,9 @@ def test_margin_uses_unit_prices_and_skips_unit_mismatch(currency):
     orders = {1: {"currency": "CNY", "sales_order_id": 9}}
     sales = {9: {"id": 9, "order_no": "SO1", "currency": "USD", "exchange_rate": Decimal("7.1")}}
     line = {
-        "unit": "个",
+        "unit": "卷",
+        "declared_unit": "个",
+        "declared_quantity": Decimal("5"),
         "unit_price": Decimal("12"),
         "amount": Decimal("60"),
         "quantity": Decimal("5"),
@@ -82,9 +84,12 @@ def test_margin_uses_unit_prices_and_skips_unit_mismatch(currency):
     assert result["purchase"] == Decimal("10.05")
     negative = declared_margin(customs_row, [line], orders, sales)
     assert negative["status"] == "negative" and negative["margin"] == Decimal("-12.68")
-    assert negative["note"] == "报关单价低于采购价"
+    assert negative["note"] == "申报单价低于采购折算报关单价"
     weighted = declared_margin(
-        customs_row, [line, {**line, "amount": Decimal("20"), "quantity": Decimal("10")}], orders, sales
+        customs_row,
+        [line, {**line, "amount": Decimal("20"), "declared_quantity": Decimal("10")}],
+        orders,
+        sales,
     )
     assert weighted["purchase"] == Decimal("80") / Decimal("15")
     assert declared_margin({**customs_row, "amount": None}, [line], orders, sales) == (
@@ -102,9 +107,9 @@ def test_margin_uses_unit_prices_and_skips_unit_mismatch(currency):
             {**customs_row, "declared_unit_price": None, field: value}, [line], orders, sales
         )
         assert missing_price["margin"] is None and "无法试算" in missing_price["note"]
-    for field, value in (("amount", None), ("quantity", None), ("quantity", Decimal(0))):
+    for field, value in (("amount", None), ("declared_quantity", None), ("declared_quantity", Decimal(0))):
         assert declared_margin(customs_row, [{**line, field: value}], orders, sales)["margin"] is None
-    mismatch = declared_margin(customs_row, [{**line, "unit": "千克"}], orders, sales)
+    mismatch = declared_margin(customs_row, [{**line, "declared_unit": "千克"}], orders, sales)
     assert mismatch["status"] == "unavailable" and "单位不一致" in mismatch["note"]
     missing = declared_margin(customs_row, [line], orders, {})
     assert missing["status"] == "unavailable" and missing["margin"] is None
@@ -141,25 +146,35 @@ def test_margin_does_not_display_negative_zero():
             "currency": "US Dollar",
             "sales_order_no": "SO1",
         },
-        [{"unit": "片", "amount": Decimal("237.87"), "quantity": Decimal("1"), "purchase_order_id": 1}],
+        [
+            {
+                "declared_unit": "片",
+                "amount": Decimal("237.87"),
+                "declared_quantity": Decimal("1"),
+                "purchase_order_id": 1,
+            }
+        ],
         {1: {"currency": "CNY", "sales_order_id": 9}},
         {9: {"id": 9, "order_no": "SO1", "currency": "USD", "exchange_rate": Decimal("6.71")}},
         tolerance=Decimal("0"),
     )
     assert str(result["margin"]) == "0.00"
     assert result["status"] == "negative"  # 关闭容差时，即使幅度舍入为零仍提示倒挂
-    assert result["note"] == "报关单价低于采购价"
+    assert result["note"] == "申报单价低于采购折算报关单价"
 
 
 def test_review_page_shows_margin_per_customs_line(ns, engine, service):
     order = purchase(amounts=("120.00", "20.00"))
+    for _, record in order[2]:
+        record["custrecord_swc_subpo_item_bgunit"] = "个"
+        record["custrecord_swc_subpo_item_bgqty"] = Decimal("10")
     order[2][0][1]["custrecord_swc_subpo_item_ratewithrate"] = Decimal("12")
     order[2][1][1]["custrecord_swc_subpo_item_ratewithrate"] = Decimal("2")
     save(ns, engine, bundle([order], [customs("870")]))
     lines = group(service, "CD870").customsLines
     assert [(line.margin, line.marginStatus) for line in lines] == [("-12.68%", "negative"), ("81.22%", "ok")]
     assert lines[0].declaredUnitPriceCny == "10.65" and lines[0].combinedPurchaseUnitPrice == "12"
-    assert lines[0].marginNote == "报关单价低于采购价"
+    assert lines[0].marginNote == "申报单价低于采购折算报关单价"
     assert lines[0].purchaseLines[0].salesOrderExchangeRate == "7.1"
     set_rate(engine, None)
     lines = group(service, "CD870").customsLines
@@ -174,6 +189,9 @@ def test_review_page_shows_margin_per_customs_line(ns, engine, service):
 def test_review_page_estimates_missing_declared_price(ns, engine, service):
     # NS 未填申报单价：按报关金额 15 ÷ 报关数量 10 试算 1.5，申报幅度与填写时相同并标注试算
     order = purchase(amounts=("120.00", "20.00"))
+    for _, record in order[2]:
+        record["custrecord_swc_subpo_item_bgunit"] = "个"
+        record["custrecord_swc_subpo_item_bgqty"] = Decimal("10")
     customs_id, head, lines = customs("870")
     for _, record in lines:
         del record["custrecord_swc_grossamountzj"]

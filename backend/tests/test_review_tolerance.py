@@ -34,9 +34,9 @@ def test_unit_price_tolerance_boundary(difference, status):
         },
         [
             {
-                "unit": "片",
+                "declared_unit": "片",
                 "amount": (Decimal("237.8695") + difference) * 60,
-                "quantity": Decimal("60"),
+                "declared_quantity": Decimal("60"),
                 "purchase_order_id": 1,
             }
         ],
@@ -65,7 +65,11 @@ def test_default_and_zero_tolerance_config():
 @pytest.mark.parametrize("tolerance,alert", [("0.10", False), ("0.05", True), ("0", True)])
 def test_configured_tolerance_reaches_api_counts_and_filters(context, ns, engine, tolerance, alert):
     # 10.65 元申报单价与 107.50 / 10 = 10.75 元采购单价，差额恰好 0.10 元。
-    save(ns, engine, bundle([purchase(amounts=("107.50", "20.00"))], [customs("870")]))
+    order = purchase(amounts=("107.50", "20.00"))
+    for _, record in order[2]:
+        record["custrecord_swc_subpo_item_bgunit"] = "个"
+        record["custrecord_swc_subpo_item_bgqty"] = Decimal("10")
+    save(ns, engine, bundle([order], [customs("870")]))
     context.settings.review_unit_price_tolerance_cny = load_settings(
         {"REVIEW_UNIT_PRICE_TOLERANCE_CNY": tolerance}
     ).review_unit_price_tolerance_cny

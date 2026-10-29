@@ -78,7 +78,8 @@ def test_real_database_page_aggregates_are_integer_counts(schema_engine, ns):
     from backend.modules.review.dto.review_dto import DeclarationListQuery
     from backend.modules.review.service.review_service import ReviewService
     from backend.modules.source.public import DeclarationService
-    from backend.tests.test_source_storage import bundle, customs, purchase, save
+    from backend.tests.review_helpers import comparable_purchase as purchase
+    from backend.tests.test_source_storage import bundle, customs, save
 
     save(ns, schema_engine, bundle([purchase()], [customs("870")]))
     review = ReviewService(schema_engine, DeclarationService(schema_engine), create_events())

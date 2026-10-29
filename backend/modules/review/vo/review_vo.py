@@ -27,6 +27,8 @@ class PurchaseLine(StrictModel):
     quantity: str
     unit: str
     price: str
+    purchaseQuantity: str = ""
+    purchaseUnit: str = ""
     amount: str
     currency: str
     salesOrderExchangeRate: str = ""
