@@ -42,7 +42,7 @@ export function WritebackStats({
         glyph="成"
         label="NS 已登记"
         value={`${counts.applied} 张`}
-        note="NS 已完整登记，包含人工核实完成"
+        note="包含本次回写、同号已有登记及人工核实"
         selected={selected === "applied"}
         onSelect={() => onSelect("applied")}
       />
@@ -51,7 +51,7 @@ export function WritebackStats({
         tone={counts.attention ? "warning" : "neutral"}
         label="需处理"
         value={`${counts.attention} 张`}
-        note="待处理、同号冲突、部分写入或结果不明"
+        note="待处理、部分写入或结果不明"
         selected={selected === "attention"}
         onSelect={() => onSelect("attention")}
       />

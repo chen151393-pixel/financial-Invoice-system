@@ -41,7 +41,7 @@
 
 列表搜索拆为 `taskNo`（任务号）、`invoiceNo`（发票号码）、`supplierName`（供应商）和 `parentOrderNo`（母采购单号），非空条件按 AND 组合、去除首尾空白并做转义包含匹配；旧 `keyword` 混合搜索仍兼容。母单号仅查任务不可变审核快照 `snapshot.sources.*.parent_number`，不查候选账单、备注或实时来源。列表、分页总数和状态概况共用同一搜索表达式；一个任务匹配多个母单也只计一次。任务摘要新增去重的 `parentOrders: [{id, number}]`，列表展示该任务的全部母单，历史快照缺失时为空。不增加表或修改历史快照。
 
-列表概况分为待回写（`queued/waiting_bill/needs_confirmation/needs_preview/ready`）、回写中（`executing`）、NS 已登记（`applied`）、需处理（`blocked/conflict/partial/unknown`），审核已失效（`stale`）单独筛选。分组仅用于查询展示，不改变任何状态或允许动作；同号冲突不视为完整登记，部分写入与结果不明仍须人工核实。
+列表概况分为待回写（`queued/waiting_bill/needs_confirmation/needs_preview/ready`）、回写中（`executing`）、NS 已登记（`applied/conflict`）、需处理（`blocked/partial/unknown`），审核已失效（`stale`）单独筛选。2026-10-30 起，新旧同号已有登记任务均计入“NS 已登记”，不再进入“需处理”，无需重查或数据迁移。分组只用于查询展示，保留 `conflict` 及其“NS 已有同号登记”细分说明，不改变允许动作或将已有登记改记为本次写入成功；部分写入与结果不明仍须人工核实。
 
 列表新增 `group=pending|executing|applied|attention|stale`（空为全部），与原 `state` 精确筛选共同生效。响应新增 `counts`（`all` 与五个分组）及 `states`（12 个细分状态的 `state/label/group/count`）。全部计数由数据库按组合搜索条件汇总，沿用任务号／发票号／供应商的相同转义包含查询，不受状态、分组和分页限制，也不调用外部 NS。搜索条件无匹配记录时返回零计数。无表结构或迁移变化。
 
@@ -74,6 +74,6 @@
 
 ## 查询阶段核对已有登记（2026-10-30）
 
-`query_service` 使用审核快照的供应商内部 ID 和本张发票完整号码，通过 source 查询门面读取 NS 同号有效登记。结果保存在 `candidates.registrationCheck`，包含核对号码和已有记录的 ID、号码、日期。查到记录优先进入 `conflict`（“NS 已有同号登记”），归入“需处理”，不生成方案，不允许确认或执行；不将其当作本次回写成功。额度为零不能单独证明本张发票已登记。
+`query_service` 使用审核快照的供应商内部 ID 和本张发票完整号码，通过 source 查询门面读取 NS 同号有效登记。结果保存在 `candidates.registrationCheck`，包含核对号码和已有记录的 ID、号码、日期。查到记录优先进入 `conflict`（“NS 已有同号登记”），归入“NS 已登记”，不生成方案，不允许确认或执行；不将其当作本次回写成功。额度为零不能单独证明本张发票已登记。
 
 `policy/registration_policy.py` 供方案确认、执行和动作展示复用。历史待写入任务若没有本张发票的核对结果，必须重新查询；查询失败、旧脚本未返回核对结果时阻塞，不按未登记放行。写入 RESTlet 仍保留最终同号检查，防止查询后已有新登记。无需数据库迁移，NS 只读查询脚本须先升级到 `2026-10-30.4`，详见部署说明。

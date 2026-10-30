@@ -3,8 +3,8 @@
 GROUP_STATES = {
     "pending": ("queued", "waiting_bill", "needs_confirmation", "needs_preview", "ready"),
     "executing": ("executing",),
-    "applied": ("applied",),
-    "attention": ("blocked", "conflict", "partial", "unknown"),
+    "applied": ("applied", "conflict"),
+    "attention": ("blocked", "partial", "unknown"),
     "stale": ("stale",),
 }
 

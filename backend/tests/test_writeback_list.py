@@ -59,8 +59,8 @@ def test_writeback_counts_cover_all_states_without_page_or_status_filter(listing
         "all": 12,
         "pending": 5,
         "executing": 1,
-        "applied": 1,
-        "attention": 4,
+        "applied": 2,
+        "attention": 3,
         "stale": 1,
     }
     assert {option["state"] for option in result["states"]} == set(LABELS)
@@ -73,6 +73,22 @@ def test_writeback_counts_cover_all_states_without_page_or_status_filter(listing
         assert {row["state"] for row in selected["items"]} == set(expected)
         assert selected["total"] == result["counts"][group]
         assert selected["counts"] == result["counts"]
+
+
+def test_existing_registration_is_listed_as_registered_without_changing_stored_state(engine, listing):
+    with engine.connect() as connection:
+        before = connection.execute(select(tasks).where(tasks.c.state == "conflict")).mappings().one()
+    registered = listing.list(TaskQuery(group="applied", state="conflict"))
+    assert registered["total"] == 1
+    row = registered["items"][0]
+    assert row["state"] == "conflict" and row["stateLabel"] == "NS 已有同号登记"
+    assert not row["writeback"]["allowed"]
+    assert listing.list(TaskQuery(group="attention", state="conflict"))["total"] == 0
+    option = next(item for item in registered["states"] if item["state"] == "conflict")
+    assert option["group"] == "applied"
+    with engine.connect() as connection:
+        after = connection.execute(select(tasks).where(tasks.c.id == before["id"])).mappings().one()
+    assert dict(after) == dict(before)
 
 
 def test_exact_state_and_keyword_share_count_scope_and_escape_sql_wildcards(listing):
