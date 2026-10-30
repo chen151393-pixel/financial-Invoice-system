@@ -1,47 +1,109 @@
-/* 回签合同批量上传窗口 */
+/* 回签合同：选择文件与本次结果；路径收起避免横向滚动。 */
+.ui-dialog.itd-upload-dialog {
+  width: min(840px, calc(100vw - 32px));
+}
 .itd-upload {
   display: grid;
   gap: var(--space-control);
-  padding-top: var(--space-control);
+  padding-top: var(--space-small);
+  min-width: 0;
 }
-.itd-upload__picker {
-  display: grid;
+.itd-upload__intro,
+.itd-upload__muted,
+.itd-upload__rules {
+  color: var(--color-muted);
+}
+.itd-upload__intro,
+.itd-upload__message,
+.itd-upload__reason {
+  margin: 0;
+}
+.itd-upload__muted {
+  display: block;
+  font-size: 12px;
+}
+.itd-upload__selection ul {
+  list-style: none;
+  padding: 0;
+  margin: var(--space-small) 0 0;
+  max-height: 160px;
+  overflow-y: auto;
+}
+.itd-upload__selection li,
+.itd-upload__job-heading,
+.itd-upload__actions {
+  display: flex;
+  align-items: center;
   gap: var(--space-small);
-  font-weight: 600;
 }
-.itd-upload__picker input {
-  font: inherit;
-  font-weight: 400;
+.itd-upload__selection li,
+.itd-upload__job-heading {
+  justify-content: space-between;
 }
+.itd-upload__selection li > span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.itd-upload__selection li > button {
+  flex-shrink: 0;
+}
+.itd-upload__actions {
+  flex-wrap: wrap;
+}
+.itd-upload__results h4 {
+  margin: 0;
+  font-size: 15px;
+}
+.itd-upload__results,
 .itd-upload__job {
   display: grid;
   gap: var(--space-control);
   min-width: 0;
-  padding-block: var(--space-control);
+  padding-top: var(--space-control);
   border-top: 1px solid var(--color-border);
 }
-.itd-upload__job h4 {
-  margin: 0;
+.itd-upload__filename {
+  display: block;
+  overflow-wrap: anywhere;
+  font-weight: 500;
 }
-.itd-upload__actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-small);
+.itd-upload .ui-table {
+  table-layout: fixed;
+}
+.itd-upload .ui-table td {
+  overflow-wrap: anywhere;
+}
+.itd-upload__reason {
+  margin-block: 6px;
+}
+.itd-upload__path {
+  color: var(--color-muted);
+  font-size: 12px;
+}
+.itd-upload__path summary,
+.itd-upload__rules summary {
+  cursor: pointer;
+}
+.itd-upload__path span {
+  display: block;
+  overflow-wrap: anywhere;
 }
 .itd-upload__assign {
   display: flex;
   flex-wrap: wrap;
   gap: var(--space-small);
+  margin-top: var(--space-small);
 }
 .itd-upload__assign input {
   min-width: 0;
-  width: 140px;
-  padding: 4px 8px;
+  width: 100%;
+  padding: 6px 8px;
   border: 1px solid var(--color-input-border);
   border-radius: var(--radius-control);
   font: inherit;
 }
-.itd-upload .it-secondary {
-  display: block;
-  color: var(--color-muted);
+@media (max-width: 520px) {
+  .ui-dialog.itd-upload-dialog {
+    padding: 16px;
+  }
 }

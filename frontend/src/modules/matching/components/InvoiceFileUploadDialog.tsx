@@ -26,6 +26,9 @@ export function InvoiceFileUploadDialog({
   return (
     <BatchUpload
       title="批量上传发票文件"
+      fileLabel="发票文件"
+      pickerHint="支持 PDF、JPG、PNG · 单个文件最高 10 MB · 可多选"
+      intro="按发票号码匹配已通过的比对结果并归档，仅展示本次上传结果。"
       help="支持 PDF、JPG、PNG，单个文件不超过 10 MB。文件名需包含发票号码（税务平台下载的文件名已包含），只归档比对已通过的发票：系统按其分配的子采购单保存到“月份/CD号_真实报关单号”文件夹，跨报关单时每个文件夹各存一份；已有不同文件时不会覆盖。"
       accept=".pdf,.jpg,.jpeg,.png"
       targetLabel="发票号码"

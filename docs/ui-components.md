@@ -47,7 +47,8 @@ import { Card, CardHeader, CardContent, MetricCard, MetricGrid, Badge } from "..
 | `DonutChart`                                         | 环形占比                     | 中心合计 + 图例，图例文本由调用方给出                                                                                                        |
 | `Sparkline` / `Gauge`                                | 迷你走势、半圆仪表           | 只表达形状或单一比率                                                                                                                         |
 | `Dialog`                                             | 模态弹窗                     | 焦点进入弹窗、背景不可操作，关闭后回到触发控件；`busy` 时不能关闭                                                                             |
-| `BatchUpload`                                        | 批量上传窗口                 | 分批提交文件、逐个展示后端结果；`assignable` 状态的文件可填写归属编号重传；格式与归属不在前端判断                                              |
+| `BatchUpload`                                        | 批量上传窗口                 | 复用 FileDropzone 选择／拖入、追加与移除文件；只显示本次结果、路径折叠、重开清空；每批立即展示并保留中途失败前的结果；`assignable` 状态可填写编号重传；格式与归属由后端判断。 |
+| `FileDropzone` | 文件选择与拖入 | 整块区域点击或键盘选择，支持多选、文件拖入高亮与禁用状态；选择和拖入统一回调，不判断业务格式、大小或归属，取消选择保留原列表。 |
 | `Icon`                                               | 线性图标                     | 新图标在 `Icon.tsx` 登记，不在页面手画                                                                                                       |
 | `Button` / `Pagination`                              | 既有公共组件                 | `Button` 支持 `primary` / `secondary` / `ghost` 与 `size="sm"`；同样从本入口导出                                                             |
 

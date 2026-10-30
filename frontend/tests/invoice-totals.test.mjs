@@ -5,7 +5,7 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { createServer } from "vite";
 
-let server, View, api, Filters, emptyFilters, invoiceApi;
+let server, View, api, Filters, emptyFilters, invoiceApi, FileUpload, UploadResults;
 before(async () => {
   server = await createServer({
     configFile: fileURLToPath(new URL("../vite.config.ts", import.meta.url)),
@@ -21,6 +21,70 @@ before(async () => {
     "/src/modules/invoice/components/InvoiceFilters.tsx",
   ));
   invoiceApi = await server.ssrLoadModule("/src/modules/invoice/api/invoice.ts");
+  ({ InvoiceFileUploadDialog: FileUpload } = await server.ssrLoadModule(
+    "/src/modules/matching/components/InvoiceFileUploadDialog.tsx",
+  ));
+  ({ BatchUploadResults: UploadResults } = await server.ssrLoadModule(
+    "/src/shared/components/ui/BatchUploadResults.tsx",
+  ));
+});
+
+test("发票上传沿用拖入区和本次结果交互，保留 10 MB、比对通过和不覆盖说明", () => {
+  const html = renderToStaticMarkup(
+    createElement(FileUpload, { upload: async () => ({ items: [] }), onClose() {} }),
+  );
+  assert.match(html, /点击选择或拖入发票文件/);
+  assert.match(html, /10 MB/);
+  assert.match(html, /只归档比对已通过的发票/);
+  assert.match(html, /不会覆盖/);
+  assert.match(html, /重新打开窗口时清空上次展示/);
+  assert.match(html, /type="file" multiple="" accept=".pdf,.jpg,.jpeg,.png"/);
+  assert.match(html, /disabled=""[^>]*>开始上传/);
+  assert.doesNotMatch(html, /100 MB|选择文件后提交|本次处理结果<\/h4>/);
+});
+
+test("发票结果显示真实失败和多处归档路径，路径折叠且仅允许指定状态补号码", () => {
+  const result = (index, status) => ({
+    index,
+    file: null,
+    target: "",
+    result: {
+      filename: `发票${index}.pdf`,
+      target: status === "saved" ? "260000000001" : "",
+      status,
+      reason: status === "saved" ? "已归档两张报关单" : "后端拒绝归档",
+      paths: status === "saved" ? ["共享盘/CD870/发票.pdf", "共享盘/CD871/发票.pdf"] : [],
+    },
+  });
+  const props = {
+    rows: [result(0, "saved"), result(1, "unmatched"), result(2, "conflict")],
+    busy: false,
+    targetLabel: "发票号码",
+    targetMaxLength: 100,
+    statusLabels: { saved: "已保存", unmatched: "未识别发票号码", conflict: "已有不同文件，未覆盖" },
+    assignable: ["unmatched", "ambiguous"],
+    onAssign() {},
+    onRetry() {},
+  };
+  const html = renderToStaticMarkup(createElement(UploadResults, props));
+  assert.match(html, /文件 \/ 发票号码/);
+  assert.match(html, /已有不同文件，未覆盖/);
+  assert.match(html, /后端拒绝归档/);
+  assert.match(html, /共享盘\/CD870\/发票.pdf/);
+  assert.match(html, /共享盘\/CD871\/发票.pdf/);
+  assert.match(html, /<details class="ui-upload__paths"><summary>查看保存位置/);
+  assert.equal((html.match(/指定发票号码/g) || []).length, 1);
+  assert.match(html, /min-width:0/);
+  assert.match(html, /disabled=""[^>]*>按此编号重新上传/);
+  const filled = renderToStaticMarkup(
+    createElement(UploadResults, {
+      ...props,
+      busy: true,
+      rows: [{ ...result(1, "unmatched"), target: "260000000002" }],
+    }),
+  );
+  assert.match(filled, /value="260000000002"/);
+  assert.match(filled, /disabled=""[^>]*>按此编号重新上传/);
 });
 after(async () => {
   await server?.close();

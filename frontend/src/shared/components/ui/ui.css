@@ -1264,10 +1264,14 @@ button.ui-metric:focus-visible {
 }
 
 /* BatchUpload */
+.ui-dialog.ui-upload-dialog {
+  width: min(840px, calc(100vw - 32px));
+}
 .ui-upload {
   display: grid;
   gap: var(--space-control);
-  padding-top: var(--space-control);
+  padding-top: var(--space-small);
+  min-width: 0;
 }
 .ui-upload__help {
   margin: 0;
@@ -1275,30 +1279,87 @@ button.ui-metric:focus-visible {
   font-size: 12px;
   line-height: 1.7;
 }
-.ui-upload__picker {
-  display: grid;
+.ui-upload__heading,
+.ui-upload__actions,
+.ui-upload__selection li {
+  display: flex;
+  align-items: center;
   gap: var(--space-small);
-  font-weight: 600;
 }
-.ui-upload__picker input {
-  font: inherit;
-  font-weight: 400;
+.ui-upload__heading,
+.ui-upload__selection li {
+  justify-content: space-between;
 }
-.ui-upload__error {
+.ui-upload__actions {
+  flex-wrap: wrap;
+}
+.ui-upload__selection ul {
+  list-style: none;
+  padding: 0;
+  margin: var(--space-small) 0 0;
+  max-height: 160px;
+  overflow-y: auto;
+}
+.ui-upload__selection li > span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.ui-upload__selection li > button {
+  flex-shrink: 0;
+}
+.ui-upload__rules {
+  color: var(--color-muted);
+  font-size: 12px;
+}
+.ui-upload__rules summary,
+.ui-upload__paths summary {
+  cursor: pointer;
+}
+.ui-upload__results {
+  min-width: 0;
+  display: grid;
+  gap: var(--space-control);
+  padding-top: var(--space-control);
+  border-top: 1px solid var(--color-border);
+}
+.ui-upload__results h4 {
   margin: 0;
-  padding: 12px;
-  background: var(--color-canvas);
-  color: var(--color-feedback);
+  font-size: 15px;
+}
+.ui-upload__results .ui-table {
+  table-layout: fixed;
+}
+.ui-upload__results .ui-table td {
+  overflow-wrap: anywhere;
+}
+.ui-upload__filename {
+  display: block;
+  font-weight: 500;
+}
+.ui-upload__target,
+.ui-upload__paths {
+  display: block;
+  color: var(--color-muted);
+  font-size: 12px;
+}
+.ui-upload__reason {
+  margin: 6px 0;
+}
+@media (max-width: 520px) {
+  .ui-dialog.ui-upload-dialog {
+    padding: 16px;
+  }
 }
 .ui-upload__assign {
   display: flex;
   flex-wrap: wrap;
   gap: var(--space-small);
+  margin-top: var(--space-small);
 }
 .ui-upload__assign input {
   min-width: 0;
-  width: 140px;
-  padding: 4px 8px;
+  width: 100%;
+  padding: 6px 8px;
   border: 1px solid var(--color-input-border);
   border-radius: var(--radius-control);
   font: inherit;
@@ -1307,4 +1368,5 @@ button.ui-metric:focus-visible {
   display: block;
   color: var(--color-muted);
   font-size: 12px;
+  overflow-wrap: anywhere;
 }

@@ -3,7 +3,6 @@ import { readImportFile } from "../../../shared/api/import-file";
 import {
   createSignedUpload,
   getSignedUpload,
-  listSignedUploads,
   retrySignedUpload,
   uploadSignedChunk,
 } from "../api/signed-upload";
@@ -13,37 +12,55 @@ import type { UploadBatch } from "../types/signed-upload";
 export function useSignedUploads() {
   const [jobs, setJobs] = useState<UploadBatch[]>([]);
   const [busy, setBusy] = useState(false);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [transfers, setTransfers] = useState<Record<string, string>>({});
   const mounted = useRef(true);
   const sending = useRef(false);
   const localFiles = useRef(new Map<string, File>());
   const manifests = useRef(new WeakMap<File, { id: string; files: File[] }>());
+  const currentJobs = useRef(new Map<string, UploadBatch>());
+  const selection = useRef<File[]>([]);
+  const revision = useRef(0);
+  const refreshing = useRef(false);
+  const changed = useRef(false);
 
   const update = useCallback((job: UploadBatch) => {
-    if (mounted.current) setJobs((current) => [job, ...current.filter((v) => v.id !== job.id)]);
+    if (!mounted.current) return;
+    currentJobs.current.set(job.id, job);
+    if (job.saved > 0) changed.current = true;
+    setJobs(Array.from(currentJobs.current.values()));
   }, []);
   const refresh = useCallback(async () => {
+    if (sending.current || refreshing.current || !currentJobs.current.size) return;
+    refreshing.current = true;
+    const requested = revision.current;
+    setLoading(true);
     try {
-      const result = await listSignedUploads();
-      if (mounted.current && !sending.current) {
-        setJobs(result.items);
+      const result = await Promise.all(Array.from(currentJobs.current.keys(), getSignedUpload));
+      if (mounted.current && !sending.current && revision.current === requested) {
+        result.forEach(update);
         setError("");
       }
     } catch (reason) {
-      if (mounted.current) setError(reason instanceof Error ? reason.message : "任务查询失败");
+      if (mounted.current && revision.current === requested)
+        setError(reason instanceof Error ? reason.message : "任务查询失败");
     } finally {
+      refreshing.current = false;
       if (mounted.current) setLoading(false);
     }
-  }, []);
+  }, [update]);
 
   useEffect(() => {
     mounted.current = true;
     let stopped = false;
     let timer: ReturnType<typeof setTimeout>;
     async function poll() {
-      if (!sending.current) await refresh();
+      if (
+        !sending.current &&
+        Array.from(currentJobs.current.values()).some((job) => job.phase !== "completed")
+      )
+        await refresh();
       if (!stopped) timer = setTimeout(() => void poll(), 2000);
     }
     void poll();
@@ -76,8 +93,20 @@ export function useSignedUploads() {
   }
 
   async function submit(files: File[]) {
-    if (sending.current) return;
+    if (sending.current || !files.length) return false;
     sending.current = true;
+    revision.current += 1;
+    // 重试同组选中文件沿用已建批次；新一轮上传只展示本次结果。
+    if (
+      selection.current.length !== files.length ||
+      files.some((file, index) => selection.current[index] !== file)
+    ) {
+      selection.current = files;
+      currentJobs.current.clear();
+      localFiles.current.clear();
+      setJobs([]);
+      setTransfers({});
+    }
     setBusy(true);
     setError("");
     try {
@@ -112,6 +141,7 @@ export function useSignedUploads() {
   async function retry(job: UploadBatch, fileId: string, orderNo: string) {
     if (sending.current) return;
     sending.current = true;
+    revision.current += 1;
     setBusy(true);
     setError("");
     try {
@@ -138,5 +168,6 @@ export function useSignedUploads() {
     retry,
     refresh,
     canResume: (id: string) => localFiles.current.has(id),
+    changed: changed.current,
   };
 }

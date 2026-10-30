@@ -3,7 +3,6 @@ import type { UploadBatch } from "../types/signed-upload";
 
 const root = "/tasks/signed-contracts/upload-jobs";
 const batch = (id: string) => `${root}/${encodeURIComponent(id)}`;
-export const listSignedUploads = () => http<{ items: UploadBatch[] }>(root);
 export const getSignedUpload = (id: string) => http<UploadBatch>(batch(id));
 export const createSignedUpload = (requestId: string, files: { filename: string; size: number }[]) =>
   http<UploadBatch>(root, "POST", { requestId, files });

@@ -6,7 +6,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { createServer } from "vite";
 
 // 合成样本只用于组件验证，不连接真实 NS、共享盘或业务数据库。
-let server, api, uploadApi, Declarations, Signed, Upload;
+let server, api, uploadApi, Declarations, Signed, Upload, Results, Dropzone;
 before(async () => {
   server = await createServer({
     configFile: fileURLToPath(new URL("../vite.config.ts", import.meta.url)),
@@ -25,6 +25,10 @@ before(async () => {
   ({ SignedContractUpload: Upload } = await server.ssrLoadModule(
     "/src/modules/task/components/SignedContractUpload.tsx",
   ));
+  ({ SignedUploadResults: Results } = await server.ssrLoadModule(
+    "/src/modules/task/components/SignedUploadResults.tsx",
+  ));
+  ({ FileDropzone: Dropzone } = await server.ssrLoadModule("/src/shared/components/ui/FileDropzone.tsx"));
 });
 after(async () => {
   await server?.close();
@@ -115,7 +119,87 @@ test("上传窗口说明格式、大小与不覆盖规则，未选择文件时�
   assert.match(html, /100 MB/);
   assert.match(html, /后台队列/);
   assert.match(html, /<input type="file" multiple=""/);
-  assert.match(html, /<button[^>]*disabled=""[^>]*>上传 0 个文件/);
+  assert.match(html, /<button[^>]*disabled=""[^>]*>开始上传/);
+  assert.match(html, /点击选择或拖入回签合同/);
+  assert.match(html, /下次打开窗口将清空本次展示/);
+  assert.doesNotMatch(html, /最近任务|暂无上传任务|正在读取上传任务/);
+});
+
+test("当前结果优先展示文件和状态，成功不再占用双进度条，路径默认折叠", () => {
+  const job = {
+    id: "private-batch-id",
+    phase: "completed",
+    total: 2,
+    finished: 2,
+    saved: 1,
+    message: "已处理 2/2 个文件，已保存 1 个",
+    uploadPercent: 100,
+    progressPercent: 100,
+    items: [
+      {
+        id: "1",
+        filename: "SUB-200.pdf",
+        status: "saved",
+        reason: "已保存到共享盘",
+        orderNumber: "SUB-200",
+        archivePath: "\\\\share\\SUB-200.pdf",
+        canRetry: false,
+      },
+      {
+        id: "2",
+        filename: "无单号.pdf",
+        status: "unmatched",
+        reason: "未找到子采购单号，请核对后重试",
+        orderNumber: "",
+        archivePath: null,
+        canRetry: true,
+      },
+    ],
+  };
+  const html = renderToStaticMarkup(
+    createElement(Results, {
+      job,
+      index: 0,
+      busy: false,
+      transfers: {},
+      canResume: () => false,
+      onRetry() {},
+    }),
+  );
+  assert.match(html, /已处理 2\/2 个文件，已保存 1 个/);
+  assert.match(html, /已保存/);
+  assert.match(html, /未识别单号/);
+  assert.match(html, /重新处理/);
+  assert.match(html, /<details class="itd-upload__path"><summary>查看保存位置/);
+  assert.match(html, /min-width:0/);
+  assert.doesNotMatch(html, /文件传输进度|后台处理进度|private-batch-id/);
+  const busy = renderToStaticMarkup(
+    createElement(Results, {
+      job,
+      index: 0,
+      busy: true,
+      transfers: {},
+      canResume: () => false,
+      onRetry() {},
+    }),
+  );
+  assert.match(busy, /disabled=""[^>]*>重新处理/);
+});
+
+test("拖入区有可键盘访问的多文件选择框，忙碌时禁用选择", () => {
+  const html = renderToStaticMarkup(
+    createElement(Dropzone, {
+      label: "选择合同",
+      hint: "支持多选",
+      accept: ".pdf",
+      multiple: true,
+      disabled: true,
+      onFiles() {},
+    }),
+  );
+  assert.match(html, /type="file" multiple="" accept=".pdf" disabled=""/);
+  assert.match(html, /aria-label="选择合同"/);
+  assert.match(html, /data-disabled="true"/);
 });
 
 test("报关资料重试与回签上传只提交必要字段，失败时返回后端原因", async (t) => {
