@@ -9,7 +9,7 @@ const tones: Record<string, Tone> = {
   ready: "info",
   executing: "progress",
   applied: "success",
-  conflict: "warning",
+  conflict: "success",
   partial: "warning",
   unknown: "warning",
   blocked: "danger",

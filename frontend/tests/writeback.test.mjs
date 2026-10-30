@@ -47,8 +47,14 @@ test("回写概况展示后端计数并保持当前分组，徽标区分完成�
   });
   assert.equal((html.match(/aria-pressed="true"/g) || []).length, 1);
   for (const value of ["20 张", "2 张", "10 张", "4 张", "需处理", "回写中"]) assert.ok(html.includes(value));
+  assert.match(html, /包含本次回写、同号已有登记及人工核实/);
+  assert.doesNotMatch(html, /同号冲突/);
   assert.match(
     render(StateBadge, { task: { state: "applied", stateLabel: "NS 已登记" } }),
+    /data-tone="success"/,
+  );
+  assert.match(
+    render(StateBadge, { task: { state: "conflict", stateLabel: "NS 已有同号登记" } }),
     /data-tone="success"/,
   );
   assert.match(

@@ -157,7 +157,10 @@ def test_query_conflict_precedes_zero_capacity_and_manual_confirmation(engine, p
     with pytest.raises(ApiError, match="任务或候选版本已变化"):
         prepared.service.confirm(prepared.task_id, confirmation(task), USER)
     listing = prepared.service.list(TaskQuery())
-    assert listing["counts"]["attention"] == 1 and listing["counts"]["pending"] == 0
+    assert listing["counts"]["applied"] == 1
+    assert listing["counts"]["attention"] == 0 and listing["counts"]["pending"] == 0
+    assert prepared.service.list(TaskQuery(group="applied"))["items"][0]["id"] == task["id"]
+    assert prepared.service.list(TaskQuery(group="attention"))["total"] == 0
     assert not rows(engine, "SELECT id FROM writeback_requests")
 
 
