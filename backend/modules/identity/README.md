@@ -2,6 +2,8 @@
 
 飞书登录、飞书部门与人员同步、角色与权限管理，以及应急管理员账号密码登录。方案与分期见 [飞书登录、部门同步与权限方案](../../../docs/feishu-identity-plan.md)；本文对应第 1 期（2026-10-28）。
 
+测试生命周期（2026-10-30）：`test_feishu_login.py` 与 `test_directory_selection.py` 共用 `application_clients`，每个应用只进入一次 lifespan；管理员和飞书登录浏览器只隔离 Cookie，统一登记关闭，不各自启动后台消费者。退出时先关闭浏览器，再退出应用生命周期，并断言实际后台线程全部结束。回归 `test_login_browsers_do_not_restart_background_workers` 禁止新增浏览器重启消费者；保留 `test_write_scope.py` 的精确锁记录断言，不过滤其他数据库调用来掩盖线程残留。
+
 ## 文件职责
 
 | 目录                     | 内容                                                                                                                                                                                                                                                                |

@@ -1,5 +1,6 @@
 """飞书登录、部门与成员同步、权限管理：使用模拟飞书接口，不访问真实飞书。"""
 
+from contextlib import ExitStack, contextmanager
 from urllib.parse import parse_qs, urlsplit
 
 import pytest
@@ -98,12 +99,63 @@ def feishu():
 
 @pytest.fixture
 def app(context, feishu):
-    return create_app(context.settings, context.ns, context.engine, feishu=feishu)
+    application = create_app(context.settings, context.ns, context.engine, feishu=feishu)
+    with application_clients(application, context.settings):
+        yield application
+
+
+@contextmanager
+def application_clients(app, settings):
+    """一个应用只进入一次 lifespan；不同浏览器只隔离 Cookie，不重复启动后台消费者。"""
+    threads = []
+    try:
+        with ExitStack() as clients:
+            clients.enter_context(TestClient(app, base_url=settings.origin))
+            # 保留实际线程引用，不能只看 worker.thread（重复 start 会覆盖它）。
+            for name in (
+                "contract_worker",
+                "wecom_directory_worker",
+                "signed_upload_worker",
+                "lemon_worker",
+                "ns_plan_worker",
+                "review_calculation_worker",
+                "directory_sync_worker",
+                "writeback_prepare_worker",
+            ):
+                thread = getattr(app.state, name).thread
+                if thread is not None:
+                    threads.append(thread)
+            app.state.test_clients = clients
+            yield
+    finally:
+        assert all(not thread.is_alive() for thread in threads), "登录测试结束后后台线程必须全部退出"
+
+
+def browser_client(app, settings, **options):
+    client = TestClient(app, base_url=settings.origin, **options)
+    app.state.test_clients.callback(client.close)
+    return client
+
+
+def test_login_browsers_do_not_restart_background_workers(app, context, feishu, monkeypatch):
+    worker = app.state.review_calculation_worker
+    thread = worker.thread
+    assert thread is not None and thread.is_alive()
+
+    def unexpected_start():
+        pytest.fail("新浏览器不应重新进入应用 lifespan、重启后台消费者")
+
+    monkeypatch.setattr(worker, "start", unexpected_start)
+    admin = admin_client(app, context.settings)
+    setup_directory(admin, context.settings)
+    client, callback, _ = feishu_login(app, context.settings, feishu, "u-wang")
+    assert callback.headers["location"] == "/review?status=pending"
+    assert client.get("/api/session").status_code == 200
+    assert worker.thread is thread and thread.is_alive()
 
 
 def admin_client(app, settings):
-    client = TestClient(app, base_url=settings.origin)
-    client.__enter__()
+    client = browser_client(app, settings)
     headers = {"Origin": settings.origin}
     body = {"username": settings.admin_user, "password": settings.admin_password}
     assert client.post("/api/session", json=body, headers=headers).status_code == 200
@@ -140,8 +192,7 @@ def setup_directory(client, settings, *, scopes=("采购部", "财务部"), role
 
 
 def feishu_login(app, settings, feishu, user_id, *, return_to="/review?status=pending"):
-    client = TestClient(app, base_url=settings.origin, follow_redirects=False)
-    client.__enter__()
+    client = browser_client(app, settings, follow_redirects=False)
     response = client.post(
         "/api/session/feishu/start", json={"returnTo": return_to}, headers={"Origin": settings.origin}
     )
@@ -212,12 +263,12 @@ def test_state_is_single_use_and_bound_to_browser(app, context, feishu):
     replay = client.get("/api/session/feishu/callback", params={"code": "code-again", "state": state})
     assert replay.headers["location"] == "/login"
     # 另一个浏览器拿到授权码与 state 也不能登录
-    other = TestClient(app, base_url=context.settings.origin, follow_redirects=False)
+    other = browser_client(app, context.settings, follow_redirects=False)
     start = other.post(
         "/api/session/feishu/start", json={"returnTo": "/tasks"}, headers={"Origin": context.settings.origin}
     )
     foreign_state = parse_qs(urlsplit(start.json()["url"]).query)["state"][0]
-    stranger = TestClient(app, base_url=context.settings.origin, follow_redirects=False)
+    stranger = browser_client(app, context.settings, follow_redirects=False)
     feishu.codes["code-x"] = "u-wang"
     response = stranger.get("/api/session/feishu/callback", params={"code": "code-x", "state": foreign_state})
     assert response.headers["location"] == "/login" and not stranger.cookies.get("ns_session")
@@ -229,7 +280,7 @@ def test_state_is_single_use_and_bound_to_browser(app, context, feishu):
 def test_cancelled_authorization_and_wrong_tenant(app, context, feishu):
     admin = admin_client(app, context.settings)
     setup_directory(admin, context.settings)
-    client = TestClient(app, base_url=context.settings.origin, follow_redirects=False)
+    client = browser_client(app, context.settings, follow_redirects=False)
     start = client.post("/api/session/feishu/start", json={}, headers={"Origin": context.settings.origin})
     state = parse_qs(urlsplit(start.json()["url"]).query)["state"][0]
     client.get("/api/session/feishu/callback", params={"error": "access_denied", "state": state})
@@ -241,7 +292,7 @@ def test_cancelled_authorization_and_wrong_tenant(app, context, feishu):
 
 
 def test_start_rejects_foreign_origin_and_unsafe_return(app, context, feishu):
-    client = TestClient(app, base_url=context.settings.origin)
+    client = browser_client(app, context.settings)
     assert (
         client.post(
             "/api/session/feishu/start", json={}, headers={"Origin": "https://evil.invalid"}

@@ -17,6 +17,7 @@ from backend.tests.identity.test_feishu_login import (
     PURCHASE_A,
     FakeFeishu,
     admin_client,
+    application_clients,
     feishu_login,
 )
 from sqlalchemy import text
@@ -26,9 +27,9 @@ from sqlalchemy import text
 def system(context):
     feishu = FakeFeishu()
     app = create_app(context.settings, context.ns, context.engine, feishu=feishu)
-    client = admin_client(app, context.settings)
-    yield app, client, feishu, {"Origin": context.settings.origin}
-    client.__exit__(None, None, None)
+    with application_clients(app, context.settings):
+        client = admin_client(app, context.settings)
+        yield app, client, feishu, {"Origin": context.settings.origin}
 
 
 def preview(client, headers):
