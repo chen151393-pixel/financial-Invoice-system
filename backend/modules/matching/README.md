@@ -63,7 +63,9 @@
    - **税额**：子采购税额 = 各税率的含税合计 × 税率 ÷（1 + 税率），按税率四舍五入到分，与票面税额相差不超过 0.05 元为一致。税率来自 NS 子采购明细税码（source `tax_rate`），未同步时显示“未校验”、不要求说明。
    - **合计金额**：发票行价税合计对该行对应子采购明细的含税合计，容差 0.01 元；多行发票按各行对应范围汇总，不在每行重复整张采购单总额。原申报价项已移除，不再重复展示金额核对。
 5. **存储与审核**：组内每条子采购明细仍单独记一条分配（任务按行计算收票进度），`checks.group` 保存组 ID 与子采购单 ID。`POST /api/matching/groups/{groupId}/confirm`（`invoiceId`、可选 `invoiceVersionId`、`note`）在同一账本事务内逐条通过，任一条失败全部回滚；需说明时说明作用于全组；同一操作重复提交返回原结果。`POST /api/matching/groups/{groupId}/reject` 整组驳回。组内记录不能单独通过或驳回（409）；批量通过按组处理，组内任一条不满足条件时整组跳过。
-6. **视图**：`GET /api/matching/invoices/{id}` 新增 `groups`（`orders`、各发票行 `checks/confidence/quantity/amount/lines`、`noteReasons`、`confirm/reject` 能力、`allocationIds`），按当前来源实时重算。
+6. **视图**：`GET /api/matching/invoices/{id}` 新增 `groups`（`orders`、各发票行 `checks/confidence/quantity/amount/lines`、`noteReasons`、`confirm/reject` 能力、`allocationIds`），按当前来源实时重算。另返回 `linkedGroups`，仅包含组内全部已确认、依据有效且有整单应开快照的关联；复用整单展示结构，`confirm/reject` 均不可用。已关联详情沿用审核时保存的比对项、置信度及 `orderShare` 应开数量金额，不按收票后的剩余量重算。少开时同时保留实际关联数量金额，不能将分配量冒充整单应开。
+
+   2026-10-30：`linked_comparison_service.py` 提供已关联整单只读视图，`group_comparison_view.py` 复用待审与已关联的展示投影。部分取消、待复核、来源缺失或旧记录缺少整单证据时不组装完整已关联整单，前端逐条展示原分配详情。读取不写库，不修改审核与任务进度，无迁移、不调用 NS。验证见 `test_matching_linked_details.py`。
 7. **换算**：页面不再填写换算分子、分母与换算证据，默认 1 / 1；单位不同时以审核说明作为数量口径依据（单位不一致本身要求说明）。接口仍接受换算参数供既有调用方使用。
 8. **迁移影响**：已有的逐行或拆分建议保留，点“重新生成建议”时由整单建议替代；已逐条通过的分配不动，如需改为整单，请先删除这些关联再重新生成。无需 matching 表结构迁移；source 新增迁移 `0038`（子采购明细税率）。
 

@@ -181,6 +181,7 @@
 }
 .matching-comparison-content {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: var(--space-control);
 }
 .matching-comparison-sides {
@@ -300,6 +301,9 @@
   .matching-comparison-sides {
     grid-template-columns: 1fr;
   }
+}
+.matching-group-lines {
+  min-width: 0;
 }
 .matching-group-lines summary {
   padding: var(--space-small) 0;

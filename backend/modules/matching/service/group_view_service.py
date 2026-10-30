@@ -10,15 +10,15 @@ from backend.modules.task.public import open_lines
 
 from ..dao import allocation_dao
 from ..dto.matching_dto import ConfirmBody
-from ..mapper import allocation_mapper as mapper
 from ..policy import allocation_policy as rules
-from ..policy.comparison_policy import HIGH, text, tier
+from ..policy.comparison_policy import HIGH
 from ..policy.group_comparison_policy import compare_group
 from ..policy.order_group_policy import ONE_INVOICE, order_share, short_lines, taken
 from ..policy.pending_order_policy import REGENERATE, whole_order
 from ..public import ClosedLine, LinesClosedByDifference
-from ..vo.matching_vo import Capability, GroupItem, GroupLine, GroupOrder, GroupView
+from ..vo.matching_vo import Capability
 from . import approval_service
+from .group_comparison_view import comparison_view
 
 SHORT_REASON = "发票少于子采购单，差额按差异结束"
 
@@ -90,64 +90,19 @@ def views(invoice, paper, rows, row_views, lines, tasks=None):
             (row_views[row["id"]].confirm.reason for row in own if not row_views[row["id"]].confirm.allowed),
             "",
         )
-        orders = {}
-        for row in own:
-            line = lines.get(row["purchase_line_id"]) or {}
-            order = orders.setdefault(
-                str(line.get("purchase_order_id", "")),
-                {
-                    "purchaseOrderId": str(line.get("purchase_order_id", "")),
-                    "orderNo": line.get("order_no") or "",
-                    "parentOrderNo": line.get("parent_order_no") or "",
-                    "supplier": line.get("supplier_name") or "",
-                    "company": line.get("company_name") or "",
-                    "lineCount": 0,
-                },
-            )
-            order["lineCount"] += 1
-        items = []
-        for item_id, (checks, confidence, parts) in compared.items():
-            items.append(
-                GroupItem(
-                    invoiceItemId=str(item_id),
-                    checks=mapper.check_views(checks),
-                    confidence=text(confidence),
-                    tier=tier(confidence),
-                    quantity=text(sum((row["quantity"] for row in parts), Decimal(0))),
-                    amount=text(sum((row["amount"] for row in parts), Decimal(0))),
-                    lines=[
-                        GroupLine(
-                            purchaseLineId=str(row["purchase_line_id"]),
-                            orderNo=lines[row["purchase_line_id"]]["order_no"] or "",
-                            item=lines[row["purchase_line_id"]]["item_name"]
-                            or lines[row["purchase_line_id"]]["declaration_name"]
-                            or "",
-                            specification=lines[row["purchase_line_id"]]["specification"] or "",
-                            unit=lines[row["purchase_line_id"]]["unit_name"] or "",
-                            quantity=text(row["quantity"]),
-                            amount=text(row["amount"]),
-                            taxRate=mapper.tax_rate(lines[row["purchase_line_id"]]["tax_rate"]),
-                        )
-                        for row in parts
-                    ],
-                )
-            )
-        lowest = min((confidence for _, confidence, _ in compared.values()), default=Decimal(0))
         result.append(
-            GroupView(
-                id=key,
-                orders=[GroupOrder(**order) for order in orders.values()],
-                items=items,
-                confidence=text(lowest),
-                tier=tier(lowest),
-                noteReasons=reasons,
-                confirm=Capability(
+            comparison_view(
+                key,
+                own,
+                compared,
+                lines,
+                reasons,
+                Capability(
                     allowed=not block,
                     reason=block
                     or ("通过时需填写说明" if reasons else "整组通过：全部子采购明细一次记入收票进度"),
                 ),
-                reject=Capability(allowed=True, reason="整组驳回后可重新生成建议或人工处理"),
-                allocationIds=[str(row["id"]) for row in own],
+                Capability(allowed=True, reason="整组驳回后可重新生成建议或人工处理"),
             )
         )
     return result

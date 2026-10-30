@@ -23,6 +23,7 @@ export function AllocationCard({
   onCancel,
   invoice,
   item,
+  readOnly = false,
 }: {
   allocation: Allocation;
   busy: boolean;
@@ -32,6 +33,7 @@ export function AllocationCard({
   onCancel: (reason: string) => void;
   invoice?: InvoiceMatching["invoice"];
   item?: InvoiceItem;
+  readOnly?: boolean;
 }) {
   const [mode, setMode] = useState<Mode>(null);
   const [note, setNote] = useState("");
@@ -145,85 +147,88 @@ export function AllocationCard({
         {allocation.status === "confirmed" && allocation.verificationStatus !== "valid" && (
           <p className="matching-help">{allocation.reverify.reason}</p>
         )}
-        {mode === null ? (
-          <div className="matching-row matching-review-actions">
-            {allocation.status === "proposed" && (
-              <>
-                <Button
-                  variant="primary"
-                  disabled={busy || !allocation.confirm.allowed}
-                  onClick={() => setMode("confirm")}
-                >
-                  确认通过
+        {!readOnly &&
+          (mode === null ? (
+            <div className="matching-row matching-review-actions">
+              {allocation.status === "proposed" && (
+                <>
+                  <Button
+                    variant="primary"
+                    disabled={busy || !allocation.confirm.allowed}
+                    onClick={() => setMode("confirm")}
+                  >
+                    确认通过
+                  </Button>
+                  <Button disabled={busy || !allocation.reject.allowed} onClick={() => setMode("reject")}>
+                    驳回
+                  </Button>
+                </>
+              )}
+              {onReverify &&
+                allocation.status === "confirmed" &&
+                allocation.verificationStatus !== "valid" && (
+                  <Button
+                    disabled={busy || !allocation.reverify.allowed}
+                    title={allocation.reverify.reason}
+                    onClick={() => setMode("reverify")}
+                  >
+                    重新核实分配
+                  </Button>
+                )}
+              {allocation.status === "confirmed" && (
+                <Button disabled={busy || !allocation.cancel.allowed} onClick={() => setMode("cancel")}>
+                  取消分配
                 </Button>
-                <Button disabled={busy || !allocation.reject.allowed} onClick={() => setMode("reject")}>
-                  驳回
-                </Button>
-              </>
-            )}
-            {onReverify && allocation.status === "confirmed" && allocation.verificationStatus !== "valid" && (
-              <Button
-                disabled={busy || !allocation.reverify.allowed}
-                title={allocation.reverify.reason}
-                onClick={() => setMode("reverify")}
-              >
-                重新核实分配
-              </Button>
-            )}
-            {allocation.status === "confirmed" && (
-              <Button disabled={busy || !allocation.cancel.allowed} onClick={() => setMode("cancel")}>
-                取消分配
-              </Button>
-            )}
-          </div>
-        ) : (
-          <form
-            className="matching-form"
-            onSubmit={(event) => {
-              event.preventDefault();
-              const body = {
-                note,
-                invoiceVersionId: allocation.currentInvoiceVersionId,
-                purchaseBasisId: purchase?.purchaseBasisId,
-              };
-              if (mode === "confirm") onConfirm(body);
-              else if (mode === "reverify") onReverify?.(body);
-              else if (mode === "reject") onReject(note);
-              else onCancel(note);
-            }}
-          >
-            <label>
-              {mode === "cancel"
-                ? "取消原因（必填）"
-                : (mode === "confirm" || mode === "reverify") && noteRequired
-                  ? "审核说明（必填）"
-                  : "说明（选填）"}
-              <textarea
-                rows={2}
-                maxLength={300}
-                value={note}
-                disabled={busy}
-                onChange={(e) => setNote(e.target.value)}
-              />
-            </label>
-            <div className="matching-row">
-              <Button type="submit" variant="primary" disabled={busy}>
-                {busy
-                  ? "提交中…"
-                  : mode === "reverify"
-                    ? "确认重新核实"
-                    : mode === "confirm"
-                      ? "确认通过"
-                      : mode === "reject"
-                        ? "确认驳回"
-                        : "确认取消"}
-              </Button>
-              <Button disabled={busy} onClick={() => setMode(null)}>
-                返回
-              </Button>
+              )}
             </div>
-          </form>
-        )}
+          ) : (
+            <form
+              className="matching-form"
+              onSubmit={(event) => {
+                event.preventDefault();
+                const body = {
+                  note,
+                  invoiceVersionId: allocation.currentInvoiceVersionId,
+                  purchaseBasisId: purchase?.purchaseBasisId,
+                };
+                if (mode === "confirm") onConfirm(body);
+                else if (mode === "reverify") onReverify?.(body);
+                else if (mode === "reject") onReject(note);
+                else onCancel(note);
+              }}
+            >
+              <label>
+                {mode === "cancel"
+                  ? "取消原因（必填）"
+                  : (mode === "confirm" || mode === "reverify") && noteRequired
+                    ? "审核说明（必填）"
+                    : "说明（选填）"}
+                <textarea
+                  rows={2}
+                  maxLength={300}
+                  value={note}
+                  disabled={busy}
+                  onChange={(e) => setNote(e.target.value)}
+                />
+              </label>
+              <div className="matching-row">
+                <Button type="submit" variant="primary" disabled={busy}>
+                  {busy
+                    ? "提交中…"
+                    : mode === "reverify"
+                      ? "确认重新核实"
+                      : mode === "confirm"
+                        ? "确认通过"
+                        : mode === "reject"
+                          ? "确认驳回"
+                          : "确认取消"}
+                </Button>
+                <Button disabled={busy} onClick={() => setMode(null)}>
+                  返回
+                </Button>
+              </div>
+            </form>
+          ))}
       </CardContent>
     </Card>
   );

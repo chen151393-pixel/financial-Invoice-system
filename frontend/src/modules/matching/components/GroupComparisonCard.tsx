@@ -8,7 +8,13 @@ import {
   DataTable,
   ProgressRing,
 } from "../../../shared/components/ui";
-import { tierLabels, type InvoiceItem, type InvoiceMatching, type MatchingGroup } from "../types/matching";
+import {
+  tierLabels,
+  type Allocation,
+  type InvoiceItem,
+  type InvoiceMatching,
+  type MatchingGroup,
+} from "../types/matching";
 import { ChecksTable } from "./ChecksTable";
 import { InvoiceLineSide } from "./InvoiceLineSide";
 
@@ -22,6 +28,8 @@ export function GroupComparisonCard({
   busy,
   onConfirm,
   onReject,
+  readOnly = false,
+  reviewedAllocations = [],
 }: {
   group: MatchingGroup;
   item: InvoiceItem;
@@ -29,6 +37,8 @@ export function GroupComparisonCard({
   busy: boolean;
   onConfirm: (note: string) => Promise<boolean>;
   onReject: (note: string) => Promise<boolean>;
+  readOnly?: boolean;
+  reviewedAllocations?: Allocation[];
 }) {
   const [mode, setMode] = useState<Mode>(null);
   const [note, setNote] = useState("");
@@ -44,7 +54,7 @@ export function GroupComparisonCard({
         title={`${group.orders[0]?.supplier || "子采购单"} · ${orders}`}
         description={
           <span className="matching-row">
-            <Badge tone="info">待审核整单</Badge>
+            <Badge tone={readOnly ? "success" : "info"}>{readOnly ? "已关联整单" : "待审核整单"}</Badge>
             <span>
               第 {item.lineNo || "—"} 行对应 {group.orders.length} 张整张子采购单，共 {part.lines.length}{" "}
               行明细
@@ -53,10 +63,12 @@ export function GroupComparisonCard({
         }
         actions={
           <div className="matching-confidence">
-            <ProgressRing value={part.confidence} text={`${part.confidence}%`} label="匹配置信度" />
+            {part.confidence !== null && (
+              <ProgressRing value={part.confidence} text={`${part.confidence}%`} label="匹配置信度" />
+            )}
             <span>
-              <small>匹配置信度</small>
-              <strong>{tierLabels[part.tier]}置信度</strong>
+              <small>{part.tier === "manual" ? "关联方式" : "匹配置信度"}</small>
+              <strong>{part.tier === "manual" ? "人工关联" : `${tierLabels[part.tier]}置信度`}</strong>
             </span>
           </div>
         }
@@ -114,61 +126,78 @@ export function GroupComparisonCard({
             ]}
           />
         </details>
-        {group.noteReasons.length > 0 && (
+        {readOnly && (
+          <div aria-label="已关联审核信息">
+            <p className="matching-help">
+              以下为审核时保存的比对结果；子采购名称等信息取当前来源。已关联记录无需重复审核。
+            </p>
+            {reviewedAllocations.map((allocation) => (
+              <p key={allocation.id} className="matching-help">
+                {allocation.purchase?.orderNo || "子采购行"} · 实际关联 {allocation.quantity} /{" "}
+                {allocation.amount} · 审核：{allocation.reviewedBy || "未记录"}
+                {allocation.reviewedAt &&
+                  ` · ${new Date(allocation.reviewedAt).toLocaleString("zh-CN", { timeZone: "Asia/Shanghai" })}`}
+                {allocation.reviewNote && ` · 说明：${allocation.reviewNote}`}
+              </p>
+            ))}
+          </div>
+        )}
+        {!readOnly && group.noteReasons.length > 0 && (
           <ul className="matching-reasons" aria-label="通过时需填写说明的原因">
             {group.noteReasons.map((reason) => (
               <li key={reason}>{reason}</li>
             ))}
           </ul>
         )}
-        <p className="matching-help">{group.confirm.reason}</p>
-        {mode === null ? (
-          <div className="matching-row matching-review-actions">
-            <Button
-              variant="primary"
-              disabled={busy || !group.confirm.allowed}
-              onClick={() => setMode("confirm")}
-            >
-              确认整单通过
-            </Button>
-            <Button disabled={busy || !group.reject.allowed} onClick={() => setMode("reject")}>
-              驳回整单
-            </Button>
-          </div>
-        ) : (
-          <form
-            className="matching-form"
-            onSubmit={(event) => {
-              event.preventDefault();
-              void (mode === "confirm" ? onConfirm(note) : onReject(note)).then((saved) => {
-                if (saved) setMode(null);
-              });
-            }}
-          >
-            <label>
-              {noteRequired ? "审核说明（必填）" : "说明（选填）"}
-              <textarea
-                rows={2}
-                maxLength={300}
-                value={note}
-                disabled={busy}
-                onChange={(event) => setNote(event.target.value)}
-              />
-            </label>
-            <div className="matching-row">
-              <Button type="submit" variant="primary" disabled={busy}>
-                {busy
-                  ? "提交中…"
-                  : mode === "confirm"
-                    ? `确认通过 ${group.orders.length} 张整单`
-                    : "确认驳回整单"}
+        {!readOnly && <p className="matching-help">{group.confirm.reason}</p>}
+        {!readOnly &&
+          (mode === null ? (
+            <div className="matching-row matching-review-actions">
+              <Button
+                variant="primary"
+                disabled={busy || !group.confirm.allowed}
+                onClick={() => setMode("confirm")}
+              >
+                确认整单通过
               </Button>
-              <Button disabled={busy} onClick={() => setMode(null)}>
-                返回
+              <Button disabled={busy || !group.reject.allowed} onClick={() => setMode("reject")}>
+                驳回整单
               </Button>
             </div>
-          </form>
-        )}
+          ) : (
+            <form
+              className="matching-form"
+              onSubmit={(event) => {
+                event.preventDefault();
+                void (mode === "confirm" ? onConfirm(note) : onReject(note)).then((saved) => {
+                  if (saved) setMode(null);
+                });
+              }}
+            >
+              <label>
+                {noteRequired ? "审核说明（必填）" : "说明（选填）"}
+                <textarea
+                  rows={2}
+                  maxLength={300}
+                  value={note}
+                  disabled={busy}
+                  onChange={(event) => setNote(event.target.value)}
+                />
+              </label>
+              <div className="matching-row">
+                <Button type="submit" variant="primary" disabled={busy}>
+                  {busy
+                    ? "提交中…"
+                    : mode === "confirm"
+                      ? `确认通过 ${group.orders.length} 张整单`
+                      : "确认驳回整单"}
+                </Button>
+                <Button disabled={busy} onClick={() => setMode(null)}>
+                  返回
+                </Button>
+              </div>
+            </form>
+          ))}
       </CardContent>
     </Card>
   );

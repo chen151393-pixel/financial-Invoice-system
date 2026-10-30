@@ -4,6 +4,7 @@ import { fileURLToPath } from "node:url";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { createServer } from "vite";
+import { linkedMatching } from "./fixtures/linked-matching.mjs";
 
 let server, api;
 before(async () => {
@@ -14,6 +15,80 @@ before(async () => {
     logLevel: "error",
   });
   api = await server.ssrLoadModule("/src/modules/matching/api/index.ts");
+});
+
+test("已关联整单默认展示详细比对和审核依据，不再显示无待审建议", async () => {
+  const { InvoiceLinePanel } = await server.ssrLoadModule(
+    "/src/modules/matching/components/InvoiceLinePanel.tsx",
+  );
+  const value = linkedMatching();
+  const html = renderToStaticMarkup(
+    createElement(InvoiceLinePanel, {
+      ...value,
+      invoiceId: "1",
+      invoiceVersionId: "3",
+      replacements: [],
+      busy: false,
+      actions: { cancel: async () => true, search: async () => ({ rows: [] }) },
+    }),
+  );
+  for (const label of [
+    "已关联整单",
+    "整张子采购单合计",
+    "合计金额",
+    "税额",
+    "查看子采购明细",
+    "已核对票面和整单",
+    "测试审核员",
+    "删除关联",
+  ])
+    assert.ok(html.includes(label), label);
+  assert.doesNotMatch(html, /本行没有待审核建议|确认整单通过|驳回整单|确认通过|取消分配/);
+  assert.equal((html.match(/aria-label="整单比对 SUB-TEST-1"/g) || []).length, 1);
+});
+
+test("人工整单关联不显示虚构的零置信度", async () => {
+  const { GroupComparisonCard } = await server.ssrLoadModule(
+    "/src/modules/matching/components/GroupComparisonCard.tsx",
+  );
+  const value = linkedMatching();
+  const group = value.linkedGroups[0];
+  group.confidence = null;
+  group.tier = "manual";
+  group.items[0].confidence = null;
+  group.items[0].tier = "manual";
+  const html = renderToStaticMarkup(
+    createElement(GroupComparisonCard, { group, item: value.item, invoice: value.invoice, readOnly: true }),
+  );
+  assert.match(html, /人工关联/);
+  assert.doesNotMatch(html, /0%|匹配置信度|确认整单通过|驳回整单/);
+});
+
+test("旧后端或逐行关联也能查看详细比对，多条已关联全部保留", async () => {
+  const { InvoiceLinePanel } = await server.ssrLoadModule(
+    "/src/modules/matching/components/InvoiceLinePanel.tsx",
+  );
+  const value = linkedMatching();
+  delete value.linkedGroups;
+  value.item.allocations.push({
+    ...value.item.allocations[0],
+    id: "2",
+    purchase: { ...value.item.allocations[0].purchase, orderNo: "SUB-TEST-2" },
+  });
+  const html = renderToStaticMarkup(
+    createElement(InvoiceLinePanel, {
+      ...value,
+      invoiceId: "1",
+      invoiceVersionId: "3",
+      replacements: [],
+      busy: false,
+      actions: { cancel: async () => true, search: async () => ({ rows: [] }) },
+    }),
+  );
+  assert.match(html, /比对记录 1/);
+  assert.match(html, /比对记录 2/);
+  assert.match(html, /发票行与子采购行逐项比对/);
+  assert.doesNotMatch(html, /本行没有待审核建议|确认通过|取消分配/);
 });
 after(async () => {
   await server?.close();

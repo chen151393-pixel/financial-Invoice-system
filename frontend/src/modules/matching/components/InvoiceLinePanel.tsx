@@ -29,6 +29,7 @@ export function InvoiceLinePanel({
   actions,
   invoice,
   groups,
+  linkedGroups = [],
 }: {
   item: InvoiceItem;
   invoiceId: string;
@@ -38,11 +39,14 @@ export function InvoiceLinePanel({
   actions: Actions;
   invoice: InvoiceMatching["invoice"];
   groups: MatchingGroup[];
+  linkedGroups?: MatchingGroup[];
 }) {
   const [activeId, setActiveId] = useState<string | null>(null);
   // 整单建议整组展示与审核，组内逐条记录不再单独列为待处理比对
   const own = groups.filter((group) => group.items.some((row) => row.invoiceItemId === item.id));
   const inGroups = new Set(own.flatMap((group) => group.allocationIds));
+  const linkedOwn = linkedGroups.filter((group) => group.items.some((row) => row.invoiceItemId === item.id));
+  const linkedGroupedIds = new Set(linkedOwn.flatMap((group) => group.allocationIds));
   const { linked, pending, history } = groupAllocations(
     item.allocations.filter((allocation) => !inGroups.has(allocation.id)),
   );
@@ -50,12 +54,13 @@ export function InvoiceLinePanel({
   const active = pending.find((row) => row.id === activeId) ?? pending[0];
   // 没有建议也没有已关联时，手动关联占据建议位置并默认展示置信度最高的候选
   const autoLoad = own.length === 0 && pending.length === 0 && linked.length === 0;
-  const card = (allocation: (typeof pending)[number]) => (
+  const card = (allocation: (typeof pending)[number], readOnly = false) => (
     <AllocationCard
       key={`${allocation.id}:${allocation.status}:${allocation.verificationStatus}:${allocation.currentInvoiceVersionId}`}
       allocation={allocation}
       invoice={invoice}
       item={item}
+      readOnly={readOnly}
       busy={busy}
       onConfirm={(body) => actions.confirm(allocation.id, body)}
       onReverify={(body) => actions.reverify(allocation.id, body)}
@@ -111,7 +116,23 @@ export function InvoiceLinePanel({
         </Card>
       )}
       {active && card(active)}
-      {!active && own.length === 0 && !autoLoad && (
+      {linkedOwn.map((group) => (
+        <GroupComparisonCard
+          key={`linked:${group.id}`}
+          group={group}
+          item={item}
+          invoice={invoice}
+          busy={busy}
+          readOnly
+          reviewedAllocations={linked.filter((allocation) => group.allocationIds.includes(allocation.id))}
+          onConfirm={(note) => actions.confirmGroup(group.id, note)}
+          onReject={(note) => actions.rejectGroup(group.id, note)}
+        />
+      ))}
+      {linked
+        .filter((allocation) => !linkedGroupedIds.has(allocation.id))
+        .map((allocation) => card(allocation, true))}
+      {!active && own.length === 0 && linked.length === 0 && !autoLoad && (
         <Card>
           <EmptyState
             title="本行没有待审核建议"
@@ -146,7 +167,7 @@ export function InvoiceLinePanel({
       {history.length > 0 && (
         <details className="matching-history">
           <summary>已驳回或已取消的记录（{history.length}）</summary>
-          {history.map(card)}
+          {history.map((allocation) => card(allocation))}
         </details>
       )}
     </section>

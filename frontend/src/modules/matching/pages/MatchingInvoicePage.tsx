@@ -150,6 +150,7 @@ export function MatchingInvoicePage({ invoiceId }: { invoiceId: string }) {
             invoice={invoice}
             groups={groups}
             invoiceId={invoiceId}
+            linkedGroups={state.data.linkedGroups}
             invoiceVersionId={invoice.versionId}
             replacements={replacements}
             busy={busy}

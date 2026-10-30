@@ -119,6 +119,8 @@ export type InvoiceMatching = {
   items: InvoiceItem[];
   // 待审核的整单建议；组内记录也出现在各发票行 allocations 中
   groups: MatchingGroup[];
+  // 已关联且依据有效的整单详情；旧后端不提供时退回逐条关联详情。
+  linkedGroups?: MatchingGroup[];
   generate: Capability;
 };
 
@@ -137,7 +139,7 @@ export type GroupLine = {
 export type GroupItem = {
   invoiceItemId: string;
   checks: Check[];
-  confidence: string;
+  confidence: string | null;
   tier: Tier;
   quantity: string;
   amount: string;
@@ -155,7 +157,7 @@ export type MatchingGroup = {
     lineCount: number;
   }[];
   items: GroupItem[];
-  confidence: string;
+  confidence: string | null;
   tier: Tier;
   noteReasons: string[];
   confirm: Capability;

@@ -145,7 +145,7 @@ class GroupItem(StrictModel):
 
     invoiceItemId: str
     checks: list[Check]
-    confidence: str
+    confidence: str | None
     tier: str
     quantity: str
     amount: str
@@ -158,7 +158,7 @@ class GroupView(StrictModel):
     id: str
     orders: list[GroupOrder]
     items: list[GroupItem]
-    confidence: str
+    confidence: str | None
     tier: str
     noteReasons: list[str]
     confirm: Capability
@@ -182,6 +182,8 @@ class InvoiceMatching(StrictModel):
     paper: InvoicePaper
     # 待审核的整单建议；组内分配同时出现在各发票行 allocations 中
     groups: list[GroupView] = Field(default_factory=list)
+    # 已关联且依据有效的完整整单，保留审核时比对，不能重复审核。
+    linkedGroups: list[GroupView] = Field(default_factory=list)
     items: list[ItemView]
     generate: Capability
 
