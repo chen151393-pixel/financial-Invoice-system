@@ -3,6 +3,7 @@ import { syncBatchPath } from "../../app/paths";
 import { Button } from "../../shared/components/Button";
 import { Pagination } from "../../shared/components/Pagination";
 import { SyncHealthGrid } from "./components/SyncHealthGrid";
+import { NsBatchRecords } from "./components/NsPlanBatches";
 import { SyncPhaseTag } from "./components/SyncPhaseTag";
 import { SyncSourceCards } from "./components/SyncSourceCards";
 import { useNsPlanBatches } from "./hooks/useNsPlanBatches";
@@ -25,10 +26,11 @@ export function SyncOverview() {
     <>
       <SyncSourceCards plan={data?.plan ?? null} nsPlan={ns.data?.plan ?? null} />
       <SyncHealthGrid />
+      <NsBatchRecords state={ns} />
       <section className="sync-background sync-background--flush" aria-label="同步执行记录">
         <div className="sync-background__head" id="sync-platforms">
           <div className="sync-background__title">
-            <h2>同步执行记录</h2>
+            <h2>柠檬云同步执行记录</h2>
             <small>柠檬云后台批次 · 北京时间</small>
           </div>
           <div className="sync-background__inline">

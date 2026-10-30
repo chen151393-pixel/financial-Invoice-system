@@ -12,8 +12,8 @@ export default function SyncNsBatchWorkspacePage() {
       groups={navigation}
       activeId="sync"
       onNavigate={navigate}
-      title="NS 计划批次详情"
-      description="单次定时同步批次的日期范围、各分页执行结果与失败原因"
+      title="NS 同步执行详情"
+      description="手动补拉或定时批次的日期范围、保存结果与失败原因"
       breadcrumb={<Link to={paths.syncNs}>NS 数据同步</Link>}
     >
       <NsPlanBatchPage />
