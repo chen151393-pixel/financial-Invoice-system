@@ -3,6 +3,7 @@ import { spawn } from "node:child_process";
 import { createServer } from "node:net";
 import { fileURLToPath } from "node:url";
 import { readDevConfig } from "./dev-config.mjs";
+import { spawnManaged } from "./managed-process.mjs";
 
 const root = fileURLToPath(new URL("../", import.meta.url));
 const children = new Set();
@@ -25,17 +26,17 @@ function stop(code = 0) {
 }
 
 function launch(name, args, env, cwd = root) {
-  const child = spawn(process.execPath, args, { cwd, stdio: "inherit", env });
+  const child = spawnManaged(process.execPath, args, { cwd, stdio: "inherit", env });
   children.add(child);
   child.on("error", (error) => {
-    console.error(`${name}启动失败：${error.message}；另一端继续运行。`);
-    process.exitCode = 1;
+    console.error(`${name}启动失败：${error.message}；正在停止本次启动的服务。`);
+    stop(1);
   });
   child.on("exit", (code) => {
     children.delete(child);
     if (!stopping) {
-      console.error(`${name}已退出（退出码 ${code ?? "未知"}）；另一端继续运行。请查看该服务日志。`);
-      process.exitCode = code || 1;
+      console.error(`${name}已退出（退出码 ${code ?? "未知"}）；正在停止本次启动的服务。`);
+      stop(code || 1);
     }
   });
 }
@@ -55,7 +56,9 @@ for (const signal of ["SIGINT", "SIGTERM"]) process.on(signal, () => stop());
 try {
   const config = readDevConfig(root);
   const apiOnly = process.argv.includes("--api-only");
-  await checkPort(config.apiPort, "127.0.0.1");
+  const webOnly = process.argv.includes("--web-only");
+  if (apiOnly && webOnly) throw new Error("不能同时指定 --api-only 与 --web-only");
+  if (!webOnly) await checkPort(config.apiPort, "127.0.0.1");
   if (!apiOnly) await checkPort(config.webPort, "localhost");
   const env = {
     ...process.env,
@@ -64,7 +67,7 @@ try {
     WEB_PORT: String(config.webPort),
     APP_ORIGIN: config.origin,
   };
-  launch("后端", ["scripts/python.mjs", "-m", "backend", "--reload"], env);
+  if (!webOnly) launch("后端", ["scripts/python.mjs", "-m", "backend", "--reload"], env);
   if (!apiOnly) {
     // 前端在 frontend/ 目录内运行，使用其自身依赖与 vite.config.ts。
     launch(
@@ -74,7 +77,9 @@ try {
       fileURLToPath(new URL("../frontend/", import.meta.url)),
     );
   }
-  console.log(`后端地址 ${config.apiTarget}；前端访问 ${config.origin}；Ctrl+C 停止本次启动的服务。`);
+  console.log(
+    `${webOnly ? "" : `后端地址 ${config.apiTarget}；`}${apiOnly ? "" : `前端访问 ${config.origin}；`}Ctrl+C 停止本次启动的服务。`,
+  );
 } catch (error) {
   console.error(error.message);
   stop(1);
