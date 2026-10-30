@@ -14,7 +14,8 @@ from backend.modules.review.public import ReviewApproved
 from backend.modules.source.public import DeclarationService, digest, snapshot
 from backend.tests.review_helpers import MaterializedReviewService as ReviewService
 from backend.tests.review_helpers import comparable_purchase as purchase
-from backend.tests.test_source_storage import ACCOUNT, bundle, customs, rows, save
+from backend.tests.review_helpers import customs_prices as customs
+from backend.tests.test_source_storage import ACCOUNT, bundle, rows, save
 from backend.tests.test_source_storage import engine as engine  # 共用夹具
 from backend.tests.test_source_storage import ns as ns  # 共用夹具
 from fastapi.testclient import TestClient
@@ -132,12 +133,12 @@ def test_list_states_counts_and_purchase_basis(service, seeded, engine):
 
 
 def test_negative_margin_is_alerted_and_not_auto_approvable(service, ns, engine):
-    save(ns, engine, bundle([purchase(amounts=("99999.00", "99999.00"))], [customs("870")]))
+    save(ns, engine, bundle([purchase()], [customs("870", original="3")]))
     result = service.browse(query())
     assert result.counts["marginAlert"] == 1 and result.counts["autoApprovable"] == 0
     item = result.groups[0]
     assert item.marginAlert and not item.autoReview.eligible
-    assert "采购折算报关单价高于人民币申报单价且超出容差" in item.autoReview.reasons
+    assert "报关行单价高于人民币申报单价且超出容差" in item.autoReview.reasons
     assert [g.recordNumber for g in service.browse(query(status="margin_alert")).groups] == ["CD870"]
 
 

@@ -1,5 +1,6 @@
 """后台财务计算、代次一致性、重试、SQL 分页及来源汇率联动。"""
 
+import json
 import re
 from copy import deepcopy
 from decimal import Decimal
@@ -14,7 +15,8 @@ from backend.modules.review.service.calculation_worker import CalculationWorker
 from backend.modules.review.service.review_service import ReviewService
 from backend.modules.source.public import DeclarationService
 from backend.tests.review_helpers import comparable_purchase as purchase
-from backend.tests.test_source_storage import ACCOUNT, bundle, customs, rows, save
+from backend.tests.review_helpers import customs_prices as customs
+from backend.tests.test_source_storage import ACCOUNT, bundle, rows, save
 from backend.tests.test_source_storage import engine as engine
 from backend.tests.test_source_storage import ns as ns
 from sqlalchemy import event, text
@@ -97,7 +99,7 @@ def test_dirty_results_cannot_advertise_auto_review(review, ns, engine):
     calculations = CalculationService(review)
     calculations.rebuild()
     assert review.browse(query()).groups[0].autoReview.eligible
-    save(ns, engine, bundle([purchase(amounts=("99999", "20"))], [customs("870")]))
+    save(ns, engine, bundle([purchase()], [customs("870", original="3")]))
     dirty = review.browse(query())
     assert dirty.notices and dirty.counts["autoApprovable"] == 0
     group = dirty.groups[0]
@@ -120,7 +122,7 @@ def test_update_during_calculation_discards_old_generation(review, ns, engine, m
 
     def concurrent_update(account):
         result = build(account)
-        save(ns, engine, bundle([purchase(amounts=("99999", "20"))], [customs("870")]))
+        save(ns, engine, bundle([purchase()], [customs("870", original="3")]))
         return result
 
     monkeypatch.setattr(calculations, "build", concurrent_update)
@@ -153,7 +155,9 @@ def test_failure_retains_snapshot_and_retries_after_restart(review, ns, engine, 
 
 
 def test_changed_tolerance_rebuilds_and_hides_old_precheck(review, ns, engine):
-    save(ns, engine, bundle([purchase(amounts=("107.50", "20"))], [customs("870")]))
+    save(
+        ns, engine, bundle([purchase()], [customs("870", original="10.75", declared="10.65", currency="CNY")])
+    )
     CalculationService(review).rebuild()
     assert review.browse(query()).groups[0].autoReview.eligible
     strict = ReviewService(engine, DeclarationService(engine), EventBus(), Decimal("0.05"))
@@ -163,6 +167,38 @@ def test_changed_tolerance_rebuilds_and_hides_old_precheck(review, ns, engine):
     CalculationWorker(changed).run_once()
     assert strict.browse(query()).groups[0].marginAlert
     assert CalculationService(review).calculate({"ns_account": ACCOUNT}) is False
+
+
+def test_v6_purchase_snapshot_is_hidden_then_rebuilt_with_customs_prices(review, ns, engine):
+    seed(ns, engine)
+    calculations = CalculationService(review)
+    calculations.rebuild()
+    snapshot = rows(engine, "SELECT id,payload FROM review_declaration_snapshots")[0]
+    payload = json.loads(snapshot["payload"])
+    for line in payload["customsLines"]:
+        line.pop("originalUnitPriceCny")
+        line.pop("originalPriceUnit")
+        line.pop("declaredPriceUnit")
+        line.update(combinedPurchaseUnitPrice="16.142857", margin="-12.31%", marginStatus="negative")
+    with engine.begin() as connection:
+        connection.execute(
+            text("UPDATE review_declaration_snapshots SET payload=:p,margin_alert=1 WHERE id=:i"),
+            {"p": json.dumps(payload), "i": snapshot["id"]},
+        )
+        connection.execute(text("UPDATE review_calculation_jobs SET calculation_key='review-v6:cny=0.10'"))
+    stale = review.browse(query())
+    assert stale.counts["marginAlert"] == 0
+    line = stale.groups[0].customsLines[0]
+    assert line.marginStatus == "unavailable" and line.margin == line.originalUnitPriceCny == ""
+    calculations.initialize()
+    CalculationWorker(calculations).run_once()
+    fresh = review.browse(query()).groups[0]
+    assert fresh.calculationStatus == "ready" and not fresh.marginAlert
+    assert fresh.contentSha256 == payload["contentSha256"]
+    line = fresh.customsLines[0]
+    assert line.margin == "0.00%" and line.originalUnitPriceCny == line.declaredUnitPriceCny == "10.65"
+    assert "combinedPurchaseUnitPrice" not in line.model_dump()
+    assert rows(engine, "SELECT id FROM review_records") == []
 
 
 def test_approval_enqueues_and_does_not_wait_for_account_rebuild(review, ns, engine):
