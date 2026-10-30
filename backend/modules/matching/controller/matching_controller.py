@@ -70,7 +70,7 @@ def create_router(queries, allocations, proposals, invoice_lists):
 
     @router.post("/manual-orders/candidates/query", response_model=ManualOrderCandidates)
     def manual_order_candidates(body: CandidateQuery, owner: Owner):
-        """手动关联候选：一行一张整张子采购单，含选中后展示的明细与剩余应开。"""
+        """手动关联候选：不带关键字只返回置信度最高的一张，带关键字（至少 3 个字符）返回匹配的整张子采购单。"""
         return queries.manual_order_candidates(body)
 
     @router.post("/manual-orders", response_model=InvoiceMatching)

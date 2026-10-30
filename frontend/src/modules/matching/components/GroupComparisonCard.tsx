@@ -10,6 +10,7 @@ import {
 } from "../../../shared/components/ui";
 import { tierLabels, type InvoiceItem, type InvoiceMatching, type MatchingGroup } from "../types/matching";
 import { ChecksTable } from "./ChecksTable";
+import { InvoiceLineSide } from "./InvoiceLineSide";
 
 type Mode = "confirm" | "reject" | null;
 
@@ -62,24 +63,7 @@ export function GroupComparisonCard({
       />
       <CardContent className="matching-comparison-content">
         <div className="matching-comparison-sides">
-          <Card className="matching-source-side">
-            <CardHeader title="进项发票行" description={invoice.number} />
-            <CardContent>
-              <p>{invoice.seller || "销售方未提供"}</p>
-              <p className="matching-help">
-                开票日期 {invoice.date || "—"} · 购买方 {invoice.buyer || "未提供"}
-              </p>
-              <strong>
-                第 {item.lineNo || "—"} 行 · {item.item || "品名未提供"}
-              </strong>
-              <p>
-                {item.quantity ?? "—"} {item.unit || ""} · 价税合计 {item.amount ?? "—"} {invoice.currency}
-              </p>
-              <p className="matching-help">
-                金额 {item.net ?? "—"} · 税率 {item.taxRate ?? "—"} · 税额 {item.tax ?? "—"}
-              </p>
-            </CardContent>
-          </Card>
+          <InvoiceLineSide invoice={invoice} item={item} />
           <Card className="matching-source-side matching-source-side--purchase">
             <CardHeader title="整张子采购单合计" description={orders} />
             <CardContent>

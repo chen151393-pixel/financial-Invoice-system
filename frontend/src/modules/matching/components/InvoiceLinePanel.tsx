@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Badge, Button, Card, CardContent, CardHeader, EmptyState } from "../../../shared/components/ui";
+import { Badge, Card, CardContent, CardHeader, EmptyState } from "../../../shared/components/ui";
 import type { ManualOrderBody, ManualOrderCandidates } from "../types/manual-order";
 import type { ConfirmBody, InvoiceItem, InvoiceMatching, MatchingGroup } from "../types/matching";
 import { AllocationCard } from "./AllocationCard";
@@ -39,7 +39,6 @@ export function InvoiceLinePanel({
   invoice: InvoiceMatching["invoice"];
   groups: MatchingGroup[];
 }) {
-  const [manual, setManual] = useState(false);
   const [activeId, setActiveId] = useState<string | null>(null);
   // 整单建议整组展示与审核，组内逐条记录不再单独列为待处理比对
   const own = groups.filter((group) => group.items.some((row) => row.invoiceItemId === item.id));
@@ -49,6 +48,8 @@ export function InvoiceLinePanel({
   );
   // 一次只展开一条待处理比对；处理后列表变化时回到第一条。
   const active = pending.find((row) => row.id === activeId) ?? pending[0];
+  // 没有建议也没有已关联时，手动关联占据建议位置并默认展示置信度最高的候选
+  const autoLoad = own.length === 0 && pending.length === 0 && linked.length === 0;
   const card = (allocation: (typeof pending)[number]) => (
     <AllocationCard
       key={`${allocation.id}:${allocation.status}:${allocation.verificationStatus}:${allocation.currentInvoiceVersionId}`}
@@ -109,41 +110,30 @@ export function InvoiceLinePanel({
           </ul>
         </Card>
       )}
-      {active
-        ? card(active)
-        : own.length === 0 && (
-            <Card>
-              <EmptyState
-                title="本行没有待审核建议"
-                description="只有整张子采购单的数量、含税合计与发票行完全一致时才自动建议；部分开票或单位不同请手动关联。"
-              />
-            </Card>
-          )}
-      <Card aria-label="候选子采购单">
-        <CardHeader
-          title="候选子采购单"
-          description="以整张子采购单为最小关联单位，选择后展开该单明细填写本票分配。已有待审核建议时，请先驳回再手动关联；已通过的关联可选择替换。"
-          actions={
-            <Button disabled={busy} aria-expanded={manual} onClick={() => setManual(!manual)}>
-              {manual ? "收起手动关联" : "手动关联"}
-            </Button>
-          }
-        />
-        <CardContent>
-          <ManualAllocation
-            key={item.allocations.map((row) => `${row.id}:${row.status}:${row.verificationStatus}`).join("|")}
-            invoiceId={invoiceId}
-            invoiceVersionId={invoiceVersionId}
-            item={item}
-            busy={busy}
-            search={actions.search}
-            replacements={replacements}
-            onCreate={actions.create}
-            showForm={manual}
-            onShowForm={() => setManual(true)}
+      {active && card(active)}
+      {!active && own.length === 0 && !autoLoad && (
+        <Card>
+          <EmptyState
+            title="本行没有待审核建议"
+            description="只有整张子采购单的数量、含税合计与发票行完全一致时才自动建议；部分开票或单位不同请手动关联。"
           />
-        </CardContent>
-      </Card>
+        </Card>
+      )}
+      <ManualAllocation
+        key={[
+          item.id,
+          ...item.allocations.map((row) => `${row.id}:${row.status}:${row.verificationStatus}`),
+        ].join("|")}
+        invoiceId={invoiceId}
+        invoiceVersionId={invoiceVersionId}
+        item={item}
+        invoice={invoice}
+        busy={busy}
+        search={actions.search}
+        replacements={replacements}
+        onCreate={actions.create}
+        autoLoad={autoLoad}
+      />
       <Card>
         <CardHeader
           title={`已关联（${linked.length}）`}

@@ -17,7 +17,7 @@
 | ------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `api/index.ts`      | 全部接口（其他模块只能经此导入，如发票列表读取比对摘要）                                                                                                                                                                                                                                                                                                                      |
 | `types/matching.ts` | 与后端 VO 一致的类型；置信度分档与比对结果的中文映射只在这里维护；手动整单关联类型在 `types/manual-order.ts`                                                                                                                                                                                                                                                                  |
-| `components/`       | `AllocationCard`（一条建议或分配及其操作表单）、`ChecksTable`（逐项比对）、`ManualAllocation` + `CandidateTable` + `OrderShareForm`（整张子采购单候选查询、选中后逐条明细填写本票分配）、`QueueTable`（审核队列）、`InvoiceLineNav` / `InvoiceLinePanel`（发票行导航与选中行详情）、`LinkedAllocations`（已关联列表与删除关联）、`allocation-groups.ts`（按后端状态分组展示） |
+| `components/`       | `AllocationCard`（一条建议或分配及其操作表单）、`ChecksTable`（逐项比对）、`ManualAllocation` + `CandidateTable` + `OrderShareForm` + `InvoiceLineSide`（默认展示置信度最高的整张子采购单、按单号改选、逐条明细填写本票分配）、`QueueTable`（审核队列）、`InvoiceLineNav` / `InvoiceLinePanel`（发票行导航与选中行详情）、`LinkedAllocations`（已关联列表与删除关联）、`allocation-groups.ts`（按后端状态分组展示） |
 
 ## 规则
 
@@ -69,7 +69,7 @@
 
 ## 手动关联改为整张子采购单（2026-10-29）
 
-- “候选子采购单”一行一张整张子采购单（`POST /api/matching/manual-orders/candidates/query`），显示母单、供应商、报关单号、明细行数、整单剩余应开、置信度与备注命中；不能关联的原因由后端 `block` 给出。原逐行候选 `findCandidates` 及逐行新建 / 替换调用已删除，旧后端接口保留（见后端 README）。
-- 点“选择此单”后由 `OrderShareForm` 展开该单全部明细，每行默认填后端给出的剩余应开，可改小以支持部分开票；本票不开的明细填 0。提交 `POST /api/matching/manual-orders`，整组保存并通过；需说明、超容量等由后端校验，失败保留输入并显示原因。替换原关联沿用“关联方式”选择。
+- 手动关联由 `ManualAllocation` 负责。本行没有待审核建议、也没有已关联时（`InvoiceLinePanel` 计算 `autoLoad`），它占据建议位置：打开即以空关键字查询 `POST /api/matching/manual-orders/candidates/query`，后端只返回置信度最高的一张候选，页面直接展示其整单比对（标“置信度最高 · 未保存”）；没有可默认展示的候选时显示空状态。不是这张时“按单号改选”：关键字至少 3 个字符（后端校验），结果由 `CandidateTable` 一行一张整张子采购单列出，选中后标“手动选择 · 未保存”；清空关键字再查询回到默认候选。有建议或已关联时收起，点“手动关联”展开后才查询。原逐行候选 `findCandidates` 及逐行新建 / 替换调用已删除，旧后端接口保留（见后端 README）。
+- `OrderShareForm` 与自动建议的整单比对卡同一布局：来源标记、置信度、进项发票行（与 `GroupComparisonCard` 共用 `InvoiceLineSide`）与整张子采购单合计两侧摘要、逐项比对，再列该单全部明细，每行默认填后端给出的剩余应开，可改小以支持部分开票；本票不开的明细填 0。提交 `POST /api/matching/manual-orders`，整组保存并通过；需说明、超容量等由后端校验，失败保留输入并显示原因。替换原关联沿用“关联方式”选择。
 - 人工整单关联置信度为空，已关联列表标为“人工关联”。
 - 验证：`frontend/tests/order-matching.test.mjs`（接口参数、明细默认值）、`frontend/tests/workbench.test.mjs`（整单候选表）；本地隔离 SQLite 合成数据浏览器检查：两张候选、备注命中排前，默认全额提交被后端要求填写说明，改为墨水 4 个 / 40.20、清洗液 0 后保存成功并标为人工关联，剩余应开更新为 16 / 80.3；375px 窄屏无页面横向滚动，宽表在容器内滚动。

@@ -141,12 +141,23 @@ test("手动关联按整张子采购单查询并提交全部明细；选中后�
       order: {
         purchaseOrderId: "248",
         orderNo: "YE-CY20260410-F114-1",
+        parentOrderNo: "YE-CY20260410-F114",
         supplier: "东莞市创远智能设备有限公司",
+        company: "上海毅鑫实业有限公司",
+        recordNumbers: ["CD000901"],
+        unit: "台",
+        currency: "CNY",
+        remainingQuantity: "288",
+        remainingAmount: "22602.24",
+        confidence: "62",
+        tier: "medium",
         checks: [],
         block: "",
         lines: [line("31", "迷你烫画机", "192", "15068.16"), line("32", "迷你烫画机", "96", "7534.08")],
       },
-      item: { id: "5" },
+      origin: "best",
+      item: { id: "5", lineNo: "1", item: "*机械设备*烫画机", quantity: "72", unit: "台", amount: "5101.20" },
+      invoice: { number: "26442000012361004566", seller: "东莞市创远智能设备有限公司", currency: "CNY" },
       invoiceId: "28",
       invoiceVersionId: "7",
       replaceId: "",
@@ -156,8 +167,39 @@ test("手动关联按整张子采购单查询并提交全部明细；选中后�
     }),
   );
   assert.match(html, /共 2 行明细/);
+  // 默认候选与自动建议同样展示整单比对：来源标记、置信度、发票行与整单合计两侧摘要
+  assert.match(html, /置信度最高 · 未保存/);
+  assert.match(html, /中置信度/);
+  assert.match(html, /进项发票行/);
+  assert.match(html, /剩余应开 288 台 · 含税合计 22602.24 CNY/);
+  assert.match(html, /母采购单 YE-CY20260410-F114/);
   assert.match(html, /value="192"/);
   assert.match(html, /value="7534.08"/);
   assert.match(html, /aria-label="迷你烫画机 本票分配数量"/);
   assert.match(html, /保存整单关联并通过/);
+});
+
+test("手动关联：无建议时打开即查询默认候选，其余情况收起且不自动查询", async () => {
+  const { ManualAllocation } = await server.ssrLoadModule(
+    "/src/modules/matching/components/ManualAllocation.tsx",
+  );
+  const props = {
+    invoiceId: "28",
+    invoiceVersionId: "7",
+    item: { id: "5", lineNo: "1" },
+    invoice: { number: "1", currency: "CNY" },
+    busy: false,
+    search: async () => ({ rows: [], total: 0 }),
+    replacements: [],
+    onCreate: async () => true,
+  };
+  const auto = renderToStaticMarkup(createElement(ManualAllocation, { ...props, autoLoad: true }));
+  assert.match(auto, /第 1 行 · 关联整张子采购单/);
+  assert.match(auto, /没有待审核建议/);
+  assert.match(auto, /按单号改选/);
+  assert.match(auto, /至少 3 个字符/);
+  assert.match(auto, /正在查询候选子采购单/);
+  const folded = renderToStaticMarkup(createElement(ManualAllocation, { ...props, autoLoad: false }));
+  assert.match(folded, /aria-expanded="false"[^>]*>手动关联</);
+  assert.doesNotMatch(folded, /正在查询候选子采购单|按单号改选|查询子采购单/);
 });

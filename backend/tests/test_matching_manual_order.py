@@ -1,11 +1,13 @@
 """手动整单关联：候选按整张子采购单、逐条明细可改小（部分开票）、整组保存并通过；使用隔离 SQLite 数据。"""
 
+from decimal import Decimal
 from uuid import uuid4
 
 import pytest
 from backend.core.errors import ApiError
 from backend.modules.matching.dto.manual_order_dto import ManualOrderBody
 from backend.modules.matching.dto.matching_dto import CandidateQuery
+from backend.modules.matching.service import manual_order_service
 from backend.tests.invoice_files import invoice
 from backend.tests.test_matching import engine as engine
 from backend.tests.test_matching import import_invoices, invoice_id
@@ -52,7 +54,21 @@ def test_candidates_are_whole_orders_with_lines(engine, world, reviewed):
     assert len(order.lines) == 2 and {line.orderNo for line in order.lines} == {"SUB-200"}
     assert order.remainingQuantity == "20" and order.remainingAmount == "120.5"
     assert any(check.key == "quantity" for check in order.checks)
+    assert candidates(world, invoice, item, "SUB-200").rows == result.rows
     assert not candidates(world, invoice, item, "不存在的单号").rows
+
+
+def test_default_shows_only_best_and_keyword_needs_three_characters(engine, world, reviewed, monkeypatch):
+    invoice, item = target(world, engine, "26000000000000009915", ("墨水", "个", "4", "35.58", "4.62"))
+    default = candidates(world, invoice, item)
+    assert len(default.rows) == 1 and default.rows[0].confidence != "0"
+    with pytest.raises(ApiError, match="至少输入 3 个字符"):
+        candidates(world, invoice, item, " S2 ")
+    # 与发票行没有任何相符项（置信度 0）的子采购单不作默认展示，仍可按单号查到
+    monkeypatch.setattr(manual_order_service, "compare_group", lambda *args: ([], Decimal(0)))
+    unrelated = candidates(world, invoice, item)
+    assert not unrelated.rows and unrelated.total == 1
+    assert [row.orderNo for row in candidates(world, invoice, item, "SUB-200").rows] == ["SUB-200"]
 
 
 def test_partial_invoice_saves_whole_order_group(engine, world, reviewed):

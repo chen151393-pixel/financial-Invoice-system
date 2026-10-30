@@ -1,6 +1,7 @@
 """手动整单关联：候选以整张子采购单为最小单位，选中后逐条明细分配（可改小以支持部分开票），整组保存并通过。
 
-- 候选：有效任务行按关键字筛选后按子采购单归并，再读取整单全部有效来源行及其任务行。整单任一明细不在
+- 候选：不带关键字时只返回置信度最高的一张可选候选（页面默认展示其整单比对）；带关键字（至少 3 个字符）时
+  返回匹配的候选列表，供用户按单号改选。有效任务行按关键字筛选后按子采购单归并，再读取整单全部有效来源行及其任务行。整单任一明细不在
   有效应开范围、开票依据变化或已按差异结束时整单不可选，原因显示在候选上；已开完的明细不再列出。
 - 比对：按全部可分配明细的剩余应开全额与发票行做整单比对（group_comparison_policy），保存时按实际填写重算。
 - 保存：同一事务内写入整组分配（checks.group.manual 标记），随即按整单审核规则逐条通过；须说明而未填写、
@@ -26,8 +27,10 @@ from ..policy.order_group_policy import order_shares
 from ..vo.manual_order_vo import ManualOrderCandidate, ManualOrderCandidates
 from . import group_plan_service, group_view_service, ledger_service
 
-# 候选最多返回张数；超出时提示用关键字缩小范围
-LIMIT = 50
+# 按关键字查询时最多返回张数；超出时提示输入更完整的单号
+LIMIT = 20
+# 关键字最短长度：过短的关键字会命中大量子采购单，容易误选
+MIN_KEYWORD = 3
 
 
 def _invoice_item(connection, invoice_id, item_id):
@@ -61,9 +64,14 @@ def _searchable(line, task):
 
 
 def candidates(connection, query):
-    """备注命中与置信度高的子采购单排前；支持子采购单号、母单号、供应商、品名、报关单号搜索。"""
-    invoice, item = _invoice_item(connection, int(query.invoiceId), int(query.invoiceItemId))
+    """备注命中与置信度高的子采购单排前；支持子采购单号、母单号、供应商、品名、报关单号搜索。
+
+    不带关键字时 rows 只含置信度最高且可选、置信度大于 0 的一张（没有则为空），total 为全部候选张数。
+    """
     keyword = query.keyword.strip().casefold()
+    if keyword and len(keyword) < MIN_KEYWORD:
+        raise ApiError(400, f"请至少输入 {MIN_KEYWORD} 个字符查询子采购单")
+    invoice, item = _invoice_item(connection, int(query.invoiceId), int(query.invoiceItemId))
     # 已开完的子采购单整单没有剩余应开，不作候选；部分开票的单仍有未结束任务行。
     tasks = {row["purchase_line_id"]: row for row in open_lines(connection)}
     contexts = purchase_lines(connection, list(tasks))
@@ -83,6 +91,10 @@ def candidates(connection, query):
         for order_id, lines in grouped.items()
     ]
     rows.sort(key=lambda row: (-Decimal(row.confidence), not row.orderMatched, row.orderNo))
+    if not keyword:
+        # 默认只展示一张：整单不可选或与发票行毫无相符项时不作默认，由用户按单号查询
+        best = next((row for row in rows if not row.block and Decimal(row.confidence) > 0), None)
+        return ManualOrderCandidates(rows=[best] if best else [], total=len(rows))
     return ManualOrderCandidates(rows=rows[:LIMIT], total=len(rows))
 
 

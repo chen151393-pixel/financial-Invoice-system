@@ -4,7 +4,7 @@
 
 人工关联的最小单位改为整张子采购单；可部分开票。
 
-- `POST /api/matching/manual-orders/candidates/query`（`invoiceId`、`invoiceItemId`、`keyword`，沿用 `CandidateQuery`）：有效任务行按子采购单号、母单号、供应商、品名、报关单号筛选后按子采购单归并，读取整单全部有效来源行及其任务行（含已开完的行）。返回每张单的合计剩余应开（单位或币种不同时为空）、发票行对全部可分配明细剩余应开的整单比对与置信度、`block`、`lines`（未开完的明细）。按置信度、备注命中、单号排序，最多 50 张。整单资格与自动建议共用 `order_group_policy.order_shares`：任一明细不在有效应开范围、依据变化、已按差异结束或进度不一致时整单不可选；已开完的明细不列出。
+- `POST /api/matching/manual-orders/candidates/query`（`invoiceId`、`invoiceItemId`、`keyword`，沿用 `CandidateQuery`）：有效任务行按子采购单号、母单号、供应商、品名、报关单号筛选后按子采购单归并，读取整单全部有效来源行及其任务行（含已开完的行）。返回每张单的合计剩余应开（单位或币种不同时为空）、发票行对全部可分配明细剩余应开的整单比对与置信度、`block`、`lines`（未开完的明细）。按置信度、备注命中、单号排序。`keyword` 为空时 `rows` 只含置信度最高、可选且置信度大于 0 的一张（没有则为空），`total` 为全部候选张数，供页面默认展示；`keyword` 非空时至少 3 个字符（否则 400），最多返回 20 张。整单资格与自动建议共用 `order_group_policy.order_shares`：任一明细不在有效应开范围、依据变化、已按差异结束或进度不一致时整单不可选；已开完的明细不列出。
 - `POST /api/matching/manual-orders`（`requestId`、`invoiceId`、`invoiceItemId`、`purchaseOrderId`、`invoiceVersionId`、`lines[{purchaseLineId, quantity, amount}]`、`note`、可选 `replaceAllocationId` + `replaceReason`）：`lines` 必须恰好覆盖该单当前全部可分配明细，数量与金额可为 0（本票不开）但须成对，至少一行大于 0。服务在账本锁内重新读取，取消被替换的原关联（须为本票已确认记录），写入整组分配（`checks.group.manual`，置信度为空，页面显示“人工关联”），随即按整单审核规则逐条通过（`group_view_service.approve_rows`）。存在不一致项或超出剩余应开时须填写说明；超出发票行容量、同行已有待审核建议、明细不一致等返回 409；任一失败整体回滚。重复提交按派生请求编号与请求指纹返回原结果，不同内容复用编号返回 409。
 - 旧逐行接口 `POST /candidates/query`、`POST /allocations`、`POST /allocations/{id}/replace` 详情页已不再调用，保留给既有测试与可能的外部调用方；确认无调用方后删除。无数据库迁移，不触发 NS 写入。
 - 验证：`backend/tests/test_matching_manual_order.py`（整单候选与明细、部分开票整组保存并通过及幂等、须覆盖全部明细、发票行容量与超开说明回滚、待审核建议阻止）。

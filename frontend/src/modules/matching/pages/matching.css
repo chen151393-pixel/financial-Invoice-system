@@ -100,6 +100,20 @@
   text-align: right;
   font-variant-numeric: tabular-nums;
 }
+.matching-share-heading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 4px var(--space-control);
+}
+/* 按单号改选：输入框占满剩余宽度，窄屏时按钮换行 */
+.matching-order-search {
+  align-items: flex-end;
+}
+.matching-order-search label {
+  flex: 1 1 320px;
+}
 .matching-form .matching-check {
   display: flex;
   align-items: center;
