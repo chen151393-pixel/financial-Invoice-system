@@ -6,6 +6,7 @@ from decimal import Decimal
 from backend.core.errors import ApiError
 
 from .order_policy import require_whole_orders
+from .registration_policy import require_clear_registration
 
 
 def candidates(task, result):
@@ -32,6 +33,7 @@ def candidates(task, result):
 
 
 def validate_plan(task, result, targets):
+    require_clear_registration(task, result)
     bills = candidates(task, result)
     require_whole_orders(task, targets)
     allocations = {str(row["id"]): row for row in task["snapshot"]["allocations"]}

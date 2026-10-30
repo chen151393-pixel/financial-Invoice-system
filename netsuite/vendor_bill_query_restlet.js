@@ -8,13 +8,14 @@
 // 不依赖现网 VendorInvoice.js 的 getData：它跳过税额为 0、可收为 0 和 2025-07-01 以前的账单，
 // 查不到时无法区分“账单未生成”和“已登记满”。额度口径与其 handleJson 相同，但用整数分精确计算。
 define(["N/search", "N/runtime", "N/log"], (search, runtime, log) => {
-  const REVISION = "2026-10-28.3";
+  const REVISION = "2026-10-30.4";
   const MAX_ORDERS = 20;
   const MAX_BILLS = 200;
   const MAX_ROWS = 1000;
   // 现网单张账单最多约 10 条有效明细；明细逐行读取后在脚本内合计，上限按账单上限留余量。
   const MAX_DETAILS = 5000;
   const DETAIL = "customrecord_swc_vendor_invoice_detail";
+  const INVOICE = "customrecord_swc_vendor_invoice";
   const text = (value) => (value === null || value === undefined ? "" : String(value));
   const id = (input) => typeof input === "string" && /^[1-9][0-9]{0,19}$/.test(input);
   const fail = (code) => {
@@ -81,17 +82,57 @@ define(["N/search", "N/runtime", "N/log"], (search, runtime, log) => {
       !input ||
       typeof input !== "object" ||
       Array.isArray(input) ||
-      Object.keys(input).some((key) => !["action", "vendorId", "purchaseOrderIds"].includes(key)) ||
+      Object.keys(input).some(
+        (key) => !["action", "vendorId", "purchaseOrderIds", "invoiceNumber"].includes(key),
+      ) ||
       input.action !== "bills" ||
       !id(input.vendorId) ||
       !Array.isArray(input.purchaseOrderIds) ||
       input.purchaseOrderIds.length === 0 ||
       input.purchaseOrderIds.length > MAX_ORDERS ||
       !input.purchaseOrderIds.every(id) ||
-      new Set(input.purchaseOrderIds).size !== input.purchaseOrderIds.length
+      new Set(input.purchaseOrderIds).size !== input.purchaseOrderIds.length ||
+      (Object.prototype.hasOwnProperty.call(input, "invoiceNumber") &&
+        (typeof input.invoiceNumber !== "string" ||
+          !input.invoiceNumber.length ||
+          input.invoiceNumber.length > 100 ||
+          input.invoiceNumber !== input.invoiceNumber.trim() ||
+          [...input.invoiceNumber].some((char) => char.charCodeAt(0) < 32)))
     )
       fail("INVALID_REQUEST");
-    return { vendorId: input.vendorId, purchaseOrderIds: [...input.purchaseOrderIds] };
+    return {
+      vendorId: input.vendorId,
+      purchaseOrderIds: [...input.purchaseOrderIds],
+      ...(Object.prototype.hasOwnProperty.call(input, "invoiceNumber")
+        ? { invoiceNumber: input.invoiceNumber }
+        : {}),
+    };
+  }
+
+  function findRegistrations(input) {
+    const columns = [column("number", "name"), column("date", "custrecord_swc_vi_billdate")];
+    const read = reader(columns);
+    const found = rows(
+      INVOICE,
+      [
+        ["name", "is", input.invoiceNumber],
+        "AND",
+        ["custrecord_swc_vi_vendor", "anyof", input.vendorId],
+        "AND",
+        ["isinactive", "is", "F"],
+      ],
+      columns,
+      MAX_ROWS,
+    );
+    const seen = new Set();
+    const records = found.map((row) => {
+      const record = { id: text(row.id), number: read.value(row, "number"), date: read.value(row, "date") };
+      if (!id(record.id) || seen.has(record.id) || record.number !== input.invoiceNumber)
+        fail("INVALID_RESULT");
+      seen.add(record.id);
+      return record;
+    });
+    return { invoiceNumber: input.invoiceNumber, records };
   }
 
   function findVendor(vendorId) {
@@ -289,9 +330,11 @@ define(["N/search", "N/runtime", "N/log"], (search, runtime, log) => {
   }
 
   function query(input, trace) {
+    trace.stage = "existing_invoice_lookup";
+    const registration = input.invoiceNumber ? { registrationCheck: findRegistrations(input) } : {};
     trace.stage = "vendor_lookup";
     const vendor = findVendor(input.vendorId);
-    if (!vendor) return { status: "VENDOR_NOT_FOUND", vendor: null, purchaseOrders: [] };
+    if (!vendor) return { status: "VENDOR_NOT_FOUND", vendor: null, purchaseOrders: [], ...registration };
     trace.stage = "purchase_order_lookup";
     const orders = findOrders(input.purchaseOrderIds);
     const matched = input.purchaseOrderIds.filter((key) => orders.get(key)?.vendorId === vendor.id);
@@ -313,7 +356,7 @@ define(["N/search", "N/runtime", "N/log"], (search, runtime, log) => {
         .map((bill) => output(bill, voided.has(bill.billId), details.get(bill.billId)));
       return { ...order, status: found.length ? "FOUND" : "NO_BILLS", bills: found };
     });
-    return { status: "OK", vendor, purchaseOrders };
+    return { status: "OK", vendor, purchaseOrders, ...registration };
   }
 
   function post(input) {

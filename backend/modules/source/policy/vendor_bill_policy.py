@@ -26,6 +26,16 @@ def validate_result(result, criteria, account):
         raise ValueError("账套不一致")
     if result.query != criteria:
         raise ValueError("查询条件不一致")
+    check = result.registrationCheck
+    if criteria.invoiceNumber is not None:
+        if check is None or check.invoiceNumber != criteria.invoiceNumber:
+            raise ValueError("未完成本张发票的已有登记核对")
+        if len({record.id for record in check.records}) != len(check.records) or any(
+            record.number != criteria.invoiceNumber for record in check.records
+        ):
+            raise ValueError("已有登记号码不一致或记录重复")
+    elif check is not None:
+        raise ValueError("未请求已有登记核对却返回了登记结果")
     times = [
         datetime.fromisoformat(t.replace("Z", "+00:00"))
         for t in (result.readStartedAt, result.readCompletedAt)

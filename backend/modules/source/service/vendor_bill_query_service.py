@@ -15,16 +15,20 @@ class VendorBillQueryService:
     def __init__(self, ns):
         self.ns = ns
 
-    def query_ids(self, vendor_id, purchase_order_ids):
-        return self.query(VendorBillQuery(vendorId=vendor_id, purchaseOrderIds=purchase_order_ids))
+    def query_ids(self, vendor_id, purchase_order_ids, invoice_number=None):
+        return self.query(
+            VendorBillQuery(
+                vendorId=vendor_id, purchaseOrderIds=purchase_order_ids, invoiceNumber=invoice_number
+            )
+        )
 
     def query(self, criteria):
-        data = self.ns.vendor_bill_query(criteria.model_dump())
+        data = self.ns.vendor_bill_query(criteria.model_dump(exclude_none=True))
         if isinstance(data, dict) and data.get("complete") is False:
             code = data.get("error", {}).get("code") if isinstance(data.get("error"), dict) else ""
             reason = {
                 "QUERY_LIMIT": "账单查询超出单次范围或执行额度，请缩小范围后重查",
-                "INVALID_REQUEST": "NS 账单查询参数契约不一致，请核对部署版本",
+                "INVALID_REQUEST": "NS 账单查询参数契约不一致，请升级只读账单查询脚本后重新查询",
                 "INVALID_RESULT": "NS 返回的账单或金额不完整，请核实脚本及数据",
             }.get(code, "NS 账单查询失败，请核对部署受众及查询权限")
             raise ApiError(502, reason)
@@ -48,4 +52,7 @@ class VendorBillQueryService:
                 }
             )
         except (ValidationError, ValueError):
-            raise ApiError(502, "NS 账单查询结果契约或完整性校验失败，未返回部分候选") from None
+            raise ApiError(
+                502,
+                "NS 账单查询结果契约或完整性校验失败；同号登记核对须升级只读查询脚本后重查，未返回部分候选",
+            ) from None

@@ -108,10 +108,14 @@ def result():
 
 
 def query(prepared, payload=None, during=None):
-    data = result() if payload is None else payload
+    data = deepcopy(result() if payload is None else payload)
+    invoice_number = prepared.service.get(prepared.task_id)["invoiceNo"]
+    if "query" in data:
+        data["query"]["invoiceNumber"] = invoice_number
+        data.setdefault("registrationCheck", {"invoiceNumber": invoice_number, "records": []})
 
     def call(criteria):
-        assert criteria == {"vendorId": "77", "purchaseOrderIds": ["100"]}
+        assert criteria == {"vendorId": "77", "purchaseOrderIds": ["100"], "invoiceNumber": invoice_number}
         if during:
             during()
         return deepcopy(data)
@@ -133,6 +137,54 @@ def confirmation(task):
             for a in task["allocations"]
         ],
     )
+
+
+def test_query_conflict_precedes_zero_capacity_and_manual_confirmation(engine, prepared):
+    payload = result()
+    number = prepared.service.get(prepared.task_id)["invoiceNo"]
+    payload["registrationCheck"] = {
+        "invoiceNumber": number,
+        "records": [{"id": "7001", "number": number, "date": "2026-10-30"}],
+    }
+    bill = payload["purchaseOrders"][0]["bills"][0]
+    bill["amounts"].update(received="1000.00", available="0.00")
+    bill["details"] = {"count": 1, "total": "1000.00"}
+    task = query(prepared, payload)
+    assert task["state"] == "conflict" and "7001" in task["reason"]
+    assert not task["actions"]["confirm"] and not task["actions"]["execute"]
+    assert not task["writeback"]["allowed"] and task["plan"] is None
+    assert task["candidates"]["registrationCheck"]["records"][0]["number"] == number
+    with pytest.raises(ApiError, match="任务或候选版本已变化"):
+        prepared.service.confirm(prepared.task_id, confirmation(task), USER)
+    listing = prepared.service.list(TaskQuery())
+    assert listing["counts"]["attention"] == 1 and listing["counts"]["pending"] == 0
+    assert not rows(engine, "SELECT id FROM writeback_requests")
+
+
+def test_old_query_script_cannot_pass_registration_check(prepared):
+    def legacy(criteria):
+        data = result()
+        data["query"] = criteria
+        return data  # 回显请求也不能替代真实登记核对结果
+
+    gateway = VendorBillQueryService(
+        SimpleNamespace(settings=SimpleNamespace(account="prod"), vendor_bill_query=legacy)
+    )
+    task = prepared.service.get(prepared.task_id)
+    checked = QueryService(prepared.service, gateway).refresh(prepared.task_id, task["revision"], USER)
+    assert checked["state"] == "blocked" and "升级只读查询脚本" in checked["reason"]
+    assert not checked["actions"]["confirm"] and checked["candidates"] is None
+
+
+def test_zero_capacity_alone_does_not_mean_this_invoice_is_registered(prepared):
+    payload = result()
+    bill = payload["purchaseOrders"][0]["bills"][0]
+    bill["amounts"].update(received="1000.00", available="0.00")
+    bill["details"] = {"count": 1, "total": "1000.00"}
+    task = query(prepared, payload)
+    assert task["state"] != "conflict"
+    with pytest.raises(ApiError, match="超过可收发票额度"):
+        prepared.service.confirm(prepared.task_id, confirmation(task), USER)
 
 
 def test_atomic_enqueue_and_idempotent_confirmation(engine, prepared):
@@ -309,6 +361,8 @@ def test_refresh_uses_current_connection_and_can_confirm_local_task(prepared):
     other = TaskService(prepared.service.engine, "other")
     data = result()
     data["account"] = "other"
+    data["query"]["invoiceNumber"] = "26000000000000008999"
+    data["registrationCheck"] = {"invoiceNumber": "26000000000000008999", "records": []}
     calls = []
 
     def read(criteria):
@@ -320,7 +374,7 @@ def test_refresh_uses_current_connection_and_can_confirm_local_task(prepared):
     )
     task = other.get(prepared.task_id)
     updated = QueryService(other, gateway).refresh(prepared.task_id, task["revision"], USER)
-    assert calls == [{"vendorId": "77", "purchaseOrderIds": ["100"]}]
+    assert calls == [{"vendorId": "77", "purchaseOrderIds": ["100"], "invoiceNumber": "26000000000000008999"}]
     assert updated["state"] == "needs_confirmation"
     assert updated["candidates"]["account"] == "other"
     confirmed = other.confirm(prepared.task_id, confirmation(updated), USER)

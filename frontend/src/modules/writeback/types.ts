@@ -84,6 +84,10 @@ export interface TaskDetail extends TaskSummary {
   candidates: {
     queryId: string;
     readCompletedAt: string;
+    registrationCheck?: {
+      invoiceNumber: string;
+      records: { id: string; number: string; date: string }[];
+    } | null;
     purchaseOrders: { id: string; number?: string; reason: string; bills: Bill[] }[];
   } | null;
   plan: Plan | null;

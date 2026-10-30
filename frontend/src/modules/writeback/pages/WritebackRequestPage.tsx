@@ -53,6 +53,7 @@ export function TaskContent({
   onResolve: (body: ResolveBody) => void;
 }) {
   const bills = task.candidates?.purchaseOrders.flatMap((order) => order.bills) ?? [];
+  const registrations = task.candidates?.registrationCheck?.records ?? [];
   return (
     <>
       <Alert title={writing ? "正在回写 NS" : unverified ? "回写结果待核实" : task.stateLabel}>
@@ -62,6 +63,27 @@ export function TaskContent({
             ? "请先刷新任务状态，取得最新结果后再处理；不要重复提交回写。"
             : task.reason}
       </Alert>
+      {registrations.length > 0 && (
+        <Card>
+          <CardHeader
+            title="NS 已有同号发票登记"
+            description="已拦截重复回写，请核对以下已有登记。此状态不代表本系统本次执行了写入。"
+          />
+          <CardContent>
+            <DataTable
+              label="已有发票登记"
+              rows={registrations}
+              rowKey={(row) => row.id}
+              minWidth={480}
+              columns={[
+                { key: "id", header: "NS 记录 ID", render: (row) => row.id },
+                { key: "number", header: "发票号码", render: (row) => row.number },
+                { key: "date", header: "开票日期", render: (row) => row.date || "未提供" },
+              ]}
+            />
+          </CardContent>
+        </Card>
+      )}
       <Card>
         <CardHeader
           title={`发票 ${task.invoiceNo}`}

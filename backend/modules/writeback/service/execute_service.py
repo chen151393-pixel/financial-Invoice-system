@@ -11,6 +11,7 @@ from backend.integrations.netsuite.client import WriteOutcomeUnknown
 
 from ..dao import audit_dao, lock_dao, plan_dao, request_dao, task_dao
 from ..policy.order_policy import require_whole_orders
+from ..policy.registration_policy import require_clear_registration
 from ..policy.result_policy import interpret, unknown
 from ..policy.state_policy import stuck
 from .queue_service import now, still_current
@@ -99,6 +100,7 @@ class ExecuteService:
         return self.tasks.get(task_id)
 
     def _claim(self, connection, task, actor):
+        require_clear_registration(task, task["candidates"])
         allowed, reason = self.tasks.gate.check(task)
         if not allowed:
             raise ApiError(409, reason)
