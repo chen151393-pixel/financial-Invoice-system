@@ -1,5 +1,5 @@
 import { Badge, DataTable, EmptyState } from "../../../shared/components/ui";
-import { resultLabels, type Check } from "../types/matching";
+import type { Check } from "../types/matching";
 
 export function ChecksTable({ checks, caption }: { checks: Check[]; caption: string }) {
   if (!checks.length)
@@ -21,9 +21,9 @@ export function ChecksTable({ checks, caption }: { checks: Check[]; caption: str
           render: (row) => (
             <div className="matching-cell">
               <span>
-                <Badge tone={row.result === "match" ? "info" : "warning"}>{resultLabels[row.result]}</Badge>
+                <Badge tone={row.result === "match" ? "info" : "warning"}>{row.resultLabel}</Badge>
               </span>
-              {row.difference && <span>{row.difference}</span>}
+              {row.differenceLabel && <span>{row.differenceLabel}</span>}
               {row.note &&
                 (row.result === "match" ? (
                   <details className="matching-check-note">

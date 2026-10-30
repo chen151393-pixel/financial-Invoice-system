@@ -160,13 +160,38 @@ test("逐项比对默认展示原始金额和差异，异常说明可见", () =>
         result: "mismatch",
         difference: "0.02",
         note: "金额需核实",
+        resultLabel: "不一致",
+        differenceLabel: "发票多 0.02",
       },
     ],
   });
   assert.match(html, /1234567890.12/);
-  assert.match(html, /0.02/);
+  assert.match(html, /发票多 0.02/);
   assert.match(html, /金额需核实/);
   assert.doesNotMatch(html, /<details/);
+});
+
+test("分次收票显示后端结果文字和剩余说明，不显示负数差额", () => {
+  const html = render(Checks, {
+    caption: "逐项比对",
+    checks: [
+      {
+        key: "quantity",
+        label: "数量",
+        invoiceValue: "72",
+        purchaseValue: "192",
+        result: "match",
+        difference: "-120",
+        note: "本次数量在剩余应开范围内可分次收票",
+        resultLabel: "分次收票",
+        differenceLabel: "收票后剩余应开 120",
+      },
+    ],
+  });
+  assert.match(html, /分次收票/);
+  assert.match(html, /收票后剩余应开 120/);
+  assert.doesNotMatch(html, /-120/);
+  assert.doesNotMatch(html, />一致</);
 });
 
 test("明细导航保持选中行；提交期间禁止切换，候选限制取后端", () => {

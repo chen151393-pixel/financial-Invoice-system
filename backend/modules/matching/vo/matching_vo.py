@@ -22,6 +22,9 @@ class Check(StrictModel):
     result: Literal["match", "partial", "mismatch", "missing"]
     difference: str | None
     note: str
+    # 展示文字由后端推导：分次收票、发票多/少等，前端直接显示
+    resultLabel: str
+    differenceLabel: str | None
 
 
 class PurchaseSide(StrictModel):

@@ -4,6 +4,7 @@ from datetime import UTC
 from decimal import Decimal
 
 from ..policy.allocation_policy import STATUS_LABELS, remaining
+from ..policy.check_label_policy import check_labels
 from ..policy.comparison_policy import text, tier
 from ..vo.matching_vo import AllocationView, Check, InvoicePaper, InvoiceSide, PurchaseSide
 
@@ -14,10 +15,15 @@ def iso(value):
     return value.replace(tzinfo=UTC).isoformat() if value else None
 
 
+# 建议快照中保存的比对字段；展示文字不入库，读取时按结果推导
+STORED_FIELDS = ("key", "label", "invoiceValue", "purchaseValue", "result", "difference", "note")
+
+
 def check_views(checks, purchase_unit=None):
     result = []
     for check in checks or []:
-        values = {key: check[key] for key in Check.model_fields}
+        values = {key: check[key] for key in STORED_FIELDS}
+        values["resultLabel"], values["differenceLabel"] = check_labels(check)
         if check["key"] == "unit" and purchase_unit and purchase_unit != check["purchaseValue"]:
             values["purchaseValue"] = purchase_unit
             values["note"] = f"{values['note'] or ''}采购单位原值：{check['purchaseValue']}。"

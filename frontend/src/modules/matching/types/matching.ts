@@ -11,6 +11,10 @@ export type Check = {
   result: "match" | "partial" | "mismatch" | "missing";
   difference: string | null;
   note: string;
+  /** 后端给出的结果文字，如“分次收票”；前端不按数值自行推断 */
+  resultLabel: string;
+  /** 后端给出的差额说明，如“收票后剩余应开 120”；为空时不显示 */
+  differenceLabel: string | null;
 };
 
 export type PurchaseSide = {
@@ -230,12 +234,6 @@ export type ConfirmBody = Partial<Conversion> & {
 
 // 中文文案只在这里维护一份。
 export const tierLabels: Record<Tier, string> = { high: "高", medium: "中", low: "低", manual: "人工" };
-export const resultLabels: Record<Check["result"], string> = {
-  match: "一致",
-  partial: "部分一致",
-  mismatch: "不一致",
-  missing: "未提供",
-};
 
 // 进项发票按匹配状态筛选的列表：list 为发票列表分页结构（由调用方给出类型），counts 不受所选匹配状态影响
 export type InvoiceMatchFilters = {
