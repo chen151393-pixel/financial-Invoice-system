@@ -35,6 +35,8 @@ export function ReviewPage() {
     supplierName: searchParams.get("supplierName") || "",
     recordNo: searchParams.get("recordNo") || searchParams.get("keyword") || "",
     purchaseOrderNo: searchParams.get("purchaseOrderNo") || "",
+    createdFrom: searchParams.get("createdFrom") || "",
+    createdTo: searchParams.get("createdTo") || "",
     // 工作台"待审批"分区跳转时带 status=pending
     status: searchParams.get("status") === "pending" ? "pending" : "all",
     page: 1,
@@ -149,6 +151,8 @@ export function ReviewPage() {
             supplierName: query.supplierName || "",
             recordNo: query.recordNo || "",
             purchaseOrderNo: query.purchaseOrderNo || "",
+            createdFrom: query.createdFrom || "",
+            createdTo: query.createdTo || "",
           }}
           busy={busy}
           onSearch={(criteria) => {

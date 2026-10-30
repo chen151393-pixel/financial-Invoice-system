@@ -16,6 +16,7 @@ from backend.modules.source.public import (
     china_day_range,
     purchase_lines,
     workbench_declarations,
+    workbench_purchases,
 )
 from backend.modules.task.public import unbound_notify_suppliers, workbench_tasks
 
@@ -136,20 +137,18 @@ class WorkbenchService:
         selected, filtered_counts = select_rows(scoped, query)
         if export:
             return export_csv(selected)
-        scoped_tasks = [
-            {
-                **row,
-                "declaration_created_at": heads.get(row["customs_declaration_id"], {}).get("ns_created_at"),
-            }
-            for row in tasks
-            if not query.account or row["ns_account"] == query.account
-        ]
+        scoped_tasks = [row for row in tasks if not query.account or row["ns_account"] == query.account]
         today = now.astimezone(BUSINESS_ZONE).date()
         # 票面收票覆盖全部已入库正常人民币发票；与 NS 任务账套、审核进度无关。
         start = date.fromisoformat(f"{month_keys(today)[0]}-01")
         end = date(today.year + (today.month == 12), today.month % 12 + 1, 1)
         receipts = read_receipt_dates(connection, start, end - timedelta(days=1))
-        monthly = monthly_receipts(scoped_tasks, receipts, today)
+        purchases = [
+            row
+            for row in workbench_purchases(connection)
+            if not query.account or row["ns_account"] == query.account
+        ]
+        monthly = monthly_receipts(purchases, receipts, today)
         rank, unknown = supplier_ranking(scoped_tasks)
         total = len(selected)
         pages = max(1, (total + query.pageSize - 1) // query.pageSize)
@@ -173,8 +172,12 @@ class WorkbenchService:
             funnel=funnel(positions),
             nodes=node_distribution(scoped_tasks),
             monthly=monthly,
-            unknownExpectedDates=sum(
-                row["currency"] == "CNY" and not row["declaration_created_at"] for row in scoped_tasks
+            unknownExpectedDates=len(
+                {
+                    (row["ns_account"], row["purchase_order_id"])
+                    for row in purchases
+                    if row["currency"] == "CNY" and not row["declaration_created_at"]
+                }
             ),
             queue={
                 **allocation_dao.proposal_counts(connection, HIGH, MEDIUM),

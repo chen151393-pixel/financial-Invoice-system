@@ -134,6 +134,8 @@ def test_monthly_receipts_by_declaration_creation_month_cny_only():
         {**base, "declaration_created_at": None, "expected": Decimal("888")},  # 缺日期不回退
         {**base, "declaration_created_at": datetime(2026, 4, 1), "expected": Decimal("999")},
     ]
+    rows = [{**row, "ns_account": "A", "purchase_order_id": index} for index, row in enumerate(rows)]
+    rows.append(rows[0])  # 同月重复关联不重复累计。
     receipts = [
         {"date": date(2026, 10, 31), "gross": Decimal("40"), "count": 2},
         {"date": date(2026, 9, 30), "gross": Decimal("70"), "count": 1},
@@ -164,7 +166,10 @@ def test_expected_uses_source_creation_date_and_reports_missing_dates(engine, wo
     result = read(engine)
     assert Decimal(result.monthly[-1].expected) == Decimal("120.5")
     assert result.unknownExpectedDates == 0
-    assert next(k for k in result.kpis if k.key == "expected").hint == "本月创建报关单关联 1 个开票任务"
+    assert (
+        next(k for k in result.kpis if k.key == "expected").hint
+        == "本月报关关联 1 张子采购单（含待审核，已去重）"
+    )
     with engine.begin() as connection:
         connection.execute(
             text("UPDATE source_customs_declarations SET ns_created_at = '2026-09-30 15:59:59'")
@@ -179,7 +184,74 @@ def test_expected_uses_source_creation_date_and_reports_missing_dates(engine, wo
     assert missing.unknownExpectedDates == 1 and all(Decimal(m.expected) == 0 for m in missing.monthly)
     with engine.begin() as connection:
         connection.execute(text("UPDATE task_tasks SET status = 'superseded'"))
-    assert read(engine).unknownExpectedDates == 0
+    assert read(engine).unknownExpectedDates == 1  # 任务被替代不影响来源应开。
+
+
+def test_expected_includes_pending_orders_and_deduplicates_without_using_task_or_line_totals(
+    engine, ns, world
+):
+    save(ns, engine, bundle([purchase()], [customs("870")]))
+    save(ns, engine, bundle([purchase("201", "871")], [customs("871")]))
+    with engine.begin() as connection:
+        connection.execute(
+            text("UPDATE source_customs_declarations SET ns_created_at = '2026-09-30 16:00:00'")
+        )
+        # 同一子单关联第二张报关单，且每张单已有多个行级关联。
+        connection.execute(
+            text("""
+            INSERT INTO source_customs_purchase_links
+                (customs_declaration_id, purchase_order_id, evidence, status, synced_at, created_at, updated_at)
+            SELECT d.id, p.id, 'ns_reference', 'active', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+            FROM source_customs_declarations d, source_purchase_orders p
+            WHERE d.record_no = 'CD871' AND p.order_no = 'SUB-200'
+        """)
+        )
+    pending = read(engine)
+    assert pending.counts.review == 2 and pending.counts.task == 0
+    assert Decimal(pending.monthly[-1].expected) == Decimal("241")
+    assert pending.monthly[-1].orderCount == 2
+    assert Decimal(next(k for k in pending.kpis if k.key == "expected").value) == Decimal("241")
+    approve(world, "CD870")
+    assert Decimal(read(engine).monthly[-1].expected) == Decimal("241")
+    with engine.begin() as connection:
+        # 应开取实时单头含税合计；明细和已冻结任务仍为 120.50，不能重复叠加。
+        connection.execute(
+            text("UPDATE source_purchase_orders SET total_amount = 8502 WHERE order_no = 'SUB-200'")
+        )
+    assert Decimal(read(engine).monthly[-1].expected) == Decimal("8622.5")
+    with engine.begin() as connection:
+        connection.execute(
+            text("UPDATE source_purchase_orders SET total_amount = NULL WHERE order_no = 'SUB-200'")
+        )
+    missing = read(engine).monthly[-1]
+    assert Decimal(missing.expected) == Decimal("120.5") and missing.unknownTasks == 1
+    assert read(engine, account="missing").monthly[-1].orderCount == 0
+    with engine.begin() as connection:
+        connection.execute(text("UPDATE source_purchase_orders SET is_active = 0 WHERE order_no = 'SUB-200'"))
+        connection.execute(text("UPDATE source_customs_purchase_links SET status = 'stale'"))
+    assert read(engine).monthly[-1].orderCount == 0
+
+
+def test_expected_monthly_dedup_keeps_accounts_and_months_separate():
+    base = dict(
+        ns_account="A",
+        purchase_order_id=1,
+        currency="CNY",
+        expected=Decimal("0.123456"),
+        declaration_created_at=datetime(2026, 9, 30, 16),
+    )
+    rows = [
+        base,
+        base,
+        {**base, "ns_account": "B"},
+        {**base, "declaration_created_at": datetime(2026, 9, 1)},
+        {**base, "purchase_order_id": 2, "currency": "USD", "expected": Decimal("999")},
+        {**base, "purchase_order_id": 3, "expected": None},
+    ]
+    result = monthly_receipts(rows, [], date(2026, 10, 30))
+    assert result[-1]["expected"] == "0.246912" and result[-1]["orderCount"] == 3
+    assert result[-1]["unknownTasks"] == 1
+    assert result[-2]["expected"] == "0.123456" and result[-2]["orderCount"] == 1
 
 
 def test_receipt_totals_use_invoice_date_all_normal_cny_including_unmatched(engine, world):
@@ -294,7 +366,7 @@ def test_node_distribution_excludes_completed_tasks():
 def test_kpis_month_change_outstanding_and_counts():
     today = datetime(2026, 10, 19).date()
     monthly = [
-        {"month": m, "expected": e, "received": r, "percent": p, "invoiceCount": 1}
+        {"month": m, "expected": e, "received": r, "percent": p, "invoiceCount": 1, "orderCount": 4}
         for m, e, r, p in (
             ("2026-05", "0", "0", None),
             ("2026-06", "0", "0", None),
@@ -325,7 +397,7 @@ def test_kpis_month_change_outstanding_and_counts():
     reviews = [{"changed": True, "ns_created_at": datetime(2026, 9, 3)}, {"changed": False}]
     found = {k["key"]: k for k in kpis(monthly=monthly, tasks=tasks, reviews=reviews, today=today)}
     assert found["expected"]["delta"] == "较上月 +25.0%" and found["expected"]["direction"] == "up"
-    assert found["expected"]["hint"] == "本月创建报关单关联 4 个开票任务"
+    assert found["expected"]["hint"] == "本月报关关联 4 张子采购单（含待审核，已去重）"
     assert found["received"]["delta"] == "收票／应开比 20.0%"
     assert found["received"]["hint"] == "本月开票 1 张正常进项票（含未匹配）"
     outstanding = found["outstanding"]

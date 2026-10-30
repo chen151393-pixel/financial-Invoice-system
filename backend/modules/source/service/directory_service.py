@@ -25,6 +25,12 @@ def china_day_range(start, end):
     return lower, upper
 
 
+def declaration_ids_created(connection, start, end):
+    """在调用方快照内读取 NS 创建日期（中国日期，含首尾）对应的报关单 ID。"""
+    lower, upper = china_day_range(start, end)
+    return customs_declaration_dao.ids_created_between(connection, lower, upper)
+
+
 class SourceDirectory:
     def __init__(self, engine):
         self.engine = engine
@@ -61,10 +67,7 @@ class SourceDirectory:
 
     def declaration_ids_created(self, start, end):
         """NS 创建日期（中国日期）在 start—end（含）之间的报关单 ID。"""
-        lower, upper = china_day_range(start, end)
-        return self._read(
-            lambda connection: customs_declaration_dao.ids_created_between(connection, lower, upper)
-        )
+        return self._read(lambda connection: declaration_ids_created(connection, start, end))
 
     def orders_by_number(self, order_no):
         """按子采购单号精确查找有效子采购单：[{id, order_no, customs_declaration_id}]。"""

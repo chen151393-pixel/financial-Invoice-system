@@ -18,13 +18,15 @@ def replace_account(connection, account, rows, supplier_rows):
         connection.execute(insert(suppliers), supplier_rows[start : start + 300])
 
 
-def browse(connection, query, key, month_start):
+def browse(connection, query, key, month_start, declaration_ids=None):
     fresh = and_(jobs.c.requested_revision == jobs.c.completed_revision, jobs.c.calculation_key == key)
     pending = snapshots.c.review_status == "pending"
     approved = snapshots.c.review_status == "approved"
     alert = and_(pending, fresh, snapshots.c.margin_alert.is_(True))
     auto = and_(pending, fresh, snapshots.c.auto_eligible.is_(True))
     conditions = search_conditions(query, connection.dialect.name)
+    if declaration_ids is not None:
+        conditions.append(snapshots.c.customs_declaration_id.in_(declaration_ids))
     if query.account:
         conditions.append(snapshots.c.ns_account == query.account)
     if query.keyword:

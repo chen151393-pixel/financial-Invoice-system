@@ -1,4 +1,17 @@
 /* 待办分类（组件库 Tabs） */
+.wb-todos__results {
+  position: relative;
+  min-height: 180px;
+}
+.wb-todos__previous {
+  visibility: hidden;
+}
+.wb-todos__feedback {
+  position: absolute;
+  inset: 0;
+  overflow: auto;
+  padding: 0 20px;
+}
 .wb-todos__tabs {
   padding: 0 20px;
   border-bottom: 1px solid var(--color-border);

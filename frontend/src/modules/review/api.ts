@@ -8,7 +8,11 @@ import type {
 } from "./types";
 
 export const queryDeclarations = (criteria: DeclarationListQuery) =>
-  http<ComparisonResult>("/review/declarations/query", "POST", criteria);
+  http<ComparisonResult>("/review/declarations/query", "POST", {
+    ...criteria,
+    createdFrom: criteria.createdFrom || null,
+    createdTo: criteria.createdTo || null,
+  });
 
 // 只提交报关单身份、页面所见内容摘要与备注；后端在锁内重读来源并核对摘要。
 export const approveDeclaration = (

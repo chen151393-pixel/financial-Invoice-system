@@ -298,3 +298,43 @@ def test_bulk_input_limits_and_literal_spaces():
     for value in ("x" * 121, ";".join(str(i) for i in range(51)), "x" * 6501):
         with pytest.raises(ValidationError):
             query(recordNo=value)
+
+
+def test_creation_date_filter_uses_china_day_boundaries_before_counts_and_paging(review, ns, engine):
+    dates = [
+        "2026-08-31T15:59:59Z",
+        "2026-08-31T16:00:00Z",
+        "2026-09-01T15:59:59Z",
+        "2026-09-01T16:00:00Z",
+        None,
+    ]
+    for index, created in enumerate(dates):
+        identity = str(870 + index)
+        head = customs(identity)
+        head[1]["created"] = created
+        save(ns, engine, bundle([purchase(str(200 + index), identity)], [head]))
+    CalculationService(review).rebuild()
+    criteria = dict(createdFrom="2026-09-01", createdTo="2026-09-01")
+    result = review.browse(query(**criteria, pageSize=1, page=2))
+    assert result.total == 2 and result.pages == 2
+    assert result.counts["all"] == 2 and result.counts["pending"] == 2
+    assert [group.recordNumber for group in result.groups] == ["CD871"]
+    assert review.browse(query(**criteria, recordNo="CD872")).total == 1
+    assert review.browse(query(createdFrom="2026-10-01", createdTo="2026-10-31")).total == 0
+    assert review.browse(query()).total == 5  # 清空日期后包含创建时间缺失的单据。
+
+
+@pytest.mark.parametrize(
+    "values",
+    [
+        {"createdFrom": "2026-09-01"},
+        {"createdTo": "2026-09-01"},
+        {"createdFrom": "2026-09-02", "createdTo": "2026-09-01"},
+        {"createdFrom": "2026-02-30", "createdTo": "2026-03-01"},
+    ],
+)
+def test_creation_date_filter_validation(values):
+    from pydantic import ValidationError
+
+    with pytest.raises(ValidationError):
+        query(**values)

@@ -5,6 +5,7 @@ from datetime import UTC, datetime, timedelta, timezone
 from sqlalchemy.exc import SQLAlchemyError
 
 from backend.core.errors import ApiError
+from backend.modules.source.public import declaration_ids_created
 
 from ..dao import declaration_snapshot_dao
 from ..policy.calculation_policy import FAILED_REASON, PENDING_REASON, calculation_key
@@ -29,8 +30,13 @@ class ReviewQueryService:
                 if connection.dialect.name == "mysql":
                     connection = connection.execution_options(isolation_level="REPEATABLE READ")
                 with connection.begin():
+                    declaration_ids = (
+                        declaration_ids_created(connection, query.createdFrom, query.createdTo)
+                        if query.createdFrom
+                        else None
+                    )
                     counts, total, page, suppliers, jobs = declaration_snapshot_dao.browse(
-                        connection, query, self.key, month_start_utc(datetime.now(UTC))
+                        connection, query, self.key, month_start_utc(datetime.now(UTC)), declaration_ids
                     )
         except SQLAlchemyError:
             raise ApiError(503, "财务计算结果读取失败，请检查数据库及迁移状态") from None

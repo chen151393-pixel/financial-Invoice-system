@@ -116,8 +116,9 @@ class MonthlyReceipt(StrictModel):
     received: str
     invoiceCount: int
     percent: str | None
-    # 当月应开金额缺失、未计入的任务数
+    # 保留旧字段名兼容调用方；现为当月合计金额缺失、未计入的去重子采购单数。
     unknownTasks: int
+    orderCount: int = 0
 
 
 class AnomalyCount(StrictModel):
@@ -162,7 +163,7 @@ class Workbench(StrictModel):
     kpis: list[Kpi] = Field(default_factory=list)
     suppliers: list[SupplierRank]
     unknownSupplierAmounts: int
-    # 应开按关联报关单 NS 创建月份、收票按发票开票月份；缺失报关创建时间的任务另计数。
+    # 应开为全部报关关联子采购含税总额（含待审核，按月去重）；缺失创建时间的子单另计数。
     funnel: Funnel | None = None
     nodes: NodeDistribution | None = None
     monthly: list[MonthlyReceipt] = Field(default_factory=list)

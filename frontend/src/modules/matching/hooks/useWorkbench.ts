@@ -39,12 +39,12 @@ export function useWorkbench() {
       })
       .catch((error: unknown) => {
         if (active)
-          setState({
-            data: null,
+          setState((previous) => ({
+            data: previous.data,
             request: query,
             version,
             error: error instanceof Error ? error.message : "工作台读取失败",
-          });
+          }));
       });
     return () => {
       active = false;
@@ -77,7 +77,7 @@ export function useWorkbench() {
   }
   const loading = state.request !== query || state.version !== version;
   return {
-    data: loading ? null : state.data,
+    data: state.data,
     error: loading ? "" : state.error,
     loading,
     query,

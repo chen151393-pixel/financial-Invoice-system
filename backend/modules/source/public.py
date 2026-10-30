@@ -14,10 +14,10 @@ from .policy.declared_price_policy import (
 from .policy.unit_policy import unit_label
 from .service.contract_service import SubpoContractSource
 from .service.declaration_service import DeclarationService, digest, snapshot
-from .service.directory_service import SourceDirectory, china_day_range
+from .service.directory_service import SourceDirectory, china_day_range, declaration_ids_created
 from .service.pl_comparison_service import PlScriptService
 from .service.purchase_context import line_declarations, purchase_lines, supplier_line_ids
-from .service.workbench_reader import workbench_declarations
+from .service.workbench_reader import workbench_declarations, workbench_purchases
 from .service.writeback_context import writeback_context
 
 __all__ = [
@@ -27,6 +27,7 @@ __all__ = [
     "admission_issues",
     "admission_reason",
     "workbench_declarations",
+    "workbench_purchases",
     "unit_names",
     "unit_label",
     # 采购报关联查（实时 NS）与子采购合同
@@ -52,6 +53,7 @@ __all__ = [
     "pick_sales_order",
     # 中国日期区间换算为 UTC 区间（报关单创建日期筛选）
     "china_day_range",
+    "declaration_ids_created",
     "SourceChanged",
 ]
 

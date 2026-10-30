@@ -86,7 +86,7 @@ export type Workbench = {
   funnel: { steps: FunnelStep[]; completionRate: string | null } | null;
   // 进行中开票任务按节点分布
   nodes: { total: number; nodes: { key: string; label: string; count: number; percent: string }[] } | null;
-  // 应开按关联报关单 NS 创建月；收票按全部正常人民币进项票开票月（含未匹配）
+  // 应开取全部报关关联子采购单含税合计（含待审核、按月去重）；收票按正常进项票开票月
   unknownExpectedDates: number;
   monthly: {
     month: string;
@@ -95,7 +95,9 @@ export type Workbench = {
     received: string;
     invoiceCount: number;
     percent: string | null;
+    // 兼容字段名：当月合计金额缺失的去重子采购单数。
     unknownTasks: number;
+    orderCount: number;
   }[];
   // 待审核比对建议按置信度分档，以及比对项不一致的分类计数
   queue: {

@@ -18,12 +18,12 @@ import "../components/workbench-reports.css";
 export function WorkbenchPage({ state }: { state: ReturnType<typeof useWorkbench> }) {
   return (
     <div className="wb">
-      {state.loading && (
+      {state.loading && !state.data && (
         <div className="wb-panel wb-loading" role="status">
           正在读取工作台数据…<p>正在汇总财务核对、发票比对和开票跟进。</p>
         </div>
       )}
-      {state.error && (
+      {state.error && !state.data && (
         <div className="wb-panel wb-empty" role="alert">
           <strong>工作台暂时无法加载</strong>
           <p>{state.error}</p>
@@ -59,12 +59,15 @@ export function WorkbenchPage({ state }: { state: ReturnType<typeof useWorkbench
             change={state.change}
             exporting={state.exporting}
             onExport={() => void state.download()}
+            loading={state.loading}
+            error={state.error}
+            onRetry={state.refresh}
           />
           <details className="wb-definitions">
             <summary>统计口径</summary>
             <p>
-              金额指标仅统计人民币：应开取有效任务的冻结金额，按关联报关单在 NS
-              的创建月份（北京时间）统计；缺少创建日期的任务单独提示且不计入。
+              金额指标仅统计人民币：应开取全部报关关联子采购单的含税合计，包含待审核，按关联报关单在 NS
+              的创建月份（北京时间）统计；同月同一子采购单只计一次，跨月分别统计。缺少合计金额或报关创建日期的记录单独提示。
               收票按发票开票月份统计全部已入库正常进项票，包含未匹配发票，
               不含红字、已被红冲及作废票。收票／应开比不代表任务完成率。待收金额仍按未完成任务统计；走势线为近
               6 个月的同口径序列。 待财务审核按报关单计数，待通知供应商按开票跟进节点计数。

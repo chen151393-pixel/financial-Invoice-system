@@ -359,6 +359,10 @@ test("财务搜索拆为三个批量输入框，仅显示框内提示并保留�
     }),
   );
   assert.equal((html.match(/type="search"/g) || []).length, 3);
+  assert.equal((html.match(/type="date"/g) || []).length, 2);
+  assert.match(html, /报关单创建日期 从/);
+  assert.match(html, /name="createdFrom"/);
+  assert.match(html, /name="createdTo"/);
   for (const label of ["供应商", "CD 号", "子采购单号"]) {
     assert.ok(html.includes(`<span class="ui-sr-only">${label}</span>`));
   }
@@ -367,6 +371,21 @@ test("财务搜索拆为三个批量输入框，仅显示框内提示并保留�
   assert.match(html, /多条用逗号分隔/);
   assert.doesNotMatch(html, /<select|查找报关与采购单据/);
   assert.doesNotMatch(html, /查询方式|重置示例/);
+});
+
+test("财务日期筛选原样传给后端，清空后提交 null 恢复不限", async (t) => {
+  const calls = [];
+  t.mock.method(globalThis, "fetch", async (_url, options) => {
+    calls.push(JSON.parse(options.body));
+    return Response.json({ groups: [] });
+  });
+  const { queryDeclarations } = await server.ssrLoadModule("/src/modules/review/api.ts");
+  await queryDeclarations({ createdFrom: "2026-08-01", createdTo: "2026-08-31", page: 1 });
+  await queryDeclarations({ createdFrom: "", createdTo: "", page: 1 });
+  assert.equal(calls[0].createdFrom, "2026-08-01");
+  assert.equal(calls[0].createdTo, "2026-08-31");
+  assert.equal(calls[1].createdFrom, null);
+  assert.equal(calls[1].createdTo, null);
 });
 
 test("分页清晰标识当前页并限制首尾翻页和跳转范围", () => {

@@ -71,12 +71,15 @@ test("月度收票趋势区分无应开和真实零收票，直接显示精确�
   assert.match(html, /11,040.00/);
   assert.match(html, /1.2%/);
   assert.match(html, /应开按报关单创建月/);
-  assert.match(html, /3 个人民币任务未取得关联报关单的创建日期/);
+  assert.match(html, /含待审核/);
+  assert.match(html, /同月同一子单只计一次/);
+  assert.doesNotMatch(html, /应开取任务冻结金额/);
+  assert.match(html, /3 张人民币子采购单的关联报关单未取得创建日期/);
   assert.match(html, /value="2026-10" selected=""/);
   assert.equal((html.match(/class="ui-chart__point"/g) ?? []).length, 2);
   assert.match(html, /收票／应开比 暂无应开/);
   assert.match(html, /0.0%/);
-  assert.match(html, /另有 2 个任务应开金额缺失/);
+  assert.match(html, /另有 2 张子采购单合计金额缺失/);
   const empty = renderToStaticMarkup(createElement(WorkbenchReceipts, { monthly: [monthly[0]] }));
   assert.match(empty, /暂无可统计的应开或收票金额/);
   assert.doesNotMatch(empty, /class="ui-chart"/);
@@ -264,6 +267,8 @@ const row = {
   waitingDays: 4,
 };
 const data = {
+  kpis: [],
+  monthly: [],
   counts,
   filteredCounts: counts,
   items: [
@@ -363,6 +368,46 @@ test("初始加载不显示伪造零指标或空结果", () => {
   });
   assert.match(html, /正在读取工作台数据/);
   assert.doesNotMatch(html, /共 0 项|当前条件下没有待办/);
+});
+
+test("切换待办分类时保留工作台，将加载状态限制在列表并禁用旧结果", () => {
+  const html = render(Page, {
+    state: {
+      query: { ...query, kind: "matching" },
+      loading: true,
+      data,
+      error: "",
+      change() {},
+      refresh() {},
+    },
+  });
+  assert.match(html, /应开与已收票金额趋势/);
+  assert.match(html, /优先处理/);
+  assert.match(html, /aria-pressed="true">待比对/);
+  assert.match(html, /正在读取待办列表/);
+  assert.match(html, /aria-busy="true"/);
+  assert.match(html, /class="wb-todos__previous" inert=""/);
+  assert.match(html, /disabled=""[^>]*>↓ 导出全部结果/);
+  assert.doesNotMatch(html, /正在读取工作台数据|工作台暂时无法加载/);
+});
+
+test("待办切换失败保留图表和分类，在列表内提供重试；空结果不会覆盖失败提示", () => {
+  const html = render(Page, {
+    state: {
+      query,
+      loading: false,
+      data,
+      error: "查询失败，请重试",
+      change() {},
+      refresh() {},
+    },
+  });
+  assert.match(html, /应开与已收票金额趋势/);
+  assert.match(html, /待办列表加载失败/);
+  assert.match(html, /查询失败，请重试/);
+  assert.match(html, /重新加载待办/);
+  assert.match(html, /class="wb-todos__previous" inert=""/);
+  assert.doesNotMatch(html, /工作台暂时无法加载/);
 });
 
 test("查询与导出携带相同筛选，导出结果完全取自后端", async (t) => {
@@ -484,7 +529,7 @@ test("关键指标：首张实底主指标，金额格式化后端值，标签�
         label: "本月应开金额",
         value: "3286400.5",
         delta: "较上月 +12.4%",
-        hint: "本月创建报关单关联 3 个开票任务",
+        hint: "本月报关关联 3 张子采购单（含待审核，已去重）",
       },
       {
         ...kpi,

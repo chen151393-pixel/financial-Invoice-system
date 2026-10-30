@@ -20,9 +20,9 @@ def month_of(value):
     return local_date(value).strftime("%Y-%m")
 
 
-def expected_month(task):
+def expected_month(order):
     """应开归属关联报关单的 NS 创建月份；缺失时不回退到任务生成日期。"""
-    created = task.get("declaration_created_at")
+    created = order.get("declaration_created_at")
     return month_of(created) if created else None
 
 
@@ -79,9 +79,10 @@ def supplier_ranking(tasks, limit=6):
     return result, len(unknown)
 
 
-def monthly_receipts(tasks, receipts, today, months=6, currency="CNY"):
+def monthly_receipts(purchases, receipts, today, months=6, currency="CNY"):
     """应开按关联报关单 NS 创建月，收票按全部正常人民币进项票的开票月（含未匹配）。
 
+    purchases 来自 source 单头金额，含待审核；同月同账套同子单去重，跨月分别统计。
     receipts 来自 invoice 门面的按日期汇总；比值不表示同一批任务完成率，可超过 100%。
     应开缺失只影响应开统计，不影响独立的票面收票金额。
     """
@@ -90,10 +91,15 @@ def monthly_receipts(tasks, receipts, today, months=6, currency="CNY"):
     received = dict.fromkeys(keys, Decimal(0))
     invoice_counts = dict.fromkeys(keys, 0)
     unknown = dict.fromkeys(keys, 0)
-    for row in tasks:
+    orders = {key: set() for key in keys}
+    for row in purchases:
         key = expected_month(row)
         if key not in expected or (row["currency"] or "") != currency:
             continue
+        identity = (row["ns_account"], row["purchase_order_id"])
+        if identity in orders[key]:
+            continue
+        orders[key].add(identity)
         if row["expected"] is None:
             unknown[key] += 1
             continue
@@ -112,6 +118,7 @@ def monthly_receipts(tasks, receipts, today, months=6, currency="CNY"):
             "invoiceCount": invoice_counts[key],
             "percent": percent(received[key], expected[key]) if expected[key] else None,
             "unknownTasks": unknown[key],
+            "orderCount": len(orders[key]),
         }
         for key in keys
     ]

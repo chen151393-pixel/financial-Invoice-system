@@ -1,14 +1,17 @@
 """财务核对请求：列表条件与审核确认（单张、批量）；审核只接受报关单内容摘要与备注。"""
 
+from datetime import date
 from typing import Literal
 
-from pydantic import Field, field_validator
+from pydantic import Field, field_validator, model_validator
 
 from backend.core.dto import StrictModel
 from backend.core.search_terms import SearchText
 
 
 class DeclarationListQuery(StrictModel):
+    createdFrom: date | None = Field(default=None, strict=False)
+    createdTo: date | None = Field(default=None, strict=False)
     supplierName: SearchText = ""
     recordNo: SearchText = ""
     purchaseOrderNo: SearchText = ""
@@ -19,6 +22,16 @@ class DeclarationListQuery(StrictModel):
     supplierId: str = Field(default="", max_length=20, pattern=r"^([1-9][0-9]*)?$")
     page: int = Field(default=1, ge=1, le=100000)
     pageSize: int = Field(default=20, ge=1, le=50)
+
+    @model_validator(mode="after")
+    def valid_created_dates(self):
+        if bool(self.createdFrom) != bool(self.createdTo):
+            raise ValueError("请同时填写报关单创建开始日期与结束日期")
+        if self.createdFrom and self.createdFrom > self.createdTo:
+            raise ValueError("报关单创建开始日期不能晚于结束日期")
+        if self.createdFrom == date.min or self.createdTo == date.max:
+            raise ValueError("报关单创建日期超出支持范围")
+        return self
 
 
 class CurrencyEvidence(StrictModel):

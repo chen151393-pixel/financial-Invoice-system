@@ -227,7 +227,7 @@ MySQL 的 `SUM(CASE ...)` 返回 Decimal，待审核建议非空时曾导致队�
 
 ## 工作台漏斗、应开与已收、比对队列分档（2026-10-27）
 
-`POST /api/matching/workbench/query` 新增：`funnel`（由五个业务状态累加的“至少走到这一步”报关单数及相对上一步的通过率，不含无需开票的报关单）、`monthly`（最近 6 个月人民币应开按关联报关单的 NS 创建月（北京时间），缺失日期不回退、由 unknownExpectedDates 提示，收票按全部正常入库进项票的开票月（含未匹配）；invoiceCount 为正常票张数，percent 为收票／应开比，可超过 100%；应开缺失只影响应开统计并另计数）、`queue`（待审核比对建议按置信度高 / 中 / 低分档计数）。规则在 `policy/workbench_reports.py`，任务应开合计由 task 门面 `workbench_tasks` 的 `expected` 字段提供（任一行缺失为空）。
+`POST /api/matching/workbench/query` 新增：`funnel`（由五个业务状态累加的“至少走到这一步”报关单数及相对上一步的通过率，不含无需开票的报关单）、`monthly`（最近 6 个月人民币应开按关联报关单的 NS 创建月（北京时间），缺失日期不回退、由 unknownExpectedDates 提示，收票按全部正常入库进项票的开票月（含未匹配）；invoiceCount 为正常票张数，percent 为收票／应开比，可超过 100%；应开缺失只影响应开统计并另计数）、`queue`（待审核比对建议按置信度高 / 中 / 低分档计数）。规则在 `policy/workbench_reports.py`。应开合计由 source 门面 `workbench_purchases` 提供全部有效报关关联子采购单的单头含税 `total_amount`，包含待审核，与任务生成、审核通过无关。同月按账套与子单 ID 去重，跨月分别统计；缺失单头金额不从明细反算，兼容字段 `unknownTasks` 计当月缺失金额子单数，`orderCount` 计当月去重子单数。待收金额仍由 task 门面提供。
 
 ## 进项发票按匹配状态筛选（2026-10-27）
 
