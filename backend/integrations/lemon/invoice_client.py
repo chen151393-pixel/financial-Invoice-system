@@ -2,6 +2,7 @@
 
 import json
 import logging
+import re
 import time
 from decimal import Decimal
 
@@ -14,6 +15,9 @@ from .professional_invoice_details import LemonProfessionalInvoiceDetails
 from .professional_invoices import LemonProfessionalInvoices
 
 logger = logging.getLogger("ns_api.lemon")
+PAGE_SIZE = 100
+MAX_INVOICES = 2000
+GROUPED_AMOUNT = re.compile(r"-?\d{1,3}(?:,\d{3})+\.\d{2}")
 OPERATIONS = {
     "user_token": "获取用户授权",
     "accounts": "查询授权账套",
@@ -150,10 +154,10 @@ class LemonInvoiceClient:
         return result
 
     def invoices(self, token, asid, start, end):
-        records, seen = [], set()
+        records, seen, total = [], set(), None
         deadline = time.monotonic() + 120
-        # 不依赖尚未实测的 Count 总数含义；继续至空页，并检测重复页及明确上限。
-        for page in range(1, 22):
+        # 2026-10-29 实测：Count 为不含合计行的发票总数；末页及其后的空页附一条合计行。
+        for page in range(1, MAX_INVOICES // PAGE_SIZE + 2):
             if time.monotonic() > deadline:
                 raise ApiError(502, "柠檬云拉取时间过长，请缩小日期范围；本次未保存发票")
             data = self._post(
@@ -171,22 +175,59 @@ class LemonInvoiceClient:
                     "name": "",
                     "invoiceStatus": 0,
                     "page": page,
-                    "rows": 100,
+                    "rows": PAGE_SIZE,
                 },
             )
-            rows = data.get("List")
-            if not isinstance(rows, list) or len(rows) > 100:
-                raise ApiError(502, "柠檬云发票分页格式异常，未保存发票")
+            rows, count = invoice_rows(data)
+            if total is not None and total != count:
+                raise ApiError(502, "柠檬云发票总数在分页期间变化，请重新查询；本次未保存")
+            total = count
+            if len(rows) != min(PAGE_SIZE, total - len(records)):
+                raise ApiError(502, "柠檬云发票分页与总数不一致，请重新查询；本次未保存")
             if not rows:
                 return records
-            if page > 20:
-                raise ApiError(
-                    422, "本次超过 2000 张发票，请缩小日期范围；本次未保存", code="lemon_range_limit"
-                )
             for row in rows:
-                identifier = row.get("InvoiceId") if isinstance(row, dict) else None
+                identifier = row.get("InvoiceId")
                 if type(identifier) is not int or identifier <= 0 or identifier in seen:
                     raise ApiError(502, "柠檬云发票编号缺失或分页重复，请重新查询；本次未保存")
                 seen.add(identifier)
-                records.append(row)
+                records.append(plain_gross(row))
         raise ApiError(502, "柠檬云分页未结束，本次未保存")
+
+
+def invoice_rows(data):
+    rows, total = data.get("List"), data.get("Count")
+    if type(total) is not int or total < 0 or not isinstance(rows, list):
+        raise ApiError(502, "柠檬云发票分页格式异常，未保存发票")
+    if total > MAX_INVOICES:
+        raise ApiError(422, "本次超过 2000 张发票，请缩小日期范围；本次未保存", code="lemon_range_limit")
+    if len(rows) > PAGE_SIZE + 1 or any(not isinstance(row, dict) for row in rows):
+        raise ApiError(502, "柠檬云发票分页行数或格式异常，未保存发票")
+    # 合计行只按完整特征识别；其他缺编号的行仍按异常拒收，不能泛化跳过。
+    if rows and is_summary(rows[-1]):
+        rows = rows[:-1]
+    if len(rows) > PAGE_SIZE:
+        raise ApiError(502, "柠檬云发票分页超过单页上限，未保存发票")
+    return rows, total
+
+
+def is_summary(row):
+    return (
+        type(row.get("InvoiceId")) is int
+        and row["InvoiceId"] == 0
+        and type(row.get("InvoiceCategory")) is int
+        and row["InvoiceCategory"] == 0
+        and row.get("BusinessTypeText") == "合计"
+        and row.get("Number") in (None, "")
+        and row.get("Code") in (None, "")
+        and row.get("InvoiceDate") is None
+        and row.get("InvoiceDateText") == ""
+    )
+
+
+def plain_gross(row):
+    """价税合计是展示文本，可能带千分位；只接受规范分组，其余格式交 invoice 校验拒收。"""
+    gross = row.get("AdValoremTaxTotals")
+    if isinstance(gross, str) and GROUPED_AMOUNT.fullmatch(gross):
+        return {**row, "AdValoremTaxTotals": gross.replace(",", "")}
+    return row
