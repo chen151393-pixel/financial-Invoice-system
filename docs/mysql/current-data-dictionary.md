@@ -1034,6 +1034,7 @@ flowchart LR
 | `scope_key`     | `VARCHAR(64)`     | 是   | —                    | 应用、环境与管理员身份摘要，区分大小写       |
 | `request_id`    | `VARCHAR(36)`     | 是   | —                    | 幂等提交编号，区分大小写                     |
 | `plan_id`       | `BIGINT UNSIGNED` | 是   | —                    | 来源计划，手动提交为空                       |
+| `ns_plan_id`    | `BIGINT UNSIGNED` | 是   | —                    | NS 来源计划（`0040`），柠檬云及手动批次为空 |
 | `phase`         | `VARCHAR(20)`     | 否   | —                    | 唯一批次状态，取值见下                       |
 | `configuration` | `JSON`            | 是   | —                    | 不可变执行条件（账套范围、日期、业务类型）及授权绑定摘要 |
 | `created_at`    | `DATETIME(6)`     | 否   | CURRENT_TIMESTAMP(6) | 本地记录创建时间，UTC                        |
@@ -1041,7 +1042,7 @@ flowchart LR
 
 **关联与约束**
 
-- 主键：`id`；`plan_id` 外键指向 [sync_lemon_plans](#sync_lemon_plans)。
+- 主键：`id`；`plan_id` 外键指向 [sync_lemon_plans](#sync_lemon_plans)；`ns_plan_id` 外键指向 [sync_ns_plans](#sync_ns_plans)（`0040`，NS 批次 `source` 为 `ns_customs`/`ns_purchase`，`plan_id` 保持为空）。
 - 唯一键 `uq_sync_run_request`：`(scope_key, request_id)`；查询索引 `ix_sync_run_scope_phase`：`(scope_key, phase)`。
 - 数据库检查：`phase IN ('queued','discovering','running','completed','partial','failed','unknown')`，依次为排队、查询授权账套、执行中、完成、部分成功、失败、存在待核实分片。
 - 数据库检查：`trigger_type IN ('schedule','manual')`。
@@ -1242,10 +1243,11 @@ NS 来源按批后台保存记录与结果，不保存令牌。
 | `status` | VARCHAR(20) | 否 | running / completed / partial / interrupted / failed / unknown |
 | `result` | JSON | 是 | 本批实际保存结果，含逐单状态 |
 | `error` | VARCHAR(500) | 是 | 脱敏失败原因 |
+| `run_id` | BIGINT | 是 | 所属定时计划批次（`0040`），外键指向 `sync_runs`；手动按批保存为空 |
 | `created_at` | DATETIME | 否 | 本地记录创建时间，UTC |
 | `updated_at` | DATETIME | 否 | 本地记录最后更新时间，UTC；由 DAO 更新 |
 
-`scope_key` 与 `request_id` 联合唯一；按 `scope_key, status` 建索引。running 记录在当前进程无执行时按待核实展示，迁移不允许降级删除。接口与状态说明见[同步模块](../../backend/modules/sync/README.md#后台保存批次与耗时日志2026-10-19)。
+`scope_key` 与 `request_id` 联合唯一；按 `scope_key, status`、`run_id, status` 建索引。定时计划的分页记录 `scope_key` 为 NS 账户摘要，由所属批次统计一次，近 14 天同步情况不重复计数。running 记录在当前进程无执行时按待核实展示，迁移不允许降级删除。接口与状态说明见[同步模块](../../backend/modules/sync/README.md#后台保存批次与耗时日志2026-10-19)。
 
 ## 漏录表补齐（2026-10-19 核对）
 
@@ -1403,6 +1405,24 @@ NS 来源按批后台保存记录与结果，不保存令牌。
 | revision | INT | 否 | — | 编辑版本，防止覆盖并发修改 |
 | configuration | JSON | 否 | — | 账套范围、每日时间与滚动天数快照 |
 | next_run_at | DATETIME(6) | 是 | — | 下一次触发时间，UTC |
+| created_at | DATETIME(6) | 否 | CURRENT_TIMESTAMP(6) | 记录创建时间，UTC |
+| updated_at | DATETIME(6) | 否 | CURRENT_TIMESTAMP(6) | DAO 更新的最近修改时间，UTC |
+
+<a id="sync_ns_plans"></a>
+
+### sync_ns_plans｜NS 来源每日定时同步计划
+
+迁移 `0040` 新建。一行对应一个 NS 账户（`scope_key` 唯一，为账户摘要），系统管理员共同管理；配置只含单据范围（报关单、子采购单）、每日执行时间与回扫天数，不含凭据。到期后按单据类型在 `sync_runs` 各生成一个批次（`ns_plan_id` 指向本表），每页执行记录写入 `sync_ns_runs`（`run_id` 指向批次）。规则见[同步模块](../../backend/modules/sync/README.md#ns-定时同步计划2026-10-29)。
+
+| 字段 | 类型 | 可空 | 默认 | 说明 |
+| --- | --- | --- | --- | --- |
+| id | BIGINT UNSIGNED | 否 | 自增 | 主键 |
+| scope_key | VARCHAR(64) | 否 | — | NS 账户摘要，区分大小写，唯一 |
+| owner | VARCHAR(190) | 否 | — | 最近保存计划的管理员，后台执行沿用该身份并在执行前复核 |
+| enabled | BOOLEAN | 否 | — | 是否启用 |
+| revision | INT | 否 | — | 编辑版本，防止覆盖并发修改 |
+| configuration | JSON | 否 | — | `kinds`、`times`、`lookbackDays`；自动暂停时另含 `pausedReason` |
+| next_run_at | DATETIME(6) | 是 | — | 下一次触发时间，UTC；暂停时为空 |
 | created_at | DATETIME(6) | 否 | CURRENT_TIMESTAMP(6) | 记录创建时间，UTC |
 | updated_at | DATETIME(6) | 否 | CURRENT_TIMESTAMP(6) | DAO 更新的最近修改时间，UTC |
 

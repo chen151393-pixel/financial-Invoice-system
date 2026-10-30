@@ -3,7 +3,7 @@
 > 本文件由 `npm.cmd run db:map` 根据迁移链离线 MySQL DDL、实体定义和字段字典生成，请勿手工修改；迁移或实体变化后重新生成，`backend/tests/test_schema_map.py` 会检查是否过期。
 > “修改”含加列、改列、索引与中文备注；数据回填仅在线执行，不在离线 DDL 中体现。
 
-当前最新迁移：`0039_task_wecom_directory`；共 39 个迁移、62 张实体表。
+当前最新迁移：`0040_sync_ns_plans`；共 40 个迁移、63 张实体表。
 
 ## 1. 按模块查表
 
@@ -81,8 +81,9 @@
 | `sync_lemon_jobs` | （无实体定义，代码不读写；说明见字段字典） | `0023` | — | [查看](current-data-dictionary.md#sync_lemon_jobs) |
 | `sync_lemon_plans` | 柠檬云每日同步计划 | `0023` | — | [查看](current-data-dictionary.md#sync_lemon_plans) |
 | `sync_lemon_runs` | 柠檬云拉票记录（手动或后台分片）与结果，不保存令牌 | `0018` | `0023`、`0025` | [查看](current-data-dictionary.md#sync_lemon_runs) |
-| `sync_ns_runs` | NS 来源按批后台保存记录与结果，不保存令牌 | `0024` | — | [查看](current-data-dictionary.md#sync_ns_runs) |
-| `sync_runs` | 同步运行记录 | `0001` | `0015`、`0023`、`0025` | [查看](current-data-dictionary.md#sync_runs) |
+| `sync_ns_plans` | NS 来源（报关单、子采购单）每日定时同步计划 | `0040` | — | [查看](current-data-dictionary.md#sync_ns_plans) |
+| `sync_ns_runs` | NS 来源按批后台保存记录与结果，不保存令牌 | `0024` | `0040` | [查看](current-data-dictionary.md#sync_ns_runs) |
+| `sync_runs` | 同步运行记录 | `0001` | `0015`、`0023`、`0025`、`0040` | [查看](current-data-dictionary.md#sync_runs) |
 
 ### identity
 
@@ -154,3 +155,4 @@
 | [`0037_writeback_execution`](../../backend/migrations/versions/0037_writeback_execution.py) | `writeback_requests`、`writeback_target_locks` | — | 新增 NS 写入请求与账单目标锁；只建新表，不修改准备阶段四张表。 |
 | [`0038_source_purchase_line_tax_rate`](../../backend/migrations/versions/0038_source_purchase_line_tax_rate.py) | — | `source_purchase_order_lines` | source：子采购明细保存税率（2026-10-29）。 |
 | [`0039_task_wecom_directory`](../../backend/migrations/versions/0039_task_wecom_directory.py) | `task_wecom_directories`、`task_wecom_directory_groups` | — | 企微只读目录与同步状态；按企业及凭证摘要隔离，不存凭证或群成员清单。 |
+| [`0040_sync_ns_plans`](../../backend/migrations/versions/0040_sync_ns_plans.py) | `sync_ns_plans` | `sync_ns_runs`、`sync_runs` | sync：NS 来源定时同步计划；批次复用 sync_runs，分页执行记录复用 sync_ns_runs 并指向所属批次。 |

@@ -230,6 +230,7 @@ def test_directory_migration_can_downgrade_and_upgrade_without_touching_other_ta
     assert set(inspect(engine).get_table_names()) == before - {
         "task_wecom_directories",
         "task_wecom_directory_groups",
+        "sync_ns_plans",  # 0040 在没有计划数据时随之回退
     }
     command.upgrade(config, "head")
     assert set(inspect(engine).get_table_names()) == before

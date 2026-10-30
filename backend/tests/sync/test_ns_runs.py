@@ -7,7 +7,7 @@ import pytest
 from backend.core.database import make_engine
 from backend.core.errors import ApiError
 from backend.modules.sync.dto.ns_run_dto import NsRunRequest
-from backend.modules.sync.entity.ns_run import ns_runs
+from backend.modules.sync.entity import lemon_plans, ns_plans, ns_runs, sync_runs
 from backend.modules.sync.service.ns_run_service import NsRunService
 from backend.modules.sync.service.progress_service import ProgressService
 from backend.tests.test_sync_pull import sync_api as sync_api
@@ -61,7 +61,9 @@ def body(**changes):
 @pytest.fixture
 def engine(tmp_path):
     engine = make_engine(f"sqlite:///{tmp_path / 'runs.sqlite'}")
-    ns_runs.create(engine)
+    # 分页记录可指向计划批次，外键依赖的计划与批次表一并建出。
+    for table in (lemon_plans, ns_plans, sync_runs, ns_runs):
+        table.create(engine)
     yield engine
     engine.dispose()
 

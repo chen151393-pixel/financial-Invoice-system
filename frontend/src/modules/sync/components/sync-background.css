@@ -122,6 +122,11 @@
   border-radius: var(--radius-control);
   background: var(--color-canvas);
 }
+/* 复选项与其说明同行：说明可换行，窄屏不把复选框单独挤到一行。 */
+.sync-background__option > span {
+  flex: 1 1 0;
+  min-width: 0;
+}
 .sync-background__error {
   margin: 0;
   color: var(--color-feedback);

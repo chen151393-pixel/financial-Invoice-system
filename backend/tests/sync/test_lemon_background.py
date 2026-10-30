@@ -11,7 +11,8 @@ from backend.modules.invoice.entity import headers, versions
 from backend.modules.sync.dao import lemon_plan_dao, lemon_run_dao, sync_run_dao
 from backend.modules.sync.dto.lemon_batch_dto import RetryBatch, SavePlan, SubmitBatch
 from backend.modules.sync.dto.lemon_invoice_dto import PullLemonInvoices
-from backend.modules.sync.policy.lemon_batch_policy import INTERRUPTED, next_time
+from backend.modules.sync.policy.lemon_batch_policy import INTERRUPTED
+from backend.modules.sync.policy.schedule_policy import next_time
 from backend.modules.sync.service.lemon_batch_service import LemonBatchService
 from backend.modules.sync.service.lemon_job_service import LemonJobService
 from backend.modules.sync.service.lemon_plan_service import LemonPlanService

@@ -11,6 +11,7 @@ const WorkbenchWorkspacePage = lazy(() => import("./WorkbenchWorkspacePage"));
 const ReviewWorkspacePage = lazy(() => import("./ReviewWorkspacePage"));
 const SyncWorkspacePage = lazy(() => import("./SyncWorkspacePage"));
 const SyncBatchWorkspacePage = lazy(() => import("./SyncBatchWorkspacePage"));
+const SyncNsBatchWorkspacePage = lazy(() => import("./SyncNsBatchWorkspacePage"));
 const InvoiceWorkspacePage = lazy(() => import("./InvoiceWorkspacePage"));
 const MatchingWorkspacePage = lazy(() => import("./MatchingWorkspacePage"));
 const TaskWorkspacePage = lazy(() => import("./TaskWorkspacePage"));
@@ -66,6 +67,10 @@ export const router = createBrowserRouter([
           {
             path: `${paths.syncBatches}/:requestId`,
             element: page("同步任务详情", <SyncBatchWorkspacePage />),
+          },
+          {
+            path: `${paths.syncNsBatches}/:requestId`,
+            element: page("NS 计划批次详情", <SyncNsBatchWorkspacePage />),
           },
           { path: paths.writeback, element: page("NS 回写", <WritebackWorkspacePage />) },
           { path: `${paths.writeback}/:requestId`, element: page("NS 回写", <WritebackWorkspacePage />) },

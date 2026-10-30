@@ -56,7 +56,42 @@ class NsRunService:
             self._finish(scope, body.requestId, "failed", None, "服务正在停止，本批未开始执行，请重新发起")
         return self.read(owner, body.requestId)
 
-    def _create(self, scope, body):
+    def execute_now(self, owner, scope, body, run_id):
+        """定时计划在后台线程内同步执行一页：建 running 记录并直接执行，结果写回同一记录。
+
+        复用手动按批保存的执行与结果映射；执行标记先于记录登记，避免查询把刚建的记录显示为待核实。
+        """
+        ticket = self.pulls.progress.create(owner)["progressId"]
+        with self.lock:
+            self.active[scope, body.requestId] = ticket
+        try:
+            previous = self._create(scope, body, run_id=run_id)
+        except BaseException:
+            with self.lock:
+                self.active.pop((scope, body.requestId), None)
+            raise
+        if previous is not None:
+            with self.lock:
+                self.active.pop((scope, body.requestId), None)
+            raise ApiError(409, "分页请求编号已存在，未重复执行")
+        self._execute(owner, scope, body, ticket)
+
+    def executing(self, scope):
+        """本进程正在执行的请求编号；不在其中的 running 记录按结果待核实展示。"""
+        with self.lock:
+            return frozenset(request for key, request in self.active if key == scope)
+
+    def progress(self, scope, request_id, owner):
+        with self.lock:
+            ticket = self.active.get((scope, request_id))
+        if ticket is None:
+            return None
+        try:
+            return self.pulls.progress.get(ticket, owner)
+        except ApiError:
+            return None
+
+    def _create(self, scope, body, *, run_id=None):
         """新建 running 记录并返回 None；同编号已存在时返回原记录。"""
         values = {
             "scope_key": scope,
@@ -64,6 +99,7 @@ class NsRunService:
             "kind": body.kind,
             "request": body.snapshot(),
             "status": "running",
+            **({"run_id": run_id} if run_id is not None else {}),
         }
         try:
             with self.engine.begin() as connection:

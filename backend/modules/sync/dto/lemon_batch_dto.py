@@ -11,6 +11,7 @@ from backend.core.dto import StrictModel
 from backend.modules.invoice.public import lemon_import_defaults
 
 from .lemon_invoice_dto import PullLemonInvoices
+from .schedule_dto import DailySchedule
 
 
 class AccountScope(StrictModel):
@@ -58,20 +59,8 @@ class SubmitBatch(AccountScope):
         return self
 
 
-class SavePlan(AccountScope):
-    revision: int = Field(ge=0)
-    enabled: bool
-    times: list[str] = Field(min_length=1, max_length=8)
-    lookbackDays: int = Field(ge=1, le=366)
-
-    @field_validator("times")
-    @classmethod
-    def daily_times(cls, values):
-        if len(set(values)) != len(values) or any(
-            not re.fullmatch(r"(?:[01][0-9]|2[0-3]):[0-5][0-9]", v) for v in values
-        ):
-            raise PydanticCustomError("lemon_times", "执行时间须为不重复的 HH:mm，每日最多 8 次")
-        return sorted(values)
+class SavePlan(AccountScope, DailySchedule):
+    """柠檬云计划：账套范围与业务类型，加公共的每日时间与回扫天数。"""
 
 
 class RetryBatch(StrictModel):

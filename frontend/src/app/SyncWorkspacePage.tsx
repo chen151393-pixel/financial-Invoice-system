@@ -7,6 +7,7 @@ import { useViewNavigate } from "./useViewNavigate";
 import { LemonInvoicePanel } from "../modules/sync/LemonInvoicePanel";
 import { LemonBindingPanel } from "../modules/sync/LemonBindingPanel";
 import { LemonBackgroundPanel } from "../modules/sync/pages/LemonBackgroundPanel";
+import { NsPlanPanel } from "../modules/sync/pages/NsPlanPanel";
 import { InvoiceImportPage } from "../modules/invoice/pages/InvoiceImportPage";
 
 export default function SyncWorkspacePage() {
@@ -22,13 +23,14 @@ export default function SyncWorkspacePage() {
       breadcrumb={source === "overview" ? undefined : <Link to={paths.sync}>数据同步</Link>}
       description={
         source === "ns"
-          ? "按单据类型和日期范围从 NS 正式环境拉取报关单与子采购"
+          ? "按单据类型和日期范围从 NS 正式环境拉取报关单与子采购，或配置每日定时同步"
           : source === "lemon"
             ? "柠檬云各公司账套的进项发票：后台定时同步、即时拉取与 Excel 导入"
             : "NS 正式环境的报关与子采购、柠檬云各公司账套的进项发票"
       }
     >
       <SyncPage source={source}>
+        {source === "ns" && <NsPlanPanel />}
         {source === "lemon" && (
           <>
             <LemonBackgroundPanel />

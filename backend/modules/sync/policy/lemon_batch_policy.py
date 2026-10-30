@@ -1,11 +1,10 @@
 """同步范围、分片及状态汇总；不把开票日期当作修改时间游标。"""
 
 import hashlib
-from datetime import datetime, timedelta, timezone
+from datetime import timedelta
 
 from backend.core.errors import ApiError
 
-SHANGHAI = timezone(timedelta(hours=8))
 ACTIVE = ("queued", "discovering", "running")
 LABELS = {
     "queued": "等待执行",
@@ -21,18 +20,6 @@ LABELS = {
 
 def binding_key(binding):
     return hashlib.sha256(f"{binding['id']}|{binding['scope_key']}|{binding['mobile']}".encode()).hexdigest()
-
-
-def next_time(times, now):
-    local = now.replace(tzinfo=timezone.utc).astimezone(SHANGHAI)
-    for offset in (0, 1):
-        for value in sorted(times):
-            hour, minute = map(int, value.split(":"))
-            candidate = datetime.combine(local.date() + timedelta(days=offset), datetime.min.time(), SHANGHAI)
-            candidate = candidate.replace(hour=hour, minute=minute)
-            if candidate > local:
-                return candidate.astimezone(timezone.utc).replace(tzinfo=None)
-    raise ValueError("每日执行时间不能为空")
 
 
 def windows(start, end):

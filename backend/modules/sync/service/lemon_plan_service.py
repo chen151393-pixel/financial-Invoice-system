@@ -10,7 +10,8 @@ from ..dao import lemon_binding_dao as bindings
 from ..dao import lemon_plan_dao as plans
 from ..dao import lemon_run_dao as invoice_runs
 from ..dao import sync_run_dao as runs
-from ..policy.lemon_batch_policy import ACTIVE, SHANGHAI, binding_key, next_time
+from ..policy.lemon_batch_policy import ACTIVE, binding_key
+from ..policy.schedule_policy import SHANGHAI, next_time
 from ..vo.lemon_batch_vo import plan_view
 
 

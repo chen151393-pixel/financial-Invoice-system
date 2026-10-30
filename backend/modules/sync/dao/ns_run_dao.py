@@ -29,7 +29,18 @@ def finish(connection, scope, request_id, status, *, result=None, error=None):
     ).rowcount
 
 
+def batch_pages(connection, run_id):
+    """定时计划批次下的分页记录，按执行顺序返回。"""
+    query = select(table).where(table.c.run_id == run_id).order_by(table.c.id)
+    return [dict(row) for row in connection.execute(query).mappings()]
+
+
 def since(connection, start):
-    """start（UTC）之后创建的 NS 批次：时间、单据类型与状态，供同步情况统计。"""
-    query = select(table.c.created_at, table.c.kind, table.c.status).where(table.c.created_at >= start)
+    """start（UTC）之后创建的手动 NS 批次：时间、单据类型与状态，供同步情况统计。
+
+    定时计划的分页记录由所属 sync_runs 批次统计一次，这里排除，避免重复计数。
+    """
+    query = select(table.c.created_at, table.c.kind, table.c.status).where(
+        table.c.created_at >= start, table.c.run_id.is_(None)
+    )
     return [dict(row) for row in connection.execute(query).mappings()]

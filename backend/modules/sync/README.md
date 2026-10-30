@@ -1,5 +1,29 @@
 # 数据同步与连接模块
 
+## NS 定时同步计划（2026-10-29）
+
+管理员在 `/sync/ns` 配置每日定时计划，后台按计划从 NS 正式环境只读拉取报关单、子采购单（报关单自动补齐关联子采购单、母采购单及关联依据），保存复用 source 的部分保存流程：本地已有单据按 NS 身份更新、补齐字段，没有的新增，空页不清空原数据。不写入 NS，不增加 NS 环境筛选。
+
+**接口**（均要求系统管理员，校验全部在后端）
+
+- `GET /api/sync/ns/plan`：返回 `plan{revision, enabled, nextRunAt, kinds, times, lookbackDays, pausedReason}`、`submit/pause` 的 `allowed/reason`、`kindOptions`、`coverage`。
+- `PUT /api/sync/ns/plan`：请求 `{revision, enabled, kinds, times, lookbackDays}`。`kinds` 为 `customs-declarations`/`sub-purchase-orders` 至少一项且不重复（固定先报关后子采购）；`times` 为 1–8 个不重复 `HH:mm`（北京时间）；`lookbackDays` 1–366。版本不符返回 409；启用时 NS 账户或存储配置不完整返回 409 与原因，停用状态仍可保存。重新保存会清除自动暂停原因。
+- `GET /api/sync/ns/batches?page=&pageSize=&phase=`：计划批次分页（一批对应一种单据类型），附计划启用状态与下次执行时间。
+- `GET /api/sync/ns/batches/{requestId}`：批次及每页执行记录：状态、本页单据数、已保存/失败/跳过计数、失败单据原因、执行中阶段进度。
+
+**执行规则**
+
+- 到期：`NsPlanService.tick` 在计划行锁内为每种单据类型建一个 `sync_runs` 批次（`source=ns_customs/ns_purchase`、`trigger_type=schedule`、`ns_plan_id`），冻结北京时间“今天往前 N 天”的创建日期窗口与计划版本，然后推进下次时间。已有活动批次时不叠加，结束后到期计划合并为一次最新窗口回扫；停机错过多个时点也只补一次。
+- 推进：`NsJobService.step` 每次推进最早的活动批次一页，按 `nextCursor` 串行读完整个范围；每页通过 `NsRunService.execute_now` 写一条 `sync_ns_runs`（`run_id` 指向批次），执行与结果映射和手动按批保存相同。新增/更新计数含随报关补齐的子采购单。
+- 互斥：`NsPlanWorker`（复用柠檬云的 `ScheduledWorker` 常驻循环）以数据库命名锁保证同一数据库只有一个消费者，批次串行执行；来源保存继续使用 source 现有账户锁，计划与手动同步不会同时保存同一账户。没有新增全库锁。
+- 页级 `failed`（本页没有任何关联组提交，多为手动同步占用账户锁或 NS 列表读取暂时失败）间隔 60 秒按原游标重新排队，同一页连续 5 次后结束批次。逐单失败不在批次内重试，下次计划回扫时正常重读。
+- 结果待核实（数据库提交未知、服务重启时页仍为 running）立即停止该批次、不自动重试，并自动暂停计划，`pausedReason` 说明原因；管理员核对本地记录后重新保存即恢复。计划保存人失去管理员角色时同样自动暂停。
+- 执行标记与阶段进度在当前进程内存中，沿用单 API worker 约束；多进程部署需改为共享标记。
+
+**文件**：`entity/ns_plan.py`、`dao/ns_plan_dao.py`、`dto/ns_plan_dto.py`、`policy/ns_plan_policy.py`（下一页判定与汇总，纯函数）、`vo/ns_plan_vo.py`、`service/ns_plan_service.py`（计划与入队）、`service/ns_batch_service.py`（查询）、`service/ns_job_service.py`（执行）、`service/ns_plan_worker.py`、`controller/ns_plan_controller.py`。与柠檬云共用：`dto/schedule_dto.py`（时间与回扫天数校验）、`policy/schedule_policy.py`（北京时间触发计算）、`service/scheduled_worker.py`（常驻循环与命名锁）。迁移 `0040_sync_ns_plans` 新增 `sync_ns_plans`，并为 `sync_runs` 加 `ns_plan_id`、为 `sync_ns_runs` 加 `run_id`；只有尚无计划、计划批次和计划分页记录时才允许降级，否则拒绝，以免丢失待核实证据。
+
+**验证**：`backend/tests/sync/test_ns_plan.py` 覆盖计划编辑（版本冲突、权限、配置未就绪、输入校验）、按类型入队与窗口冻结、同一时点不重复、活动批次不叠加、游标翻页与计数汇总、逐单失败、锁冲突排队与次数上限、待核实停止并自动暂停、重启后待核实不重跑、保存人失权暂停、近 14 天统计不重复计数、HTTP 接口，以及经真实 source 保存流程的再次回扫只更新并补齐字段、不新增重复单据。使用 SQLite 与替身 NS，未连接真实 NS 或 MySQL；MySQL 上的命名锁竞争沿用柠檬云 worker 的既有验证，本计划未单独在 MySQL 上验证。
+
 ## 系统管理员访问柠檬云同步（2026-10-28）
 
 柠檬云绑定、发票账套选项、手动拉票、后台批次与计划入口统一校验当前系统管理员角色，应急账号与已启用的飞书管理员均可使用。角色及在职、范围、启用状态由 identity 实时校验；普通角色、服务密钥和权限被撤销的账号不能访问。
@@ -10,7 +34,7 @@
 
 ## 全账套后台任务与每日计划（2026-10-19）
 
-已实现当前发现范围内全部授权账套/指定账套后台拉票、日期分片、持久任务历史及可配置每日计划。接口、文件职责、并发与未知结果保护、迁移 `0023_sync_background`、`0025_sync_merge_lemon_jobs`（分片并入 `sync_lemon_runs`，`sync_runs` 只保留 `phase`）和部署步骤见[后台同步说明](../../../docs/lemon-background-sync.md)。后台与单账套入口复用 `LemonInvoiceService` 及原事件保存链路；NS 的分页拉取仍不属于持久后台队列。
+已实现当前发现范围内全部授权账套/指定账套后台拉票、日期分片、持久任务历史及可配置每日计划。接口、文件职责、并发与未知结果保护、迁移 `0023_sync_background`、`0025_sync_merge_lemon_jobs`（分片并入 `sync_lemon_runs`，`sync_runs` 只保留 `phase`）和部署步骤见[后台同步说明](../../../docs/lemon-background-sync.md)。后台与单账套入口复用 `LemonInvoiceService` 及原事件保存链路。NS 的手动分页拉取仍由页面逐批推进；NS 定时计划见下文“NS 定时同步计划”。
 
 ## 进项发票列表定向补拉（2026-10-19）
 
@@ -24,7 +48,7 @@
 
 柠檬云页 `/sync/lemon` 现由应用层装配发票模块的Excel导入组件，支持原文件预览和确认入库。导入使用独立 `/api/invoices/import/*` 契约，见[发票模块](../invoice/README.md)；本模块已提供已有账号授权绑定、账套选择和 API 手动拉票；接口与部署见[接入说明](../../../docs/lemon-invoice-sync-plan.md)。配置、前端操作与接口见[账号绑定说明](../../../docs/lemon-account-binding.md)。
 
-展示服务器连接配置与最近M2M认证结果，支持三类单据只读分页拉取；子采购订单和报关单另支持补齐明细后按页保存到独立 MySQL 的 source 新表（架构 v2 第 4b 步起）。尚未执行定时全量或增量同步，不写回 NS。
+展示服务器连接配置与最近M2M认证结果，支持三类单据只读分页拉取；子采购订单和报关单另支持补齐明细后按页保存到独立 MySQL 的 source 新表（架构 v2 第 4b 步起）。NS 定时回扫见下文“NS 定时同步计划”，按创建日期回扫，不是修改时间增量同步；不写回 NS。
 
 ## 文件职责
 
@@ -65,7 +89,7 @@ controller/ns_controller.py接收 NS 请求；service/connection_service.py生�
 
 认证成功不等于拥有记录读写权限，状态不能虚构为同步完成。
 
-仅拉取接口返回 REST 单头详情及内嵌资源，不额外联查独立明细。列表会随 NS 数据变化，不是不可变快照。NS 定时同步、增量游标尚未实施；柠檬云后台任务和每日计划见本文开头，原手动拉票使用下方独立接口。
+仅拉取接口返回 REST 单头详情及内嵌资源，不额外联查独立明细。列表会随 NS 数据变化，不是不可变快照。NS 每日定时回扫见下文“NS 定时同步计划”，修改时间增量游标（`sync_cursors`）尚未实施；柠檬云后台任务和每日计划见本文开头，原手动拉票使用下方独立接口。
 
 ## 按页拉取并保存
 

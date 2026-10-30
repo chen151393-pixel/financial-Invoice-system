@@ -2,8 +2,10 @@ import { Link } from "react-router";
 import { paths } from "../../../app/paths";
 import { syncTime } from "../types/background";
 
-/** 数据同步中心的平台入口。只展示接口返回的计划状态，NS 暂无运行汇总接口，不显示统计。 */
-export function SyncSourceCards({ plan }: { plan: { enabled: boolean; nextRunAt: string | null } | null }) {
+type PlanState = { enabled: boolean; nextRunAt: string | null } | null;
+
+/** 数据同步中心的平台入口。只展示接口返回的计划状态，不在前端汇总统计。 */
+export function SyncSourceCards({ plan, nsPlan }: { plan: PlanState; nsPlan: PlanState }) {
   return (
     <div className="sync-sources">
       <article className="sync-source">
@@ -15,12 +17,20 @@ export function SyncSourceCards({ plan }: { plan: { enabled: boolean; nextRunAt:
             <h2>NetSuite</h2>
             <p>采购订单 · 子采购订单 · 报关单</p>
           </div>
-          <span className="sync-phase" data-phase="completed">
-            按需拉取
-          </span>
+          {nsPlan && (
+            <span className="sync-phase" data-phase={nsPlan.enabled ? "completed" : "queued"}>
+              {nsPlan.enabled ? "定时计划已启用" : "定时计划已暂停"}
+            </span>
+          )}
         </div>
+        <dl className="sync-source__facts">
+          <div>
+            <dt>下次执行</dt>
+            <dd>{nsPlan ? syncTime(nsPlan.nextRunAt) : "—"}</dd>
+          </div>
+        </dl>
         <div className="sync-source__foot">
-          <span>不修改 NS 源单据</span>
+          <span>只读 NS，不修改源单据</span>
           <Link className="ui-button ui-button--primary" to={paths.syncNs}>
             进入 NS 数据同步
           </Link>

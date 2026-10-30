@@ -96,7 +96,7 @@ export default function SyncPage({
           ))}
         </div>
       )}
-      {source === "lemon" && children}
+      {source !== "overview" && children}
     </div>
   );
 }

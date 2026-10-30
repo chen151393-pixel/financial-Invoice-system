@@ -64,6 +64,7 @@ from .modules.sync.controller import create_router as sync_router
 from .modules.sync.controller.lemon_batch_controller import create_router as lemon_batch_router
 from .modules.sync.controller.lemon_binding_controller import create_router as lemon_binding_router
 from .modules.sync.controller.lemon_invoice_controller import create_router as lemon_invoice_router
+from .modules.sync.controller.ns_plan_controller import create_router as ns_plan_router
 from .modules.sync.controller.ns_run_controller import create_router as ns_run_router
 from .modules.sync.controller.sync_health_controller import create_router as sync_health_router
 from .modules.sync.public import LemonInvoicesFetched
@@ -76,6 +77,10 @@ from .modules.sync.service.lemon_invoice_service import LemonInvoiceService, on_
 from .modules.sync.service.lemon_job_service import LemonJobService
 from .modules.sync.service.lemon_plan_service import LemonPlanService
 from .modules.sync.service.lemon_worker import LemonWorker
+from .modules.sync.service.ns_batch_service import NsBatchService
+from .modules.sync.service.ns_job_service import NsJobService
+from .modules.sync.service.ns_plan_service import NsPlanService
+from .modules.sync.service.ns_plan_worker import NsPlanWorker
 from .modules.sync.service.ns_run_service import NsRunService
 from .modules.sync.service.sync_health_service import SyncHealthService
 from .modules.task.controller.board_controller import create_router as task_board_router
@@ -143,6 +148,7 @@ def create_app(settings=None, ns=None, engine=None, wecom=None, lemon=None, lemo
             app.state.wecom_directory_worker.start()
             app.state.signed_upload_worker.start()
             app.state.lemon_worker.start()
+            app.state.ns_plan_worker.start()
             app.state.review_calculation_worker.start()
             app.state.directory_sync_worker.start()
             app.state.writeback_prepare_worker.start()
@@ -160,6 +166,8 @@ def create_app(settings=None, ns=None, engine=None, wecom=None, lemon=None, lemo
                 await asyncio.to_thread(app.state.signed_upload_worker.stop)
             if hasattr(app.state, "lemon_worker"):
                 await asyncio.to_thread(app.state.lemon_worker.stop)
+            if hasattr(app.state, "ns_plan_worker"):
+                await asyncio.to_thread(app.state.ns_plan_worker.stop)
             if hasattr(app.state, "contract_worker"):
                 await asyncio.to_thread(app.state.contract_worker.stop)
             if hasattr(app.state, "ns_runs"):
@@ -340,4 +348,8 @@ def _register_business(app, settings, ns, contract_ns, wecom, engine, lemon_invo
     app.include_router(sync_router(ConnectionService(settings, ns), pulls))
     app.state.ns_runs = NsRunService(engine, pulls)
     app.include_router(ns_run_router(app.state.ns_runs))
+    ns_batches = NsBatchService(engine, app.state.ns_runs, app.state.identity.require_admin)
+    ns_plans = NsPlanService(ns_batches)
+    app.include_router(ns_plan_router(ns_plans, ns_batches))
+    app.state.ns_plan_worker = NsPlanWorker(ns_plans, NsJobService(ns_batches, ns_plans))
     app.include_router(sync_health_router(SyncHealthService(engine)))

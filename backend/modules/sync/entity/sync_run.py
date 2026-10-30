@@ -52,6 +52,12 @@ sync_runs = Table(
     Column("request_id", identifier(36), comment="幂等提交编号"),
     Column("plan_id", ID, ForeignKey("sync_lemon_plans.id", name="fk_sync_run_plan"), comment="来源计划"),
     Column(
+        "ns_plan_id",
+        ID,
+        ForeignKey("sync_ns_plans.id", name="fk_sync_run_ns_plan"),
+        comment="NS 来源计划；柠檬云批次使用 plan_id",
+    ),
+    Column(
         "phase",
         identifier(20),
         nullable=False,

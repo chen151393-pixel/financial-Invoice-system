@@ -67,6 +67,7 @@ TABLES = {
     "sync_lemon_bindings",
     "sync_lemon_runs",
     "sync_ns_runs",
+    "sync_ns_plans",
     "sync_lemon_plans",
     "sync_lemon_jobs",
     "identity_departments",
@@ -312,8 +313,12 @@ def test_downgrade_refuses_to_erase_version_evidence(tmp_path):
         with pytest.raises(RuntimeError, match="不可.*丢弃|不能降级删除"):
             command.downgrade(_config(SCHEMA_INI, _url(engine)), "base")
         with engine.connect() as connection:
-            # 0039 的只读目录可由企微重建，允许回退；供应商绑定和业务版本证据必须保留。
-            evidence_tables = TABLES - {"task_wecom_directories", "task_wecom_directory_groups"}
+            # 0039 的只读目录可由企微重建、0040 的空计划表无数据，允许回退；供应商绑定和业务版本证据必须保留。
+            evidence_tables = TABLES - {
+                "task_wecom_directories",
+                "task_wecom_directory_groups",
+                "sync_ns_plans",
+            }
             assert evidence_tables <= set(inspect(connection).get_table_names())
             assert connection.execute(text("SELECT id FROM invoice_lines")).scalar_one() == 77
     finally:

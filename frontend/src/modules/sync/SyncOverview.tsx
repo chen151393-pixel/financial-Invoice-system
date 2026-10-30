@@ -5,6 +5,7 @@ import { Pagination } from "../../shared/components/Pagination";
 import { SyncHealthGrid } from "./components/SyncHealthGrid";
 import { SyncPhaseTag } from "./components/SyncPhaseTag";
 import { SyncSourceCards } from "./components/SyncSourceCards";
+import { useNsPlanBatches } from "./hooks/useNsPlanBatches";
 import { useSyncBatches } from "./hooks/useSyncBatches";
 import { phaseOptions, syncTime } from "./types/background";
 import "./components/sync-background.css";
@@ -19,9 +20,10 @@ const countTags = [
 
 export function SyncOverview() {
   const { data, error, loading, phase, change, refresh } = useSyncBatches();
+  const ns = useNsPlanBatches();
   return (
     <>
-      <SyncSourceCards plan={data?.plan ?? null} />
+      <SyncSourceCards plan={data?.plan ?? null} nsPlan={ns.data?.plan ?? null} />
       <SyncHealthGrid />
       <section className="sync-background sync-background--flush" aria-label="同步执行记录">
         <div className="sync-background__head" id="sync-platforms">
