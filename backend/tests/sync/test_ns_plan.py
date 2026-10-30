@@ -203,7 +203,9 @@ def test_pages_follow_cursor_and_upsert_counts_are_summed(engine):
     assert (batch["fetched_count"], batch["created_count"], batch["updated_count"]) == (4, 4, 6)
     sent = [request for _, request in pulls.requests]
     assert [r.cursor.model_dump() for r in sent] == [{"afterId": "0", "throughId": None, "offset": 0}, cursor]
-    assert all(r.partialSave and r.startDate == "2026-10-23" and r.endDate == "2026-10-29" for r in sent)
+    # worker 按真实当前时间入队，窗口以批次冻结的日期为准，不写死日期。
+    window = batch["configuration"]["startDate"], batch["configuration"]["endDate"]
+    assert all(r.partialSave and (r.startDate, r.endDate) == window for r in sent)
     assert [p["run_id"] for p in pages(engine, batch["id"])] == [batch["id"]] * 2
     detail = world.batches.read(ADMIN, batch["request_id"])
     assert [p["status"] for p in detail["pages"]] == ["completed", "completed"] and not detail["poll"]

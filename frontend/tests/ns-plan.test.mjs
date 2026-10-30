@@ -6,7 +6,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { MemoryRouter } from "react-router";
 import { createServer } from "vite";
 
-let server, Form, Detail, Cards, api;
+let server, Form, Detail, Cards, Status, Tabs, api;
 before(async () => {
   server = await createServer({
     configFile: fileURLToPath(new URL("../vite.config.ts", import.meta.url)),
@@ -19,6 +19,8 @@ before(async () => {
   ({ SyncSourceCards: Cards } = await server.ssrLoadModule(
     "/src/modules/sync/components/SyncSourceCards.tsx",
   ));
+  ({ NsSyncStatus: Status } = await server.ssrLoadModule("/src/modules/sync/components/NsSyncStatus.tsx"));
+  ({ SyncTabs: Tabs } = await server.ssrLoadModule("/src/modules/sync/components/SyncTabs.tsx"));
   api = await server.ssrLoadModule("/src/modules/sync/api/ns-plan-api.ts");
 });
 after(async () => {
@@ -65,6 +67,27 @@ test("后端不允许启用时保存按钮禁用，暂停入口按后端 allowed
   const html = render(Form, { data: blocked, busy: false, save() {} });
   assert.match(html, /disabled=""[^>]*>保存同步计划/);
   assert.doesNotMatch(html, /暂停已保存计划/);
+});
+test("自动暂停原因显示在保存按钮旁", () => {
+  const paused = {
+    ...data,
+    plan: { ...data.plan, enabled: false, pausedReason: "存在结果待核实的分页，计划已自动暂停" },
+  };
+  const html = render(Form, { data: paused, busy: false, save() {} });
+  assert.match(html, /role="status"[^>]*>存在结果待核实的分页[\s\S]*保存同步计划/);
+});
+test("状态条与柠檬云同样三格：可否启用、计划状态与下次执行", () => {
+  const html = render(Status, { data });
+  assert.match(html, /定时同步[\s\S]*可启用/);
+  assert.match(html, /定时计划[\s\S]*已启用[\s\S]*每日 02:00、14:00/);
+  assert.match(html, /下次执行/);
+  const paused = { ...data, plan: { ...data.plan, enabled: false, pausedReason: "已自动暂停" } };
+  assert.match(render(Status, { data: paused }), /已自动暂停，原因见定时计划/);
+});
+test("NS 与柠檬云共用“手动补拉 / 定时计划”页签，处理中禁止切换", () => {
+  const html = renderToStaticMarkup(createElement(Tabs, { value: "plan", onChange() {}, disabled: true }));
+  assert.match(html, /disabled=""[^>]*>手动补拉/);
+  assert.match(html, /aria-pressed="true"[^>]*>定时计划/);
 });
 test("批次详情加载中不显示伪结果", () => {
   assert.match(render(Detail, {}), /正在读取批次详情/);

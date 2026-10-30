@@ -151,7 +151,17 @@ def test_query_select_and_revoke(setup):
     setup.upstream.professional_accounts = upstream.query
     response = setup.client.post(BASE + "/accounts/query", json={})
     assert response.status_code == 200
-    assert response.json() == {"items": [{"asid": "21", "name": "专业账套"}]}
+    assert response.json() == {
+        "items": [
+            {
+                "asid": "21",
+                "name": "专业账套",
+                "edition": "professional",
+                "editionLabel": "专业版",
+                "content": "票头 + 商品明细",
+            }
+        ]
+    }
     assert setup.client.post(BASE + "/account", json={"asid": "7"}).status_code == 403
     selected = setup.client.post(BASE + "/account", json={"asid": "21"})
     assert selected.status_code == 200 and selected.json()["selected"]["asid"] == "21"

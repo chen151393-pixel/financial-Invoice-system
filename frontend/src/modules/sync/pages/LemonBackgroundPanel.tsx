@@ -7,18 +7,14 @@ import { LemonRecentBatches } from "../components/LemonRecentBatches";
 import { LemonSyncStatus } from "../components/LemonSyncStatus";
 import { SyncBatchForm } from "../components/SyncBatchForm";
 import { SyncPlanForm } from "../components/SyncPlanForm";
+import { SyncTabs, type SyncTab } from "../components/SyncTabs";
 import "../components/sync-background.css";
 import "../components/sync-layout.css";
-
-const tabs = [
-  ["manual", "手动补拉"],
-  ["plan", "定时计划"],
-] as const;
 
 export function LemonBackgroundPanel() {
   const state = useBackgroundConfig();
   const navigate = useNavigate();
-  const [tab, setTab] = useState<(typeof tabs)[number][0]>("manual");
+  const [tab, setTab] = useState<SyncTab>("manual");
   return (
     <>
       {state.data && <LemonSyncStatus data={state.data} />}
@@ -29,22 +25,7 @@ export function LemonBackgroundPanel() {
             {state.data && <small>{state.data.coverage}</small>}
           </div>
         </div>
-        {state.data && (
-          <div className="sync-tabs" role="group" aria-label="同步配置方式">
-            {tabs.map(([key, label]) => (
-              <button
-                type="button"
-                key={key}
-                className="sync-tab"
-                aria-pressed={tab === key}
-                disabled={Boolean(state.busy)}
-                onClick={() => setTab(key)}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
-        )}
+        {state.data && <SyncTabs value={tab} onChange={setTab} disabled={Boolean(state.busy)} />}
         {(state.error || state.message || !state.data || !state.data.submit.allowed) && (
           <div className="sync-background__body">
             {state.error && (

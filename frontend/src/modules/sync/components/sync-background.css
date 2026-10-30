@@ -57,6 +57,52 @@
   gap: 20px;
   padding: 20px;
 }
+/* NS 手动补拉放在页签卡片内：拉取结果面板去掉自身边框，避免卡片套卡片。 */
+.sync-background__manual {
+  padding: 20px;
+}
+.sync-background__manual .sync-page__results {
+  border: 0;
+  border-radius: 0;
+  padding: 0;
+}
+/* 计划表单左右两栏：左栏何时执行，右栏同步范围；窄窗口改为上下排列。 */
+.sync-background__fields--split {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.25fr);
+  gap: 20px 32px;
+  align-items: start;
+}
+.sync-background__column {
+  display: grid;
+  gap: 20px;
+  min-width: 0;
+}
+.sync-background__switch {
+  display: flex;
+  margin-bottom: var(--space-control);
+}
+.sync-background__choices {
+  display: grid;
+  gap: var(--space-control);
+}
+.sync-background__rules {
+  font-size: 12px;
+}
+.sync-background__rules p {
+  margin: 6px 0 0;
+  color: var(--color-muted);
+}
+.sync-background__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-small);
+  margin-left: auto;
+}
+.sync-background__paused {
+  margin: 0;
+  color: var(--color-feedback);
+  font-size: 12px;
+}
 .sync-background__foot {
   display: flex;
   align-items: center;
@@ -110,17 +156,21 @@
   color: var(--color-muted);
   font-size: 12px;
 }
+/* 授权账套表：账套多时在框内滚动，表头保持可见。 */
 .sync-background__accounts {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(min(240px, 100%), 1fr));
-  gap: var(--space-small);
   margin: var(--space-control) 0;
-  padding: var(--space-control);
-  max-height: 300px;
+  max-height: 320px;
   overflow: auto;
   border: 1px solid var(--color-border);
   border-radius: var(--radius-control);
-  background: var(--color-canvas);
+}
+.sync-background__accounts th {
+  position: sticky;
+  top: 0;
+}
+.sync-background__accounts td:first-child {
+  min-width: 0;
+  width: 48px;
 }
 /* 复选项与其说明同行：说明可换行，窄屏不把复选框单独挤到一行。 */
 .sync-background__option > span {
@@ -188,6 +238,11 @@
 .sync-background summary:focus-visible {
   outline: 2px solid var(--color-primary);
   outline-offset: 2px;
+}
+@media (max-width: 960px) {
+  .sync-background__fields--split {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 @media (max-width: 760px) {
   .sync-background {

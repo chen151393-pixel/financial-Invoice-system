@@ -6,6 +6,7 @@ from backend.modules.invoice.public import lemon_business_type_options, lemon_im
 from ..dao import lemon_binding_dao as bindings
 from ..dao import lemon_run_dao as runs
 from ..policy.lemon_binding_policy import configuration_reason
+from ..policy.lemon_detail_policy import edition_view
 from ..vo.lemon_invoice_vo import run_view
 from .invoice_account_service import invoice_accounts
 
@@ -64,7 +65,12 @@ class LemonAccountService:
         with self.engine.connect() as connection:
             _, row = self.context(connection, owner)
         accounts = self.authorized_accounts(self.client.user_token(row["mobile"]))
-        return {"items": [{"asid": account["asid"], "name": account["name"]} for account in accounts]}
+        return {
+            "items": [
+                {"asid": account["asid"], "name": account["name"], **edition_view(account)}
+                for account in accounts
+            ]
+        }
 
     def authorized_accounts(self, token):
         professional = self.client.professional_accounts(token)

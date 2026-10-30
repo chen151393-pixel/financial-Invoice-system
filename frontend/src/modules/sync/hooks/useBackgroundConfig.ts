@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { getBackgroundConfig, querySyncAccounts, saveSyncPlan, submitSyncBatch } from "../api/background-api";
-import type { BackgroundConfig, BatchInput, Plan } from "../types/background";
+import type { BackgroundConfig, BatchInput, LemonAccountOption, Plan } from "../types/background";
 
 export function useBackgroundConfig() {
   const [data, setData] = useState<BackgroundConfig | null>(null);
-  const [accounts, setAccounts] = useState<{ asid: string; name: string }[] | null>(null);
+  const [accounts, setAccounts] = useState<LemonAccountOption[] | null>(null);
   const [busy, setBusy] = useState("");
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");

@@ -2,11 +2,11 @@ import { useRef, useState } from "react";
 import { Button } from "../../../shared/components/Button";
 import { LemonBusinessTypes } from "../LemonBusinessTypes";
 import { SyncAccountScope } from "./SyncAccountScope";
-import type { AccountScope, BackgroundConfig, BatchInput } from "../types/background";
+import type { AccountScope, BackgroundConfig, BatchInput, LemonAccountOption } from "../types/background";
 
 type Props = {
   data: BackgroundConfig;
-  accounts: { asid: string; name: string }[] | null;
+  accounts: LemonAccountOption[] | null;
   busy: boolean;
   query: () => void;
   submit: (body: BatchInput) => void;

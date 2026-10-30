@@ -262,6 +262,9 @@ def test_account_query_uses_authenticated_json_request(setup):
     response = setup.client.post(BASE + "/accounts/query", json={})
     assert response.status_code == 200 and len(response.json()["items"]) == 2
     assert "private" not in response.text
+    # open2 账套没有专业版标记，按免费版展示：只拉票头。
+    assert {item["edition"] for item in response.json()["items"]} == {"free"}
+    assert response.json()["items"][0]["content"].startswith("仅票头")
 
 
 def test_invalid_date_range_returns_safe_specific_reason(setup):

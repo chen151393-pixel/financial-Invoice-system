@@ -12,6 +12,14 @@ export type Plan = AccountScope & {
   lookbackDays: number;
   nextRunAt: string | null;
 };
+/** 授权账套查询结果；版本与可拉取内容由后端给出，前端只展示。 */
+export type LemonAccountOption = {
+  asid: string;
+  name: string;
+  edition: "professional" | "free";
+  editionLabel: string;
+  content: string;
+};
 export type BackgroundConfig = {
   plan: Plan;
   submit: Action;

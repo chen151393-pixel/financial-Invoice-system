@@ -16,8 +16,16 @@ class LemonAccount(BaseModel):
     name: str
 
 
+class LemonAccountOption(LemonAccount):
+    """授权账套查询结果：附带版本与可拉取内容，前端只展示。"""
+
+    edition: str
+    editionLabel: str
+    content: str
+
+
 class LemonAccounts(BaseModel):
-    items: list[LemonAccount]
+    items: list[LemonAccountOption]
 
 
 class InvoiceAccountOption(BaseModel):

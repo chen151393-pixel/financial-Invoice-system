@@ -51,18 +51,47 @@ test("全部账套的排除语义和新增自动纳入明确", () => {
     change() {},
     query() {},
     disabled: false,
-    accounts: [{ asid: "9", name: "测试账套" }],
+    accounts: [{ asid: "9", name: "测试账套", edition: "free", editionLabel: "免费版", content: "仅票头" }],
   });
   assert.match(html, /新增账套自动纳入/);
   assert.match(html, /已排除/);
-  assert.match(html, /type="checkbox" checked=""/);
+  assert.match(html, /aria-label="排除 测试账套" checked=""/);
 });
 test("定时计划按北京时间展示，保存与暂停有明确操作", () => {
   const html = render(Plan, { data, accounts: null, busy: false, query() {}, save() {} });
   assert.match(html, /14:00/);
   assert.match(html, /保存同步计划/);
   assert.match(html, /暂停已保存计划/);
-  assert.match(html, /请用手动补拉/);
+  assert.match(html, /“手动补拉”页提交/);
+  assert.match(html, /何时执行（北京时间）/);
+  assert.match(html, /查询授权账套后显示各账套的版本/);
+});
+test("授权账套列出版本与可拉取内容，文字来自后端", () => {
+  const html = render(Scope, {
+    value: data.plan,
+    change() {},
+    query() {},
+    disabled: false,
+    accounts: [
+      {
+        asid: "21",
+        name: "专业账套",
+        edition: "professional",
+        editionLabel: "专业版",
+        content: "票头 + 商品明细",
+      },
+      {
+        asid: "7",
+        name: "免费账套",
+        edition: "free",
+        editionLabel: "免费版",
+        content: "仅票头；商品明细与附件尚未接入",
+      },
+    ],
+  });
+  assert.match(html, /专业账套[\s\S]*专业版[\s\S]*票头 \+ 商品明细/);
+  assert.match(html, /免费账套[\s\S]*免费版[\s\S]*仅票头/);
+  assert.match(html, /aria-label="排除 免费账套"/);
 });
 test("未授权不能提交，等待任务详情时不显示伪成功", () => {
   const html = render(Batch, {

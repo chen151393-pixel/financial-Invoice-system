@@ -11,6 +11,19 @@ def account_namespace(host, asid, professional=True):
     ).hexdigest()
 
 
+# 账套版本决定能拉到的内容：专业版有商品明细接口，免费版（open2 默认版）只返回票头。
+EDITIONS = {
+    "professional": ("专业版", "票头 + 商品明细"),
+    "free": ("免费版", "仅票头；商品明细与附件尚未接入"),
+}
+
+
+def edition_view(account):
+    edition = "professional" if account.get("edition") == "professional" else "free"
+    label, content = EDITIONS[edition]
+    return {"edition": edition, "editionLabel": label, "content": content}
+
+
 def refresh_action(row, account):
     if row is None:
         reason = "发票不存在，请刷新列表"

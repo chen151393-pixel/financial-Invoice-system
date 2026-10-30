@@ -7,7 +7,7 @@ import { useViewNavigate } from "./useViewNavigate";
 import { LemonInvoicePanel } from "../modules/sync/LemonInvoicePanel";
 import { LemonBindingPanel } from "../modules/sync/LemonBindingPanel";
 import { LemonBackgroundPanel } from "../modules/sync/pages/LemonBackgroundPanel";
-import { NsPlanPanel } from "../modules/sync/pages/NsPlanPanel";
+import { NsSyncPanel } from "../modules/sync/pages/NsSyncPanel";
 import { InvoiceImportPage } from "../modules/invoice/pages/InvoiceImportPage";
 
 export default function SyncWorkspacePage() {
@@ -30,7 +30,7 @@ export default function SyncWorkspacePage() {
       }
     >
       <SyncPage source={source}>
-        {source === "ns" && <NsPlanPanel />}
+        {source === "ns" && <NsSyncPanel />}
         {source === "lemon" && (
           <>
             <LemonBackgroundPanel />

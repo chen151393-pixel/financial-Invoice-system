@@ -1,5 +1,13 @@
 import { http } from "../../../shared/api/http";
-import type { BackgroundConfig, Batch, BatchDetail, BatchInput, BatchList, Plan } from "../types/background";
+import type {
+  BackgroundConfig,
+  Batch,
+  BatchDetail,
+  BatchInput,
+  BatchList,
+  LemonAccountOption,
+  Plan,
+} from "../types/background";
 
 const root = "/sync/lemon";
 export const getBackgroundConfig = () => http<BackgroundConfig>(`${root}/background/configuration`);
@@ -27,4 +35,4 @@ export const getSyncBatch = (id: string, page = 1) =>
 export const retrySyncBatch = (id: string, requestId: string) =>
   http<Batch>(`${root}/batches/${encodeURIComponent(id)}/retry`, "POST", { requestId });
 export const querySyncAccounts = () =>
-  http<{ items: { asid: string; name: string }[] }>(`${root}/accounts/query`, "POST", {});
+  http<{ items: LemonAccountOption[] }>(`${root}/accounts/query`, "POST", {});
