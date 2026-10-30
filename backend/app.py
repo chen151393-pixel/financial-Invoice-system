@@ -47,6 +47,7 @@ from .modules.matching.service.invoice_file_service import InvoiceFileService
 from .modules.matching.service.invoice_list_service import InvoiceListService
 from .modules.matching.service.matching_query_service import MatchingQueryService
 from .modules.matching.service.proposal_service import ProposalService, on_invoices_imported
+from .modules.matching.service.task_proposal_service import on_review_approved as on_task_review_approved
 from .modules.matching.service.workbench_service import WorkbenchService
 from .modules.review.controller.review_controller import create_router as review_router
 from .modules.review.public import PurchaseBasisInvalidated, ReviewApproved
@@ -234,6 +235,7 @@ def create_events(*, writeback_queue_enabled=True):
     events.subscribe(PurchaseBasisInvalidated, partial(ledger_service.on_basis_invalidated, events=events))
     events.subscribe(ReviewApproved, on_review_approved)
     events.subscribe(ReviewApproved, partial(ledger_service.on_review_approved, events=events))
+    events.subscribe(ReviewApproved, on_task_review_approved)
     events.subscribe(SourceChanged, request_calculation)
     events.subscribe(ReviewApproved, request_calculation)
     events.subscribe(InvoiceChanging, ledger_service.on_invoice_changing)
