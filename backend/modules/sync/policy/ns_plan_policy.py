@@ -100,7 +100,7 @@ def next_step(pages, executing, now):
     return {
         "action": "finish",
         "phase": "partial" if partial else "completed",
-        "message": "范围内全部分页已处理，存在失败单据，请查看分页明细"
+        "message": "范围内全部分页已处理，存在失败或待核实单据，请查看分页明细"
         if partial
         else "范围内全部分页已处理完成；本地已有单据按 NS 身份更新、补齐",
     }

@@ -10,7 +10,7 @@ from threading import Event
 
 import pytest
 from backend.app import create_events
-from backend.core import write_lock
+from backend.core import named_lock, write_lock
 from backend.core.errors import ApiError
 from backend.core.write_lock import transaction
 from backend.modules.review.dao import calculation_job_dao as jobs
@@ -22,6 +22,9 @@ from backend.tests.test_review_calculations_mysql import setup_job
 from backend.tests.test_schema_baseline import schema_engine as schema_engine
 from backend.tests.test_source_storage import ACCOUNT, bundle, customs, declaration, purchase
 from backend.tests.test_source_storage import ns as ns
+from backend.tests.test_sync_optimization import batch as batch
+from backend.tests.test_sync_partial_save import page_result
+from sqlalchemy.exc import OperationalError
 
 
 @pytest.fixture
@@ -107,3 +110,36 @@ def test_worker_defers_without_failure_when_ledger_is_busy(mysql, monkeypatch):
         job = jobs.get(connection, "test-account")
     assert built == [] and job["attempts"] == 0 and job["last_error"] == ""
     assert job["retry_at"] is not None and service.pending() == []
+
+
+@pytest.mark.parametrize("contended", [False, True])
+def test_partial_sync_reacquires_account_lock_after_disconnect(mysql, batch, monkeypatch, contended):
+    ns, page, _, _ = batch
+    service = StorageService(ns, mysql)
+    original = service.commit
+    attempts = []
+    with mysql.connect() as competitor:
+
+        def commit(connection, bundle, config, account, lock, report):
+            attempts.append(bundle["customs"][0][0])
+            with connection.begin():
+                assert named_lock.owns(connection, lock)
+            result = original(connection, bundle, config, account, lock, report)
+            if len(attempts) == 2:
+                connection.invalidate()
+                if contended:
+                    with competitor.begin():
+                        assert named_lock.acquire(competitor, lock, timeout=2)
+                raise OperationalError("", {}, Exception("commit acknowledgement lost"))
+            return result
+
+        monkeypatch.setattr(service, "commit", commit)
+        try:
+            result = service.sync_partial_page("customs-declarations", lambda: page_result(page[:3]))
+            assert result["batch"]["canContinue"] is not contended
+            assert result["batch"]["counts"]["unknown"] == 1
+            assert result["batch"]["counts"]["saved"] == (1 if contended else 2)
+            assert len(attempts) == (2 if contended else 3)
+        finally:
+            # 命名锁不会随事务提交释放，确保测试竞争连接不带锁回池。
+            competitor.invalidate()

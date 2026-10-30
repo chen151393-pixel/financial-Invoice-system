@@ -1,7 +1,9 @@
-"""逐关联组保存：部分失败不丢失其他成功单据，组内原子，结果未知停止。"""
+"""逐关联组保存：异常组跳过，已提交数据保留，连接及账户锁恢复后继续。"""
 
 from collections import Counter
 
+import pytest
+from backend.core import named_lock
 from backend.core.errors import ApiError
 from backend.modules.source.service.storage_service import StorageService
 from backend.modules.sync.dto.source_dto import PullRequest
@@ -101,32 +103,46 @@ def test_detail_read_failure_isolated_to_complete_group(batch, engine):
     assert len(rows(engine, "SELECT id FROM source_customs_declarations")) == 2
 
 
-def test_unknown_commit_keeps_prior_counts_and_stops_remaining(batch, engine, monkeypatch):
+@pytest.mark.parametrize("fallback", [False, True])
+def test_unknown_commit_keeps_prior_counts_and_continues(batch, engine, monkeypatch, fallback):
     ns, page, _, _ = batch
     service = StorageService(ns, engine)
     original = service.commit
     calls = []
+    if fallback:
+        read_bundle = service.read_bundle
+
+        def read(*args):
+            if not calls and not getattr(read, "attempted", False):
+                read.attempted = True
+                raise ApiError(502, "整页读取失败，改为逐组读取")
+            return read_bundle(*args)
+
+        monkeypatch.setattr(service, "read_bundle", read)
 
     def save(*args):
         calls.append(True)
         saved = original(*args)
         if len(calls) == 2:
             # 模拟已提交但确认响应丢失，不能用捕获异常推断该组未写入。
+            args[0].invalidate()
             raise OperationalError("", {}, Exception("connection lost"))
         return saved
 
     monkeypatch.setattr(service, "commit", save)
     result = service.sync_partial_page("customs-declarations", lambda: page_result(page[:3]))
     assert result["batch"]["counts"] == {
-        "saved": 1,
+        "saved": 2,
         "skipped": 0,
         "failed": 0,
         "unknown": 1,
-        "not_processed": 1,
+        "not_processed": 0,
     }
-    assert result["batch"]["status"] == "interrupted" and not result["batch"]["canContinue"]
-    assert result["storage"]["customs"]["created"] == 1
-    assert len(calls) == 2 and len(rows(engine, "SELECT id FROM source_customs_declarations")) == 2
+    assert result["batch"]["status"] == "partial" and result["batch"]["canContinue"]
+    assert result["storage"]["customs"]["created"] == 2
+    assert "待核实 1 张" in result["message"] and "已停止" not in result["message"]
+    assert len(calls) == 3 and len(rows(engine, "SELECT id FROM source_customs_declarations")) == 3
+    assert [item["status"] for item in result["batch"]["items"]] == ["saved", "unknown", "saved"]
 
 
 def test_transaction_business_failure_rolls_back_only_its_group(batch, engine, monkeypatch):
@@ -199,7 +215,8 @@ def test_saved_group_can_be_reviewed_and_generate_tasks(batch, engine):
     assert [Decimal(str(row["expected_amount"])) for row in amounts] == [Decimal("100.50"), Decimal("20")]
 
 
-def test_lock_conflict_stops_later_groups_without_losing_prior_success(batch, engine, monkeypatch):
+@pytest.mark.parametrize("status", [403, 409, 429, 500, 503])
+def test_group_api_failure_does_not_stop_later_groups(batch, engine, monkeypatch, status):
     ns, page, _, _ = batch
     service = StorageService(ns, engine)
     original = service.commit
@@ -208,17 +225,83 @@ def test_lock_conflict_stops_later_groups_without_losing_prior_success(batch, en
     def save(*args):
         calls.append(True)
         if len(calls) == 2:
-            raise ApiError(409, "同步连接已失去占用，未保存")
+            raise ApiError(status, "本组读取或保存失败")
         return original(*args)
 
     monkeypatch.setattr(service, "commit", save)
     result = service.sync_partial_page("customs-declarations", lambda: page_result(page[:3]))
     assert result["batch"]["counts"] == {
-        "saved": 1,
+        "saved": 2,
         "skipped": 0,
         "failed": 1,
         "unknown": 0,
-        "not_processed": 1,
+        "not_processed": 0,
     }
-    assert not result["batch"]["canContinue"] and len(calls) == 2
-    assert len(rows(engine, "SELECT id FROM source_customs_declarations")) == 1
+    assert result["batch"]["canContinue"] and len(calls) == 3
+    assert len(rows(engine, "SELECT id FROM source_customs_declarations")) == 2
+
+
+def test_database_write_failure_rolls_back_only_its_group(batch, engine, monkeypatch):
+    ns, page, _, _ = batch
+    service = StorageService(ns, engine)
+    original = service._write
+
+    def write(connection, account, bundle, documents, now):
+        value = original(connection, account, bundle, documents, now)
+        if documents["customs"][0]["ns_internal_id"] == "871":
+            raise OperationalError("", {}, Exception("database write failed"))
+        return value
+
+    monkeypatch.setattr(service, "_write", write)
+    result = service.sync_partial_page("customs-declarations", lambda: page_result(page[:3]))
+    assert [item["status"] for item in result["batch"]["items"]] == ["saved", "unknown", "saved"]
+    assert result["batch"]["canContinue"]
+    for table in ("source_customs_declarations", "source_purchase_orders"):
+        assert len(rows(engine, f"SELECT id FROM {table}")) == 2
+
+
+@pytest.mark.parametrize("recovery", ["acquired", "busy", "disconnected"])
+def test_lost_account_lock_must_be_recovered_before_next_group(batch, engine, monkeypatch, recovery):
+    ns, page, _, _ = batch
+    service = StorageService(ns, engine)
+    original = service.commit
+    calls, reacquired = [], []
+    lost = False
+    acquire = named_lock.acquire
+
+    def owns(connection, lock):
+        return not lost
+
+    def recover(connection, lock, timeout=0):
+        nonlocal lost
+        if not lost:
+            return acquire(connection, lock, timeout)
+        reacquired.append(lock)
+        if recovery == "disconnected":
+            raise OperationalError("", {}, Exception("database unavailable"))
+        lost = recovery != "acquired"
+        return not lost
+
+    def save(*args):
+        nonlocal lost
+        calls.append(True)
+        if len(calls) == 2:
+            args[0].invalidate()
+            lost = True
+            raise OperationalError("", {}, Exception("connection lost"))
+        assert not lost
+        return original(*args)
+
+    monkeypatch.setattr(named_lock, "owns", owns)
+    monkeypatch.setattr(named_lock, "acquire", recover)
+    monkeypatch.setattr(service, "commit", save)
+    result = service.sync_partial_page("customs-declarations", lambda: page_result(page[:3]))
+    assert len(reacquired) == 1
+    continued = recovery == "acquired"
+    assert result["batch"]["canContinue"] == continued
+    assert result["batch"]["counts"]["saved"] == (2 if continued else 1)
+    assert result["batch"]["counts"]["not_processed"] == (0 if continued else 1)
+    assert len(calls) == (3 if continued else 2)
+    if not continued:
+        assert result["batch"]["status"] == "interrupted"
+        assert "账户保存锁未恢复" in result["message"]

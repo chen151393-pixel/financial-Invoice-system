@@ -64,12 +64,17 @@ class PartialResult:
             key: sum(item["status"] == key for item in self.items.values())
             for key in ("saved", "skipped", "failed", "unknown", "not_processed")
         }
-        status = "interrupted" if self.interrupted else "partial" if counts["failed"] else "completed"
+        has_issues = counts["failed"] or counts["unknown"]
+        status = "interrupted" if self.interrupted else "partial" if has_issues else "completed"
         message = f"本批入口单据：已保存 {counts['saved']} 张，失败 {counts['failed']} 张"
         if counts["skipped"]:
             message += f"，未出库跳过 {counts['skipped']} 张"
+        if counts["unknown"]:
+            message += f"，待核实 {counts['unknown']} 张（请核对本地记录，勿直接重试）"
         if self.interrupted:
-            message += f"，待核实 {counts['unknown']} 张，未处理 {counts['not_processed']} 张；已停止后续拉取"
+            message += f"，未处理 {counts['not_processed']} 张；数据库连接或账户保存锁未恢复，已停止后续拉取"
+        elif has_issues:
+            message += "；异常关联组已跳过，不影响后续同步"
         message += "。已确认保存的数据保留，同一报关关联组一起提交或失败"
         page = {key: value for key, value in self.page.items() if key != "readFailures"}
         return {

@@ -23,7 +23,7 @@
 - 推进：`NsJobService.step` 每次推进最早的活动批次一页，按 `nextCursor` 串行读完整个范围；每页通过 `NsRunService.execute_now` 写一条 `sync_ns_runs`（`run_id` 指向批次），执行与结果映射和手动按批保存相同。新增/更新计数含随报关补齐的子采购单。
 - 互斥：`NsPlanWorker`（复用柠檬云的 `ScheduledWorker` 常驻循环）以数据库命名锁保证同一数据库只有一个消费者，批次串行执行；来源保存继续使用 source 现有账户锁，计划与手动同步不会同时保存同一账户。没有新增全库锁。
 - 页级 `failed`（本页没有任何关联组提交，多为手动同步占用账户锁或 NS 列表读取暂时失败）间隔 60 秒按原游标重新排队，同一页连续 5 次后结束批次。逐单失败不在批次内重试，下次计划回扫时正常重读。
-- 结果待核实（数据库提交未知、服务重启时页仍为 running）立即停止该批次、不自动重试，并自动暂停计划，`pausedReason` 说明原因；管理员核对本地记录后重新保存即恢复。计划保存人失去管理员角色时同样自动暂停。
+- 单个关联组提交待核实时，连接和账户锁恢复后标记本页 `partial` 并继续后续分页，该组在本批次不重试。整页结果不可确认（例如服务重启时页仍为 running）或连接/账户锁无法恢复导致 interrupted 时，仍立即停止该批次并自动暂停计划，`pausedReason` 说明原因；管理员核对本地记录后重新保存即恢复。计划保存人失去管理员角色时同样自动暂停。
 - 执行标记与阶段进度在当前进程内存中，沿用单 API worker 约束；多进程部署需改为共享标记。
 
 **文件**：`entity/ns_plan.py`、`dao/ns_plan_dao.py`、`dto/ns_plan_dto.py`、`policy/ns_plan_policy.py`（下一页判定与汇总，纯函数）、`vo/ns_plan_vo.py`、`service/ns_plan_service.py`（计划与入队）、`service/ns_batch_service.py`（查询）、`service/ns_job_service.py`（执行）、`service/ns_plan_worker.py`、`controller/ns_plan_controller.py`。与柠檬云共用：`dto/schedule_dto.py`（时间与回扫天数校验）、`policy/schedule_policy.py`（北京时间触发计算）、`service/scheduled_worker.py`（常驻循环与命名锁）。迁移 `0040_sync_ns_plans` 新增 `sync_ns_plans`，并为 `sync_runs` 加 `ns_plan_id`、为 `sync_ns_runs` 加 `run_id`；只有尚无计划、计划批次和计划分页记录时才允许降级，否则拒绝，以免丢失待核实证据。
@@ -171,7 +171,7 @@ test_sync_pull.py 覆盖三类映射、身份、参数、金额精度、空结�
 
 响应新增 `batch`：`status` 为 completed / partial / interrupted；`canContinue` 控制是否可拉下一批；`counts` 按本批入口单据统计 saved / failed / unknown / not_processed；`items` 含 id、number、同名 status 和中文 reason。`count` 仍为本页列表单据数，`rows` 仅含成功读到的单头，失败的单头在 items 中。已补齐并提交的同组入口按实际提交结果标记，不重复计入组保存次数。
 
-已知失败不阻止翻页，但时间段完成显示“存在失败单据”，可逐批查看清单。数据库提交未知或不可继续的错误返回 interrupted，先保留已返回的本批结果，再停止后续分页，不自动重发。保存响应丢失时仍须核实本地记录，单靠进度不能推断哪些组已写入。进度中的“处理结束”仅指请求结束，以逐单保存结果为准。
+2026-10-30 起，单个关联组失败或数据库提交结果待核实均跳过该组，连接和账户保存锁可恢复时继续后续组及分页。存在 failed 或 unknown 的已处理批次返回 `partial`、`canContinue=true`，保留逐单原因与待核实数量，确认成功数不包含 unknown。手动按时间段和计划分页都沿原游标继续，不重发本页异常组。仅连接/账户锁无法恢复时返回 `interrupted`，保留已返回结果后停止后续分页。整个保存请求响应丢失、进程退出等无法取得逐单结果的情况仍按 unknown 停止，不自动重发。保存结果待核实的单据须核对本地记录，单靠进度不能推断是否写入。进度中的“处理结束”仅指请求结束，以逐单保存结果为准。
 
 旧文档中的“整页失败／整页事务”适用于 `partialSave=false`；新模式对应完整关联组，不把失败组的部分明细保存为完整单据。本次不新增表、不调整数值精度、不写 NS，也不提供持久断点续跑。
 

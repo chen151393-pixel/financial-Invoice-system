@@ -30,6 +30,7 @@ from backend.tests.test_source_storage import ns as ns
 from backend.tests.test_sync_optimization import batch as batch
 from fastapi.testclient import TestClient
 from pydantic import ValidationError
+from sqlalchemy.exc import OperationalError
 
 ADMIN = "user:admin"
 # 北京时间 2026-10-29 10:00
@@ -381,6 +382,56 @@ def test_scheduled_run_updates_existing_documents_and_fills_fields(batch, engine
     assert rows(engine, "SELECT DISTINCT specification FROM source_customs_lines") == [
         {"specification": "型号"}
     ]
+
+
+def test_unknown_group_does_not_stop_later_pages(batch, engine, monkeypatch):
+    """source 真实提交结果经过持久批次后仍推进下一页，不重发未知组。"""
+    ns_, records_page, _, _ = batch
+    storage = StorageService(ns_, engine)
+    commit = storage.commit
+    attempts = []
+
+    def save(*args):
+        attempts.append(args[1]["customs"][0][0])
+        saved = commit(*args)
+        if len(attempts) == 2:
+            args[0].invalidate()
+            raise OperationalError("", {}, Exception("commit acknowledgement lost"))
+        return saved
+
+    monkeypatch.setattr(storage, "commit", save)
+
+    class StoragePulls(Pulls):
+        def pull_and_save(self, kind, request, owner):
+            self.requests.append((kind, request))
+            first = len(self.requests) == 1
+            selected = records_page[:3] if first else records_page[3:4]
+            listing = {
+                "rows": [{**row, "number": row["record"]["name"]} for row in selected],
+                "count": len(selected),
+                "hasMore": first,
+                "nextCursor": {"afterId": selected[-1]["id"], "throughId": None, "offset": 0}
+                if first
+                else None,
+            }
+            return storage.sync_partial_page(kind, lambda: listing)
+
+    pulls = StoragePulls()
+    world = services(engine, pulls)
+    world.plans.save(ADMIN, plan())
+    due(world, engine)
+    world.plans.tick(NOW)
+    drain(world)
+    saved = batches(engine, world.scope)[0]
+    assert saved["phase"] == "partial"
+    assert "待核实" in saved["message"]
+    results = pages(engine, saved["id"])
+    assert [row["status"] for row in results] == ["partial", "completed"]
+    assert results[0]["result"]["batch"]["counts"]["unknown"] == 1
+    assert [request.offset for _, request in pulls.requests] == [0, 20]
+    assert attempts == [row["id"] for row in records_page[:4]]
+    assert len(rows(engine, "SELECT id FROM source_customs_declarations")) == 4
+    assert saved["created_count"] == 6  # 未知组的报关及子采购不计入确认成功数。
 
 
 def test_plan_http_requires_admin_and_validates_body(context, monkeypatch):

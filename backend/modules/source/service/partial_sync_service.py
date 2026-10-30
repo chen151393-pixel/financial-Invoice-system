@@ -8,7 +8,7 @@ import logging
 
 from sqlalchemy.exc import SQLAlchemyError
 
-from backend.core import write_lock
+from backend.core import named_lock, write_lock
 from backend.core.errors import ApiError
 from backend.integrations.netsuite.read_batch import quiet_progress
 
@@ -127,15 +127,12 @@ class PartialSyncService:
         try:
             saved, collected = save(phase)
         except SQLAlchemyError:
-            # 连接/提交异常无法确认该组结果；保留此前确认成功的计数，停止后续组及翻页。
-            result.mark(group, "unknown", "数据库保存结果待核实，请核对本地记录后处理，勿直接重试")
-            result.interrupted = True
-            return False
+            # 不能推断异常组未写入，也不重发该组；恢复连接和账户互斥后仅继续后续组。
+            result.mark(group, "unknown", "数据库保存结果待核实，本组已跳过；请核对本地记录，勿直接重试")
+            return self._continue_after_failure(context, phase)
         except ApiError as error:
             result.mark(group, "failed", f"本关联组未保存；{error.message}")
-            if error.status not in (404, 422, 502):
-                result.interrupted = True
-                return False
+            return self._continue_after_failure(context, phase)
         else:
             result.add(saved)
             result.mark_skipped(collected.get("skipped", []))
@@ -144,4 +141,22 @@ class PartialSyncService:
             # 初次单头读取失败的入口，若作为完整关联单据成功读回并提交，按实际结果更新状态。
             included = [{"id": identity} for identity in saved_ids if identity in result.items]
             result.mark(included, "saved", "本单及完整关联数据已提交保存")
+        return True
+
+    def _continue_after_failure(self, context, report):
+        """失败组结束后清理事务；断线重连必须重新取得账户锁，不能绕过互斥写后续组。"""
+        connection, _, _, _, lock, _, result = context
+        try:
+            if connection.in_transaction():
+                connection.rollback()
+            with connection.begin():
+                available = named_lock.owns(connection, lock) or named_lock.acquire(connection, lock)
+        except SQLAlchemyError:
+            available = False
+        if not available:
+            result.interrupted = True
+            result.storage["warnings"].append("数据库连接或账户保存锁未能恢复，已停止后续同步")
+            report("数据库连接或账户保存锁未能恢复，已停止后续同步")
+            return False
+        report("本组异常已记录并跳过，继续处理后续单据")
         return True

@@ -59,10 +59,16 @@
 ## 部分保存整页一次读取（2026-10-19）
 
 - 原部分保存模式先按报关关联组拆分，再对每组重复执行整条 NS 读取链（报关明细、反查子采购、PL、母单核实、原始行、Packing、销售/母采购行、v3 比对、母单单头）。20 组一页约需 250–300 次串行 NS 请求，这是线上单批 120 秒级耗时的主要来源（按代码路径估算，未在真实 NS 计时）。
-- 现在 `PartialSyncService` 先对整页调用一次 `StorageService.read_bundle`，再由纯转换 `mapper/group_bundle.py` 按 NS 反查的报关—子采购成员关系拆成关联组，每组仍单独 `commit`（映射校验 + 短事务写入）。失败隔离、锁顺序、逐单结果与旧行为一致：映射或写入失败只影响本组，数据库结果不明停止后续组。
+- 现在 `PartialSyncService` 先对整页调用一次 `StorageService.read_bundle`，再由纯转换 `mapper/group_bundle.py` 按 NS 反查的报关—子采购成员关系拆成关联组，每组仍单独 `commit`（映射校验 + 短事务写入）。映射或写入失败只影响本组；2026-10-30 起数据库结果不明也仅标记本组待核实并跳过，连接和账户锁可恢复时继续后续组与分页，不重发当前异常组。
 - 整页读取遇到业务错误（任一组的读取、追溯或核实失败）时，记录 `ns_sync_whole_page_fallback` 日志后改为原逐组读取，保持“失败只影响本组”；此时比原来多一次整页尝试。
 - 母单缺失提示改由 `policy/parent_reference_policy.py` 的 `missing_parent_warnings` 按组生成，避免整页提示串组。单头仍为 REST 整条读取，`source_raw_records` 保存内容不变。
-- 验证：`tests/source/test_line_batch_save.py` 断言 20 组一页的列表查询从 60 次降至 3 次、明细批次从 40 次降至 2 次；`tests/sync/test_sync_timing.py` 覆盖整页读取失败回退逐组；`test_sync_partial_save.py` 原有的组失败隔离、结果未知停止和锁冲突用例全部通过。
+- 验证：`tests/source/test_line_batch_save.py` 断言 20 组一页的列表查询从 60 次降至 3 次、明细批次从 40 次降至 2 次；`tests/sync/test_sync_timing.py` 覆盖整页读取失败回退逐组；`test_sync_partial_save.py` 覆盖组失败隔离、提交后响应丢失、事务回滚及连接/锁恢复；`tests/sync/test_ns_plan.py` 覆盖异常组后的下一页仍执行。
+
+### 单组异常后继续（2026-10-30）
+
+- 同组读取、校验或保存的 `ApiError` 记录为 `failed`，数据库异常保守记录为 `unknown`；异常组不计入确认成功数、不在本次循环中重试。整页预读与逐组回退两条路径使用同一处理。
+- 继续前清理遗留事务并核实账户命名锁；连接失效后允许重连，但必须重新取得账户锁。连接不可用或锁已被其他操作占用时返回 `interrupted`，保留已确认结果和剩余未处理数，不能无锁继续。
+- 可继续的批次只要包含失败或待核实项即为 `partial`，`canContinue=true`；未知结果保留待核实提示，不冒充成功。MySQL 重连后锁归属与竞争测试位于 `test_sync_ledger_lock_mysql.py`，需专用测试 MySQL 才能验证。
 
 ## 保存规则
 
