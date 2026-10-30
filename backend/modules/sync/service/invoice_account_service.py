@@ -26,7 +26,7 @@ def invoice_accounts(binding, owner):
         names.insert(0, {"asid": current["selected_asid"], "account_name": current["selected_name"]})
     labels = {"lemon": "Excel 导入（账套未对齐）"}
     for row in names:
-        for professional, edition in ((True, "专业版"), (False, "默认版")):
+        for professional, edition in ((True, "专业版"), (False, "免费版")):
             key = account_namespace(settings.lemon_host, row["asid"], professional)
             labels.setdefault(key, f"{row['account_name']}（{edition} · {row['asid']}）")
     return {

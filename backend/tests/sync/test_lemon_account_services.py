@@ -132,20 +132,44 @@ def test_missing_or_malformed_availability_is_not_no_service(data):
         adapter(handler).query("private-user-token")
 
 
-def test_default_accounts_only_used_after_explicit_no_service():
-    calls = []
+def test_professional_and_free_accounts_are_listed_together():
     client = SimpleNamespace(
-        professional_accounts=lambda token: None,
-        accounts=lambda token: calls.append(token) or [{"asid": "7", "name": "默认账套"}],
+        professional_accounts=lambda token: [{"asid": "200", "name": "专业账套", "edition": "professional"}],
+        accounts=lambda token: [{"asid": "103", "name": "免费账套"}],
     )
     service = LemonAccountService(SimpleNamespace(engine=None), client)
-    assert service.authorized_accounts("token") == [{"asid": "7", "name": "默认账套"}]
-    client.professional_accounts = lambda token: []
-    assert service.authorized_accounts("token") == []
-    assert calls == ["token"]
+    assert service.authorized_accounts("token") == [
+        {"asid": "200", "name": "专业账套", "edition": "professional"},
+        {"asid": "103", "name": "免费账套", "edition": "free"},
+    ]
+    # 上游明确没有专业版服务时只剩免费版
+    client.professional_accounts = lambda token: None
+    assert service.authorized_accounts("token") == [{"asid": "103", "name": "免费账套", "edition": "free"}]
+
+
+def test_same_asid_in_both_editions_is_rejected():
+    client = SimpleNamespace(
+        professional_accounts=lambda token: [{"asid": "7", "name": "专业账套", "edition": "professional"}],
+        accounts=lambda token: [{"asid": "7", "name": "免费账套"}],
+    )
+    with pytest.raises(ApiError, match="相同的账套编号"):
+        LemonAccountService(SimpleNamespace(engine=None), client).authorized_accounts("token")
+
+
+def test_free_account_failure_does_not_return_professional_only():
+    def failing(token):
+        raise ApiError(502, "柠檬云查询授权账套失败")
+
+    client = SimpleNamespace(
+        professional_accounts=lambda token: [{"asid": "200", "name": "专业账套", "edition": "professional"}],
+        accounts=failing,
+    )
+    with pytest.raises(ApiError, match="查询授权账套失败"):
+        LemonAccountService(SimpleNamespace(engine=None), client).authorized_accounts("token")
 
 
 def test_query_select_and_revoke(setup):
+    setup.upstream.allowed = []  # 本用例只验证专业版，免费版无账套
     rows = [PRO_ROW]
     upstream = adapter(lambda request: reply(request, rows=rows))
     setup.upstream.professional_accounts = upstream.query

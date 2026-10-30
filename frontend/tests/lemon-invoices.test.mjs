@@ -147,7 +147,7 @@ test("显示本次真实范围和提交统计，明细待补齐不声称已匹�
   assert.match(html, /明细待补齐/);
   assert.match(html, /<dt>明细完整<\/dt><dd>1 张<\/dd>/);
   assert.match(html, /href="\/matching"[^>]*>审核匹配建议/);
-  assert.match(html, /默认版暂只读取票头/);
+  assert.match(html, /免费版暂只读取票头/);
   assert.match(html, /须人工确认/);
   assert.doesNotMatch(html, /已匹配|匹配完成/);
 });

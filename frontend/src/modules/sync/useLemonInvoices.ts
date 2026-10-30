@@ -6,13 +6,14 @@ import {
   selectLemonAccount,
   pullLemonInvoices,
 } from "./lemon-invoice-api";
-import type { LemonAccount, LemonConfiguration, LemonPullRequest } from "./lemon-invoice-api";
+import type { LemonConfiguration, LemonPullRequest } from "./lemon-invoice-api";
+import type { LemonAccountOption } from "./types/background";
 
 const EMPTY_TYPES: string[] = [];
 
 export function useLemonInvoices() {
   const [data, setData] = useState<LemonConfiguration | null>(null);
-  const [accounts, setAccounts] = useState<LemonAccount[] | null>(null);
+  const [accounts, setAccounts] = useState<LemonAccountOption[] | null>(null);
   const [asid, setAsid] = useState("");
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");

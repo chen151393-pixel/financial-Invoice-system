@@ -1,4 +1,5 @@
 import { http } from "../../shared/api/http";
+import type { LemonAccountOption } from "./types/background";
 
 export type LemonAccount = { asid: string; name: string };
 export type LemonRun = {
@@ -60,7 +61,7 @@ function checkedConfiguration(value: LemonConfiguration): LemonConfiguration {
 export const lemonConfiguration = () =>
   http<LemonConfiguration>("/sync/lemon/invoices/configuration").then(checkedConfiguration);
 export const queryLemonAccounts = () =>
-  http<{ items: LemonAccount[] }>("/sync/lemon/accounts/query", "POST", {});
+  http<{ items: LemonAccountOption[] }>("/sync/lemon/accounts/query", "POST", {});
 export const selectLemonAccount = (asid: string) =>
   http<LemonConfiguration>("/sync/lemon/account", "POST", { asid }).then(checkedConfiguration);
 export type LemonPullRequest = {

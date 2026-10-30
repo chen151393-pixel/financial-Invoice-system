@@ -102,11 +102,11 @@ class LemonInvoiceService:
         records = self.client.invoice_details(
             token, body.asid, records, selected_ids, professional=professional
         )
-        return professional, records
+        return professional, chosen["name"], records
 
     def _execute(self, owner, body, scope, binding, targets=None, *, background=False):
         try:
-            professional, records = self._fetch(body, binding, targets)
+            professional, account_name, records = self._fetch(body, binding, targets)
             namespace = account_namespace(self.accounts.binding.settings.lemon_host, body.asid, professional)
             with transaction(self.engine) as connection:
                 _, current = self.accounts.context(connection, owner, lock=True)
@@ -128,6 +128,7 @@ class LemonInvoiceService:
                         date.fromisoformat(body.endDate),
                         tuple(records),
                         tuple(body.businessTypes),
+                        account_name,
                     ),
                 )
                 if runs.get(connection, scope, body.requestId)["status"] != "completed":

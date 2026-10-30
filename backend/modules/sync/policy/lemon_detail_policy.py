@@ -28,7 +28,7 @@ def refresh_action(row, account):
     if row is None:
         reason = "发票不存在，请刷新列表"
     elif row["source"] != "lemon_professional":
-        reason = "仅支持柠檬云专业版接口发票；Excel 或默认版请使用原导入方式"
+        reason = "仅支持柠檬云专业版接口发票；Excel 或免费版请使用原导入方式"
     elif row["lemon_account"] != account:
         reason = "当前账套与发票原账套不一致，请到柠檬云同步页选择原账套"
     elif not row["external_id"] or not row["invoice_date"]:

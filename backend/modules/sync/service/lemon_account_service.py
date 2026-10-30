@@ -73,9 +73,14 @@ class LemonAccountService:
         }
 
     def authorized_accounts(self, token):
-        professional = self.client.professional_accounts(token)
-        # 空专业版列表仍是专业版结果；None 仅表示上游明确确认没有专业版服务。
-        return self.client.accounts(token) if professional is None else professional
+        # 同一账号可同时拥有专业版和免费版账套，两边都查；任一边失败整体报错，不以半个列表冒充完整。
+        # None 表示上游明确确认没有专业版服务，按空列表处理。
+        professional = self.client.professional_accounts(token) or []
+        free = [{**account, "edition": "free"} for account in self.client.accounts(token)]
+        # 拉票按 asid 判断版本；两版编号区间实测不重叠（2026-10-29），万一重号则无法区分，明确拒绝。
+        if {row["asid"] for row in professional} & {row["asid"] for row in free}:
+            raise ApiError(502, "柠檬云专业版与免费版返回了相同的账套编号，无法区分版本，本次未继续")
+        return professional + free
 
     def select(self, owner, asid):
         with self.engine.connect() as connection:

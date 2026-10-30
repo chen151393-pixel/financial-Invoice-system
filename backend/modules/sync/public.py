@@ -13,3 +13,5 @@ class LemonInvoicesFetched:
     end: date
     records: tuple[dict, ...]
     business_types: tuple[str, ...]
+    # 本次复核到的柠檬云账套名称；进项票的购买方即账套所属公司，上游列表不提供购买方。
+    account_name: str = ""

@@ -78,7 +78,7 @@ export function LemonInvoiceView({
                   <option value="">请选择账套</option>
                   {accounts.map((account) => (
                     <option key={account.asid} value={account.asid}>
-                      {account.name}（{account.asid}）
+                      {account.name}（{account.editionLabel} · {account.asid}）
                     </option>
                   ))}
                 </select>
@@ -129,7 +129,7 @@ export function LemonInvoiceView({
           <p>{data.sync.reason}。单次最多 366 天、2000 张；超限时缩小日期范围。</p>
           <p className="lemon-invoices__note">
             专业版拉取时同步读取商品明细；明细完整后按已审核子采购行生成建议，须人工确认。
-            专业版已入库票头可按原日期范围重新拉取补齐。默认版暂只读取票头；全部账套与定时计划请使用上方后台同步，附件同步尚未接入。
+            专业版已入库票头可按原日期范围重新拉取补齐。免费版暂只读取票头；全部账套与定时计划请使用上方后台同步，附件同步尚未接入。
           </p>
           {latest && (
             <div className="lemon-invoices__result" role="status">

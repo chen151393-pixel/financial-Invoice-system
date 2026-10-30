@@ -20,7 +20,7 @@ def prepared_batch(event):
     for raw in event.records:
         values = validate(raw, event.start, event.end)
         detail_rows, detail_status = validate_details(raw, values)
-        item = prepare(raw, values, event.account, detail_rows, detail_status)
+        item = prepare(raw, values, event.account, detail_rows, detail_status, event.account_name)
         if item["key"] in seen or raw["InvoiceId"] in ids:
             raise ApiError(422, "本次来源存在重复票号或记录编号，整批未保存")
         seen.add(item["key"])
@@ -36,11 +36,16 @@ def classify(connection, item, existing):
     if old["source"] != item["header"]["source"] or old["external_id"] != item["header"]["external_id"]:
         raise ApiError(409, "同票来源身份冲突，整批未保存，请核实原记录")
     old_rows = item_dao.by_invoices(connection, [old["id"]])
-    if digest(old, old_rows) == digest(item["header"], item["rows"]):
-        return "unchanged"
-    head, rows = projection(item["header"], item["rows"], old_rows)
-    if digest(old, old_rows) == digest(head, rows):
-        return "unchanged"
+    headers = [item["header"]]
+    if old["buyer_name"] is None:
+        # 购买方取账套名称前已入库的票：仅缺购买方不算内容变化，不换版、不影响已确认分配。
+        headers.append({**item["header"], "buyer_name": None, "buyer_name_normalized": None})
+    for header in headers:
+        if digest(old, old_rows) == digest(header, item["rows"]):
+            return "unchanged"
+        head, rows = projection(header, item["rows"], old_rows)
+        if digest(old, old_rows) == digest(head, rows):
+            return "unchanged"
     return "updated"
 
 

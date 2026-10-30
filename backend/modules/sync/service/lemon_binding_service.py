@@ -99,7 +99,7 @@ class LemonBindingService:
             },
             "sync": {
                 "allowed": False,
-                "reason": "已支持后台多账套拉取和定时计划；专业版可补全商品明细，默认版明细与附件尚未接入",
+                "reason": "已支持后台多账套拉取和定时计划；专业版可补全商品明细，免费版明细与附件尚未接入",
             },
         }
 

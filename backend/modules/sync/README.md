@@ -150,6 +150,8 @@ test_sync_pull.py 覆盖三类映射、身份、参数、金额精度、空结�
 
 专业版发票已接入 `integrations/lemon/professional_invoices.py` 的 `PurchasePagingList` 分页读取。拉票使用所选账套的加密上下文，排除严格识别的合计行，并核对总数、重复编号和页数；成功完整读取后发布原有事件事务保存，默认版继续使用原接口。真实账号读取 78 张，隔离 SQLite 保存固定资产票 15 张，重复跨页读取仍为 78 张且无重复保存。协议来源、当前单服务范围和验证边界见[接入说明](../../../docs/lemon-invoice-sync-plan.md#专业版服务自动发现2026-10-19)。隔离测试：`tests/sync/test_lemon_account_services.py`、`test_lemon_professional_protocol.py`、`test_lemon_professional_save.py`。
 
+2026-10-29 免费版并存：`LemonAccountService.authorized_accounts()` 同时查询专业版与免费版（open2 `GetAccountSets`）并合并，任一版本失败整体报错，两版同号明确拒绝；open2 拉票识别合计行、按 `Count` 核对分页并规范千分位价税合计。拉票事件 `LemonInvoicesFetched` 新增 `account_name`（复核到的账套名称），供 invoice 填写购买方。无迁移、接口字段不变。方案与真实只读核实见[免费版接入方案](../../../docs/lemon-free-edition-plan.md)；测试：`tests/sync/test_lemon_protocol.py`、`test_lemon_account_services.py`、`test_lemon_buyer.py`。
+
 新入口为 `/api/sync/lemon/invoices/configuration`、`/accounts/query`、`/account`、`/invoices/pull-save`、`/runs/{requestId}`（后四项同属 `/api/sync/lemon` 前缀）。请求、响应、限制见[完整协议](../../../docs/lemon-invoice-sync-plan.md)。`/accounts/query` 每项另返回 `edition`（`professional`／`free`）、`editionLabel` 与 `content`（专业版“票头 + 商品明细”，免费版“仅票头”），规则在 `policy/lemon_detail_policy.py`，页面只展示（2026-10-30）。API 按管理员身份隔离；日期必填且最多 366 天，所有分页完成才整批入库；同请求返回原结果，运行中拒绝切账套及新请求，重启不重置状态。
 
 跨模块保存通过 `public.py` 的 `LemonInvoicesFetched` 事件，invoice 通过 `LemonInvoicesStored` 回执，同事务更新票据与已完成统计。事件只在 `app.py` 订阅；不通过 DAO 写其他模块。测试位于 `backend/tests/sync/test_lemon_{protocol,invoices,mysql}.py`；真实上游未联调。

@@ -8,7 +8,7 @@ def detail_issue(item):
         return (
             "本次未读取专业版商品明细，请核实服务端版本和明细读取配置"
             if item["header"]["source"] == "lemon_professional"
-            else "本次来源未提供商品明细；默认版暂不支持商品明细接口"
+            else "本次来源未提供商品明细；免费版暂未接入商品明细"
         )
     if not item["rows"]:
         return "柠檬云明细接口返回空商品行，请在柠檬云核对原票是否包含商品明细"

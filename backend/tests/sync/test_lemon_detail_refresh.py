@@ -17,6 +17,7 @@ def seeded(setup):
     upstream = setup.upstream
     upstream.allowed[0]["edition"] = "professional"
     upstream.professional_accounts = lambda token: deepcopy(upstream.allowed)
+    upstream.accounts = lambda token: []  # 同一账套只属于一个版本
     upstream.professional_invoices = upstream.invoices
     upstream.rows = [
         {key: value for key, value in full_invoice(InvoiceId=i, Number=str(i)).items() if key != "Detail"}

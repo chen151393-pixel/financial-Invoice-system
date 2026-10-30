@@ -16,7 +16,7 @@ from backend.modules.sync.dto.lemon_invoice_dto import PullLemonInvoices
 from backend.tests.documents_ready import complete_documents
 from backend.tests.matching_helpers import confirm_groups
 from backend.tests.sync.lemon_detail_fixtures import full_invoice
-from backend.tests.sync.test_lemon_account_services import adapter, reply
+from backend.tests.sync.test_lemon_account_services import PRO_ROW, adapter, reply
 from backend.tests.sync.test_lemon_invoices import OWNER, body, count, make_services
 from backend.tests.sync.test_lemon_professional_protocol import response
 from backend.tests.test_matching import engine as engine
@@ -83,7 +83,8 @@ def flow(engine, env, world):
             if state["fail"]:
                 return httpx.Response(503)
             return httpx.Response(200, json={"state": 1000, "data": {"invoiceData": state["raw"]["Detail"]}})
-        return reply(request)
+        # 账套名称即采购公司：购买方取自账套名称后与子采购的采购公司一致
+        return reply(request, rows=[{**PRO_ROW, "asname": "采购公司A"}])
 
     protocol = adapter(handler)
     upstream.professional_accounts = protocol.query

@@ -81,6 +81,8 @@ def test_late_page_or_business_validation_failure_saves_nothing(setup, monkeypat
 
 def test_same_numeric_account_and_invoice_have_separate_edition_namespaces(setup):
     assert setup.client.post(BASE + "/invoices/pull-save", json=body()).status_code == 200
+    # 同一编号后来只以专业版出现（两版同时出现同号会被拒绝，见账套服务测试）
+    setup.upstream.allowed = []
     attach(setup, [response([pro_invoice(number="26000000000000000001")], 1), response([], 1)], asid="7")
     assert setup.client.post(BASE + "/invoices/pull-save", json=body()).status_code == 200
     with setup.engine.connect() as connection:
@@ -100,9 +102,11 @@ def test_cross_channel_same_invoice_rejected_in_both_directions(setup, api_first
     from backend.tests.invoice_files import workbook
 
     if professional:
+        allowed = setup.upstream.allowed
         setup.upstream.professional_accounts = lambda token: [
-            {**row, "edition": "professional"} for row in setup.upstream.allowed
+            {**row, "edition": "professional"} for row in allowed
         ]
+        setup.upstream.allowed = []  # 同一账套只属于一个版本
         setup.upstream.professional_invoices = setup.upstream.invoices
     number = "26000000000000000001"
     content = workbook([excel_invoice(number, [("墨水", "个", "1", "100", "13")])])

@@ -35,7 +35,7 @@ class LemonPlanService:
             "plan": plan,
             "submit": {"allowed": allowed, "reason": reason},
             "pause": {"allowed": plan["enabled"], "reason": "暂停计划不影响已提交批次"},
-            "coverage": "全部账套指当前财务服务接口返回的授权账套；多专业版服务和默认版混合枚举尚未验证。",
+            "coverage": "全部账套包含当前绑定账号下的专业版与免费版授权账套；同一账号多个专业版服务的枚举尚未验证。",
             "businessTypeOptions": sorted(
                 set(lemon_business_type_options(latest["result"] if latest else None) + plan["businessTypes"])
             ),

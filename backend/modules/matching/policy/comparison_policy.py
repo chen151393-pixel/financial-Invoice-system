@@ -168,6 +168,15 @@ def order_reference(remark, line):
 SUPPLIER_NOTE = "去掉括号内容、公司后缀和开头地名后比较；部分一致表示名称相近，须核实后填写说明"
 
 
+def buyer_note(invoice):
+    """柠檬云接口不含购买方，按账套名称填写；比对页如实说明来源。"""
+    if not invoice["buyer_name"]:
+        return "发票未提供购买方"
+    if (invoice.get("lemon_account") or "").startswith(("professional:", "open2:")):
+        return "购买方取自柠檬云账套名称"
+    return ""
+
+
 def _check(key, invoice_value, purchase_value, result, difference=None, note="", weights=None):
     weight = (weights or WEIGHTS)[key]
     score = weight if result == "match" else Decimal(weight) / 2 if result == "partial" else 0
@@ -218,7 +227,7 @@ def compare(invoice, item, line, remaining_quantity, remaining_amount):
             invoice["buyer_name"],
             line["company_name"],
             name_result(invoice["buyer_name_normalized"], line["company_name_normalized"]),
-            note="" if invoice["buyer_name"] else "发票未提供购买方",
+            note=buyer_note(invoice),
         ),
         _check(
             "item",

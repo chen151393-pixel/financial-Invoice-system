@@ -13,6 +13,7 @@ from .comparison_policy import (
     SUPPLIER_NOTE,
     TAX_TOLERANCE,
     _check,
+    buyer_note,
     name_result,
     order_number,
     order_reference,
@@ -93,7 +94,7 @@ def compare_group(invoice, item, item_tax, parts):
                     for line in lines
                 ]
             ),
-            note="" if invoice["buyer_name"] else "发票未提供购买方",
+            note=buyer_note(invoice),
         ),
         _check_group(
             "item",
