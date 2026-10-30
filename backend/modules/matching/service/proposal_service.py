@@ -23,6 +23,7 @@ from backend.modules.task.public import open_lines
 from ..dao import allocation_dao
 from ..policy.allocation_policy import SYSTEM
 from ..policy.order_group_policy import share_snapshot
+from ..policy.pending_order_policy import REGENERATE, legacy_ids
 from . import group_plan_service
 
 # 比较新旧建议是否相同的字段；相同时不重复追加。
@@ -48,6 +49,8 @@ def _unchanged(previous, expected):
         return (
             *(row[name] for name in _SAME),
             json.dumps((row["checks"] or {}).get("items"), sort_keys=True, default=str),
+            json.dumps((row["checks"] or {}).get("orderShare"), sort_keys=True, default=str),
+            json.dumps(((row["checks"] or {}).get("group") or {}).get("orderIds"), sort_keys=True),
         )
 
     return sorted(map(key, previous)) == sorted(map(key, expected))
@@ -55,20 +58,34 @@ def _unchanged(previous, expected):
 
 def generate(connection, invoice_ids, actor, *, refresh=False):
     """在调用方事务中生成建议，返回新增条数。"""
-    invoices = [
-        invoice
-        for invoice in read_invoices(connection, invoice_ids)
-        if invoice["status"] == "normal" and invoice["detail_status"] == "complete"
-    ]
+    invoices = read_invoices(connection, invoice_ids)
     if not invoices:
         return 0
     active = {}
-    for row in allocation_dao.by_invoices(connection, [invoice["id"] for invoice in invoices]):
+    saved = allocation_dao.by_invoices(connection, [invoice["id"] for invoice in invoices])
+    retired = legacy_ids(saved) if refresh else set()
+    now, created = _now(), 0
+    for row in saved:
+        if row["id"] in retired:
+            # 无新候选也退出旧规则；与新建议同事务，失败时全部回滚。
+            allocation_dao.update_status(
+                connection,
+                row["id"],
+                {
+                    "status": "rejected",
+                    "reviewed_by": actor,
+                    "reviewed_at": now,
+                    "review_note": "整单规则升级：旧待审建议已失效，需重新匹配。" + REGENERATE,
+                },
+                now,
+            )
+            continue
         if row["status"] in ("proposed", "confirmed"):
             active.setdefault(row["invoice_item_id"], []).append(row)
     task_lines = open_lines(connection)
-    now, created = _now(), 0
     for invoice in invoices:
+        if invoice["status"] != "normal" or invoice["detail_status"] != "complete":
+            continue
         items = [
             item
             for item in invoice["items"]

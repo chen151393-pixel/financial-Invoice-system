@@ -206,12 +206,12 @@
 ## 销售单汇率与人民币申报价（2026-10-23）
 
 - 同步时按子采购单的销售单引用（`custrecord_swc_subpo_so`）以固定只读 SuiteQL `sales_headers` 读取销售单头（单号、币种、汇率），保存到 `source_sales_orders`（迁移 `0029_source_sales_orders`），子采购单 `sales_order_id` 指向它。读取失败时提示“销售单汇率读取失败”，不影响单据保存，原关联保持不变。**真实 NS 的销售单汇率字段尚待一次只读核实。**
-- 报关行对应的销售单：其关联子采购单的销售单中单号与报关行销售订单号一致的；没有一致的且只有一个时取该销售单（`policy/declared_price_policy.py`）。
+- 报关行对应的销售单（2026-10-30）：仅在该行关联子采购单的销售单中匹配。两边单号去掉首尾空白及明确的显示前缀“销售订单 #”“销售单 #”“Sales Order #”（支持全角 ＃），再按完整单号精确匹配；保留斜杠、后缀、大小写和内部空格，不作部分命中。按销售单 ID 去重后唯一匹配到才使用对应币种和汇率；同一张销售单重复关联不算多张。报关行单号缺失、未匹配或同号匹配到多张均返回待核对原因；即使只有一个候选或多张汇率相同，也不兜底借用（`policy/declared_price_policy.py`）。每条报关行独立匹配，选中的销售单缺汇率或币种不一致时不改取其他销售单，不修改 NS 同步原文。
 - 换算前复用币种规则识别明确名称与代码：`US Dollar`／美元与 `USD` 等价，人民币／`Chinese Yuan` 与 `CNY` 等价。原始展示值不变；未知币种、内部 ID、模糊简称仍待核实，真实币种不一致仍拒绝换算。使用已同步销售单汇率，不另取实时汇率。
 - 2026-10-26 财务核对改为单价幅度：人民币报关单价 = 报关单价 × 销售单汇率；2026-10-29 修正为采购金额折算报关单价 = 关联采购行含税总金额 ÷ 总报关数量；幅度 =（人民币报关单价 − 采购金额折算报关单价）÷ 人民币报关单价。通过 `declared_unit_price_cny` 独立换算报关单价，不依赖报关总金额；规则及异常提示见 [review 说明](../review/README.md)。汇率不参与摘要；2026-10-29 发票比对改用含税合计，不再校验申报价。
 - 2026-10-28 报关明细新增 `declared_unit_price`（迁移 `0034`）：配置键 `customs_line.storage_fields.declared_unit_price` 映射 NS `custrecord_swc_grossamountzj`（申报单价，与 `declared_quantity`／`declared_unit` 配套）。review 申报幅度使用报关数量、报关单位与申报单价。该键为可选键，部署时须在 `NETSUITE_PL_LOOKUP` 中加入并重新同步报关单，未配置或未同步时为 NULL。NS 自 2026-08-17 起才填写该字段（此前约八成报关行为空），批量读取会省略空字段，因此该键与规格型号一样列入 `policy/optional_field_policy.py` 的可缺字段，缺失时按 NULL 保存、不拒绝整页。核对时由 `declared_unit_price(line)`（`policy/declared_price_policy.py`，经 `public.py` 暴露）给出原币申报单价：NS 已填则原样使用（NS 只保留 2 位小数）；为空时按报关金额 ÷ 报关数量试算（保留 8 位小数）并返回“试算”标记；报关金额或报关数量也缺失时才按“申报单价缺失”处理。超过 8 位小数时与 `unit_price` 同样四舍五入并提示。不参与内容摘要。
 - 门面：`declared_cny`、`pick_sales_order` 等换算函数保留；报关单 `snapshot` 包含 `sales_orders`（不参与摘要）。2026-10-29 删除仅供 matching 的 `declared_prices` 读取器及其专用 DAO 查询，`purchase_lines` 不再加载报关价格，新增 `sales_order_no`：仅取子采购单 `sales_order_id` 明确关联、且同 NS 账套的销售单号；缺失保持空。该字段用于备注订单核验，不参与旧分配摘要，详情与通过时实时重算。
-- 验证：`backend/tests/test_declared_price.py`。
+- 验证：`backend/tests/test_declared_price.py`、`test_sales_order_selection.py`（前缀、完整单号、重复候选、歧义与每行独立汇率）及 `test_review_calculations.py`（旧快照自动重算）。
 
 
 2026-10-28：`supplier_line_ids(connection, supplier_id=None, *, name_terms=())` 支持按多个供应商名称部分匹配子采购行 ID（框内 OR，与可选 ID 取 AND）。保留停用行以显示历史待审核建议，供 matching 两种审核队列复用。

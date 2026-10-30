@@ -290,6 +290,33 @@ test("候选、历史风险与不写入状态明确展示", () => {
   assert.doesNotMatch(html, /确认执行|模拟成功|执行回写/);
 });
 
+test("查询发现同号登记时展示已有记录并隐藏确认与写入入口", () => {
+  const current = task();
+  const html = render(Content, {
+    task: task({
+      state: "conflict",
+      stateLabel: "NS 已有同号登记",
+      reason: "已拦截重复回写",
+      actions: { ...noActions, refresh: true },
+      candidates: {
+        ...current.candidates,
+        registrationCheck: {
+          invoiceNumber: current.invoiceNo,
+          records: [{ id: "7001", number: current.invoiceNo, date: "2026-10-30" }],
+        },
+      },
+    }),
+    busy: false,
+    ...handlers,
+  });
+  assert.match(html, /NS 已有同号发票登记/);
+  assert.match(html, /已拦截重复回写/);
+  assert.match(html, /7001/);
+  assert.match(html, /TEST-INVOICE/);
+  assert.match(html, /2026-10-30/);
+  assert.doesNotMatch(html, /确认并冻结方案|回写到 NS/);
+});
+
 test("失效任务保留历史方案，隐藏确认入口", () => {
   const html = render(Content, {
     task: task({

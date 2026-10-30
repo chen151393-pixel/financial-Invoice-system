@@ -15,6 +15,7 @@ from ..policy import allocation_policy as rules
 from ..policy.comparison_policy import HIGH, text, tier
 from ..policy.group_comparison_policy import compare_group
 from ..policy.order_group_policy import ONE_INVOICE, order_share, short_lines, taken
+from ..policy.pending_order_policy import REGENERATE, whole_order
 from ..public import ClosedLine, LinesClosedByDifference
 from ..vo.matching_vo import Capability, GroupItem, GroupLine, GroupOrder, GroupView
 from . import approval_service
@@ -44,7 +45,7 @@ def evaluate(invoice, paper, rows, lines):
         if any(lines.get(row["purchase_line_id"]) is None for row in own):
             block = block or "子采购行已停用或不存在，请驳回后重新生成建议"
             continue
-        # 比对口径为子采购整单应开（历史分配没有快照时取分配本身）
+        # 调用方已校验整单快照；旧待审建议走只读预览，不能拿分配量作为整单应开。
         parts = [(lines[row["purchase_line_id"]], *order_share(row)) for row in own]
         tax = (paper["items"].get(item_id) or {}).get("tax_amount")
         checks, confidence = compare_group(invoice, items[item_id], tax, parts)
@@ -58,7 +59,26 @@ def views(invoice, paper, rows, row_views, lines, tasks=None):
     tasks = tasks or {}
     result = []
     for key, own in grouped(rows).items():
-        compared, reasons, block = evaluate(invoice, paper, own, lines)
+        if any(not whole_order(row) for row in own):
+            compared = {}
+            for row in own:
+                item_id = row["invoice_item_id"]
+                view = row_views[row["id"]]
+                compared[item_id] = (
+                    [check.model_dump() for check in view.checks],
+                    Decimal(view.confidence or "0"),
+                    [
+                        part
+                        for part in own
+                        if part["invoice_item_id"] == item_id and part["purchase_line_id"] in lines
+                    ],
+                )
+            reasons = list(
+                dict.fromkeys(reason for row in own for reason in row_views[row["id"]].noteReasons)
+            )
+            block = REGENERATE
+        else:
+            compared, reasons, block = evaluate(invoice, paper, own, lines)
         if not block and any(
             taken(tasks[row["purchase_line_id"]]) for row in own if row["purchase_line_id"] in tasks
         ):
@@ -142,6 +162,8 @@ def _rows(connection, invoice_id, key):
 
 def approve_rows(service, connection, rows, body, actor):
     """在调用方事务内整组逐条通过；需说明而未填写或任一条不能通过时抛错，由事务整体回滚。"""
+    if any(not whole_order(row) for row in rows):
+        raise ApiError(409, REGENERATE)
     invoice_id = int(body.invoiceId)
     invoice = read_invoices(connection, [invoice_id])[0]
     lines, _ = service.queries._context(connection, rows)

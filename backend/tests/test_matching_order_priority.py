@@ -151,7 +151,7 @@ def group_of(world, target):
     return found
 
 
-def late_task(ns, engine, world):
+def late_task(ns, engine, world, *, approve_late=True):
     save(ns, engine, bundle([purchase(), purchase("201", "871")], [customs("870"), customs("871")]))
     approve(world, "CD870")
     number = "26000000000000009193"
@@ -160,13 +160,14 @@ def late_task(ns, engine, world):
     # SUB-201 尚未审核、没有开票任务：备注单号无法定位，按供应商召回 SUB-200 整单
     original = group_of(world, target)
     assert [order.orderNo for order in original.orders] == ["SUB-200"]
-    approve(world, "CD871")
+    if approve_late:
+        approve(world, "CD871")
     return target, original
 
 
-def test_regenerate_replaces_old_pending_and_repeated_call_is_unchanged(ns, engine, world):
+def test_late_task_replaces_old_pending_and_regenerate_is_unchanged(ns, engine, world):
     target, original = late_task(ns, engine, world)
-    assert world["proposals"].generate_now([target], USER) == 2
+    assert world["proposals"].generate_now([target], USER) == 0
     found = group_of(world, target)
     assert [order.orderNo for order in found.orders] == ["SUB-201"]
     old = rows(engine, "SELECT * FROM matching_allocations WHERE id=:id", id=int(original.allocationIds[0]))[
@@ -179,10 +180,11 @@ def test_regenerate_replaces_old_pending_and_repeated_call_is_unchanged(ns, engi
 
 
 def test_regenerate_preserves_confirmed_allocation(ns, engine, world):
-    target, original = late_task(ns, engine, world)
+    target, original = late_task(ns, engine, world, approve_late=False)
     body = GroupConfirmBody(invoiceId=str(target), note="测试：人工核实原分配")
     world["allocations"].confirm_group(original.id, body, USER)
     before = rows(engine, "SELECT * FROM matching_allocations WHERE invoice_id=:id", id=target)
+    approve(world, "CD871")
     assert world["proposals"].generate_now([target], USER) == 0
     assert rows(engine, "SELECT * FROM matching_allocations WHERE invoice_id=:id", id=target) == before
     # 已整组通过后再次提交同一组为重放，不重复记账
@@ -191,15 +193,15 @@ def test_regenerate_preserves_confirmed_allocation(ns, engine, world):
         world["allocations"].confirm_group("00000000-0000-4000-8000-000000000000", body, USER)
 
 
-def test_regenerate_failure_rolls_back_old_pending_rejection(ns, engine, world, monkeypatch):
-    target, original = late_task(ns, engine, world)
+def test_late_task_failure_rolls_back_old_pending_rejection(ns, engine, world, monkeypatch):
+    target, original = late_task(ns, engine, world, approve_late=False)
 
     def fail(*args, **kwargs):
         raise RuntimeError("模拟插入失败")
 
     monkeypatch.setattr(allocation_dao, "insert_allocation", fail)
     with pytest.raises(RuntimeError, match="模拟插入失败"):
-        world["proposals"].generate_now([target], USER)
+        approve(world, "CD871")
     assert group_of(world, target).id == original.id
 
 

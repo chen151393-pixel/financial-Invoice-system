@@ -17,6 +17,7 @@ from ..policy.anomaly_policy import anomalies
 from ..policy.comparison_policy import HIGH, MEDIUM, compare, text, tier
 from ..policy.confirmation_policy import evaluate
 from ..policy.invoice_match_policy import match_status
+from ..policy.pending_order_policy import REGENERATE, legacy_ids
 from ..vo.matching_vo import (
     Candidate,
     Candidates,
@@ -28,7 +29,7 @@ from ..vo.matching_vo import (
     Summaries,
     SupplierOption,
 )
-from . import group_view_service
+from . import group_view_service, pending_order_service
 from .invoice_queue_service import invoice_queue
 from .invoice_totals_service import InvoiceTotalsService
 from .queue_scope import queue_scope
@@ -112,6 +113,8 @@ class MatchingQueryService:
 
     def _views(self, connection, invoice, rows):
         lines, tasks = self._context(connection, rows)
+        legacy = legacy_ids(rows)
+        previews = pending_order_service.comparisons(connection, invoice, rows, lines, legacy)
         items = {item["id"]: item for item in invoice["items"]}
         result = {}
         for row in rows:
@@ -130,6 +133,11 @@ class MatchingQueryService:
             checks, capabilities, reasons = evaluate(
                 row, invoice, items[row["invoice_item_id"]], line, task_line, used
             )
+            if row["id"] in legacy:
+                checks, confidence = previews.get(row["id"], ([], Decimal(0)))
+                capabilities["confirm"] = Capability(reason=REGENERATE)
+                reasons = rules.note_reasons(checks, False, False)
+                row = {**row, "confidence": confidence}
             purchase = mapper.purchase_side(row["purchase_line_id"], line, task_line)
             result[row["id"]] = mapper.allocation_view(
                 {**row, "current_invoice_version_id": invoice["current_version_id"]},

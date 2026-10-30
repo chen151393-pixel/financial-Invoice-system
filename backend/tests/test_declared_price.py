@@ -42,8 +42,8 @@ def test_sales_order_choice_and_cny_conversion():
     usd = {"id": 1, "order_no": "SO1", "currency": "USD", "exchange_rate": Decimal("7.1")}
     other = {"id": 2, "order_no": "SO2", "currency": "USD", "exchange_rate": Decimal("7.2")}
     assert pick_sales_order("SO2", [usd, other, usd]) == (other, "")
-    assert pick_sales_order("SO9", [usd, usd]) == (usd, "")
-    assert pick_sales_order("SO9", [usd, other]) == (None, "对应销售单不唯一")
+    assert pick_sales_order("SO9", [usd, usd]) == (None, "未匹配到对应销售单")
+    assert pick_sales_order("SO9", [usd, other]) == (None, "未匹配到对应销售单")
     assert declared_cny(Decimal("15"), Decimal("1.5"), "USD", usd)[:2] == (Decimal("106.5"), Decimal("10.65"))
     assert declared_cny(Decimal("15"), None, "CNY", None)[0] == Decimal("15")
     assert declared_cny(Decimal("15"), None, "EUR", usd)[2] == "报关行币种与销售单币种不一致"
@@ -51,71 +51,43 @@ def test_sales_order_choice_and_cny_conversion():
 
 
 @pytest.mark.parametrize("currency", ["USD", "US Dollar", "美元", " us dollar "])
-def test_margin_uses_unit_prices_and_skips_unit_mismatch(currency):
+def test_margin_uses_both_customs_prices_without_purchase_amount_or_unit_conversion(currency):
     customs_row = {
-        "declared_unit": "个",
-        "amount": Decimal("15"),
-        "declared_quantity": Decimal("10"),
-        "declared_unit_price": Decimal("1.5"),
-        # 另一套口径的单位与单价不参与申报幅度
+        "quantity": Decimal("5"),
         "unit": "千克",
         "unit_price": Decimal("3"),
+        "declared_quantity": Decimal("10"),
+        "declared_unit": "个",
+        "amount": Decimal("15"),
+        "declared_unit_price": Decimal("1.5"),
         "currency": currency,
         "sales_order_no": "SO1",
     }
-    orders = {1: {"currency": "CNY", "sales_order_id": 9}}
+    orders = {1: {"currency": "EUR", "sales_order_id": 9}}
     sales = {9: {"id": 9, "order_no": "SO1", "currency": "USD", "exchange_rate": Decimal("7.1")}}
-    line = {
-        "unit": "卷",
-        "declared_unit": "个",
-        "declared_quantity": Decimal("5"),
-        "unit_price": Decimal("12"),
-        "amount": Decimal("60"),
-        "quantity": Decimal("5"),
-        "purchase_order_id": 1,
-    }
-    single_customs = {**customs_row, "declared_quantity": Decimal("5"), "amount": Decimal("7.5")}
-    result = declared_margin(customs_row, [line, {**line, "amount": Decimal("40.5")}], orders, sales)
-    assert (result["status"], result["margin"], result["declared"]) == (
-        "ok",
-        Decimal("5.63"),
+    line = {"purchase_order_id": 1, "amount": None, "declared_quantity": Decimal("10"), "declared_unit": "个"}
+    before = dict(customs_row)
+    result = declared_margin(customs_row, [line], orders, sales)
+    assert (result["status"], result["margin"], result["original"], result["declared"]) == (
+        "negative",
+        Decimal("-100.00"),
+        Decimal("21.3"),
         Decimal("10.65"),
     )
-    assert result["purchase"] == Decimal("10.05")
-    negative = declared_margin(single_customs, [line], orders, sales)
-    assert negative["status"] == "negative" and negative["margin"] == Decimal("-12.68")
-    assert negative["note"] == "申报单价低于采购折算报关单价"
-    weighted = declared_margin(
-        {**customs_row, "declared_quantity": Decimal("15")},
-        [line, {**line, "amount": Decimal("20"), "declared_quantity": Decimal("10")}],
-        orders,
-        sales,
-    )
-    assert weighted["purchase"] == Decimal("80") / Decimal("15")
-    assert declared_margin({**single_customs, "amount": None}, [line], orders, sales) == (
-        declared_margin(single_customs, [line], orders, sales)
-    )
-    assert (
-        declared_margin({**single_customs, "declared_unit_price": Decimal(0)}, [line], orders, sales)[
-            "margin"
-        ]
-        is None
-    )
-    # NS 未填申报单价：按报关金额 7.5 ÷ 报关数量 5 = 1.5 试算，结果与填写 1.5 相同
-    estimated = declared_margin({**single_customs, "declared_unit_price": None}, [line], orders, sales)
-    assert estimated == negative
+    assert result["note"] == "报关单价低于报关行单价"
+    assert customs_row == before
+    # 采购金额、币种不参与幅度；报关行已有单价也不按总价重算。
+    assert declared_margin(customs_row, [{**line, "amount": Decimal("999999")}], orders, sales) == result
+    assert declared_margin({**customs_row, "amount": None, "quantity": None}, [line], orders, sales) == result
+    # 仅缺少申报单价时，复用同一报关行的总价 / 报关数量。
+    assert declared_margin({**customs_row, "declared_unit_price": None}, [line], orders, sales) == result
     for field, value in (("amount", None), ("declared_quantity", None), ("declared_quantity", Decimal(0))):
-        missing_price = declared_margin(
-            {**single_customs, "declared_unit_price": None, field: value}, [line], orders, sales
+        unavailable = declared_margin(
+            {**customs_row, "declared_unit_price": None, field: value}, [line], orders, sales
         )
-        assert missing_price["margin"] is None
-        assert ("无法试算" if field == "amount" else "数量口径待核对") in missing_price["note"]
-    for field, value in (("amount", None), ("declared_quantity", None), ("declared_quantity", Decimal(0))):
-        assert declared_margin(single_customs, [{**line, field: value}], orders, sales)["margin"] is None
-    mismatch = declared_margin(single_customs, [{**line, "declared_unit": "千克"}], orders, sales)
-    assert mismatch["status"] == "unavailable" and "单位不一致" in mismatch["note"]
-    missing = declared_margin(single_customs, [line], orders, {})
-    assert missing["status"] == "unavailable" and missing["margin"] is None
+        assert unavailable["status"] == "unavailable"
+        assert ("无法试算" if field == "amount" else "数量口径待核对") in unavailable["note"]
+    assert declared_margin(customs_row, [line], orders, {})["status"] == "unavailable"
 
 
 @pytest.mark.parametrize("currency", ["CNY", "人民币", "Chinese Yuan"])
@@ -147,6 +119,7 @@ def test_margin_does_not_display_negative_zero():
             "declared_quantity": Decimal("1"),
             "amount": Decimal("2127.27"),
             "declared_unit_price": Decimal("35.45"),
+            "unit_price": Decimal("35.4501"),
             "currency": "US Dollar",
             "sales_order_no": "SO1",
         },
@@ -164,7 +137,7 @@ def test_margin_does_not_display_negative_zero():
     )
     assert str(result["margin"]) == "0.00"
     assert result["status"] == "negative"  # 关闭容差时，即使幅度舍入为零仍提示倒挂
-    assert result["note"] == "申报单价低于采购折算报关单价"
+    assert result["note"] == "报关单价低于报关行单价"
 
 
 def test_review_page_shows_margin_per_customs_line(ns, engine, service):
@@ -176,9 +149,12 @@ def test_review_page_shows_margin_per_customs_line(ns, engine, service):
     order[2][1][1]["custrecord_swc_subpo_item_ratewithrate"] = Decimal("2")
     save(ns, engine, bundle([order], [customs("870")]))
     lines = group(service, "CD870").customsLines
-    assert [(line.margin, line.marginStatus) for line in lines] == [("-12.68%", "negative"), ("81.22%", "ok")]
-    assert lines[0].declaredUnitPriceCny == "10.65" and lines[0].combinedPurchaseUnitPrice == "12"
-    assert lines[0].marginNote == "申报单价低于采购折算报关单价"
+    assert [(line.margin, line.marginStatus) for line in lines] == [
+        ("-100.00%", "negative"),
+        ("-100.00%", "negative"),
+    ]
+    assert lines[0].declaredUnitPriceCny == "10.65" and lines[0].originalUnitPriceCny == "21.3"
+    assert lines[0].marginNote == "报关单价低于报关行单价"
     assert lines[0].purchaseLines[0].salesOrderExchangeRate == "7.1"
     set_rate(engine, None)
     lines = group(service, "CD870").customsLines
@@ -202,7 +178,7 @@ def test_review_page_estimates_missing_declared_price(ns, engine, service):
     save(ns, engine, bundle([order], [(customs_id, head, lines)]))
     shown = group(service, "CD870").customsLines
     assert [(line.price, line.priceEstimated) for line in shown] == [("1.5", True), ("1.5", True)]
-    assert shown[0].declaredUnitPriceCny == "10.65" and shown[0].margin == "-12.68%"
+    assert shown[0].declaredUnitPriceCny == "10.65" and shown[0].margin == "-100.00%"
 
 
 def test_estimated_declared_unit_price_preserves_precision():

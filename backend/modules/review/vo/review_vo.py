@@ -2,7 +2,7 @@
 
 from typing import Literal
 
-from pydantic import Field
+from pydantic import AliasChoices, Field
 
 from backend.core.dto import StrictModel
 
@@ -14,7 +14,12 @@ class UnitPriceMargin(StrictModel):
     marginStatus: Literal["ok", "negative", "unavailable"] = "unavailable"
     marginNote: str = ""
     declaredUnitPriceCny: str = ""
-    combinedPurchaseUnitPrice: str = ""
+    # 只为读出旧快照并显示“后台计算中”兼容旧键；新响应只输出报关行单价。
+    originalUnitPriceCny: str = Field(
+        default="", validation_alias=AliasChoices("originalUnitPriceCny", "combinedPurchaseUnitPrice")
+    )
+    originalPriceUnit: str = ""
+    declaredPriceUnit: str = ""
 
 
 class PurchaseLine(StrictModel):

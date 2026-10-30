@@ -47,7 +47,8 @@ export const taskListPath = (filters: {
 // 比对审核队列：tier 为置信度分档（high / medium / low），空为全部
 export const matchingQueuePath = (filters: { tier?: string }) => withQuery(paths.matching, filters);
 export const syncBatchPath = (id: string) => `${paths.syncBatches}/${encodeURIComponent(id)}`;
-export const syncNsBatchPath = (id: string) => `${paths.syncNsBatches}/${encodeURIComponent(id)}`;
+export const syncNsBatchPath = (id: string, recordType: "plan" | "manual" = "plan") =>
+  `${paths.syncNsBatches}/${encodeURIComponent(id)}${recordType === "manual" ? "?recordType=manual" : ""}`;
 export const writebackRequestPath = (id: string) => `${paths.writeback}/${encodeURIComponent(id)}`;
 export const matchingInvoicePath = (invoiceId: string) =>
   `${paths.matching}/${encodeURIComponent(invoiceId)}`;

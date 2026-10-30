@@ -1,5 +1,6 @@
 """后台财务计算、代次一致性、重试、SQL 分页及来源汇率联动。"""
 
+import json
 import re
 from copy import deepcopy
 from decimal import Decimal
@@ -14,7 +15,8 @@ from backend.modules.review.service.calculation_worker import CalculationWorker
 from backend.modules.review.service.review_service import ReviewService
 from backend.modules.source.public import DeclarationService
 from backend.tests.review_helpers import comparable_purchase as purchase
-from backend.tests.test_source_storage import ACCOUNT, bundle, customs, rows, save
+from backend.tests.review_helpers import customs_prices as customs
+from backend.tests.test_source_storage import ACCOUNT, bundle, rows, save
 from backend.tests.test_source_storage import engine as engine
 from backend.tests.test_source_storage import ns as ns
 from sqlalchemy import event, text
@@ -97,7 +99,7 @@ def test_dirty_results_cannot_advertise_auto_review(review, ns, engine):
     calculations = CalculationService(review)
     calculations.rebuild()
     assert review.browse(query()).groups[0].autoReview.eligible
-    save(ns, engine, bundle([purchase(amounts=("99999", "20"))], [customs("870")]))
+    save(ns, engine, bundle([purchase()], [customs("870", original="3")]))
     dirty = review.browse(query())
     assert dirty.notices and dirty.counts["autoApprovable"] == 0
     group = dirty.groups[0]
@@ -120,7 +122,7 @@ def test_update_during_calculation_discards_old_generation(review, ns, engine, m
 
     def concurrent_update(account):
         result = build(account)
-        save(ns, engine, bundle([purchase(amounts=("99999", "20"))], [customs("870")]))
+        save(ns, engine, bundle([purchase()], [customs("870", original="3")]))
         return result
 
     monkeypatch.setattr(calculations, "build", concurrent_update)
@@ -153,7 +155,9 @@ def test_failure_retains_snapshot_and_retries_after_restart(review, ns, engine, 
 
 
 def test_changed_tolerance_rebuilds_and_hides_old_precheck(review, ns, engine):
-    save(ns, engine, bundle([purchase(amounts=("107.50", "20"))], [customs("870")]))
+    save(
+        ns, engine, bundle([purchase()], [customs("870", original="10.75", declared="10.65", currency="CNY")])
+    )
     CalculationService(review).rebuild()
     assert review.browse(query()).groups[0].autoReview.eligible
     strict = ReviewService(engine, DeclarationService(engine), EventBus(), Decimal("0.05"))
@@ -163,6 +167,38 @@ def test_changed_tolerance_rebuilds_and_hides_old_precheck(review, ns, engine):
     CalculationWorker(changed).run_once()
     assert strict.browse(query()).groups[0].marginAlert
     assert CalculationService(review).calculate({"ns_account": ACCOUNT}) is False
+
+
+def test_v6_purchase_snapshot_is_hidden_then_rebuilt_with_customs_prices(review, ns, engine):
+    seed(ns, engine)
+    calculations = CalculationService(review)
+    calculations.rebuild()
+    snapshot = rows(engine, "SELECT id,payload FROM review_declaration_snapshots")[0]
+    payload = json.loads(snapshot["payload"])
+    for line in payload["customsLines"]:
+        line.pop("originalUnitPriceCny")
+        line.pop("originalPriceUnit")
+        line.pop("declaredPriceUnit")
+        line.update(combinedPurchaseUnitPrice="16.142857", margin="-12.31%", marginStatus="negative")
+    with engine.begin() as connection:
+        connection.execute(
+            text("UPDATE review_declaration_snapshots SET payload=:p,margin_alert=1 WHERE id=:i"),
+            {"p": json.dumps(payload), "i": snapshot["id"]},
+        )
+        connection.execute(text("UPDATE review_calculation_jobs SET calculation_key='review-v6:cny=0.10'"))
+    stale = review.browse(query())
+    assert stale.counts["marginAlert"] == 0
+    line = stale.groups[0].customsLines[0]
+    assert line.marginStatus == "unavailable" and line.margin == line.originalUnitPriceCny == ""
+    calculations.initialize()
+    CalculationWorker(calculations).run_once()
+    fresh = review.browse(query()).groups[0]
+    assert fresh.calculationStatus == "ready" and not fresh.marginAlert
+    assert fresh.contentSha256 == payload["contentSha256"]
+    line = fresh.customsLines[0]
+    assert line.margin == "0.00%" and line.originalUnitPriceCny == line.declaredUnitPriceCny == "10.65"
+    assert "combinedPurchaseUnitPrice" not in line.model_dump()
+    assert rows(engine, "SELECT id FROM review_records") == []
 
 
 def test_approval_enqueues_and_does_not_wait_for_account_rebuild(review, ns, engine):
@@ -176,6 +212,36 @@ def test_approval_enqueues_and_does_not_wait_for_account_rebuild(review, ns, eng
     CalculationWorker(calculations).run_once()
     page = review.browse(query(status="approved"))
     assert page.total == 1 and page.counts["approvedThisMonth"] == 1
+
+
+def test_v7_negative_snapshot_rebuilds_as_quantity_mismatch(review, ns, engine):
+    order = purchase()
+    for _, row in order[2]:
+        row["custrecord_swc_subpo_item_bgqty"] = Decimal("9")
+    save(ns, engine, bundle([order], [customs("870", original="3")]))
+    calculations = CalculationService(review)
+    calculations.rebuild()
+    snapshot = rows(engine, "SELECT id,payload FROM review_declaration_snapshots")[0]
+    payload = json.loads(snapshot["payload"])
+    for line in payload["customsLines"]:
+        line.update(margin="-100.00%", marginStatus="negative", marginNote="报关单价低于报关行单价")
+    with engine.begin() as connection:
+        connection.execute(
+            text("UPDATE review_declaration_snapshots SET payload=:p,margin_alert=1"),
+            {"p": json.dumps(payload)},
+        )
+        connection.execute(text("UPDATE review_calculation_jobs SET calculation_key='review-v7:cny=0.10'"))
+    assert review.browse(query()).counts["marginAlert"] == 0
+    calculations.initialize()
+    CalculationWorker(calculations).run_once()
+    fresh = review.browse(query()).groups[0]
+    assert fresh.calculationStatus == "ready" and not fresh.marginAlert and not fresh.autoReview.eligible
+    assert fresh.contentSha256 == payload["contentSha256"]
+    for line in fresh.customsLines:
+        assert line.marginStatus == "unavailable" and line.margin == ""
+        assert line.marginNote == "数量不一致（报关行 10，子采购报关合计 9）"
+    assert review.browse(query(status="margin_alert")).total == 0
+    assert rows(engine, "SELECT id FROM review_records") == []
 
 
 def test_shared_sales_rate_refreshes_other_declarations_without_reapproval(review, ns, engine):
@@ -206,6 +272,39 @@ def test_missing_sales_rate_persists_unavailable(review, ns, engine):
     item = review.browse(query()).groups[0]
     assert item.calculationStatus == "ready" and not item.marginAlert and not item.autoReview.eligible
     assert item.customsLines[0].marginStatus == "unavailable"
+
+
+def test_v8_unmatched_prefix_snapshot_rebuilds_without_resync(review, ns, engine):
+    declaration = customs("870")
+    for _, line in declaration[2]:
+        line["custrecord_swc_salesorder_number"] = "销售订单 #SO1"
+    save(ns, engine, bundle([purchase()], [declaration]))
+    calculations = CalculationService(review)
+    calculations.rebuild()
+    snapshot = rows(engine, "SELECT id,payload FROM review_declaration_snapshots")[0]
+    payload = json.loads(snapshot["payload"])
+    for line in payload["customsLines"]:
+        line.update(
+            margin="",
+            marginStatus="unavailable",
+            marginNote="对应销售单不唯一，无法计算",
+            declaredUnitPriceCny="",
+            originalUnitPriceCny="",
+        )
+    with engine.begin() as connection:
+        connection.execute(
+            text("UPDATE review_declaration_snapshots SET payload=:p"), {"p": json.dumps(payload)}
+        )
+        connection.execute(text("UPDATE review_calculation_jobs SET calculation_key='review-v8:cny=0.10'"))
+    assert review.browse(query()).groups[0].calculationStatus == "pending"
+    calculations.initialize()
+    CalculationWorker(calculations).run_once()
+    fresh = review.browse(query()).groups[0]
+    assert fresh.calculationStatus == "ready" and fresh.contentSha256 == payload["contentSha256"]
+    for line in fresh.customsLines:
+        assert line.marginStatus == "ok" and line.margin == "0.00%" and line.marginNote == ""
+        assert line.originalUnitPriceCny == line.declaredUnitPriceCny == "10.65"
+    assert rows(engine, "SELECT id FROM review_records") == []
 
 
 def test_queue_request_rolls_back_with_source_transaction(review, ns, engine):

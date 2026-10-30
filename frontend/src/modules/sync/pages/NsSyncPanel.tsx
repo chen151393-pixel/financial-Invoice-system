@@ -10,7 +10,7 @@ import "../components/sync-background.css";
 import "../components/sync-layout.css";
 
 /**
- * NS 数据同步页，与柠檬云页同一结构：状态条 →“手动补拉 / 定时计划”页签 → 计划执行记录。
+ * NS 数据同步页：状态条 →“手动补拉 / 定时计划”页签 → 手动与定时执行记录。
  * 手动补拉面板切走时只隐藏不卸载，不中断正在进行的拉取；启用条件、校验和执行均在后端。
  */
 export function NsSyncPanel() {

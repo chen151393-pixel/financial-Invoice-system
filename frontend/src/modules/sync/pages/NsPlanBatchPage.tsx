@@ -1,4 +1,4 @@
-import { Link, useParams } from "react-router";
+import { Link, useParams, useSearchParams } from "react-router";
 import { paths } from "../../../app/paths";
 import {
   Alert,
@@ -57,13 +57,20 @@ const columns: Column<NsBatchPage>[] = [
   },
 ];
 
-/** NS 计划批次详情：按分页展示真实执行状态、执行中阶段进度和失败单据原因。 */
+/** NS 执行详情：手动分页和定时批次共用结果表，保留不同的执行说明。 */
 export function NsPlanBatchPage() {
   const { requestId = "" } = useParams();
-  const { data, error, refresh } = useNsPlanBatch(requestId);
+  const [query] = useSearchParams();
+  const recordType = query.get("recordType") === "manual" ? "manual" : "plan";
+  const state = useNsPlanBatch(requestId, recordType);
+  return <NsBatchDetailContent state={state} />;
+}
+
+export function NsBatchDetailContent({ state }: { state: ReturnType<typeof useNsPlanBatch> }) {
+  const { data, error, refresh } = state;
   if (!data)
     return (
-      <section className="sync-background" aria-label="NS 计划批次详情">
+      <section className="sync-background" aria-label="NS 同步详情">
         {error ? (
           <ErrorState
             title="批次读取失败"
@@ -77,7 +84,7 @@ export function NsPlanBatchPage() {
     );
   const facts = [
     ["单据类型", data.kindLabel],
-    ["创建日期范围", `${data.startDate} 至 ${data.endDate}`],
+    ["创建日期范围", data.startDate && data.endDate ? `${data.startDate} 至 ${data.endDate}` : "未限定日期"],
     ["触发方式", data.trigger === "schedule" ? "定时计划" : "手动提交"],
     ["触发时间", syncTime(data.createdAt)],
     ["结束时间", syncTime(data.finishedAt)],
@@ -94,7 +101,7 @@ export function NsPlanBatchPage() {
         <div className="sync-background__head">
           <div className="sync-background__inline">
             <Badge tone={statusTone(data.phase)}>{data.label}</Badge>
-            <h2>{data.message}</h2>
+            <h2>{data.message || "同步执行概况"}</h2>
           </div>
           <Button onClick={refresh}>刷新批次状态</Button>
         </div>
@@ -122,9 +129,12 @@ export function NsPlanBatchPage() {
         {data.phase === "unknown" && (
           <div className="sync-background__body">
             <Alert tone="warning" title="结果待核实">
-              有分页的保存结果无法确认，后续分页已停止且不会自动重试，定时计划已自动暂停。请先在
+              {data.recordType === "manual"
+                ? "本次手动保存结果无法确认，请勿直接重复提交。请先在"
+                : "有分页的保存结果无法确认，后续分页已停止且不会自动重试，定时计划已自动暂停。请先在"}
               <Link to={paths.review}>财务核对</Link>
-              核对本地已保存单据，再到 NS 数据同步页重新启用计划。
+              核对本地已保存单据。
+              {data.recordType === "plan" && "核实后再到 NS 数据同步页重新启用计划。"}
             </Alert>
           </div>
         )}
@@ -142,7 +152,7 @@ export function NsPlanBatchPage() {
             />
           ) : (
             <DataTable
-              label="NS 计划分页结果表"
+              label="NS 同步分页结果表"
               columns={columns}
               rows={data.pages}
               rowKey={(row) => row.requestId}
@@ -150,8 +160,10 @@ export function NsPlanBatchPage() {
             />
           )}
           <p className="sync-muted">
-            每页最多 20 张入口单据，按完整报关关联组分别保存；同一页未写入时间隔 1
-            分钟后按原游标重新排队。批次编号：
+            {data.recordType === "manual"
+              ? "本记录对应一次手动分页保存，按完整报关关联组分别提交；查询和刷新不会重新执行同步。"
+              : "每页最多 20 张入口单据，按完整报关关联组分别保存；同一页未写入时间隔 1 分钟后按原游标重新排队。"}
+            批次编号：
             {data.requestId}
           </p>
         </div>

@@ -4,9 +4,11 @@ import hashlib
 
 from backend.core.errors import ApiError
 
+from ..dao import ns_history_dao as history
 from ..dao import ns_plan_dao as plans
 from ..dao import ns_run_dao as pages
 from ..dao import sync_run_dao as runs
+from ..vo.ns_history_vo import manual_view
 from ..vo.ns_plan_vo import batch_view, plan_view
 
 
@@ -23,12 +25,17 @@ class NsBatchService:
     def list(self, owner, page=1, size=20, phase=None):
         self.require_admin(owner)
         scope = self.scope()
+        manual_scope = self.ns_runs.scope(owner)
+        executing = self.ns_runs.executing(manual_scope)
         with self.engine.connect() as connection:
-            rows, total = runs.list_page(connection, scope, page, size, phase)
-            counts = runs.counts(connection, scope)
+            rows, total, counts = history.list_page(
+                connection, scope, manual_scope, executing, page, size, phase
+            )
             plan = plan_view(plans.get(connection, scope))
         return {
-            "items": [batch_view(row) for row in rows],
+            "items": [
+                manual_view(row, executing) if kind == "manual" else batch_view(row) for kind, row in rows
+            ],
             "total": total,
             "page": page,
             "pageSize": size,
@@ -37,8 +44,17 @@ class NsBatchService:
             "plan": {"enabled": plan["enabled"], "nextRunAt": plan["nextRunAt"]},
         }
 
-    def read(self, owner, request_id):
+    def read(self, owner, request_id, record_type="plan"):
         self.require_admin(owner)
+        if record_type == "manual":
+            scope = self.ns_runs.scope(owner)
+            executing = self.ns_runs.executing(scope)
+            with self.engine.connect() as connection:
+                row = pages.get(connection, scope, request_id)
+            if not row or row["run_id"] is not None:
+                raise ApiError(404, "未找到当前身份和 NS 账户的手动同步记录")
+            progress = self.ns_runs.progress(scope, request_id, owner)
+            return manual_view(row, executing, detail=True, progress=progress)
         scope = self.scope()
         with self.engine.connect() as connection:
             row = runs.get(connection, scope, request_id)

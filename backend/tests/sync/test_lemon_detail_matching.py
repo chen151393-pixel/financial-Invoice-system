@@ -138,7 +138,7 @@ def test_reordering_no_new_version_changed_quantity_reopens_review(engine, world
     assert task(engine)["status"] != "completed"
 
 
-def test_invoice_first_then_review_and_regenerate(engine, world, ns, flow):
+def test_invoice_first_then_review_automatically_suggests(engine, world, ns, flow):
     from backend.tests.test_source_storage import bundle, customs, purchase, save
     from backend.tests.test_task import approve
 
@@ -146,7 +146,8 @@ def test_invoice_first_then_review_and_regenerate(engine, world, ns, flow):
     assert not proposals(world, target(engine))
     save(ns, engine, bundle([purchase()], [customs("870")]))
     approve(world, "CD870")
-    assert world["proposals"].generate_now([target(engine)], OWNER) == 2
+    assert len(proposals(world, target(engine))) == 2
+    assert world["proposals"].generate_now([target(engine)], OWNER) == 0
 
 
 def test_detail_failure_and_subscriber_failure_preserve_previous_ledger(engine, world, reviewed, flow):

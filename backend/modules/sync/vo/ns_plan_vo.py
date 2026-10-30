@@ -24,6 +24,7 @@ def batch_view(row, pages=None, executing=frozenset(), progress=None):
     config = row["configuration"] or {}
     view = {
         "requestId": row["request_id"],
+        "recordType": "plan",
         "kind": config.get("kind"),
         "kindLabel": KINDS.get(config.get("kind"), ("", "未知单据"))[1],
         "phase": row["phase"],

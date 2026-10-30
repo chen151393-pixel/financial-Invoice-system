@@ -1,15 +1,17 @@
 // 与后端 /api/review 的响应一致；金额、数量为十进制字符串，前端不重算。
 // unshipped：未出库。自 2026-10-23 起拉取时即跳过，列表不再返回；保留类型以显示后端兜底拒绝。
 export type ReviewStatus = "pending" | "approved" | "unshipped";
-// margin_alert：待审核且采购单价超出报关单价容差；auto：待审核且满足可自动审核条件（后端判定）
+// margin_alert：待审核且报关行单价超出报关单价容差；auto：待审核且满足可自动审核条件（后端判定）
 export type ReviewFilter = "all" | "pending" | "approved" | "margin_alert" | "auto";
 export interface UnitPriceMargin {
-  // 后端按人民币申报单价与采购金额折算报关单价（含税总金额 / 总报关数量）比较。
+  // 后端比较同一报关行的 NS 单价与报关单价；两价折人民币后判断固定容差。
   margin?: string;
   marginStatus?: "ok" | "negative" | "unavailable";
   marginNote?: string;
   declaredUnitPriceCny?: string;
-  combinedPurchaseUnitPrice?: string;
+  originalUnitPriceCny?: string;
+  originalPriceUnit?: string;
+  declaredPriceUnit?: string;
 }
 export interface PurchaseLine {
   id: string;

@@ -3,6 +3,7 @@
 from ..vo.matching_vo import Capability
 from . import allocation_policy as rules
 from .comparison_policy import compare
+from .pending_order_policy import REGENERATE, whole_order
 
 
 def evaluate(row, invoice, item, line, task_line, used):
@@ -28,6 +29,10 @@ def evaluate(row, invoice, item, line, task_line, used):
         )
     if row["status"] != "proposed":
         return checks, capabilities, reasons
+    if not whole_order(row):
+        capabilities["confirm"] = Capability(reason=REGENERATE)
+        capabilities["reject"] = Capability(allowed=True, reason="驳回旧建议后按整单重新关联")
+        return [], capabilities, []
     block = rules.hard_block(invoice, line, task_line)
     if not block and line["digest"] != (row["checks"] or {}).get("purchaseDigest"):
         block = "子采购行内容在建议生成后已变化，比对依据过期，请驳回后重新生成建议"

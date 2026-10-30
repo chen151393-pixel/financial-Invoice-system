@@ -75,7 +75,11 @@ npm.cmd start
 
 ## 开发启动
 
-Windows 下 Python 自动重载已关闭：当前 Uvicorn 重载会发送控制台 Ctrl+C，可能使 npm/Vite 一起退出。修改后端代码后手动重启；前端样式和组件仍可热更新。联动启动中一端异常退出会报告服务名和退出码，另一端继续运行；主动 Ctrl+C 才同时停止两端。
+Windows 下 Python 自动重载已关闭：当前 Uvicorn 重载会发送控制台 Ctrl+C，可能使 npm/Vite 一起退出。修改后端代码后手动重启；前端样式和组件仍可热更新。联动启动中一端退出或启动失败会报告原因并停止另一端，避免只剩半套服务占用端口。
+
+`dev`、`dev:api`、`dev:web` 及 `start` 的 Windows 子进程通过 `scripts/managed-process.mjs` 和 `scripts/windows_process_job.py` 归入独立 Job Object；按 `Ctrl+C`、关闭终端或启动器被强制结束时，守护器退出并由系统清理本次启动的全部后代进程。仅使用项目已有 Python 和标准库，不新增依赖；无法建立进程保护时会报错退出，不继续裸启动。已有端口被其他进程占用时仍拒绝启动，不按端口或进程名强杀。
+
+启动脚本验证：`npm.cmd run test:scripts`，只创建短时测试进程，不启动前后端、不监听端口；Windows 用例覆盖正常退出后遗留孙进程、启动器及更上层启动进程被强杀、守护器被强杀、启动失败和退出码传递。非 Windows 环境跳过 Windows Job 专项。
 
 开发时运行 `npm.cmd run dev`，同时启动前端与 Python 后端。启动器和 Vite 统一读取根目录配置，优先级为进程环境变量 > `.env` > 默认值；不再加载 `.env.local` 或其他模式环境文件。`PORT` 是后端端口（未配置时 3333），`WEB_PORT` 是前端端口（未配置时 5173）。例如在已有 `.env` 中设置：
 

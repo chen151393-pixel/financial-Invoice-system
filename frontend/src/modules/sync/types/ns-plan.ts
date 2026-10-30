@@ -22,13 +22,14 @@ export type NsPlanConfig = {
 };
 export type NsBatch = {
   requestId: string;
+  recordType: "plan" | "manual";
   kind: NsPlanKind;
   kindLabel: string;
   phase: string;
   label: string;
   trigger: string;
-  startDate: string;
-  endDate: string;
+  startDate: string | null;
+  endDate: string | null;
   createdAt: string;
   finishedAt: string | null;
   message: string;
@@ -81,3 +82,13 @@ const tones: Record<string, Tone> = {
   failed: "danger",
 };
 export const statusTone = (status: string): Tone => tones[status] ?? "neutral";
+
+export const nsPhaseOptions = [
+  ["", "全部状态"],
+  ["queued", "等待执行"],
+  ["running", "执行中"],
+  ["completed", "已完成"],
+  ["partial", "部分成功"],
+  ["failed", "失败"],
+  ["unknown", "结果待核实"],
+] as const;

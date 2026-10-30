@@ -3,7 +3,7 @@ import { getNsBatch } from "../api/ns-plan-api";
 import type { NsBatchDetail } from "../types/ns-plan";
 
 /** 单个 NS 计划批次：后端标记 poll 时每 3 秒刷新，展示当前分页的真实阶段进度。 */
-export function useNsPlanBatch(id: string) {
+export function useNsPlanBatch(id: string, recordType: "plan" | "manual" = "plan") {
   const [data, setData] = useState<NsBatchDetail | null>(null);
   const [error, setError] = useState("");
   const [attempt, setAttempt] = useState(0);
@@ -12,7 +12,7 @@ export function useNsPlanBatch(id: string) {
     let timer: ReturnType<typeof setTimeout>;
     async function load() {
       try {
-        const value = await getNsBatch(id);
+        const value = await getNsBatch(id, recordType);
         if (!active) return;
         setData(value);
         setError("");
@@ -26,9 +26,9 @@ export function useNsPlanBatch(id: string) {
       active = false;
       clearTimeout(timer);
     };
-  }, [id, attempt]);
+  }, [id, recordType, attempt]);
   return {
-    data: data?.requestId === id ? data : null,
+    data: data?.requestId === id && data.recordType === recordType ? data : null,
     error,
     refresh: () => setAttempt((value) => value + 1),
   };

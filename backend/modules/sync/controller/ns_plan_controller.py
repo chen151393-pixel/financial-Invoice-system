@@ -31,7 +31,11 @@ def create_router(plans, batches):
         return batches.list(owner, page, pageSize, phase)
 
     @router.get("/batches/{request_id}")
-    def detail(owner: Owner, request_id: str = Path(pattern=UUID)):
-        return batches.read(owner, request_id)
+    def detail(
+        owner: Owner,
+        request_id: str = Path(pattern=UUID),
+        recordType: Literal["plan", "manual"] = "plan",
+    ):
+        return batches.read(owner, request_id, recordType)
 
     return router

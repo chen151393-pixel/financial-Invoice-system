@@ -6,6 +6,7 @@ from backend.core.errors import ApiError
 
 from ..policy.list_policy import GROUP_STATES
 from ..policy.order_policy import require_whole_orders
+from ..policy.registration_policy import require_clear_registration
 from ..policy.state_policy import WRITTEN_STATES, stuck
 from .order_vo import orders, parent_orders, plan_view
 
@@ -38,6 +39,10 @@ def writeback(task, gate):
         return {"allowed": False, "reason": "NS 已登记"}
     if task["state"] != "ready":
         return {"allowed": False, "reason": LABELS[task["state"]]}
+    try:
+        require_clear_registration(task, task["candidates"])
+    except ApiError as error:
+        return {"allowed": False, "reason": error.message}
     allowed, reason = gate.check(task)
     return {"allowed": allowed, "reason": reason}
 

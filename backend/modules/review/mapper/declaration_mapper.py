@@ -100,8 +100,8 @@ def margin_fields(margin):
         "declaredUnitPriceCny": text(margin["declared"].quantize(Decimal("0.000001")))
         if margin["declared"] is not None
         else "",
-        "combinedPurchaseUnitPrice": text(margin["purchase"].quantize(Decimal("0.000001")))
-        if margin["purchase"] is not None
+        "originalUnitPriceCny": text(margin["original"].quantize(Decimal("0.000001")))
+        if margin["original"] is not None
         else "",
     }
 
@@ -137,7 +137,7 @@ def declaration(
             rows_by_customs[row["id"]],
             orders,
             content.get("sales_orders", {}),
-            content.get("unit_names"),
+            unit_names=content.get("unit_names"),
             tolerance=tolerance,
         )
         for row in content["customs_lines"]
@@ -171,6 +171,8 @@ def declaration(
             priceEstimated=prices[row["id"]][1],
             amount=text(row["amount"]),
             currency=text(row["currency"]),
+            originalPriceUnit=unit_label(row["unit"], content.get("unit_names")),
+            declaredPriceUnit=unit_label(row["declared_unit"], content.get("unit_names")),
             purchaseCount=len(by_customs[row["id"]]),
             purchaseLines=group_purchase_lines([line.model_dump() for line in by_customs[row["id"]]]),
             **margin_fields(margins[row["id"]]),

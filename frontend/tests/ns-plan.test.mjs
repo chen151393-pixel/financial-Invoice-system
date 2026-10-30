@@ -6,7 +6,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { MemoryRouter } from "react-router";
 import { createServer } from "vite";
 
-let server, Form, Detail, Cards, Status, Tabs, api;
+let server, Form, Detail, Cards, Status, Tabs, Records, DetailContent, api;
 before(async () => {
   server = await createServer({
     configFile: fileURLToPath(new URL("../vite.config.ts", import.meta.url)),
@@ -16,6 +16,12 @@ before(async () => {
   });
   ({ NsPlanForm: Form } = await server.ssrLoadModule("/src/modules/sync/components/NsPlanForm.tsx"));
   ({ NsPlanBatchPage: Detail } = await server.ssrLoadModule("/src/modules/sync/pages/NsPlanBatchPage.tsx"));
+  ({ NsBatchDetailContent: DetailContent } = await server.ssrLoadModule(
+    "/src/modules/sync/pages/NsPlanBatchPage.tsx",
+  ));
+  ({ NsBatchRecords: Records } = await server.ssrLoadModule(
+    "/src/modules/sync/components/NsPlanBatches.tsx",
+  ));
   ({ SyncSourceCards: Cards } = await server.ssrLoadModule(
     "/src/modules/sync/components/SyncSourceCards.tsx",
   ));
@@ -47,6 +53,114 @@ const data = {
 };
 const render = (component, props) =>
   renderToStaticMarkup(createElement(MemoryRouter, null, createElement(component, props)));
+
+const record = {
+  requestId: "manual-request",
+  recordType: "manual",
+  kind: "customs-declarations",
+  kindLabel: "报关单",
+  phase: "partial",
+  label: "部分成功",
+  trigger: "manual",
+  startDate: "2026-08-01",
+  endDate: "2026-08-31",
+  createdAt: "2026-10-30T08:00:00Z",
+  finishedAt: "2026-10-30T08:01:00Z",
+  message: "已保存 1 张，失败 1 张",
+  fetched: 2,
+  created: 1,
+  updated: 0,
+  failed: 1,
+};
+const historyState = {
+  data: { items: [record], counts: { partial: 1 }, total: 1, pages: 1, page: 1, pageSize: 20, plan: null },
+  phase: "",
+  error: "",
+  refresh() {},
+  change() {},
+};
+
+test("NS 记录展示手动与计划、后端数量、日期范围和独立详情入口", () => {
+  const scheduled = {
+    ...record,
+    recordType: "plan",
+    requestId: "plan-request",
+    trigger: "schedule",
+    kindLabel: "子采购单",
+  };
+  const html = render(Records, {
+    state: { ...historyState, data: { ...historyState.data, items: [record, scheduled] } },
+  });
+  assert.match(html, /NS 同步执行记录/);
+  assert.match(html, /手动提交/);
+  assert.match(html, /定时计划/);
+  assert.match(html, /2026-08-01 至 2026-08-31/);
+  assert.match(html, /失败单据/);
+  assert.match(html, /manual-request\?recordType=manual/);
+  assert.match(html, /href="\/sync\/ns\/batches\/plan-request"/);
+  assert.match(html, /任务状态/);
+  assert.doesNotMatch(html, /查询账套/);
+});
+
+test("NS 记录区覆盖初始加载、错误重试、空结果与过期数据提示", () => {
+  assert.match(render(Records, { state: { ...historyState, data: null } }), /正在读取执行记录/);
+  const failed = render(Records, { state: { ...historyState, data: null, error: "服务暂时不可用" } });
+  assert.match(failed, /执行记录读取失败[\s\S]*重新读取/);
+  assert.match(
+    render(Records, { state: { ...historyState, error: "服务暂时不可用" } }),
+    /记录可能不是最新状态/,
+  );
+  assert.match(
+    render(Records, { state: { ...historyState, data: { ...historyState.data, items: [] } } }),
+    /当前条件下没有 NS 执行记录/,
+  );
+});
+
+test("手动待核实详情展示失败单据且不会声称定时计划自动暂停", () => {
+  const detail = {
+    ...record,
+    phase: "unknown",
+    label: "结果待核实",
+    poll: false,
+    pages: [
+      {
+        index: 2,
+        requestId: record.requestId,
+        status: "interrupted",
+        statusLabel: "已中断",
+        count: 2,
+        saved: 1,
+        failed: 1,
+        skipped: 0,
+        unknown: 0,
+        error: null,
+        progress: null,
+        failures: [
+          { id: "1", number: "CD000727", status: "failed", reason: "NS 同规则查询失败（HTTP 404）" },
+        ],
+      },
+    ],
+  };
+  const html = render(DetailContent, { state: { data: detail, error: "", refresh() {} } });
+  assert.match(html, /第 2 页/);
+  assert.match(html, /CD000727[\s\S]*HTTP 404/);
+  assert.match(html, /请勿直接重复提交/);
+  assert.doesNotMatch(html, /定时计划已自动暂停|重新启用计划|原游标重新排队/);
+});
+
+test("NS 状态筛选传给后端，详情携带记录类型避免相同编号串记录", async (t) => {
+  const urls = [];
+  t.mock.method(globalThis, "fetch", async (url) => {
+    urls.push(String(url));
+    return Response.json({});
+  });
+  await api.listNsBatches(2, "unknown");
+  await api.getNsBatch("shared-id", "manual");
+  await api.getNsBatch("shared-id");
+  assert.match(urls[0], /page=2&pageSize=20&phase=unknown/);
+  assert.match(urls[1], /shared-id\?recordType=manual$/);
+  assert.match(urls[2], /shared-id\?recordType=plan$/);
+});
 
 test("NS 计划表单展示单据范围、北京时间时点与更新补齐说明", () => {
   const html = render(Form, { data, busy: false, save() {} });

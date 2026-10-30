@@ -2,10 +2,11 @@ import { useEffect, useState } from "react";
 import { listNsBatches } from "../api/ns-plan-api";
 import type { NsBatchList } from "../types/ns-plan";
 
-/** NS 计划执行记录：后端分页，每 5 秒刷新一次以展示后台进度。 */
+/** NS 手动与计划执行记录：后端筛选分页，每 5 秒刷新一次。 */
 export function useNsPlanBatches() {
   const [page, setPage] = useState(1);
-  const [data, setData] = useState<NsBatchList | null>(null);
+  const [phase, setPhase] = useState("");
+  const [loaded, setLoaded] = useState<{ data: NsBatchList; page: number; phase: string } | null>(null);
   const [error, setError] = useState("");
   const [attempt, setAttempt] = useState(0);
   useEffect(() => {
@@ -13,9 +14,9 @@ export function useNsPlanBatches() {
     let timer: ReturnType<typeof setTimeout>;
     async function load() {
       try {
-        const value = await listNsBatches(page);
+        const value = await listNsBatches(page, phase);
         if (active) {
-          setData(value);
+          setLoaded({ data: value, page, phase });
           setError("");
         }
       } catch (error) {
@@ -29,11 +30,16 @@ export function useNsPlanBatches() {
       active = false;
       clearTimeout(timer);
     };
-  }, [page, attempt]);
+  }, [page, phase, attempt]);
   return {
-    data: data?.page === page ? data : null,
+    data: loaded?.page === page && loaded.phase === phase ? loaded.data : null,
     error,
+    phase,
     refresh: () => setAttempt((value) => value + 1),
-    change: (next: number) => setPage(next),
+    change: (next: number, nextPhase = phase) => {
+      setError("");
+      setPage(next);
+      setPhase(nextPhase);
+    },
   };
 }

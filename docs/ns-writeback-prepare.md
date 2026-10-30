@@ -4,6 +4,8 @@
 
 当前流程：**整票审核 → 生成回写任务 → 查询候选账单 → 确认并冻结方案 →（账单累计与明细不一致时）确认回写预览 → 写入 NS**。
 
+2026-10-30 新增：查询账单时同时按“供应商＋完整发票号码”核对 NS 已有有效登记。查到即显示“NS 已有同号登记”并拦截确认及重复回写，详情列出已有记录，不能仅凭账单可收金额为零认定已登记。
+
 ## 1. 部署
 
 ### 1.1 本系统
@@ -37,6 +39,10 @@ WRITEBACK_VENDOR_ALLOWLIST=
 写入总开关开启且写入脚本已配置时，后台每 10 秒自动写入最多 4 个“待写入 NS”且供应商在白名单内的任务；任务详情页也可点“回写到 NS”立即写入。
 
 ### 1.2 NS 端
+
+**启用此次查询核对前**，先将 [`netsuite/vendor_bill_query_restlet.js`](../netsuite/vendor_bill_query_restlet.js) 修订 `2026-10-30.4` 上传到现有只读查询部署（如 486），并给查询角色增加 `customrecord_swc_vendor_invoice` 的查看权限（号码 `name`、供应商 `custrecord_swc_vi_vendor`、日期 `custrecord_swc_vi_billdate`）。无需新建写入权限或数据库迁移。部署脚本不会随本地 Git 合并自动更新；本次没有执行 NS 上传或真实写入验收。
+
+随后重启本系统，在旧任务详情点击“重新查询账单”。缺少 `registrationCheck` 的旧查询响应会显示升级脚本后重查并阻止继续；已有待写入任务也必须先完成此核对。保留写入脚本原有最终同号检查，以防查询后登记变化。
 
 由 NS 管理员部署 [`netsuite/vendor_bill_writeback_restlet.js`](../netsuite/vendor_bill_writeback_restlet.js)（修订 `2026-10-28.1`）：
 

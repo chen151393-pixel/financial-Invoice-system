@@ -11,6 +11,9 @@ export const saveNsPlan = (plan: NsPlan) =>
     times: plan.times,
     lookbackDays: plan.lookbackDays,
   });
-export const listNsBatches = (page: number) =>
-  http<NsBatchList>(`${root}/batches?${new URLSearchParams({ page: String(page), pageSize: "20" })}`);
-export const getNsBatch = (id: string) => http<NsBatchDetail>(`${root}/batches/${encodeURIComponent(id)}`);
+export const listNsBatches = (page: number, phase = "") =>
+  http<NsBatchList>(
+    `${root}/batches?${new URLSearchParams({ page: String(page), pageSize: "20", ...(phase ? { phase } : {}) })}`,
+  );
+export const getNsBatch = (id: string, recordType: "plan" | "manual" = "plan") =>
+  http<NsBatchDetail>(`${root}/batches/${encodeURIComponent(id)}?recordType=${recordType}`);

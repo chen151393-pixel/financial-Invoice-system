@@ -1,5 +1,9 @@
 # 数据同步页面
 
+## NS 同步执行记录（2026-10-30）
+
+总览 `/sync` 在近 14 天同步情况下展示“NS 同步执行记录”和“柠檬云同步执行记录”；NS 页复用相同的 `NsBatchRecords`。NS 列表包含当前登录身份的手动分页保存和当前账套的定时批次，支持后端状态筛选、分页、状态数量、每 5 秒刷新和执行详情入口。显示触发时间、方式、单据类型、创建日期范围、读取、新增/更新、失败数量与结果说明。手动记录以 `?recordType=manual` 进入已有详情路由，展示失败单号、原因及真实页序号；不会错误提示定时计划已暂停或将查询当作重试。未限定日期、空记录、初始加载、错误重试和保留旧数据时的提示均有对应状态。测试：`frontend/tests/ns-plan.test.mjs`。
+
 ## NS 定时同步计划（2026-10-29）
 
 `/sync/ns` 与柠檬云页同一结构（`pages/NsSyncPanel.tsx`，2026-10-30）：状态条 `NsSyncStatus` →“手动补拉 / 定时计划”页签（两页共用 `components/SyncTabs.tsx`；手动补拉为 `NsManualPull.tsx`，切换页签只隐藏不卸载，不中断拉取）→ 计划执行记录。计划表单左栏“何时执行”（与柠檬云共用的 `components/SyncScheduleFields.tsx`，已保存状态在状态条显示），右栏同步范围（`components/NsPlanForm.tsx`，保存规则收在可展开区），自动暂停原因显示在保存按钮旁；可否启用、版本冲突和输入校验都以后端 `allowed/reason` 与保存响应为准，后端自动暂停时显示 `pausedReason`。`components/NsPlanBatches.tsx` 每 5 秒刷新后端分页的批次记录；`/sync/ns/batches/:requestId`（`pages/NsPlanBatchPage.tsx`，路由由应用层 `SyncNsBatchWorkspacePage.tsx` 装配）展示每页状态、执行中阶段进度和失败单据原因，执行中每 3 秒刷新。结果待核实只提示核对，不提供重试按钮。请求契约在 `api/ns-plan-api.ts`、类型与状态色映射在 `types/ns-plan.ts`、请求状态在 `hooks/useNsPlan*.ts`。新增区块使用统一组件库的 `Badge`、`Alert`、`DataTable`、`EmptyState`、`ErrorState`、`Skeleton`、`Pagination`，表单沿用本模块 `sync-background.css`。接口与执行规则见[后端同步模块](../../../../backend/modules/sync/README.md#ns-定时同步计划2026-10-29)。测试：`frontend/tests/ns-plan.test.mjs`。

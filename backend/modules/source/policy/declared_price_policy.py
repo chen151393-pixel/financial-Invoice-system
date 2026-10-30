@@ -1,29 +1,37 @@
 """报关申报价换算（2026-10-23 业务确认），纯函数。
 
 - 申报价（人民币）= 报关行金额 × 对应销售单汇率；报关行为人民币时不换算；
-- 对应销售单：报关行关联子采购单的销售单中，单号与报关行销售订单号一致的；没有一致的且只有一个时取该销售单；
+- 对应销售单：去掉显示前缀后按完整单号唯一匹配；未匹配或匹配多张时不取汇率；
 - 汇率不参与报关单内容摘要；缺汇率、币种不一致等无法换算时给出原因，不以 1 或 0 代替。
 """
 
+import re
 from decimal import ROUND_HALF_UP, Decimal
 
 from .currency_policy import currency_code
 
 CNY = "CNY"
 ESTIMATE_SCALE = Decimal("0.00000001")
+SALES_DISPLAY_PREFIX = re.compile(r"^(?:销售订单|销售单|Sales\s+Order)\s*[#＃]\s*", re.IGNORECASE)
+
+
+def sales_order_key(value):
+    """只去掉明确的展示前缀及首尾空白；保留完整单号的斜杠、后缀、大小写和内部空格。"""
+    return SALES_DISPLAY_PREFIX.sub("", str(value or "").strip()).strip()
 
 
 def pick_sales_order(sales_order_no, candidates):
     """candidates：报关行关联子采购单的销售单行列表（可重复）；返回 (销售单, 原因)。"""
     unique = {row["id"]: row for row in candidates if row}
-    matched = [row for row in unique.values() if sales_order_no and row.get("order_no") == sales_order_no]
+    number = sales_order_key(sales_order_no)
+    if not number:
+        return None, "报关行销售单号缺失"
+    matched = [row for row in unique.values() if sales_order_key(row.get("order_no")) == number]
     if len(matched) == 1:
         return matched[0], ""
-    if len(unique) == 1:
-        return next(iter(unique.values())), ""
-    if not unique:
-        return None, "未同步到对应销售单"
-    return None, "对应销售单不唯一"
+    if len(matched) > 1:
+        return None, "对应销售单不唯一"
+    return None, "未匹配到对应销售单"
 
 
 def declared_cny(amount, unit_price, currency, sales_order, sales_reason=""):
