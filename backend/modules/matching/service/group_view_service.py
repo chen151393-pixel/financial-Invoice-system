@@ -1,10 +1,12 @@
 """整单建议视图与整组审核：按 checks.group 归组，按当前来源实时重算发票行对整单合计的比对。"""
 
+import uuid
 from datetime import datetime, timezone
 from decimal import Decimal
 
 from backend.core.errors import ApiError
 from backend.modules.invoice.public import read_invoice_paper, read_invoices
+from backend.modules.task.public import open_lines
 
 from ..dao import allocation_dao
 from ..dto.matching_dto import ConfirmBody
@@ -12,8 +14,12 @@ from ..mapper import allocation_mapper as mapper
 from ..policy import allocation_policy as rules
 from ..policy.comparison_policy import HIGH, text, tier
 from ..policy.group_comparison_policy import compare_group
+from ..policy.order_group_policy import ONE_INVOICE, order_share, short_lines, taken
+from ..public import ClosedLine, LinesClosedByDifference
 from ..vo.matching_vo import Capability, GroupItem, GroupLine, GroupOrder, GroupView
 from . import approval_service
+
+SHORT_REASON = "发票少于子采购单，差额按差异结束"
 
 
 def group_id(row):
@@ -38,7 +44,8 @@ def evaluate(invoice, paper, rows, lines):
         if any(lines.get(row["purchase_line_id"]) is None for row in own):
             block = block or "子采购行已停用或不存在，请驳回后重新生成建议"
             continue
-        parts = [(lines[row["purchase_line_id"]], row["quantity"], row["amount"]) for row in own]
+        # 比对口径为子采购整单应开（历史分配没有快照时取分配本身）
+        parts = [(lines[row["purchase_line_id"]], *order_share(row)) for row in own]
         tax = (paper["items"].get(item_id) or {}).get("tax_amount")
         checks, confidence = compare_group(invoice, items[item_id], tax, parts)
         result[item_id] = (checks, confidence, own)
@@ -46,10 +53,18 @@ def evaluate(invoice, paper, rows, lines):
     return result, list(dict.fromkeys(reasons)), block
 
 
-def views(invoice, paper, rows, row_views, lines):
+def views(invoice, paper, rows, row_views, lines, tasks=None):
+    """tasks 为 {子采购行 ID: 任务行}，用于提示子采购单已由其他发票开具。"""
+    tasks = tasks or {}
     result = []
     for key, own in grouped(rows).items():
         compared, reasons, block = evaluate(invoice, paper, own, lines)
+        if not block and any(
+            taken(tasks[row["purchase_line_id"]]) for row in own if row["purchase_line_id"] in tasks
+        ):
+            block = ONE_INVOICE
+        if short_lines(own):
+            reasons = list(dict.fromkeys([*reasons, SHORT_REASON]))
         # 组内每条分配的不可绕过条件（来源变化、容量、版本等）沿用逐条判断。
         block = block or next(
             (row_views[row["id"]].confirm.reason for row in own if not row_views[row["id"]].confirm.allowed),
@@ -125,7 +140,7 @@ def _rows(connection, invoice_id, key):
     return sorted(rows, key=lambda row: row["id"])
 
 
-def approve_rows(service, connection, rows, body, actor, extra_reasons=()):
+def approve_rows(service, connection, rows, body, actor):
     """在调用方事务内整组逐条通过；需说明而未填写或任一条不能通过时抛错，由事务整体回滚。"""
     invoice_id = int(body.invoiceId)
     invoice = read_invoices(connection, [invoice_id])[0]
@@ -133,7 +148,11 @@ def approve_rows(service, connection, rows, body, actor, extra_reasons=()):
     _, reasons, block = evaluate(invoice, read_invoice_paper(connection, invoice_id), rows, lines)
     if block:
         raise ApiError(409, block)
-    reasons = list(dict.fromkeys([*reasons, *extra_reasons]))
+    tasks = open_lines(connection, sorted({row["purchase_line_id"] for row in rows}))
+    if any(taken(task) for task in tasks):
+        raise ApiError(409, ONE_INVOICE)
+    short = short_lines(rows)
+    reasons = list(dict.fromkeys([*reasons, *([SHORT_REASON] if short else [])]))
     note = body.note.strip()
     if reasons and not note:
         raise ApiError(400, "请填写审核说明：" + "、".join(reasons))
@@ -152,6 +171,28 @@ def approve_rows(service, connection, rows, body, actor, extra_reasons=()):
             actor,
             now,
             grouped=True,
+        )
+    if short:
+        # 一张子采购单只由一张发票开具：发票少的明细在同一事务内按差异结束，不再等待其他发票。
+        service.events.publish(
+            connection,
+            LinesClosedByDifference(
+                tuple(
+                    ClosedLine(
+                        row["purchase_line_id"],
+                        row["purchase_basis_id"],
+                        str(
+                            uuid.uuid5(
+                                uuid.NAMESPACE_URL,
+                                f"matching-close:{group_id(row)}:{row['purchase_line_id']}",
+                            )
+                        ),
+                    )
+                    for row in short
+                ),
+                actor,
+                note,
+            ),
         )
 
 

@@ -117,7 +117,7 @@ def compare_group(invoice, item, item_tax, parts):
             if unit_ok and item["quantity"] is not None and item["quantity"] == quantity
             else "mismatch",
             difference=item["quantity"] - quantity if item["quantity"] is not None else None,
-            note=f"子采购 {len(lines)} 行剩余应开数量合计",
+            note=f"子采购整单 {len(lines)} 行应开数量合计",
         ),
         _check_group(
             "amount",
@@ -130,7 +130,7 @@ def compare_group(invoice, item, item_tax, parts):
             difference=item["amount_including_tax"] - amount
             if item["amount_including_tax"] is not None
             else None,
-            note="发票行价税合计对子采购单含税合计",
+            note="发票行价税合计对子采购整单含税合计",
         ),
         _tax_check(item_tax, purchase_tax(parts), parts),
     ]

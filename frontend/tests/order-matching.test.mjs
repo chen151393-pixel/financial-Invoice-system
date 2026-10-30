@@ -90,7 +90,7 @@ test("整单建议整组通过与驳回：只提交发票、版本与选填说�
   }
 });
 
-test("手动关联按整张子采购单查询并提交全部明细；选中后明细默认取后端剩余应开", async () => {
+test("手动关联按整张子采购单查询并整单提交；明细只读，不提交逐条数量", async () => {
   const original = globalThis.fetch,
     calls = [];
   globalThis.fetch = async (url, options) => {
@@ -103,11 +103,7 @@ test("手动关联按整张子采购单查询并提交全部明细；选中后�
     invoiceItemId: "5",
     purchaseOrderId: "248",
     invoiceVersionId: "7",
-    lines: [
-      { purchaseLineId: "31", quantity: "72", amount: "5101.20" },
-      { purchaseLineId: "32", quantity: "0", amount: "0" },
-    ],
-    note: "部分开票",
+    note: "发票少开，其余按差异结束",
     replaceAllocationId: null,
     replaceReason: "",
   };
@@ -171,11 +167,12 @@ test("手动关联按整张子采购单查询并提交全部明细；选中后�
   assert.match(html, /置信度最高 · 未保存/);
   assert.match(html, /中置信度/);
   assert.match(html, /进项发票行/);
-  assert.match(html, /剩余应开 288 台 · 含税合计 22602.24 CNY/);
+  assert.match(html, /整单应开 288 台 · 含税合计 22602.24 CNY/);
   assert.match(html, /母采购单 YE-CY20260410-F114/);
-  assert.match(html, /value="192"/);
-  assert.match(html, /value="7534.08"/);
-  assert.match(html, /aria-label="迷你烫画机 本票分配数量"/);
+  assert.match(html, />192</);
+  assert.match(html, /7534.08 CNY/);
+  assert.doesNotMatch(html, /本票分配数量|<input/);
+  assert.match(html, /按差异结束/);
   assert.match(html, /保存整单关联并通过/);
 });
 

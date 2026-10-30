@@ -10,12 +10,18 @@ from backend.modules.matching.policy.check_label_policy import check_labels
     [
         # 截图场景：发票 72 台 / 5101.2 元，剩余应开 192 台 / 15068.16 元
         ({"key": "quantity", "result": "match", "difference": "-120"}, ("分次收票", "收票后剩余应开 120")),
-        ({"key": "amount", "result": "match", "difference": "-9966.96"}, ("分次收票", "收票后剩余应开 9966.96")),
+        (
+            {"key": "amount", "result": "match", "difference": "-9966.96"},
+            ("分次收票", "收票后剩余应开 9966.96"),
+        ),
         ({"key": "amount", "result": "match", "difference": "-100.5"}, ("分次收票", "收票后剩余应开 100.50")),
         ({"key": "quantity", "result": "match", "difference": "0"}, ("一致", None)),
         ({"key": "amount", "result": "match", "difference": "0.00"}, ("一致", None)),
         # 金额容差内仍为一致，不当作分次收票
-        ({"key": "amount", "result": "match", "difference": "-0.01"}, ("一致", "差额 -0.01，在 0.01 元容差内")),
+        (
+            {"key": "amount", "result": "match", "difference": "-0.01"},
+            ("一致", "差额 -0.01，在 0.01 元容差内"),
+        ),
         ({"key": "amount", "result": "match", "difference": "0.01"}, ("一致", "差额 0.01，在 0.01 元容差内")),
         ({"key": "quantity", "result": "mismatch", "difference": "30"}, ("不一致", "发票多 30")),
         ({"key": "amount", "result": "mismatch", "difference": "-12.3"}, ("不一致", "发票少 12.30")),

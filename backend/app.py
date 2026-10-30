@@ -40,7 +40,7 @@ from .modules.invoice.service.lemon_invoice_service import on_lemon_invoices_fet
 from .modules.matching.controller.invoice_file_controller import create_router as invoice_file_router
 from .modules.matching.controller.matching_controller import create_router as matching_router
 from .modules.matching.controller.workbench_controller import create_router as workbench_router
-from .modules.matching.public import AllocationChanged, InvoiceMatchingChanged
+from .modules.matching.public import AllocationChanged, InvoiceMatchingChanged, LinesClosedByDifference
 from .modules.matching.service import ledger_service
 from .modules.matching.service.allocation_service import AllocationService
 from .modules.matching.service.invoice_file_service import InvoiceFileService
@@ -91,7 +91,7 @@ from .modules.task.controller.signed_upload_controller import JSON_BODY_LIMITS
 from .modules.task.controller.signed_upload_controller import create_router as signed_upload_router
 from .modules.task.controller.supplier_group_controller import create_router as task_group_router
 from .modules.task.controller.task_controller import create_router as task_router
-from .modules.task.service.closure_service import ClosureService
+from .modules.task.service.closure_service import ClosureService, on_lines_closed_by_difference
 from .modules.task.service.contract_worker import ContractWorker
 from .modules.task.service.declaration_document_service import DeclarationDocumentService
 from .modules.task.service.delivery_receipt_service import DeliveryReceiptService
@@ -242,6 +242,7 @@ def create_events(*, writeback_queue_enabled=True):
     events.subscribe(LemonInvoicesFetched, partial(on_lemon_invoices_fetched, events=events))
     events.subscribe(LemonInvoicesStored, on_lemon_invoices_stored)
     events.subscribe(AllocationChanged, on_allocation_changed)
+    events.subscribe(LinesClosedByDifference, on_lines_closed_by_difference)
     return events
 
 

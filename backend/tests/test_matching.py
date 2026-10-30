@@ -102,6 +102,12 @@ def confirm_group(world, number_id, note=""):
     return world["allocations"].confirm_group(group(world, number_id).id, body, USER)
 
 
+def reject_proposals(world, number_id):
+    """整单有差异时系统也会生成待审核建议；逐行人工分配前先驳回。"""
+    for found in world["queries"].invoice(number_id).groups:
+        world["allocations"].reject_group(found.id, GroupRejectBody(invoiceId=str(number_id)), USER)
+
+
 def manual(world, engine, number_id, line_index, item_index=0, *, quantity="10", amount, note="人工核对"):
     view = world["queries"].invoice(number_id)
     line = rows(engine, "SELECT id FROM source_purchase_order_lines ORDER BY id")[line_index]["id"]
@@ -212,14 +218,16 @@ def test_reject_and_regenerate(engine, world, reviewed):
     assert len(proposals(world, target)) == 2
 
 
-def test_partial_invoice_gets_no_proposal_and_uses_manual(engine, world, reviewed):
-    # 只开了子采购单的一部分：不自动建议，人工关联作为例外入口
+def test_partial_invoice_gets_whole_order_proposal_and_closes_by_difference(engine, world, reviewed):
+    # 只开了子采购单的墨水：一张子采购单只由一张发票开具，整单建议带差异，确认后清洗液按差异结束
     import_invoices(world, [invoice("26000000000000008012", [INK], remark="SUB-200")])
     target = invoice_id(engine, "26000000000000008012")
-    assert proposals(world, target) == [] and world["queries"].invoice(target).groups == []
-    view, _ = manual(world, engine, target, 0, amount="100.50")
-    assert [a.status for a in view.items[0].allocations] == ["confirmed"]
-    assert task(engine)["status"] == "partially_received"
+    found = group(world, target)
+    assert "发票少于子采购单，差额按差异结束" in found.noteReasons
+    confirm_group(world, target, note="清洗液不再开票")
+    lines = rows(engine, "SELECT status, closed_with_difference FROM task_lines ORDER BY purchase_line_id")
+    assert [row["status"] for row in lines] == ["received", "received"]
+    assert [bool(row["closed_with_difference"]) for row in lines] == [False, True]
 
 
 def test_supplier_difference_requires_note_and_overinvoice_is_flagged(engine, world, reviewed):
@@ -265,11 +273,11 @@ def test_capacity_and_stale_source_block(ns, engine, world, reviewed):
     import_invoices(world, [invoice("26000000000000008007", [INK, FLUID], remark="SUB-200")])
     target = invoice_id(engine, "26000000000000008007")
     group(world, target)
-    # 同票墨水行先人工分出一部分：整单再通过会超过发票行本身
-    manual(world, engine, target, 1, quantity="1", amount="20.00", note="同票部分分给清洗液")
+    # 清洗液明细已由旧逐行人工分配收票：一张子采购单只能由一张发票开具，整单不能再通过
+    manual(world, engine, target, 1, quantity="1", amount="20.00", note="清洗液先行人工确认")
     blocked = group(world, target)
-    assert not blocked.confirm.allowed and "超过发票行本身" in blocked.confirm.reason
-    with pytest.raises(ApiError, match="超过发票行本身"):
+    assert not blocked.confirm.allowed and "只能由一张发票开具" in blocked.confirm.reason
+    with pytest.raises(ApiError, match="只能由一张发票开具"):
         confirm_group(world, target, note="x")
     save(ns, engine, bundle([purchase(amounts=("99.00", "20.00"))], [customs("870")]))
     view = world["queries"].invoice(target)
@@ -280,8 +288,8 @@ def test_capacity_and_stale_source_block(ns, engine, world, reviewed):
 def test_manual_allocation_is_idempotent(engine, world, reviewed):
     import_invoices(world, [invoice("26000000000000008008", [FLUID], remark="")])
     target = invoice_id(engine, "26000000000000008008")
+    reject_proposals(world, target)  # 本用例验证旧逐行人工接口的幂等
     item = world["queries"].invoice(target).items[0]
-    assert proposals(world, target) == []  # 只开清洗液，不是整张子采购单
     candidates = world["queries"].candidates(
         CandidateQuery(invoiceId=str(target), invoiceItemId=item.id, keyword="清洗")
     )
@@ -306,6 +314,7 @@ def test_manual_allocation_is_idempotent(engine, world, reviewed):
 
 def test_reapproval_carries_received_progress(ns, engine, world, reviewed):
     import_invoices(world, [invoice("26000000000000008009", [INK], remark="SUB-200")])
+    reject_proposals(world, invoice_id(engine, "26000000000000008009"))
     manual(world, engine, invoice_id(engine, "26000000000000008009"), 0, amount="100.50")
     save(ns, engine, bundle([purchase(amounts=("100.50", "25.00"))], [customs("870")]))
     approve(world, "CD870")

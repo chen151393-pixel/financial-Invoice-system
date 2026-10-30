@@ -1,11 +1,12 @@
-"""手动整单关联：候选以整张子采购单为最小单位，选中后逐条明细分配（可改小以支持部分开票），整组保存并通过。
+"""手动整单关联：一张子采购单只由一张发票开具（2026-10-30 业务规则），整单保存并通过。
 
 - 候选：不带关键字时只返回置信度最高的一张可选候选（页面默认展示其整单比对）；带关键字（至少 3 个字符）时
-  返回匹配的候选列表，供用户按单号改选。有效任务行按关键字筛选后按子采购单归并，再读取整单全部有效来源行及其任务行。整单任一明细不在
-  有效应开范围、开票依据变化或已按差异结束时整单不可选，原因显示在候选上；已开完的明细不再列出。
-- 比对：按全部可分配明细的剩余应开全额与发票行做整单比对（group_comparison_policy），保存时按实际填写重算。
-- 保存：同一事务内写入整组分配（checks.group.manual 标记），随即按整单审核规则逐条通过；须说明而未填写、
-  超出发票行容量等任一失败时全部回滚。可选原子替换同票一条已确认分配。
+  返回匹配的候选列表，供用户按单号改选。有效任务行按关键字筛选后按子采购单归并，再读取整单全部有效来源行及其任务行。
+  整单任一明细不在有效应开范围、开票依据变化、已有收票或已结束时整单不可选，原因显示在候选上。
+- 对应：发票只有一行时整单明细都对应该行；多行时按品名等综合得分逐条定位发票行（order_group_policy.order_parts）。
+- 比对：所选发票行对其对应明细的整单应开做整单比对，不再有部分开票。
+- 保存：记账数量与金额由后端生成（发票少时按明细顺序记到发票为止），同一事务内写入整组分配并通过；
+  发票少的明细随即按差异结束。须说明而未填写或任一校验失败时全部回滚。可选原子替换同票一条已确认分配。
 """
 
 import hashlib
@@ -23,7 +24,7 @@ from ..dto.matching_dto import GroupConfirmBody
 from ..mapper import allocation_mapper as mapper
 from ..policy.comparison_policy import order_reference, text, tier
 from ..policy.group_comparison_policy import compare_group
-from ..policy.order_group_policy import order_shares
+from ..policy.order_group_policy import fit_all, order_parts, order_shares, share_snapshot
 from ..vo.manual_order_vo import ManualOrderCandidate, ManualOrderCandidates
 from . import group_plan_service, group_view_service, ledger_service
 
@@ -98,16 +99,52 @@ def candidates(connection, query):
     return ManualOrderCandidates(rows=rows[:LIMIT], total=len(rows))
 
 
-def _candidate(invoice, item, tax, order_id, lines, bases, tasks):
+def _mapping(invoice, item, lines, tasks, bases, items=None):
+    """整单明细对应到发票行并按发票压缩：返回 (分配行, 阻断原因)；分配行带 share_quantity / share_amount。
+
+    items 为 {发票行 ID: 发票行}，默认取发票全部有效行；保存时传入扣除其他已确认分配后的可用量。
+    """
+    active = [row for row in invoice["items"] if row["is_active"]]
+    items = items or {row["id"]: row for row in active}
     shares, block = order_shares(invoice, lines, tasks, bases)
-    first = next(iter(lines.values()))
-    shown = list(shares) if shares else sorted(lines)
-    if shares:
-        checks, confidence = compare_group(
-            invoice, item, tax, [(lines[key], *value) for key, value in shares.items()]
-        )
+    if block:
+        return [], block
+    if len(active) == 1:
+        parts = [
+            {
+                "invoice_item_id": item["id"],
+                "purchase_line_id": key,
+                "purchase_basis_id": bases[key]["id"],
+                "quantity": quantity,
+                "purchase_quantity": quantity,
+                "amount": amount,
+            }
+            for key, (quantity, amount) in shares.items()
+        ]
     else:
-        checks, confidence = [], Decimal(0)
+        parts, block = order_parts(invoice, active, lines, tasks, bases, None)
+        if block:
+            return [], block
+    if item["id"] not in {part["invoice_item_id"] for part in parts}:
+        return [], "该子采购单的明细按品名对应不到所选发票行，请选择对应的发票行"
+    return fit_all(parts, items), ""
+
+
+def _item_checks(invoice, item, tax, lines, rows):
+    """所选发票行对其对应明细整单应开的比对。"""
+    own = [
+        (lines[row["purchase_line_id"]], row["share_quantity"], row["share_amount"])
+        for row in rows
+        if row["invoice_item_id"] == item["id"]
+    ]
+    return compare_group(invoice, item, tax, own)
+
+
+def _candidate(invoice, item, tax, order_id, lines, bases, tasks):
+    rows, block = _mapping(invoice, item, lines, tasks, bases)
+    first = next(iter(lines.values()))
+    shown = sorted(lines)
+    checks, confidence = _item_checks(invoice, item, tax, lines, rows) if rows else ([], Decimal(0))
     units = {lines[key].get("unit_name") or lines[key].get("unit") or "" for key in shown}
     currencies = {lines[key]["currency"] or "" for key in shown}
     return ManualOrderCandidate(
@@ -121,11 +158,11 @@ def _candidate(invoice, item, tax, order_id, lines, bases, tasks):
         ),
         currency=next(iter(currencies)) if len(currencies) == 1 else "多币种",
         unit=next(iter(units)) if len(units) == 1 else "多单位",
-        remainingQuantity=text(sum((q for q, _ in shares.values()), Decimal(0)))
-        if shares and len(units) == 1
+        remainingQuantity=text(sum((row["share_quantity"] for row in rows), Decimal(0)))
+        if rows and len(units) == 1
         else None,
-        remainingAmount=text(sum((a for _, a in shares.values()), Decimal(0)))
-        if shares and len(currencies) == 1
+        remainingAmount=text(sum((row["share_amount"] for row in rows), Decimal(0)))
+        if rows and len(currencies) == 1
         else None,
         orderMatched=bool(order_reference(invoice["remark"], first)),
         confidence=text(confidence),
@@ -145,23 +182,38 @@ def _fingerprint(body, actor):
     return hashlib.sha256((actor + body.model_dump_json()).encode()).hexdigest()
 
 
+def _available(connection, invoice):
+    """{发票行 ID: 发票行}，数量与金额扣除该行其他已确认分配；一票多单时按剩余容量记账。"""
+    result = {}
+    for row in invoice["items"]:
+        if not row["is_active"]:
+            continue
+        used_quantity, used_amount = allocation_dao.confirmed_by_item(connection, row["id"])
+        result[row["id"]] = {
+            **row,
+            "quantity": None if row["quantity"] is None else row["quantity"] - used_quantity,
+            "amount_including_tax": None
+            if row["amount_including_tax"] is None
+            else row["amount_including_tax"] - used_amount,
+        }
+    return result
+
+
 def create(service, connection, body, actor):
     """在调用方事务内保存整组分配并通过，返回发票 ID。"""
     invoice_id, item_id, order_id = int(body.invoiceId), int(body.invoiceItemId), int(body.purchaseOrderId)
     fingerprint = _fingerprint(body, actor)
-    submitted = {int(line.purchaseLineId): line for line in body.lines}
-    positive = sorted(key for key, line in submitted.items() if line.quantity > 0)
-    replayed = [allocation_dao.by_request(connection, _request_id(body, key)) for key in positive]
+    order_line_ids = sorted(row["id"] for row in purchase_order_lines(connection, [order_id]))
+    if not order_line_ids:
+        raise ApiError(404, "子采购单不存在或没有有效明细")
+    replayed = [allocation_dao.by_request(connection, _request_id(body, key)) for key in order_line_ids]
     if any(replayed):
         if all(
-            row and ((row["checks"] or {}).get("group") or {}).get("requestFingerprint") == fingerprint
+            row is None or ((row["checks"] or {}).get("group") or {}).get("requestFingerprint") == fingerprint
             for row in replayed
         ):
             return invoice_id  # 同一操作重复提交，返回原结果
         raise ApiError(409, "请求编号已用于其他分配，不能复用")
-    order_line_ids = sorted(row["id"] for row in purchase_order_lines(connection, [order_id]))
-    if not order_line_ids:
-        raise ApiError(404, "子采购单不存在或没有有效明细")
     old = allocation_dao.get(connection, int(body.replaceAllocationId)) if body.replaceAllocationId else None
     if body.replaceAllocationId and (
         not old or old["status"] != "confirmed" or old["invoice_id"] != invoice_id
@@ -174,11 +226,6 @@ def create(service, connection, body, actor):
     invoice, item = _invoice_item(connection, invoice_id, item_id)
     if not item["is_active"]:
         raise ApiError(409, "发票逻辑明细已停用，不能关联")
-    if any(
-        row["status"] == "proposed" and row["invoice_item_id"] == item_id
-        for row in allocation_dao.by_invoices(connection, [invoice_id])
-    ):
-        raise ApiError(409, "该发票行已有待审核建议，请先驳回再手动关联")
     now = datetime.now(timezone.utc).replace(tzinfo=None)
     if old:
         allocation_dao.update_status(
@@ -192,25 +239,27 @@ def create(service, connection, body, actor):
             },
             now,
         )
-        # 新分配的剩余额度须排除刚撤销的原占用；仍在同一事务，后续失败会一起回滚。
+        # 新分配的可用额度须排除刚撤销的原占用；仍在同一事务，后续失败会一起回滚。
         service._publish(connection, old["purchase_line_id"], actor, "替换时重新计算原占用")
     grouped, bases, tasks = _order(connection, [order_id])
     lines = grouped.get(order_id) or {}
-    shares, block = order_shares(invoice, lines, tasks, bases)
+    rows, block = _mapping(invoice, item, lines, tasks, bases, _available(connection, invoice))
     if block:
         raise ApiError(409, block)
-    if set(submitted) != set(shares):
-        raise ApiError(409, "提交的明细与子采购单当前可分配明细不一致，请刷新后重新选择")
-    exceeds = any(
-        submitted[key].quantity > shares[key][0] or submitted[key].amount > shares[key][1] for key in positive
-    )
-    tax = (read_invoice_paper(connection, invoice_id) or {"items": {}})["items"].get(item_id, {})
-    checks, _ = compare_group(
-        invoice,
-        item,
-        tax.get("tax_amount"),
-        [(lines[key], submitted[key].quantity, submitted[key].amount) for key in positive],
-    )
+    item_ids = {row["invoice_item_id"] for row in rows}
+    if any(
+        row["status"] == "proposed" and row["invoice_item_id"] in item_ids
+        for row in allocation_dao.by_invoices(connection, [invoice_id])
+    ):
+        raise ApiError(409, "对应的发票行已有待审核建议，请先驳回再手动关联")
+    paper = read_invoice_paper(connection, invoice_id) or {"items": {}}
+    by_item = {row["id"]: row for row in invoice["items"]}
+    checks = {
+        key: _item_checks(
+            invoice, by_item[key], (paper["items"].get(key) or {}).get("tax_amount"), lines, rows
+        )[0]
+        for key in item_ids
+    }
     group = {
         "id": str(uuid.uuid4()),
         "orderIds": [str(order_id)],
@@ -222,32 +271,36 @@ def create(service, connection, body, actor):
             connection,
             {
                 "invoice_id": invoice_id,
-                "invoice_item_id": item_id,
-                "purchase_line_id": key,
-                "purchase_basis_id": bases[key]["id"],
+                "invoice_item_id": row["invoice_item_id"],
+                "purchase_line_id": row["purchase_line_id"],
+                "purchase_basis_id": row["purchase_basis_id"],
                 "invoice_version_id": invoice["current_version_id"],
-                "quantity": submitted[key].quantity,
-                "amount": submitted[key].amount,
-                # 人工关联与逐行人工分配一致：置信度为空，页面标为“人工关联”；比对项随记录保存
+                "quantity": row["quantity"],
+                "amount": row["amount"],
+                # 人工关联置信度为空，页面标为“人工关联”；比对项与整单应开随记录保存
                 "confidence": None,
-                "checks": {"items": checks, "purchaseDigest": lines[key]["digest"], "group": group},
+                "checks": {
+                    "items": checks[row["invoice_item_id"]],
+                    "purchaseDigest": lines[row["purchase_line_id"]]["digest"],
+                    "group": group,
+                    "orderShare": share_snapshot(row),
+                },
                 "status": "proposed",
                 "proposed_by": actor,
                 "proposed_at": now,
-                "request_id": _request_id(body, key),
+                "request_id": _request_id(body, row["purchase_line_id"]),
             },
             now,
         )
-        for key in positive
+        for row in rows
     ]
-    rows = [allocation_dao.get(connection, value) for value in ids]
+    inserted = [allocation_dao.get(connection, value) for value in ids]
     group_view_service.approve_rows(
         service,
         connection,
-        rows,
+        inserted,
         GroupConfirmBody(invoiceId=str(invoice_id), invoiceVersionId=body.invoiceVersionId, note=body.note),
         actor,
-        ["超出剩余应开"] if exceeds else [],
     )
     if old:
         history = allocation_dao.get(connection, ids[0])["verification_history"] + [

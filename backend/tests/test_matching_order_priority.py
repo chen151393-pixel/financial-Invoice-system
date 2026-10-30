@@ -104,7 +104,7 @@ def test_choose_requires_exact_unique_combination():
     assert choose({1: (Decimal(31), Decimal(300))}, contributions) is None
 
 
-def test_plan_covers_whole_invoice_first_then_each_line():
+def test_plan_only_covers_whole_invoice():
     items = [
         {"id": 1, "quantity": Decimal(10), "amount_including_tax": Decimal(100)},
         {"id": 2, "quantity": Decimal(5), "amount_including_tax": Decimal(50)},
@@ -113,9 +113,12 @@ def test_plan_covers_whole_invoice_first_then_each_line():
     assert plan_groups(items, [7], {7: {1: (Decimal(10), Decimal(100)), 2: (Decimal(5), Decimal(50))}}) == [
         ([7], [1, 2])
     ]
-    # 两张单各对一行；第二行没有合适的单时只建议第一行
+    # 一票多单：两张单合计恰好等于整张发票
+    both = {8: {1: (Decimal(10), Decimal(100))}, 9: {2: (Decimal(5), Decimal(50))}}
+    assert plan_groups(items, [8, 9], both) == [([8, 9], [1, 2])]
+    # 第二行没有恰好相等的单时不再只建议第一行（2026-10-30 整单规则：组合须覆盖整张发票）
     contributions = {8: {1: (Decimal(10), Decimal(100))}, 9: {2: (Decimal(4), Decimal(40))}}
-    assert plan_groups(items, [8, 9], contributions) == [([8], [1])]
+    assert plan_groups(items, [8, 9], contributions) == []
 
 
 @pytest.mark.parametrize(

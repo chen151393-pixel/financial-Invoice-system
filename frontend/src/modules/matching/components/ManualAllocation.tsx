@@ -108,7 +108,7 @@ export function ManualAllocation({
               <span className="matching-row">
                 <Badge tone="neutral">没有待审核建议</Badge>
                 <span>
-                  只有整张子采购单的数量、含税合计与发票行完全一致时才自动建议；部分开票或单位不同时在此手动关联。
+                  没有系统建议时在此关联整张子采购单。一张子采购单只能由一张发票开具，发票少开的差额在关联后按差异结束。
                 </span>
               </span>
             ) : (
@@ -193,7 +193,7 @@ export function ManualAllocation({
                 description={
                   state.total
                     ? `共 ${state.total} 张候选，但没有与本发票行相符且可关联的子采购单，请输入单号查询。`
-                    : "没有剩余应开的子采购单，请确认开票依据已审核后再查询。"
+                    : "没有可关联的子采购单（须开票依据已审核且尚未由其他发票开具），请确认后再查询。"
                 }
               />
             )}

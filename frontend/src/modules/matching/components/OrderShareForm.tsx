@@ -14,14 +14,12 @@ import type { ManualOrderBody, ManualOrderCandidate } from "../types/manual-orde
 import { ChecksTable } from "./ChecksTable";
 import { InvoiceLineSide } from "./InvoiceLineSide";
 
-type Shares = Record<string, { quantity: string; amount: string }>;
-
 /** 候选来源：best＝打开时默认展示的置信度最高候选，picked＝用户按单号查询后改选。 */
 export type OrderOrigin = "best" | "picked";
 
 /**
- * 选中整张子采购单后的整单比对与本票分配，布局与自动建议的整单比对卡一致。
- * 明细默认取后端给出的剩余应开，可改小以支持部分开票；合计、比对与校验均由后端完成。
+ * 选中整张子采购单后的整单比对与关联，布局与自动建议的整单比对卡一致。
+ * 一张子采购单只由一张发票开具：不填写逐条数量，记账数、比对与差额处理均由后端完成。
  */
 export function OrderShareForm({
   order,
@@ -46,19 +44,9 @@ export function OrderShareForm({
   busy: boolean;
   onCreate: (body: ManualOrderBody) => Promise<boolean>;
 }) {
-  const [shares, setShares] = useState<Shares>(() =>
-    Object.fromEntries(
-      order.lines.map((line) => [
-        line.purchaseLineId,
-        { quantity: line.remainingQuantity ?? "", amount: line.remainingAmount ?? "" },
-      ]),
-    ),
-  );
   const [note, setNote] = useState("");
   // 同一次填写沿用同一请求标识：提交结果不明时重试不会重复分配。
   const [requestId] = useState(() => crypto.randomUUID());
-  const change = (id: string, key: "quantity" | "amount", value: string) =>
-    setShares((current) => ({ ...current, [id]: { ...current[id], [key]: value } }));
   return (
     <Card className="matching-comparison" aria-label={`整单比对 ${order.orderNo}`}>
       <CardHeader
@@ -97,10 +85,6 @@ export function OrderShareForm({
               invoiceItemId: item.id,
               purchaseOrderId: order.purchaseOrderId,
               invoiceVersionId,
-              lines: order.lines.map((line) => ({
-                purchaseLineId: line.purchaseLineId,
-                ...shares[line.purchaseLineId],
-              })),
               note,
               replaceAllocationId: replaceId || null,
               replaceReason: reason,
@@ -119,7 +103,7 @@ export function OrderShareForm({
                 </p>
                 <strong>1 张子采购单 · {order.lines.length} 行明细</strong>
                 <p>
-                  剩余应开 {order.remainingQuantity ?? "—"} {order.unit} · 含税合计{" "}
+                  整单应开 {order.remainingQuantity ?? "—"} {order.unit} · 含税合计{" "}
                   {order.remainingAmount ?? "—"} {order.currency}
                 </p>
                 {order.recordNumbers.length > 0 && (
@@ -133,15 +117,15 @@ export function OrderShareForm({
               {order.block}
             </Alert>
           )}
-          <ChecksTable checks={order.checks} caption="发票行与整张子采购单逐项比对（按剩余应开全额）" />
+          <ChecksTable checks={order.checks} caption="发票行与整张子采购单逐项比对" />
           <div className="matching-share-heading">
-            <strong>本票分配</strong>
+            <strong>子采购单明细</strong>
             <span className="matching-help">
-              默认填入剩余应开；部分开票时改小，本票不开的明细数量和金额填 0。保存时由后端按实际填写重新比对。
+              整单关联，不拆分明细。发票少于子采购单时，差额在保存后按差异结束，该子采购单不能再关联其他发票。
             </span>
           </div>
           <DataTable
-            label={`子采购单 ${order.orderNo} 明细与本票分配`}
+            label={`子采购单 ${order.orderNo} 明细`}
             rows={order.lines}
             rowKey={(line) => line.purchaseLineId}
             density="compact"
@@ -161,7 +145,7 @@ export function OrderShareForm({
               { key: "unit", header: "单位", render: (line) => line.unit || "单位缺失" },
               {
                 key: "remaining",
-                header: "剩余应开数量 / 含税",
+                header: "应开数量 / 含税",
                 align: "right",
                 render: (line) => (
                   <span className="matching-cell">
@@ -172,40 +156,10 @@ export function OrderShareForm({
                   </span>
                 ),
               },
-              {
-                key: "quantity",
-                header: "本票分配数量",
-                align: "right",
-                render: (line) => (
-                  <input
-                    className="matching-share-input"
-                    inputMode="decimal"
-                    aria-label={`${line.item || "明细"} 本票分配数量`}
-                    value={shares[line.purchaseLineId]?.quantity ?? ""}
-                    disabled={busy}
-                    onChange={(event) => change(line.purchaseLineId, "quantity", event.target.value)}
-                  />
-                ),
-              },
-              {
-                key: "amount",
-                header: "本票分配含税金额",
-                align: "right",
-                render: (line) => (
-                  <input
-                    className="matching-share-input"
-                    inputMode="decimal"
-                    aria-label={`${line.item || "明细"} 本票分配含税金额`}
-                    value={shares[line.purchaseLineId]?.amount ?? ""}
-                    disabled={busy}
-                    onChange={(event) => change(line.purchaseLineId, "amount", event.target.value)}
-                  />
-                ),
-              },
             ]}
           />
           <label>
-            审核说明（有不一致项或超出剩余应开时必填）
+            审核说明（有不一致项或需按差异结束时必填）
             <textarea
               rows={2}
               maxLength={300}

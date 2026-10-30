@@ -1,4 +1,4 @@
-"""生成比对建议：发票行对应一张或多张整张子采购单，不拆分子采购明细行（2026-10-29）。
+"""生成比对建议：整张发票对应一张或多张整张子采购单，不拆分子采购明细行（2026-10-30）。
 
 - 候选只来自有效任务行（已审核的应开范围）；单号命中及供应商相近共同召回。
 - 按符合项累加置信度，默认生成最高分整单方案；金额、单位或品名不符仍可展示待审核建议。
@@ -22,6 +22,7 @@ from backend.modules.task.public import open_lines
 
 from ..dao import allocation_dao
 from ..policy.allocation_policy import SYSTEM
+from ..policy.order_group_policy import share_snapshot
 from . import group_plan_service
 
 # 比较新旧建议是否相同的字段；相同时不重复追加。
@@ -93,6 +94,8 @@ def generate(connection, invoice_ids, actor, *, refresh=False):
                             "items": checks,
                             "purchaseDigest": group["lines"][row["purchase_line_id"]]["digest"],
                             "group": {"id": group_id, "orderIds": group["orderIds"]},
+                            # 子采购明细整单应开；记账数少于它的明细确认时按差异结束
+                            "orderShare": share_snapshot(row),
                         },
                     }
                 )

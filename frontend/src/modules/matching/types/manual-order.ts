@@ -17,22 +17,19 @@ export type ManualOrderCandidate = {
   tier: Tier;
   checks: Check[];
   block: string;
-  // 选中后展示的明细；表单默认值取各行剩余应开
+  // 子采购单全部明细；整单关联，记账数由后端生成
   lines: PurchaseSide[];
 };
 
 export type ManualOrderCandidates = { rows: ManualOrderCandidate[]; total: number };
 
-export type OrderLineShare = { purchaseLineId: string; quantity: string; amount: string };
-
-// 须提交该单全部可分配明细；本票不开的明细数量与金额填 0
+// 一张子采购单只由一张发票开具：整单关联，不提交逐条明细数量（2026-10-30 整单规则）
 export type ManualOrderBody = {
   requestId: string;
   invoiceId: string;
   invoiceItemId: string;
   purchaseOrderId: string;
   invoiceVersionId: string | null;
-  lines: OrderLineShare[];
   note: string;
   replaceAllocationId: string | null;
   replaceReason: string;

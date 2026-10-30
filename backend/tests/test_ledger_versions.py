@@ -19,7 +19,15 @@ from backend.modules.task.service.closure_service import ClosureService
 from backend.tests.documents_ready import complete_documents
 from backend.tests.invoice_files import invoice
 from backend.tests.matching_helpers import confirm_groups
-from backend.tests.test_matching import FLUID, INK, import_invoices, invoice_id, proposals, task
+from backend.tests.test_matching import (
+    FLUID,
+    INK,
+    import_invoices,
+    invoice_id,
+    proposals,
+    reject_proposals,
+    task,
+)
 from backend.tests.test_matching import reviewed as reviewed
 from backend.tests.test_matching import world as world
 from backend.tests.test_source_storage import PARENT, bundle, customs, purchase, rows, save
@@ -110,8 +118,8 @@ def test_unit_conversion_exactness_and_difference_closure_revoked(engine, world,
     number = "26000000000000008802"
     import_invoices(world, [invoice(number, [("墨水", "箱", "1", "88.94", "11.56")], remark="SUB-200")])
     target = invoice_id(engine, number)
-    # 单位不同不自动建议，人工关联时仍可经接口提交换算因子
-    assert proposals(world, target) == []
+    # 单位不同的整单建议须人工核实；本用例驳回后验证旧逐行接口提交换算因子
+    reject_proposals(world, target)
     item = world["queries"].invoice(target).items[0]
     line_id = rows(engine, "SELECT id FROM source_purchase_order_lines ORDER BY id")[0]["id"]
     body = ManualBody(
@@ -137,7 +145,8 @@ def test_unit_conversion_exactness_and_difference_closure_revoked(engine, world,
         ),
         USER,
     )
-    row = world["queries"].invoice(target).items[0].allocations[0]
+    allocations = world["queries"].invoice(target).items[0].allocations
+    row = next(a for a in allocations if a.status == "confirmed")  # 已驳回的整单建议仍保留在列表中
     line = active_lines(engine)[0]
     assert Decimal(str(line["received_quantity"])) == 12 and line["status"] == "partial"
     service = ClosureService(engine, world["tasks"])

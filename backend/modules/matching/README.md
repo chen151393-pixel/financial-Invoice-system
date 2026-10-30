@@ -1,5 +1,16 @@
 # matching 模块：发票比对
 
+## 整单匹配与一单一票（2026-10-30）
+
+本节替代下文“部分开票”“分次收票”“剩余应开逐张扣减”的规则，完整说明见[整单匹配规则](../../../docs/matching-whole-order-rules.md)。
+
+- 一次匹配是整张发票对一张或多张完整子采购单；一张子采购单只由一张发票开具（`order_group_policy.taken`／`ONE_INVOICE`）。已有收票、待复核占用或已结束的子采购单不参与建议、不出现在人工候选里，整组通过时也会拒绝。
+- 自动建议：覆盖整票、合计恰好相等的唯一组合（可一票多单），以及单张子采购单覆盖整票但有差异的候选，按置信度取最高分；不再按单行拆组合。
+- 记账：`fit` 按明细顺序记到发票为止，`checks.orderShare` 保存整单应开；比对按整单应开计算。人工关联 `POST /manual-orders` 不再接收 `lines`，记账数由后端生成。
+- 发票少：要求审核说明；确认时发布 `LinesClosedByDifference`，task 在同一事务内按差异结束这些明细。发票多：明细记满应开，要求说明。
+- 旧逐行接口（`/candidates/query`、`/allocations`、`/allocations/{id}/replace`）前端不再调用、暂留给既有测试，不执行一单一票规则；确认无外部调用方后删除。
+- 验证：`test_matching_manual_order.py`、`test_matching_whole_order_rules.py`，以及 `test_matching.py`、`test_matching_order_priority.py`、`test_ledger_versions.py` 的回归。
+
 ## 手动整单关联（2026-10-29）
 
 人工关联的最小单位改为整张子采购单；可部分开票。

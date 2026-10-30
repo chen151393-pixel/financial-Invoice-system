@@ -89,6 +89,8 @@ documents_pending → notify_pending → awaiting_invoice → partially_received
 
 `POST /api/tasks/{taskId}/lines/{lineId}/close` 接收 `requestId`、`purchaseBasisId`、`ledgerSha256`、`reason`。后端核对当前版本和账本，禁止待复核时结束；追加结构化 `difference_closed` 事件。请求编号唯一，重复提交返回原结果；台账/依据变化后旧决定不再适用。
 
+2026-10-30：另订阅 matching 的 `LinesClosedByDifference`（`closure_service.on_lines_closed_by_difference`，登记在 `app.py`）。整单关联确认时发票少于子采购单，在同一比对事务内对差额明细追加 `difference_closed` 事件并按差异结束，原因取审核说明；请求编号由整单组与子采购行派生，重复提交不重复结束；依据已变化或有待复核占用时整个确认回滚。人工结束与该订阅共用 `close_line`。
+
 `closure_service.py` 管理该事务，`basis_guard.py` 在合同/通知推进前复核来源；`progress_service.py` 只消费 matching 发布的绝对合计。待复核占用按原分配口径展示，不作为当前有效收票。
 
 ## 单位名称展示（2026-10-16）

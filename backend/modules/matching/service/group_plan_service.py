@@ -6,7 +6,7 @@ from backend.modules.source.public import purchase_lines, purchase_order_lines, 
 
 from ..policy.comparison_policy import order_reference, supplier_result
 from ..policy.group_comparison_policy import compare_group
-from ..policy.order_group_policy import order_parts, plan_groups, totals
+from ..policy.order_group_policy import fit_all, order_parts, plan_groups, totals
 
 
 def recall_orders(invoice, task_contexts):
@@ -57,31 +57,30 @@ def plan(connection, invoice, items, task_lines):
     result = []
     combinations = plan_groups(items, order_ids, contributions)
     exact_count = len(combinations)
-    # 数量或金额有差异也保留整单候选，评分后默认展示最高分；确认时仍执行容量和换算校验。
+    # 单张子采购单覆盖整张发票全部行时，数量或金额有差异（发票多或少）也保留为候选，评分后默认展示最高分；
+    # 差异须在审核时填写说明，发票少的明细确认时按差异结束。
     alternatives = [
         ([order_id], sorted(own))
         for order_id, own in contributions.items()
-        if set(own) == set(by_item)
-        and all(
-            by_item[key]["quantity"] is not None
-            and quantity <= by_item[key]["quantity"]
-            and amount <= by_item[key]["amount_including_tax"]
-            for key, (quantity, amount) in own.items()
-        )
+        if set(own) == set(by_item) and all(by_item[key]["quantity"] is not None for key in own)
     ]
     combinations.extend(candidate for candidate in alternatives if candidate not in combinations)
     for chosen, item_ids in combinations:
-        rows = [
-            part
-            for order_id in chosen
-            for part in parts_by_order[order_id]
-            if part["invoice_item_id"] in item_ids
-        ]
+        rows = fit_all(
+            [
+                part
+                for order_id in chosen
+                for part in parts_by_order[order_id]
+                if part["invoice_item_id"] in item_ids
+            ],
+            by_item,
+        )
         lines = {line_id: line for order_id in chosen for line_id, line in grouped[order_id].items()}
         checks = {}
         for item_id in item_ids:
+            # 比对口径是子采购整单应开，不是压缩后的记账数
             own = [
-                (lines[row["purchase_line_id"]], row["purchase_quantity"], row["amount"])
+                (lines[row["purchase_line_id"]], row["share_quantity"], row["share_amount"])
                 for row in rows
                 if row["invoice_item_id"] == item_id
             ]

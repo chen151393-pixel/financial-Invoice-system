@@ -31,6 +31,23 @@ class AllocationChanged:
 
 
 @dataclass(frozen=True)
+class ClosedLine:
+    purchase_line_id: int
+    purchase_basis_id: int
+    # 由整单组 ID 与子采购行派生，重复提交不重复结束
+    request_id: str
+
+
+@dataclass(frozen=True)
+class LinesClosedByDifference:
+    """整单关联确认时发票少于子采购单：这些子采购明细按差异结束（在比对事务中发布，task 同事务处理）。"""
+
+    lines: tuple[ClosedLine, ...]
+    actor: str
+    reason: str
+
+
+@dataclass(frozen=True)
 class InvoiceMatchingChanged:
     """完整用例末尾发布；订阅方在同一事务冻结审核快照，不调用 NS。"""
 
@@ -41,7 +58,9 @@ class InvoiceMatchingChanged:
 
 __all__ = [
     "AllocationChanged",
+    "ClosedLine",
     "LineReceipt",
+    "LinesClosedByDifference",
     "InvoiceMatchingChanged",
     "read_writeback_snapshot",
     "writeback_invoice_ids",

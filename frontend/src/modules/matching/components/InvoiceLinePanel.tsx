@@ -115,7 +115,7 @@ export function InvoiceLinePanel({
         <Card>
           <EmptyState
             title="本行没有待审核建议"
-            description="只有整张子采购单的数量、含税合计与发票行完全一致时才自动建议；部分开票或单位不同请手动关联。"
+            description="系统按整张发票对应整张子采购单生成建议；没有建议时请手动关联。一张子采购单只能由一张发票开具，发票少开的差额在关联后按差异结束。"
           />
         </Card>
       )}
