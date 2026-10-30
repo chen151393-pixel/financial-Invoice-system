@@ -16,9 +16,8 @@ from backend.modules.review.public import current_bases
 from backend.modules.task.public import open_lines
 
 from ..dao import allocation_dao
-from ..dto.matching_dto import ConfirmBody
 from ..policy import allocation_policy as rules
-from ..policy.comparison_policy import HIGH
+from ..policy.pending_order_policy import REGENERATE, whole_order
 from ..public import InvoiceMatchingChanged
 from . import approval_service, group_view_service, ledger_service
 from .group_view_service import GroupBatch, group_id
@@ -99,18 +98,16 @@ class AllocationService:
         _require_user(actor)
 
         def action(connection):
-            allocation = allocation_dao.get(connection, allocation_id)
-            if allocation is None:
-                raise ApiError(404, "比对记录不存在")
             current = allocation_dao.get(connection, allocation_id)
+            if current is None:
+                raise ApiError(404, "比对记录不存在")
             if current["status"] == "confirmed" and current["reviewed_by"] == actor:
                 return current["invoice_id"]  # 同一操作重复提交，返回原结果
             if current["status"] != "proposed":
                 raise ApiError(409, f"该记录{rules.STATUS_LABELS[current['status']]}，请刷新后核对")
-            if group_id(current):
-                raise ApiError(409, "整单建议须整组通过，请在发票比对详情中审核整单")
-            self._approve(connection, current, body, actor, _now())
-            return current["invoice_id"]
+            if not whole_order(current):
+                raise ApiError(409, REGENERATE)
+            raise ApiError(409, "整单建议须整组通过，请在发票比对详情中审核整单")
 
         return self.queries.invoice(self._run(action, actor))
 
@@ -211,7 +208,7 @@ class AllocationService:
         return invoice_id
 
     def confirm_batch(self, body, actor):
-        """批量通过高置信度且无需说明的建议；逐条独立事务，返回通过与跳过数量及原因。"""
+        """批量按整组通过；旧逐行建议仅返回跳过原因，不能回退为逐条审核。"""
         _require_user(actor)
         confirmed, skipped = 0, []
         groups = GroupBatch(self.engine, body.ids)
@@ -228,20 +225,13 @@ class AllocationService:
                 current = allocation_dao.get(connection, allocation_id)
                 if current is None or current["status"] != "proposed":
                     raise ApiError(409, "记录不存在或不是待审核建议")
-                if current["confidence"] is None or current["confidence"] < HIGH:
-                    raise ApiError(409, "置信度未达到高档，请逐条审核")
-                self._approve(
-                    connection,
-                    allocation_dao.get(connection, allocation_id),
-                    ConfirmBody(),
-                    actor,
-                    _now(),
-                )
-                return current["invoice_id"]
+                if not whole_order(current):
+                    raise ApiError(409, REGENERATE)
+                # 分组是在事务外归并的；若其间建议已变化，禁止回退为逐条通过。
+                raise ApiError(409, "整单建议已变化，请刷新后整组审核")
 
             try:
                 self._run(action, actor)
-                confirmed += 1
             except ApiError as error:
                 skipped.append({"id": str(allocation_id), "reason": error.message})
         return {"confirmed": confirmed, "skipped": skipped}
