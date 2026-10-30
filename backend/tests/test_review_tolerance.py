@@ -71,11 +71,14 @@ def test_same_exchange_rate_applies_to_both_prices_only_for_cny_tolerance():
         "declared_unit_price": Decimal("2"),
         "currency": "USD",
         "sales_order_no": "SO1",
+        "declared_unit": "个",
+        "declared_quantity": Decimal("1"),
     }
     order = {1: {"sales_order_id": 9}}
     sales = {9: {"id": 9, "order_no": "SO1", "currency": "USD", "exchange_rate": Decimal("2")}}
-    usd = declared_margin(customs_row, [{"purchase_order_id": 1}], order, sales)
-    cny = declared_margin({**customs_row, "currency": "CNY"}, [], {}, {})
+    children = [{"purchase_order_id": 1, "declared_unit": "个", "declared_quantity": Decimal("1")}]
+    usd = declared_margin(customs_row, children, order, sales)
+    cny = declared_margin({**customs_row, "currency": "CNY"}, children, order, {})
     assert usd["margin"] == cny["margin"] == Decimal("-3.00")
     assert usd["original"] == Decimal("4.12") and usd["declared"] == Decimal("4")
     assert usd["status"] == "negative" and cny["status"] == "ok"

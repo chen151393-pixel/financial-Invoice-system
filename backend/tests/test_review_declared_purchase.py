@@ -4,6 +4,7 @@ from copy import deepcopy
 from decimal import Decimal
 
 import pytest
+from backend.modules.review.dto.review_dto import DeclarationListQuery
 from backend.modules.review.mapper.declaration_mapper import purchase_line, review_lines
 from backend.modules.review.policy.auto_review_policy import auto_review_reasons, margin_alert
 from backend.modules.review.policy.margin_policy import declared_margin
@@ -122,14 +123,19 @@ def test_missing_purchase_basis_does_not_change_customs_price_margin(field, valu
     assert shown.price == "81.13"  # 报关字段缺失不影响原始采购含税单价
     if field == "declared_quantity" and value is None:
         assert shown.quantity == ""
-    result = declared_margin(CUSTOMS, [row, purchase()], {1: ORDER}, {})
-    assert result["status"] == "ok" and result["original"] == CUSTOMS["unit_price"]
+    result = declared_margin(CUSTOMS, [row], {1: ORDER}, {})
+    if field == "amount":
+        assert result["status"] == "ok" and result["original"] == CUSTOMS["unit_price"]
+    else:
+        assert result["status"] == "unavailable" and result["margin"] is None
+        assert "缺失" in result["note"] or "须大于 0" in result["note"]
 
 
-def test_purchase_unit_mismatch_does_not_block_customs_price_comparison():
+def test_purchase_declared_unit_mismatch_blocks_comparison_before_summing():
     row = {**purchase(), "unit": "平方米", "declared_unit": "千克"}
     result = declared_margin(CUSTOMS, [row], {1: ORDER}, {})
-    assert result["status"] == "ok" and result["margin"] == Decimal("1.74")
+    assert result["status"] == "unavailable" and result["margin"] is None
+    assert "报关单位不一致" in result["note"]
 
 
 def test_saved_source_and_materialized_page_preserve_both_quantity_bases(ns, engine, service):
@@ -177,29 +183,35 @@ def test_original_tax_inclusive_price_is_not_recomputed_from_rounded_amount():
 @pytest.mark.parametrize(
     "quantity", [None, Decimal(0), Decimal(-1), Decimal("1524"), Decimal("1525.00000001")]
 )
-def test_existing_prices_do_not_require_matching_or_valid_quantity(quantity):
+def test_existing_prices_require_valid_matching_declared_quantity(quantity):
     row = purchase(amount="999999")
     result = declared_margin({**CUSTOMS, "declared_quantity": quantity}, [row], {1: ORDER}, {})
-    assert result["status"] == "ok" and result["margin"] == Decimal("1.74")
+    assert result["status"] == "unavailable" and result["margin"] is None
+    assert "数量" in result["note"]
     assert not margin_alert([result])
 
 
 @pytest.mark.parametrize("price", [None, Decimal(0), Decimal(-1)])
 def test_invalid_original_price_is_not_replaced_by_total_or_purchase_amount(price):
-    result = declared_margin({**CUSTOMS, "unit_price": price, "amount": Decimal("8113")}, [], {}, {})
+    result = declared_margin(
+        {**CUSTOMS, "unit_price": price, "amount": Decimal("8113")}, [purchase()], {1: ORDER}, {}
+    )
     assert result["status"] == "unavailable" and "报关行单价" in result["note"]
     assert result["original"] is None and result["margin"] is None
 
 
 @pytest.mark.parametrize("price", [Decimal(0), Decimal(-1)])
 def test_invalid_present_declared_price_does_not_trigger_estimate(price):
-    result = declared_margin({**CUSTOMS, "declared_unit_price": price, "amount": Decimal("8113")}, [], {}, {})
+    result = declared_margin(
+        {**CUSTOMS, "declared_unit_price": price, "amount": Decimal("8113")}, [purchase()], {1: ORDER}, {}
+    )
     assert result["status"] == "unavailable" and "须大于 0" in result["note"]
 
 
 def test_cd000849_compares_two_212_prices_instead_of_113000_purchase_total():
     first = purchase("1625", "1625", "29575", "18.2")
     second = {**purchase("5375", "5375", "83425", "15.52"), "purchase_order_id": 2}
+    first["declared_unit"] = second["declared_unit"] = "个"
     customs_row = {
         **CUSTOMS,
         "unit": "个",
@@ -229,15 +241,47 @@ def test_missing_child_amount_still_blocks_auto_review_but_not_margin():
     assert auto_review_reasons("pending", False, 0, [row], True, [result]) == ["子采购含税金额缺失"]
 
 
-def test_materialized_page_uses_customs_prices_despite_purchase_quantity_mismatch(ns, engine, service):
+def test_materialized_page_shows_quantity_mismatch_without_price_alert(ns, engine, service):
     order, declaration = source_purchase(amounts=("99999", "99999")), customs()
     for _, row in order[2]:
         row["custrecord_swc_subpo_item_bgunit"] = "个"
         row["custrecord_swc_subpo_item_bgqty"] = Decimal("9")
     save(ns, engine, bundle([order], [declaration]))
     result = group(service, "CD870")
-    assert result.marginAlert and not result.autoReview.eligible
+    assert not result.marginAlert and not result.autoReview.eligible
     for line in result.customsLines:
-        assert line.marginStatus == "negative" and line.margin == "-100.00%"
-        assert line.marginNote == "报关单价低于报关行单价"
-        assert line.originalUnitPriceCny == "21.3" and line.declaredUnitPriceCny == "10.65"
+        assert line.marginStatus == "unavailable" and line.margin == ""
+        assert line.marginNote == "数量不一致（报关行 10，子采购报关合计 9）"
+        assert line.originalUnitPriceCny == line.declaredUnitPriceCny == ""
+    page = service.browse(DeclarationListQuery(status="margin_alert"))
+    assert page.total == page.counts["marginAlert"] == 0
+
+
+def test_cd000835_quantity_mismatch_takes_priority_over_negative_prices():
+    customs_row = {
+        **CUSTOMS,
+        "unit": "包",
+        "declared_unit": "千克",
+        "declared_quantity": Decimal("24965.5"),
+        "unit_price": Decimal("13.584993"),
+        "declared_unit_price": Decimal("8.2038"),
+    }
+    children = [
+        {**purchase(declared="20000"), "declared_unit": "千克"},
+        {**purchase(declared="21260"), "declared_unit": "千克"},
+    ]
+    result = declared_margin(customs_row, children, {1: ORDER}, {})
+    assert result["note"] == "数量不一致（报关行 24965.5，子采购报关合计 41260）"
+    assert result["status"] == "unavailable" and result["margin"] is None
+    assert not margin_alert([result])
+
+
+def test_quantity_check_resolves_unit_ids_and_preserves_raw_purchase_quantity():
+    row = {**purchase(), "quantity": Decimal("999999"), "declared_unit": "25"}
+    result = declared_margin(CUSTOMS, [row], {1: ORDER}, {}, unit_names={"25": "平方米"})
+    assert result["status"] == "ok" and result["margin"] == Decimal("1.74")
+
+
+def test_no_linked_rows_requires_quantity_review():
+    result = declared_margin(CUSTOMS, [], {}, {})
+    assert result["status"] == "unavailable" and "没有行级关联" in result["note"]

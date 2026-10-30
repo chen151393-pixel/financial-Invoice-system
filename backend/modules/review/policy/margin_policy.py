@@ -1,7 +1,7 @@
 """申报幅度：按同一报关行的 NS 单价与报关单价直接计算。
 
 保留两套数量、单位及原始单价，不按数量比例重算已有单价。仅当报关单价缺失时，
-复用 source 的总价 / 报关数量试算。子采购关联仅用于定位销售单汇率，不提供比较价格。
+复用 source 的总价 / 报关数量试算。子采购关联用于数量校验及定位销售单汇率，不提供比较价格。
 幅度按原币计算；两价按同一销售单汇率折人民币后，沿用固定人民币差额容差。
 """
 
@@ -12,6 +12,8 @@ from backend.modules.source.public import (
     declared_unit_price_cny,
     pick_sales_order,
 )
+
+from .quantity_policy import quantity_issue
 
 CENT = Decimal("0.01")
 DEFAULT_UNIT_PRICE_TOLERANCE_CNY = Decimal("0.10")
@@ -26,9 +28,13 @@ def declared_margin(
     purchase_rows,
     orders,
     sales_orders,
+    unit_names=None,
     tolerance=DEFAULT_UNIT_PRICE_TOLERANCE_CNY,
 ):
-    """价格仅取 customs_row；采购关联只参与销售单汇率定位。"""
+    """先核对报关数量，价格仍仅取 customs_row 的两个单价字段。"""
+    issue = quantity_issue(customs_row, purchase_rows, unit_names)
+    if issue:
+        return unavailable(issue)
     original_price = customs_row["unit_price"]
     if original_price is None:
         return unavailable("报关行单价缺失，无法计算申报幅度")

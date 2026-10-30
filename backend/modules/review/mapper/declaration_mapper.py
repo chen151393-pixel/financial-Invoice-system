@@ -137,6 +137,7 @@ def declaration(
             rows_by_customs[row["id"]],
             orders,
             content.get("sales_orders", {}),
+            unit_names=content.get("unit_names"),
             tolerance=tolerance,
         )
         for row in content["customs_lines"]

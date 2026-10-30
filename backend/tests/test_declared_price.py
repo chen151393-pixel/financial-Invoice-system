@@ -65,7 +65,7 @@ def test_margin_uses_both_customs_prices_without_purchase_amount_or_unit_convers
     }
     orders = {1: {"currency": "EUR", "sales_order_id": 9}}
     sales = {9: {"id": 9, "order_no": "SO1", "currency": "USD", "exchange_rate": Decimal("7.1")}}
-    line = {"purchase_order_id": 1, "amount": None, "declared_quantity": None, "declared_unit": "卷"}
+    line = {"purchase_order_id": 1, "amount": None, "declared_quantity": Decimal("10"), "declared_unit": "个"}
     before = dict(customs_row)
     result = declared_margin(customs_row, [line], orders, sales)
     assert (result["status"], result["margin"], result["original"], result["declared"]) == (
@@ -76,7 +76,7 @@ def test_margin_uses_both_customs_prices_without_purchase_amount_or_unit_convers
     )
     assert result["note"] == "报关单价低于报关行单价"
     assert customs_row == before
-    # 采购金额、币种、数量、单位均不参与幅度；报关行已有单价也不按总价重算。
+    # 采购金额、币种不参与幅度；报关行已有单价也不按总价重算。
     assert declared_margin(customs_row, [{**line, "amount": Decimal("999999")}], orders, sales) == result
     assert declared_margin({**customs_row, "amount": None, "quantity": None}, [line], orders, sales) == result
     # 仅缺少申报单价时，复用同一报关行的总价 / 报关数量。
@@ -85,7 +85,8 @@ def test_margin_uses_both_customs_prices_without_purchase_amount_or_unit_convers
         unavailable = declared_margin(
             {**customs_row, "declared_unit_price": None, field: value}, [line], orders, sales
         )
-        assert unavailable["status"] == "unavailable" and "无法试算" in unavailable["note"]
+        assert unavailable["status"] == "unavailable"
+        assert ("无法试算" if field == "amount" else "数量口径待核对") in unavailable["note"]
     assert declared_margin(customs_row, [line], orders, {})["status"] == "unavailable"
 
 
