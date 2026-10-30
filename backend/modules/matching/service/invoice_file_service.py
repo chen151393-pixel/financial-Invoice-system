@@ -153,7 +153,7 @@ class InvoiceFileService:
             except ApiError as error:
                 return InvoiceFileItem(**result, status="failed", reason=error.message, archivePaths=paths)
         try:
-            with transaction(self.engine) as connection:
+            with transaction(self.engine, "matching") as connection:
                 now = _now()
                 for declaration_id, (path, name) in written.items():
                     row = invoice_file_dao.get(connection, invoice["id"], declaration_id, lock=True)

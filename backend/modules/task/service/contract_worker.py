@@ -85,6 +85,6 @@ class ContractWorker:
             logger.exception("报关资料记录 %s 发生异常", row["id"])
 
     def _fail(self, job, message):
-        with transaction(self.engine) as connection:
+        with transaction(self.engine, "task") as connection:
             contract_job_dao.fail(connection, job["id"], message, datetime.now(UTC).replace(tzinfo=None))
         logger.warning("合同自动归档失败，作业 %s：%s", job["id"], message)

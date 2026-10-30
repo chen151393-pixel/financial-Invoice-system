@@ -41,7 +41,7 @@ class DirectorySyncService:
             payload = read_directory(self.feishu)
             if not payload["departments"] and (selection["departmentIds"] or selection["userIds"]):
                 raise ApiError(502, "飞书可见部门为空，已保留人员，请核实应用通讯录范围后重新同步")
-            with transaction(self.engine) as connection:
+            with transaction(self.engine, "identity") as connection:
                 if version != directory_snapshot.version(connection):
                     raise ApiError(409, "同步期间人员权限或范围已变化，请重新同步")
                 counts = directory_snapshot.persist(connection, payload, selection, _now())
@@ -72,7 +72,7 @@ class DirectorySyncService:
     def _start(self, trigger, actor):
         now = _now()
         try:
-            with transaction(self.engine) as connection:
+            with transaction(self.engine, "identity") as connection:
                 running = sync_run_dao.latest(connection, status="running")
                 if running and running["started_at"] > now - STALE_RUN:
                     raise ApiError(409, "飞书同步正在进行，请稍后刷新查看结果")
@@ -82,7 +82,7 @@ class DirectorySyncService:
 
     def _finish(self, run_id, values):
         try:
-            with transaction(self.engine) as connection:
+            with transaction(self.engine, "identity") as connection:
                 sync_run_dao.finish(connection, run_id, values, _now())
         except SQLAlchemyError:
             logger.error("identity_sync_finish_failed run=%s", run_id)

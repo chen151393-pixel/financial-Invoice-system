@@ -56,8 +56,11 @@ class CalculationWorker:
                     try:
                         self.calculations.calculate(job)
                     except Exception as error:
-                        if isinstance(error, ApiError) and error.code == write_lock.BUSY_CODE:
-                            # 账本被其他写入短暂占用不是计算错误：不记失败，几秒后重算。
+                        if isinstance(error, ApiError) and error.code in (
+                            write_lock.BUSY_CODE,
+                            write_lock.CONFLICT_CODE,
+                        ):
+                            # 账本或行锁被其他写入短暂占用不是计算错误：不记失败，几秒后重算。
                             logger.warning("账本正忙，财务计算稍后自动重试，账套 %s", job["ns_account"])
                             self.calculations.defer(job)
                         else:

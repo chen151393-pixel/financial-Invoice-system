@@ -6,6 +6,9 @@ from sqlalchemy import create_engine, event, inspect
 from sqlalchemy.engine import URL, make_url
 from sqlalchemy.exc import ArgumentError, SQLAlchemyError
 
+# 行锁等待上限（秒）。MySQL 默认 50 秒；超时由 write_lock 转为 409，提示稍后重试而不是长时间挂起。
+LOCK_WAIT_TIMEOUT = 10
+
 
 def make_engine(database_url):
     url = make_url(database_url)
@@ -99,6 +102,7 @@ def make_business_engine(database_url):
     def setup_business_connection(connection, _):
         with connection.cursor() as cursor:
             cursor.execute("SET time_zone = '+00:00'")
+            cursor.execute(f"SET SESSION innodb_lock_wait_timeout = {LOCK_WAIT_TIMEOUT}")
 
     return engine
 

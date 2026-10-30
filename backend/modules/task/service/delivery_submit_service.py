@@ -109,12 +109,12 @@ class DeliverySubmitService:
             raise ApiError(409, "发送记录保存结果待核实，请读取原执行记录，勿重新提交") from None
 
     def _claim(self, task_id, body, actor, frozen, group):
-        with transaction(self.engine) as connection:
+        with transaction(self.engine, "task") as connection:
             prior = self._replay(connection, task_id, body)
             if prior:
                 return prior, False
-            require_current(connection, task_id)
             task = task_dao.get(connection, task_id, lock=True)
+            require_current(connection, task_id)
             data = load(connection, task_id, lock_binding=True)
             self._validate(connection, data, body)
             if digest(snapshot(data, frozen["corpId"], group, frozen["files"])) != body.snapshotSha256:
@@ -167,9 +167,9 @@ class DeliverySubmitService:
         return dao.get(connection, delivery_id)
 
     def _before_create(self, task_id, body, row, media_ids, group, actor):
-        with transaction(self.engine) as connection:
-            require_current(connection, task_id)
+        with transaction(self.engine, "task") as connection:
             task = task_dao.get(connection, task_id, lock=True)
+            require_current(connection, task_id)
             current = dao.get(connection, row["id"], lock=True)
             if (
                 current["status"] != "preparing"
@@ -192,7 +192,7 @@ class DeliverySubmitService:
             )
 
     def _finish(self, task_id, row, status, actor, values):
-        with transaction(self.engine) as connection:
+        with transaction(self.engine, "task") as connection:
             task = task_dao.get(connection, task_id, lock=True)
             current = dao.get(connection, row["id"], lock=True)
             # 恢复入口可将过期 preparing 关闭；旧执行者不得继续。

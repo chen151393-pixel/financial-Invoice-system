@@ -97,7 +97,7 @@ class DeliveryReconcileService:
         if len(matches) != 1 or matches[0][:2] != (body.candidateId, body.evidenceSha256):
             raise ApiError(409, "渠道证据不完整或已变化，不能关联，请重新核实")
         try:
-            with transaction(self.engine) as connection:
+            with transaction(self.engine, "task") as connection:
                 task = task_dao.get(connection, task_id, lock=True)
                 current = owned(connection, task_id, row["id"], lock=True)
                 if current["status"] != "unknown":

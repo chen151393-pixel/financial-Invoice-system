@@ -26,9 +26,9 @@ class NotificationService:
         if actor.startswith("service:"):
             raise ApiError(403, "服务身份只读，不能保存或登记通知")
         try:
-            with transaction(self.engine) as connection:
-                require_current(connection, task_id)
+            with transaction(self.engine, "task") as connection:
                 task = task_dao.get(connection, task_id, lock=True)
+                require_current(connection, task_id)
                 if task is None:
                     raise ApiError(404, "开票任务不存在")
                 if notification_delivery_dao.overlapping(connection, task_id, ACTIVE):

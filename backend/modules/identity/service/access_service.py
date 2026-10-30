@@ -193,7 +193,7 @@ class AccessService:
 
     def _write(self, apply, actor):
         try:
-            with transaction(self.engine) as connection:
+            with transaction(self.engine, "identity") as connection:
                 self.identity.require_manage(actor)
                 apply(connection, _now())
         except IntegrityError:

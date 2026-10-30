@@ -160,7 +160,7 @@ MySQL 命名锁保证多实例单消费者，并对同一任务的同一子采�
 
 迁移 `0022_task_notifications` 新增 `task_notification_deliveries` 和 `task_notification_group_guards`。准备、创建、待群主确认、成功、失败、未知结果分别持久记录；创建不重试，未决记录保留群占用且阻止人工登记绕过。历史与任务状态区分 manual / wecom；企微创建成功不会推进收票节点，只有目标群成功回执才补证据并按原任务状态推进。
 
-新增预览/提交/本地历史/回执刷新/候选核实接口；DTO 只接受版本、摘要和记录 ID。记录及候选只读查询不创建群发。所有操作复用认证身份、来源依据保护和账本写锁，外部调用不占事务。
+新增预览/提交/本地历史/回执刷新/候选核实接口；DTO 只接受版本、摘要和记录 ID。记录及候选只读查询不创建群发。所有操作复用认证身份、来源依据保护（先锁任务行再复核）和 task 模块写锁，外部调用不占事务。
 
 验证入口：`test_deliveries.py`、`test_delivery_recovery.py`、`test_wecom_messaging.py`、`test_deliveries_mysql.py`；真实渠道联调及专用 MySQL 并发未在本次执行。
 

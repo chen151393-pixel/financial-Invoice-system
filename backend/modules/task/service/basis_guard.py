@@ -29,6 +29,7 @@ def changed_task_ids(connection, lines):
 
 
 def require_current(connection, task_id):
+    """调用方须先锁定任务行：来源失效、审核换版的事件链也锁同一任务行，锁后复核在提交前不会过期。"""
     block = reason(connection, task_id)
     if block:
         raise ApiError(409, block)

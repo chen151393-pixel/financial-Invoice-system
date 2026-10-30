@@ -33,7 +33,7 @@ class DeliveryReceiptService:
             return owned(connection, task_id, delivery_id)
 
     def _claim_refresh(self, task_id, delivery_id, actor):
-        with transaction(self.engine) as connection:
+        with transaction(self.engine, "task") as connection:
             task = task_dao.get(connection, task_id, lock=True)
             row = owned(connection, task_id, delivery_id, lock=True)
             at = now()
@@ -78,7 +78,7 @@ class DeliveryReceiptService:
             raise ApiError(409, "回执保存未完成，请稍后查询原记录；不会重新创建群发") from None
 
     def _query_error(self, task_id, row, error):
-        with transaction(self.engine) as connection:
+        with transaction(self.engine, "task") as connection:
             task_dao.get(connection, task_id, lock=True)
             current = owned(connection, task_id, row["id"], lock=True)
             if current["status"] == "pending_confirmation":
@@ -99,7 +99,7 @@ class DeliveryReceiptService:
         if any(item.get("userid") != row["sender_userid"] for item in targets):
             raise ApiError(502, "目标群回执发送成员不一致，请核实")
         target, sent_at, message = receipt(results, row["chat_id"])
-        with transaction(self.engine) as connection:
+        with transaction(self.engine, "task") as connection:
             task = task_dao.get(connection, task_id, lock=True)
             current = owned(connection, task_id, row["id"], lock=True)
             if current["status"] != "pending_confirmation":

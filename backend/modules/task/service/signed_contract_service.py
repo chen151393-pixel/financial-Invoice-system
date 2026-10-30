@@ -125,7 +125,7 @@ class SignedContractService:
         except ApiError as error:
             return SignedUploadItem(**result, status="failed", reason=error.message)
         try:
-            with transaction(self.engine) as connection:
+            with transaction(self.engine, "task") as connection:
                 existing = signed_contract_dao.get(connection, order["id"], lock=True)
                 if existing:
                     return self._existing(existing, digest, result)

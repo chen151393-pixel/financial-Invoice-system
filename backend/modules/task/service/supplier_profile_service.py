@@ -143,7 +143,7 @@ class SupplierProfileService:
             raise ApiError(404, "供应商不存在")
         now = datetime.now(timezone.utc).replace(tzinfo=None)
         try:
-            with transaction(self.engine) as connection:
+            with transaction(self.engine, "task") as connection:
                 current = supplier_setting_dao.get(connection, supplier_id, lock=True)
                 if current is None:
                     if body.revision != 0:

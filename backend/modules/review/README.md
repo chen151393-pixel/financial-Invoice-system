@@ -107,7 +107,7 @@
 
 - `app.py` 将 `SourceChanged`、`ReviewApproved` 订阅到 `calculation_service.request_calculation`，与来源／审核事务一起提交队列，不在同步请求中计算。账套内所有报关单一起重建，保证一个销售订单汇率影响的其他报关单、关联改挂、失效与人工币种依据变化均被覆盖；连续同步请求按账套合并。
 - `CalculationWorker` 每两秒检查持久队列，MySQL 命名锁保证多进程仅一个后台消费者。读取来源与 Decimal 计算在写事务外完成，复用 `declaration_mapper`、`margin_policy`、`auto_review_policy`；短事务取得队列行锁，核对代次和算法版本后原子替换整个账套快照。计算期间再次同步／审核时，旧结果丢弃，新请求仍待处理。
-- 账本锁被其他写入占用（`ApiError.code == "ledger_busy"`）不算计算失败：只把重试推迟 5 秒，不增加失败次数、不写失败原因，页面仍显示“后台计算中”。失败与推迟记录只更新本模块的队列行，不取账本锁，保证账本长时间繁忙时也能记下，后台线程不会每两秒整账套重算。
+- 账本锁被其他写入占用（`ApiError.code == "ledger_busy"`）或行锁等待超时／死锁（`lock_conflict`）不算计算失败：只把重试推迟 5 秒，不增加失败次数、不写失败原因，页面仍显示“后台计算中”。失败与推迟记录只更新本模块的队列行，不取账本锁，保证账本长时间繁忙时也能记下，后台线程不会每两秒整账套重算。
 - 失败记录中文原因并以 2—256 秒退避自动重试；进程重启继续未完成任务。启动时发现未建立快照的账套或算法／`REVIEW_UNIT_PRICE_TOLERANCE_CNY` 变化即排队。缺少汇率、金额或单位等属于已完成计算的 `unavailable`，保留具体原因，不当作零或系统失败。
 - `ReviewService.browse` 委托 `review_query_service.py`；`dao/declaration_snapshot_dao.py` 只查 review 表，使用 SQL 聚合计数、供应商子查询、关键字过滤、`ORDER BY declaration_date DESC, customs_declaration_id DESC LIMIT ... OFFSET ...`。每次列表共四条查询，不访问 source 原始 JSON、不组装全量来源、不重算幅度；每月审核数量仍按请求当时的北京时间自然月计算，跨月无需重建。
 - 接口仍为 `POST /api/review/declarations/query`。新增单据字段 `calculationStatus`（ready / pending / failed）、`calculatedAt`（最近完成计算的 UTC 时间）。更新中／失败时 `notices` 明确提示，暂展示上次完成的单据快照与状态统计；旧幅度与自动审核结论隐藏，审核按钮关闭，该账套暂不进入异常／自动审核计数和筛选。首次补算完成前单据尚不显示；完成后刷新列表。

@@ -40,7 +40,7 @@ class DocumentService:
     def _prepare(self, task_id, order_id, actor):
         task, existing = self._check(task_id, order_id)
         if existing and existing["status"] == "archived":
-            with transaction(self.engine) as connection:
+            with transaction(self.engine, "task") as connection:
                 contract_job_dao.complete(connection, task_id, order_id, _now())
             return self.tasks.detail(task_id)
         names = self.directory.describe(
@@ -96,9 +96,9 @@ class DocumentService:
 
     def _register(self, task_id, order_id, order_no, contract, digest):
         try:
-            with transaction(self.engine) as connection:
-                require_current(connection, task_id)
+            with transaction(self.engine, "task") as connection:
                 task = task_dao.get(connection, task_id, lock=True)
+                require_current(connection, task_id)
                 if task["status"] == "superseded":
                     raise ApiError(409, "任务已被新审核版本替代，文件未入库")
                 record = document_dao.get(connection, task_id, order_id, lock=True)
@@ -129,7 +129,7 @@ class DocumentService:
 
     def _fail(self, document_id, message):
         try:
-            with transaction(self.engine) as connection:
+            with transaction(self.engine, "task") as connection:
                 document_dao.update_document(
                     connection, document_id, {"status": "failed", "error_message": message[:500]}, _now()
                 )
@@ -139,9 +139,9 @@ class DocumentService:
 
     def _archive(self, task_id, document_id, order_id, path, filename, actor):
         try:
-            with transaction(self.engine) as connection:
-                require_current(connection, task_id)
+            with transaction(self.engine, "task") as connection:
                 task = task_dao.get(connection, task_id, lock=True)
+                require_current(connection, task_id)
                 now = _now()
                 document_dao.update_document(
                     connection,

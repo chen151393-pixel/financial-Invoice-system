@@ -48,7 +48,7 @@ class FeishuLoginService:
         url = self.feishu.authorize_url(state)
         now = _now()
         try:
-            with transaction(self.engine) as connection:
+            with transaction(self.engine, "identity") as connection:
                 login_flow_dao.purge_before(connection, now - timedelta(days=1))
                 login_flow_dao.create(
                     connection,
@@ -88,7 +88,7 @@ class FeishuLoginService:
             return None
         now = _now()
         try:
-            with transaction(self.engine) as connection:
+            with transaction(self.engine, "identity") as connection:
                 flow = login_flow_dao.by_state(connection, _hash(state), lock=True)
                 if flow is None:
                     return None
@@ -123,7 +123,7 @@ class FeishuLoginService:
     def _admit(self, flow, user_id):
         now = _now()
         try:
-            with transaction(self.engine) as connection:
+            with transaction(self.engine, "identity") as connection:
                 user, roles = self.access.principal(connection, user_id)
                 reason = login_denial(user, roles)
                 if reason:
@@ -139,7 +139,7 @@ class FeishuLoginService:
     def _fail(self, flow, reason, actor):
         now = _now()
         try:
-            with transaction(self.engine) as connection:
+            with transaction(self.engine, "identity") as connection:
                 login_flow_dao.finish(connection, flow["id"], "failed", reason[:300], None, now)
                 audit_dao.add(connection, actor, "login_failed", None, {"reason": reason}, now)
         except SQLAlchemyError:

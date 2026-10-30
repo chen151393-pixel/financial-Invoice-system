@@ -64,7 +64,7 @@ class DirectoryPreviewService:
         stamp = now()
         preview_id = secrets.token_hex(24)
         expires = stamp + timedelta(minutes=10)
-        with transaction(self.engine) as connection:
+        with transaction(self.engine, "identity") as connection:
             directory_preview_dao.create(
                 connection,
                 {
@@ -195,7 +195,7 @@ class DirectoryPreviewService:
         self.identity.require_manage(actor)
         selection = normalize(selection)
         try:
-            with transaction(self.engine) as connection:
+            with transaction(self.engine, "identity") as connection:
                 self.identity.require_manage(actor)
                 row = self._load(connection, preview_id, actor)
                 if row["result"]:

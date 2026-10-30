@@ -15,7 +15,7 @@
 | `migrations/` | 唯一迁移链 `0001`—`0009`，版本表 `schema_version` |
 | `tests/` | 规则、API、事务、迁移及 MySQL 并发验证 |
 
-跨模块只经 `public.py` 读取，通过同步事件写入。订阅全部登记在 `app.py:create_events`；审核事件先生成任务，再由 matching 重算绝对合计。相关写操作先取得业务库级账本锁，再按来源、依据、任务、任务行、发票、分配顺序加行锁。外部调用不放在数据库事务内。
+跨模块只经 `public.py` 读取，通过同步事件写入。订阅全部登记在 `app.py:create_events`；审核事件先生成任务，再由 matching 重算绝对合计。相关写操作先取得业务库级账本锁（不进入事件链的写入只取本模块写锁），再按来源、依据、任务、任务行、发票、分配顺序加行锁。外部调用不放在数据库事务内。
 
 4e 已删除旧 business、reconciliation、audit 实现、旧迁移链和过渡导入；旧表和数据仍留在数据库，代码不负责删除。PL 前端仍可用，归属 source。NS 回写仍在 `archive/writeback` 分支，主线不写 NS。
 
