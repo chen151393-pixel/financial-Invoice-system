@@ -47,7 +47,7 @@ class ReviewQueryService:
                 group.review.reason = reason
                 for line in group.customsLines:
                     line.margin, line.marginStatus, line.marginNote = "", "unavailable", reason
-                    line.declaredUnitPriceCny, line.combinedPurchaseUnitPrice = "", ""
+                    line.declaredUnitPriceCny, line.originalUnitPriceCny = "", ""
             groups.append(group)
         notices = [
             f"账套 {job['ns_account']}：{FAILED_REASON if job['last_error'] else PENDING_REASON}。"
