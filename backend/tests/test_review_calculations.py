@@ -274,6 +274,39 @@ def test_missing_sales_rate_persists_unavailable(review, ns, engine):
     assert item.customsLines[0].marginStatus == "unavailable"
 
 
+def test_v8_unmatched_prefix_snapshot_rebuilds_without_resync(review, ns, engine):
+    declaration = customs("870")
+    for _, line in declaration[2]:
+        line["custrecord_swc_salesorder_number"] = "销售订单 #SO1"
+    save(ns, engine, bundle([purchase()], [declaration]))
+    calculations = CalculationService(review)
+    calculations.rebuild()
+    snapshot = rows(engine, "SELECT id,payload FROM review_declaration_snapshots")[0]
+    payload = json.loads(snapshot["payload"])
+    for line in payload["customsLines"]:
+        line.update(
+            margin="",
+            marginStatus="unavailable",
+            marginNote="对应销售单不唯一，无法计算",
+            declaredUnitPriceCny="",
+            originalUnitPriceCny="",
+        )
+    with engine.begin() as connection:
+        connection.execute(
+            text("UPDATE review_declaration_snapshots SET payload=:p"), {"p": json.dumps(payload)}
+        )
+        connection.execute(text("UPDATE review_calculation_jobs SET calculation_key='review-v8:cny=0.10'"))
+    assert review.browse(query()).groups[0].calculationStatus == "pending"
+    calculations.initialize()
+    CalculationWorker(calculations).run_once()
+    fresh = review.browse(query()).groups[0]
+    assert fresh.calculationStatus == "ready" and fresh.contentSha256 == payload["contentSha256"]
+    for line in fresh.customsLines:
+        assert line.marginStatus == "ok" and line.margin == "0.00%" and line.marginNote == ""
+        assert line.originalUnitPriceCny == line.declaredUnitPriceCny == "10.65"
+    assert rows(engine, "SELECT id FROM review_records") == []
+
+
 def test_queue_request_rolls_back_with_source_transaction(review, ns, engine):
     seed(ns, engine)
     before = rows(engine, "SELECT requested_revision FROM review_calculation_jobs")

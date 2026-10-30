@@ -42,8 +42,8 @@ def test_sales_order_choice_and_cny_conversion():
     usd = {"id": 1, "order_no": "SO1", "currency": "USD", "exchange_rate": Decimal("7.1")}
     other = {"id": 2, "order_no": "SO2", "currency": "USD", "exchange_rate": Decimal("7.2")}
     assert pick_sales_order("SO2", [usd, other, usd]) == (other, "")
-    assert pick_sales_order("SO9", [usd, usd]) == (usd, "")
-    assert pick_sales_order("SO9", [usd, other]) == (None, "对应销售单不唯一")
+    assert pick_sales_order("SO9", [usd, usd]) == (None, "未匹配到对应销售单")
+    assert pick_sales_order("SO9", [usd, other]) == (None, "未匹配到对应销售单")
     assert declared_cny(Decimal("15"), Decimal("1.5"), "USD", usd)[:2] == (Decimal("106.5"), Decimal("10.65"))
     assert declared_cny(Decimal("15"), None, "CNY", None)[0] == Decimal("15")
     assert declared_cny(Decimal("15"), None, "EUR", usd)[2] == "报关行币种与销售单币种不一致"
