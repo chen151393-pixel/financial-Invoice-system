@@ -16,6 +16,7 @@ def sample():
     from backend.tests.test_writeback_prepare import result
 
     candidates = result()
+    candidates["registrationCheck"] = {"invoiceNumber": "TEST", "records": []}
     bill = candidates["purchaseOrders"][0]["bills"][0]
     bill.update(currency="CNY", availableInvoiceAmount="1000.00")
     source = {
@@ -28,6 +29,7 @@ def sample():
         "company_ns_id": "subsidiary:1",
     }
     task = {
+        "invoice_no": "TEST",
         "vendor_id": "77",
         "candidates": candidates,
         "snapshot": {

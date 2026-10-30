@@ -2,6 +2,8 @@
 
 状态：2026-10-28 版本 3 查询已在 NS `script=486&deploy=1` 部署，帝奇母单样本已通过真实查询和后端校验。远程脚本修订 `2026-10-28.3` 已合入，本次未核实线上修订号。审核绑定、持久准备任务和不可变账单分配方案已接入[阶段 A/B](ns-writeback-prepare.md)；NS 写入（阶段 C）代码已完成，写入脚本待部署验收。
 
+2026-10-30：仓库只读脚本修订为 `2026-10-30.4`，在版本 3 上新增可选 `invoiceNumber` 与 `registrationCheck`。本次未部署至 NS；回写查询启用此核对须按[部署说明](ns-writeback-prepare.md#12-ns-端)先更新只读脚本及记录查看权限。
+
 ## 本阶段范围
 
 - [NS RESTlet](../netsuite/vendor_bill_query_restlet.js)：按供应商与母采购内部 ID 查询，只接受 `action=bills`；依赖内置 `N/search`、`N/runtime`、`N/log`，不依赖现网 `VendorInvoice.js`。作废标志通过独立筛选搜索取得，发票明细逐行读取后合计。原始请求、响应、日志及部署要求见[版本 3 接口说明](ns-vendor-bill-query-api.md)。
@@ -22,6 +24,7 @@
 ```
 
 - `vendorId` 为 NS 供应商内部 ID；`purchaseOrderIds` 为 1–20 个不重复的母采购内部 ID。
+- 可选 `invoiceNumber` 为 1–100 字符的完整发票号码字符串，保留前导零，不接受首尾空格和控制字符；提供时按同供应商、同完整号码、未停用查找 `customrecord_swc_vendor_invoice`。回写队列必传此参数；普通账单查询可省略。
 - 每个 ID 必须是 1–20 位、不带前导零的正整数**字符串**。不接受数字类型、空格、编码、单号、名称或额外参数。
 - 后端固定补充 `action: "bills"`；调用者不能指定账套、URL、脚本/部署编号或写动作。
 - 本地身份取值：供应商取 `source_suppliers.ns_internal_id`，母采购取 `source_parent_orders.ns_internal_id`，并核对同一 `ns_account`。本地表主键、`order_no` 和子采购带显示前缀的 `parent_order_no` 都不是该参数。
@@ -35,6 +38,7 @@
 | --- | --- |
 | `contractVersion / complete / source` | 固定为 `3 / true / vendor-bill-query`，严格检查类型 |
 | `account / query` | 必须与服务端主连接及本次请求相符 |
+| `registrationCheck` | 请求包含 `invoiceNumber` 时必返 `{ invoiceNumber, records: [{ id, number, date }] }`，无登记明确返回空数组；号码须与请求完整一致。未请求时不返回核对对象 |
 | `readStartedAt / readCompletedAt` | 有时区且顺序有效的读取窗口，不是跨表原子快照 |
 | `status / vendor` | `OK`＋供应商对象；或 `VENDOR_NOT_FOUND`＋null，此时母单列表为空 |
 | `purchaseOrders[]` | 按请求顺序完整返回，每项有 `id / status / reason / bills`；找到的母单另含编号、供应商、公司及币种 |
@@ -112,4 +116,4 @@ npm.cmd run test:api
 npm.cmd run lint:api
 ```
 
-测试覆盖版本 3 请求、分组响应、金额、状态/身份一致性、认证与核对工具。旧版本的历史测试数字不代表本版本结果。MockTransport、Node VM 与隔离 SQLite 不能替代 NS 部署、实际权限和金额对照。本次不涉及 MySQL 并发或真实 NS 写入；写入能力、账单 ID 持久同步、审核队列和业务界面仍未接入。
+测试覆盖版本 3 请求、分组响应、金额、状态/身份一致性、认证与核对工具，以及同号登记核对。旧版本的历史测试数字不代表本版本结果。MockTransport、Node VM 与隔离 SQLite 不能替代 NS 部署、实际权限和金额对照。本次不涉及 MySQL 并发或真实 NS 写入；审核准备队列及业务界面见回写模块文档。

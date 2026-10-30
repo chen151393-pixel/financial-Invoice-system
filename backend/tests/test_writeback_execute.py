@@ -13,7 +13,7 @@ from backend.core.errors import ApiError
 from backend.core.write_lock import transaction
 from backend.integrations.netsuite.client import NetSuite, WriteOutcomeUnknown
 from backend.modules.matching.dto.matching_dto import CancelBody
-from backend.modules.writeback.dao import lock_dao
+from backend.modules.writeback.dao import lock_dao, task_dao
 from backend.modules.writeback.dto.task_dto import ConfirmPreview, ResolveWrite
 from backend.modules.writeback.entity import requests, target_locks
 from backend.modules.writeback.policy.write_gate import WriteGate
@@ -84,6 +84,34 @@ def execute(tasks, executor, prepared):
 def locks(engine):
     with engine.connect() as connection:
         return [row.bill_id for row in connection.execute(select(target_locks))]
+
+
+def test_query_detected_registration_blocks_even_direct_execute(prepared):
+    tasks, executor, gateway = setup(prepared)
+    payload = result()
+    number = tasks.get(prepared.task_id)["invoiceNo"]
+    payload["registrationCheck"] = {
+        "invoiceNumber": number,
+        "records": [{"id": "7001", "number": number, "date": "2026-10-30"}],
+    }
+    checked = query(prepared, payload)
+    assert checked["state"] == "conflict" and checked["plan"] is None
+    with pytest.raises(ApiError, match="任务不是待写入状态"):
+        execute(tasks, executor, prepared)
+    assert not gateway.calls and not locks(tasks.engine)
+
+
+def test_legacy_ready_task_requires_registration_check_before_any_ns_write(prepared):
+    tasks, executor, gateway = setup(prepared)
+    with tasks.engine.begin() as connection:
+        current = task_dao.get(connection, prepared.task_id)
+        candidates = deepcopy(current["candidates"])
+        candidates.pop("registrationCheck")
+        task_dao.change(connection, prepared.task_id, {"candidates": candidates}, now())
+    assert not tasks.get(prepared.task_id)["writeback"]["allowed"]
+    with pytest.raises(ApiError, match="尚未完成本张发票的同号登记核对"):
+        execute(tasks, executor, prepared)
+    assert not gateway.calls and not locks(tasks.engine)
 
 
 def test_execution_uses_current_connection_for_result_and_target_lock(prepared):

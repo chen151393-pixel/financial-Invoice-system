@@ -4,6 +4,8 @@
 
 接口只读取，不创建、修改或删除任何记录，也不判断账单能否回写；判定规则在后端。返回结果不是回写任务号，也不是写入授权。
 
+2026-10-30 仓库修订 `2026-10-30.4` 增加同号登记只读查询，契约版本仍为 3，未在本次任务中部署至 NS。
+
 ## 与旧查询脚本的区别
 
 旧脚本按“供应商 ID + 母单号”调用现网 `VendorInvoice.js` 的 `getData`。本脚本改为：
@@ -24,6 +26,7 @@
 
 - `vendorId`：NS 供应商内部 ID（`source_suppliers.ns_internal_id`）。
 - `purchaseOrderIds`：母采购单内部 ID（`source_parent_orders.ns_internal_id`），1～20 个且不重复。
+- 可选 `invoiceNumber`：完整号码字符串，1～100 字符，保留前导零，不接受首尾空格与控制字符。只查同供应商、同完整号码且 `isinactive=F` 的 `customrecord_swc_vendor_invoice`，不按账单额度推断本张发票是否已登记。
 - 不接受其他字段；格式不符时返回 `INVALID_REQUEST`，不发起任何检索。
 
 ## 响应
@@ -75,6 +78,7 @@
 ```
 
 - 响应另含 `query`（规范化后的请求）、`readStartedAt`、`readCompletedAt`。调用方必须先检查 `complete`。
+- 请求提供 `invoiceNumber` 时，`query` 原样回显号码，响应必须包含 `registrationCheck: { invoiceNumber, records: [{ id, number, date }] }`。`id` 为登记内部 ID，`number` 取 `name`，`date` 取 `custrecord_swc_vi_billdate`。未查到明确返回空数组；未请求核对时不返回此对象。查询失败或超过 1000 条时整批失败，不能冒充空数组。后端回写任务查到已有登记即进入 `conflict`，拦截确认及写入。
 - `status`：`OK`，或 `VENDOR_NOT_FOUND`（供应商不存在或已停用，此时不再检索采购单和账单）。
 - 每个母单按请求顺序返回，`status` 为：
   - `FOUND`：有账单；
@@ -111,15 +115,15 @@ NS 执行日志中，成功为审计级 `VENDOR_BILL_QUERY_OK`，失败为错误
 
 ## 部署（待 NS 管理员执行）
 
-已有部署无需重建：在 File Cabinet 覆盖原脚本文件，保留 `script=486&deploy=1`，下一次查询日志应显示 `revision=2026-10-28.3`。以下步骤用于首次部署。
+已有部署无需重建：在 File Cabinet 覆盖原脚本文件，保留 `script=486&deploy=1`，下一次查询日志应显示 `revision=2026-10-30.4`。角色须补充发票主记录查看权限；旧脚本不支持核对时，回写任务阻塞并提示升级重查。以下步骤用于首次部署。
 
 1. 上传 `vendor_bill_query_restlet.js` 到 File Cabinet 的 SuiteScripts 目录。
 2. 新建 RESTlet 脚本记录，建议脚本 ID：`customscript_vendor_bill_query`。
 3. 新建部署，建议部署 ID：`customdeploy_vendor_bill_query`，状态设为 Released，部署受众包含系统使用的 M2M 角色。
-4. 角色需要查看权限：供应商、采购订单、供应商账单、`customrecord_swc_vendor_invoice_detail`，并能通过 SuiteQL 读取交易的 `id`、`voided`。
+4. 角色需要查看权限：供应商、采购订单、供应商账单、`customrecord_swc_vendor_invoice_detail`；使用同号核对时，还需 `customrecord_swc_vendor_invoice` 及其 `name`、`custrecord_swc_vi_vendor`、`custrecord_swc_vi_billdate` 字段的查看权限。
 5. 部署后先用一个已知母单发起请求，与 NS 页面上该母单的账单、供应商开票平台中的“已收／可收”逐项核对。
 
-后端只读调用与配置项已在本地接入：`POST /api/source/vendor-bills/query` 接收同样的 `vendorId`、`purchaseOrderIds`，由适配器固定补充 `action=bills`；保留本页版本 3 分组结构，并增加中文说明、展示金额、问题提示和 `writeback.allowed=false`。配置、响应校验及样本核对工具见[后端接入说明](ns-vendor-bill-query.md)。旧单号参数和版本 2 响应不再接受。账单 ID 持久同步、审核绑定与回写队列仍待实现；本地接入不代表已部署或真实联调。
+后端只读调用与配置项已在本地接入：`POST /api/source/vendor-bills/query` 接收同样的 `vendorId`、`purchaseOrderIds` 和可选 `invoiceNumber`，由适配器固定补充 `action=bills`；保留本页版本 3 分组结构，并增加中文说明、展示金额、问题提示和 `writeback.allowed=false`。配置、响应校验及样本核对工具见[后端接入说明](ns-vendor-bill-query.md)。旧单号参数和版本 2 响应不再接受。审核准备队列已接入；本地接入不代表已部署或真实联调。
 
 ## 验证
 

@@ -33,6 +33,9 @@ function service(data = {}, options = {}) {
         createdfrom: (row) => row.values.purchaseOrderId,
         custrecord_swc_vid_bill: (row) => row.values.billId,
         voided: (row) => row.values.voided,
+        name: (row) => row.values.number,
+        custrecord_swc_vi_vendor: (row) => row.values.vendorId,
+        isinactive: (row) => row.values.inactive ?? "F",
       };
       const matches = (filter, row) =>
         filter[1] === "is"
@@ -119,6 +122,50 @@ function details(billId, ...amounts) {
 }
 
 const request = (purchaseOrderIds = ["501"]) => ({ action: "bills", vendorId: "88", purchaseOrderIds });
+
+test("查询阶段按完整发票号码及供应商核对有效登记，不使用账单额度推断", () => {
+  const { api, calls } = service({
+    customrecord_swc_vendor_invoice: [
+      { id: "7001", values: { number: "000123", date: "2026-10-30", vendorId: "88" } },
+      { id: "7002", values: { number: "000123", date: "2026-10-30", vendorId: "99" } },
+      { id: "7003", values: { number: "0001234", date: "2026-10-30", vendorId: "88" } },
+      { id: "7004", values: { number: "000123", date: "2026-10-30", vendorId: "88", inactive: "T" } },
+    ],
+  });
+  const result = api.post({ ...request(), invoiceNumber: "000123" });
+  assert.equal(result.complete, true);
+  assert.deepEqual(result.registrationCheck, {
+    invoiceNumber: "000123",
+    records: [{ id: "7001", number: "000123", date: "2026-10-30" }],
+  });
+  assert.equal(result.query.invoiceNumber, "000123");
+  assert.ok(calls.some((call) => call.type === "customrecord_swc_vendor_invoice"));
+});
+
+test("未登记返回明确空结果，权限异常或超限不返回假空记录", () => {
+  assert.deepEqual(service().api.post({ ...request(), invoiceNumber: "123" }).registrationCheck, {
+    invoiceNumber: "123",
+    records: [],
+  });
+  const failed = service({}, { failType: "customrecord_swc_vendor_invoice" }).api.post({
+    ...request(),
+    invoiceNumber: "123",
+  });
+  assert.equal(failed.complete, false);
+  assert.equal(failed.registrationCheck, undefined);
+  const many = Array.from({ length: 1001 }, (_, index) => ({
+    id: String(index + 1),
+    values: { number: "123", vendorId: "88" },
+  }));
+  assert.equal(
+    service({ customrecord_swc_vendor_invoice: many }).api.post({ ...request(), invoiceNumber: "123" }).error
+      .code,
+    "QUERY_LIMIT",
+  );
+  for (const invoiceNumber of [null, 123, "", " 123", "123\n", "1".repeat(101)]) {
+    assert.equal(service().api.post({ ...request(), invoiceNumber }).error.code, "INVALID_REQUEST");
+  }
+});
 
 test("按母单返回全部账单，额度按平台口径用整数分计算", () => {
   const { api, calls } = service({
@@ -392,5 +439,5 @@ test("帝奇母单样本：已付款但未收票，付款仍计入应收票额�
   assert.equal(found.amounts.available, "11184.68");
   assert.deepEqual(found.details, { count: 0, total: "0.00" });
   assert.equal(JSON.parse(logs[0].details).billCount, 1);
-  assert.equal(JSON.parse(logs[0].details).revision, "2026-10-28.3");
+  assert.equal(JSON.parse(logs[0].details).revision, "2026-10-30.4");
 });

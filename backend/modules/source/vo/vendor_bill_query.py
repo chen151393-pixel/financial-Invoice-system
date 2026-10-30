@@ -65,6 +65,17 @@ class PurchaseBills(StrictModel):
     bills: list[NsBill] = Field(max_length=200)
 
 
+class InvoiceRegistration(StrictModel):
+    id: NsId
+    number: str = Field(min_length=1, max_length=100)
+    date: str = Field(max_length=100)
+
+
+class RegistrationCheck(StrictModel):
+    invoiceNumber: str = Field(min_length=1, max_length=100)
+    records: list[InvoiceRegistration] = Field(max_length=1000)
+
+
 class NsBillResult(StrictModel):
     contractVersion: Literal[3]
     complete: Literal[True]
@@ -75,6 +86,7 @@ class NsBillResult(StrictModel):
     readCompletedAt: str
     status: Literal["OK", "VENDOR_NOT_FOUND"]
     vendor: VendorReference | None
+    registrationCheck: RegistrationCheck | None = None
     purchaseOrders: list[Annotated[PurchaseBills | MissingPurchase, Field(discriminator="status")]] = Field(
         max_length=20
     )

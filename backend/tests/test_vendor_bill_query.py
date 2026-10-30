@@ -119,6 +119,45 @@ def test_exact_read_action_account_and_amount_strings():
         ns.close()
 
 
+def test_registration_check_is_sent_and_validated_before_returning_candidates():
+    data = result()
+    criteria = {**QUERY, "invoiceNumber": "000123"}
+    data["query"] = criteria
+    data["registrationCheck"] = {
+        "invoiceNumber": "000123",
+        "records": [{"id": "7001", "number": "000123", "date": "2026-10-30"}],
+    }
+
+    def handle(request):
+        assert json.loads(request.read()) == {"action": "bills", **criteria}
+        return httpx.Response(200, json=data)
+
+    ns = client_for(handle)
+    try:
+        checked = VendorBillQueryService(ns).query(VendorBillQuery(**criteria))
+        assert checked.registrationCheck.records[0].id == "7001"
+    finally:
+        ns.close()
+
+
+@pytest.mark.parametrize(
+    "invalid",
+    [
+        None,
+        {},
+        {"invoiceNumber": "other", "records": []},
+        {"invoiceNumber": "000123", "records": [{"id": "7", "number": "other", "date": ""}]},
+    ],
+)
+def test_missing_or_mismatched_registration_check_fails_closed(invalid):
+    data = result()
+    criteria = {**QUERY, "invoiceNumber": "000123"}
+    data["query"] = criteria
+    data["registrationCheck"] = invalid
+    with pytest.raises(ApiError, match="升级只读查询脚本"):
+        query(data, criteria)
+
+
 @pytest.mark.parametrize("field", ["vendorId", "purchaseOrderIds"])
 @pytest.mark.parametrize(
     "value", [1, True, None, "", " ", " 1 ", "1\n", "V001", "0", "01", "1.0", "1e3", "1 OR 1=1", "1" * 21]

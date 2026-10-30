@@ -76,6 +76,11 @@ class NetSuite:
                 "action": "bills",
                 "vendorId": criteria["vendorId"],
                 "purchaseOrderIds": criteria["purchaseOrderIds"],
+                **(
+                    {"invoiceNumber": criteria["invoiceNumber"]}
+                    if criteria.get("invoiceNumber") is not None
+                    else {}
+                ),
             },
         )
 

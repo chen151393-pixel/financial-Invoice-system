@@ -50,6 +50,7 @@ class QueryService:
             result = self.gateway.query_ids(
                 claimed["vendor_id"],
                 sorted({s["parent_id"] for s in claimed["snapshot"]["sources"].values()}),
+                claimed["invoice_no"],
             )
             result = result.model_dump(mode="json")
         except ApiError as error:
@@ -63,10 +64,17 @@ class QueryService:
                 state, reason, targets = "blocked", failure, None
                 if result:
                     try:
-                        candidates(task, result)
-                        if any(o["status"] == "NO_BILLS" for o in result["purchaseOrders"]):
+                        registrations = (result.get("registrationCheck") or {}).get("records", [])
+                        if registrations:
+                            state = "conflict"
+                            reason = "NS 已有同号发票登记，已拦截重复回写；记录 ID：" + "、".join(
+                                row["id"] for row in registrations[:10]
+                            )
+                        elif any(o["status"] == "NO_BILLS" for o in result["purchaseOrders"]):
+                            candidates(task, result)
                             state, reason = "waiting_bill", "部分母采购尚无可见账单，稍后重查"
                         else:
+                            candidates(task, result)
                             targets = automatic_targets(task, result)
                             state, reason = (
                                 "needs_confirmation",
