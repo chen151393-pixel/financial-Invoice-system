@@ -1,5 +1,11 @@
 # matching 模块：发票比对
 
+## 按 NS 子采购合同合并行定位发票行（2026-11-09）
+
+- 发票按 NS 子采购合同开具，合同把报关品名（区分大小写）与单位相同的子采购明细合并为一行，单价 = 合计 ÷ 数量。`policy/contract_row_policy.py` 按同一口径合并，`order_group_policy.order_parts` 以合同行合计定位发票行，解决发票多行同名（如两行都是 PVC膜）时得分并列、整单被阻断的问题。
+- 数量足额、金额只差不超过 0.01 元的尾差视为开足，不要求说明、不按差异结束。
+- 详见[整单匹配规则](../../../docs/matching-whole-order-rules.md)第 3.1 节；验证 `test_matching_contract_rows.py`。无迁移；已有发票须点“重新生成建议”。
+
 ## 任务生成后自动匹配已有发票（2026-10-30）
 
 - `task_proposal_service.py` 订阅 `ReviewApproved`，在 task 生成任务/后继及 matching 更新账本之后执行。复用审核事务和账本锁，不发起外部请求；保存建议失败时整个审核事务回滚，可修复后重试。
