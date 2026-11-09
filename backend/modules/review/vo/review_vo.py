@@ -11,7 +11,10 @@ class UnitPriceMargin(StrictModel):
     """按单价计算的幅度；人民币单价保留换算精度，前端不重算。"""
 
     margin: str = ""
-    marginStatus: Literal["ok", "negative", "unavailable"] = "unavailable"
+    # unit_mismatch / quantity_mismatch：报关行原始口径与报关口径单位或数量不一致，不计算幅度
+    marginStatus: Literal["ok", "negative", "unavailable", "unit_mismatch", "quantity_mismatch"] = (
+        "unavailable"
+    )
     marginNote: str = ""
     declaredUnitPriceCny: str = ""
     # 只为读出旧快照并显示“后台计算中”兼容旧键；新响应只输出报关行单价。
@@ -57,6 +60,9 @@ class CustomsLine(UnitPriceMargin):
     price: str
     # NS 未填申报单价时 price 为报关金额 ÷ 报关数量的试算值，页面标注“试算”
     priceEstimated: bool = False
+    # 报关行原始口径（NS 数量、单价，单位见 originalPriceUnit），页面列名“采购单价”；旧快照缺省为空
+    originalQuantity: str = ""
+    originalPrice: str = ""
     amount: str
     currency: str
     purchaseCount: int

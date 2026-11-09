@@ -6,7 +6,8 @@ export type ReviewFilter = "all" | "pending" | "approved" | "margin_alert" | "au
 export interface UnitPriceMargin {
   // 后端比较同一报关行的 NS 单价与报关单价；两价折人民币后判断固定容差。
   margin?: string;
-  marginStatus?: "ok" | "negative" | "unavailable";
+  // unit_mismatch / quantity_mismatch：报关行原始口径与报关口径单位或数量不一致，后端不计算幅度
+  marginStatus?: "ok" | "negative" | "unavailable" | "unit_mismatch" | "quantity_mismatch";
   marginNote?: string;
   declaredUnitPriceCny?: string;
   originalUnitPriceCny?: string;
@@ -44,6 +45,9 @@ export interface CustomsLine extends UnitPriceMargin {
   price: string;
   // NS 未填申报单价时 price 为后端按报关金额 ÷ 报关数量的试算值，页面标注“试算”
   priceEstimated?: boolean;
+  // 报关行原始口径（NS 数量、单价；单位见 originalPriceUnit），页面列名“采购单价”
+  originalQuantity?: string;
+  originalPrice?: string;
   amount: string;
   currency: string;
   purchaseCount: number;

@@ -89,7 +89,8 @@ def purchase(order_id="200", customs_id="870", amounts=("100.50", "20.00")):
     return order_id, head, lines
 
 
-def customs(customs_id="870", modified="2026-09-02T10:00:00Z"):
+def customs(customs_id="870", modified="2026-09-02T10:00:00Z", original=(Decimal("10"), "个")):
+    """original：报关行原始口径（数量、单位），默认与报关口径一致；不一致时财务列表不计算申报幅度。"""
     head = {
         "id": customs_id,
         "name": f"CD{customs_id}",
@@ -111,8 +112,8 @@ def customs(customs_id="870", modified="2026-09-02T10:00:00Z"):
                     "custrecord_swc_goods_place": {"id": "10", "refName": "深圳"},
                     "custrecord_swc_delare_name": name,
                     "custrecord_swc_huge": "型号",
-                    "custrecord_swc_quantity": Decimal("5"),
-                    "custrecord_swc_unit": "千克",
+                    "custrecord_swc_quantity": original[0],
+                    "custrecord_swc_unit": original[1],
                     "custrecord_swc_delare_quantity": Decimal("10"),
                     "custrecord_swc_delare_unit": "个",
                     # 申报单价与报关数量、报关单位配套，申报幅度与发票单价校验使用它
@@ -227,7 +228,8 @@ def declaration(engine, customs_id="870"):
 
 
 def test_first_save_maps_rows_master_data_links_and_digest(ns, engine):
-    result = save(ns, engine, bundle([purchase()], [customs()]))
+    # 原始口径与报关口径取不同值，确认两套字段分别保存
+    result = save(ns, engine, bundle([purchase()], [customs(original=(Decimal("5"), "千克"))]))
     assert result["purchase"] == {"created": 1, "updated": 0, "linesCreated": 2, "linesUpdated": 0}
     assert result["customs"]["created"] == 1
 

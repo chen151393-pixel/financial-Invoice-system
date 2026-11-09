@@ -52,9 +52,10 @@ def test_sales_order_choice_and_cny_conversion():
 
 @pytest.mark.parametrize("currency", ["USD", "US Dollar", "美元", " us dollar "])
 def test_margin_uses_both_customs_prices_without_purchase_amount_or_unit_conversion(currency):
+    # 2026-11-09 起原始口径与报关口径须单位、数量一致才计算幅度
     customs_row = {
-        "quantity": Decimal("5"),
-        "unit": "千克",
+        "quantity": Decimal("10"),
+        "unit": "个",
         "unit_price": Decimal("3"),
         "declared_quantity": Decimal("10"),
         "declared_unit": "个",

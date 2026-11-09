@@ -46,9 +46,10 @@ ORDER = {
     "supplier_name": "供应商",
     "currency": "CNY",
 }
+# 2026-11-09 起原始口径与报关口径单位或数量不同即不计算幅度；比价用例取两套口径一致的数据
 CUSTOMS = {
-    "quantity": Decimal("100"),
-    "unit": "卷",
+    "quantity": Decimal("1525"),
+    "unit": "平方米",
     "unit_price": Decimal("5.32"),
     "declared_quantity": Decimal("1525"),
     "declared_unit": "平方米",
@@ -66,7 +67,10 @@ def test_screenshot_values_share_declared_quantity_unit_and_tax_inclusive_price(
     before = deepcopy(row)
     shown = purchase_line(ORDER, row)
     result = declared_margin(
-        {**CUSTOMS, "declared_quantity": row["declared_quantity"]}, [row], {1: ORDER}, {}
+        {**CUSTOMS, "quantity": row["declared_quantity"], "declared_quantity": row["declared_quantity"]},
+        [row],
+        {1: ORDER},
+        {},
     )
     assert (shown.quantity, shown.unit, shown.price, shown.scope) == (
         str(row["declared_quantity"]),
@@ -97,7 +101,12 @@ def test_purchase_display_grouping_does_not_supply_margin_comparison_price():
     )
     assert len(shown["members"]) == 4
     result = declared_margin(
-        {**CUSTOMS, "declared_unit_price": Decimal("15.392742"), "declared_quantity": Decimal("1220")},
+        {
+            **CUSTOMS,
+            "declared_unit_price": Decimal("15.392742"),
+            "quantity": Decimal("1220"),
+            "declared_quantity": Decimal("1220"),
+        },
         rows,
         {1: ORDER},
         {},
@@ -151,6 +160,9 @@ def test_saved_source_and_materialized_page_preserve_both_quantity_bases(ns, eng
         )
     for _, row in declaration[2]:
         row.update(
+            # 原始口径与报关口径一致，才计算申报幅度
+            custrecord_swc_quantity=Decimal("1525"),
+            custrecord_swc_unit="平方米",
             custrecord_swc_delare_quantity=Decimal("1525"),
             custrecord_swc_delare_unit="平方米",
             custrecord_swc_grossamountzj=Decimal("0.8"),
@@ -169,7 +181,7 @@ def test_saved_source_and_materialized_page_preserve_both_quantity_bases(ns, eng
         )
         assert line.originalUnitPriceCny == "21.3"
         assert line.declaredUnitPriceCny == "5.68"
-        assert line.originalPriceUnit == "千克" and line.declaredPriceUnit == "平方米"
+        assert line.originalPriceUnit == "平方米" and line.declaredPriceUnit == "平方米"
         assert line.marginStatus == "negative" and line.margin == "-275.00%"
 
 
@@ -201,7 +213,10 @@ def test_display_price_rounds_half_up_and_preserves_two_decimal_places(amount, q
 )
 def test_existing_prices_require_valid_matching_declared_quantity(quantity):
     row = purchase(amount="999999")
-    result = declared_margin({**CUSTOMS, "declared_quantity": quantity}, [row], {1: ORDER}, {})
+    # 原始数量留空：本用例只验证报关行与子采购报关数量的核对
+    result = declared_margin(
+        {**CUSTOMS, "quantity": None, "declared_quantity": quantity}, [row], {1: ORDER}, {}
+    )
     assert result["status"] == "unavailable" and result["margin"] is None
     assert "数量" in result["note"]
     assert not margin_alert([result])
@@ -273,7 +288,8 @@ def test_materialized_page_shows_quantity_mismatch_without_price_alert(ns, engin
     assert page.total == page.counts["marginAlert"] == 0
 
 
-def test_cd000835_quantity_mismatch_takes_priority_over_negative_prices():
+def test_cd000835_caliber_mismatch_takes_priority_over_quantity_and_prices():
+    # 2026-11-09 起先比同一报关行原始口径与报关口径：包对千克为单位不一致，需人工核对
     customs_row = {
         **CUSTOMS,
         "unit": "包",
@@ -287,9 +303,14 @@ def test_cd000835_quantity_mismatch_takes_priority_over_negative_prices():
         {**purchase(declared="21260"), "declared_unit": "千克"},
     ]
     result = declared_margin(customs_row, children, {1: ORDER}, {})
+    assert result["note"] == "原始单位“包”与报关单位“千克”不一致，不计算申报幅度"
+    assert result["status"] == "unit_mismatch" and result["margin"] is None
+    assert margin_alert([result])
+    # 两套口径一致时，报关数量与子采购合计不符仍按原规则提示
+    same = {**customs_row, "unit": "千克", "quantity": Decimal("24965.5")}
+    result = declared_margin(same, children, {1: ORDER}, {})
     assert result["note"] == "数量不一致（报关行 24965.5，子采购报关合计 41260）"
-    assert result["status"] == "unavailable" and result["margin"] is None
-    assert not margin_alert([result])
+    assert result["status"] == "unavailable" and not margin_alert([result])
 
 
 def test_quantity_check_resolves_unit_ids_and_preserves_raw_purchase_quantity():

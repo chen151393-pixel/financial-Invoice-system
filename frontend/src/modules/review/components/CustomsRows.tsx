@@ -33,7 +33,7 @@ export function CustomsRows({
     {
       key: "parent",
       header: "母采购单号",
-      width: "17%",
+      width: "15%",
       render: (row) =>
         row.kind === "customs" ? (
           <span
@@ -58,7 +58,7 @@ export function CustomsRows({
     {
       key: "child",
       header: "子采购单号",
-      width: "17%",
+      width: "15%",
       render: (row) =>
         row.kind === "purchase" ? (
           <span className="fr-order-no">
@@ -82,11 +82,11 @@ export function CustomsRows({
     {
       key: "supplier",
       header: "供应商",
-      width: "11%",
+      width: "10%",
       render: (row) => (row.kind === "purchase" ? row.line.supplier || "未提供" : "—"),
     },
-    { key: "name", header: "开票品名", width: "7%", render: ({ line }) => line.name || "未提供" },
-    { key: "model", header: "规格型号", width: "6%", render: ({ line }) => line.model || "—" },
+    { key: "name", header: "开票品名", width: "6%", render: ({ line }) => line.name || "未提供" },
+    { key: "model", header: "规格型号", width: "5%", render: ({ line }) => line.model || "—" },
     {
       key: "quantity",
       header: "数量",
@@ -151,6 +151,22 @@ export function CustomsRows({
           <small>{row.line.currency || "未提供币种"}</small>
         </span>
       ),
+    },
+    {
+      key: "original",
+      header: "采购单价",
+      width: "7%",
+      align: "right",
+      // 报关行原始口径（NS 数量、单位、单价）；与报关口径不一致时后端在申报幅度列提示
+      render: (row) =>
+        row.kind === "customs" ? (
+          <span aria-label="原始口径采购单价">
+            {row.line.originalPrice || "未提供"}
+            <small> / {row.line.originalPriceUnit || "单位未提供"}</small>
+          </span>
+        ) : (
+          "—"
+        ),
     },
     {
       key: "action",

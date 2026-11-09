@@ -1,6 +1,6 @@
 """查询投影版本与失效提示。金额规则变化时提升版本，启动后补算。"""
 
-CALCULATION_VERSION = "review-v10"  # v10：子采购展示单价按含税金额 / 报关数量计算，固定两位小数。
+CALCULATION_VERSION = "review-v11"  # v11：先比报关行原始口径与报关口径，新增采购单价列。
 PENDING_REASON = "来源或审核已更新，后台计算中，请稍后刷新"
 FAILED_REASON = "后台计算失败，系统将自动重试，请稍后刷新"
 

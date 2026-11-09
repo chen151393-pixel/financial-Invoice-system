@@ -1,7 +1,21 @@
 import type { UnitPriceMargin as Margin } from "../types";
 import { Badge } from "../../../shared/components/ui";
 
+const MISMATCH = { unit_mismatch: "单位不一致", quantity_mismatch: "数量不一致" } as const;
+
 export function UnitPriceMargin({ line }: { line: Margin & { priceEstimated?: boolean } }) {
+  if (line.marginStatus === "unit_mismatch" || line.marginStatus === "quantity_mismatch") {
+    // 报关行原始口径与报关口径不一致：后端不计算幅度，按需人工核对展示
+    return (
+      <div className="fr-margin fr-margin--negative">
+        <strong>—</strong>
+        <Badge tone="warning" dot={false}>
+          {MISMATCH[line.marginStatus]}
+        </Badge>
+        <small>{line.marginNote}</small>
+      </div>
+    );
+  }
   return (
     <div className={`fr-margin fr-margin--${line.marginStatus ?? "unavailable"}`}>
       <strong>{line.margin || "—"}</strong>

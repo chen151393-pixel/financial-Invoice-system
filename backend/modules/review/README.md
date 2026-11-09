@@ -85,6 +85,17 @@
 
 `POST /api/review/declarations/query` 的报关单新增 `salesOrders`（来源报关行销售单号，按出现顺序去重拼接）；`company` 继续作为主行申报抬头。报关行新增 `originPlace`（境内货源地，来源 `custrecord_swc_goods_place`）、`parent`（该报关明细自身的采购订单编号 `custrecord_swc_purachse_no`，由 source 从已保存原始记录补充）。引用显示名称，不把内部 ID 当作单号；缺失返回空字符串，不借用关联子采购的母单号、不推断销售关系、不计算金额、不修改冻结依据或内容摘要。
 
+
+## 原始口径与采购单价列（2026-11-09）
+
+用户确认：报关行同时保存原始口径（NS `custrecord_swc_quantity`／`custrecord_swc_unit`／`custrecord_swc_unitprice`，即 `quantity`、`unit`、`unit_price`）和报关口径（`declared_quantity`、`declared_unit`、`declared_unit_price`）。
+
+- 报关行接口新增 `originalQuantity`、`originalPrice`（单位沿用 `originalPriceUnit`），页面在“金额”右侧新增“采购单价”列，显示如“3.50 / 盒”。
+- 计算申报幅度前先比同一报关行的两套口径（`margin_policy.caliber_mismatch`，单位先经单位字典转名称）：单位不同返回 `marginStatus=unit_mismatch`，单位相同数量不同返回 `quantity_mismatch`，两者都不计算幅度（两个单价单位不同，不能直接相比）；任一口径缺少单位或数量时不做此项比较，沿用原有规则。
+- 两种不一致与单价异常一样计入 `marginAlert`（概况“申报幅度异常”和筛选会包含它们），并作为不能自动审核的原因“报关行原始口径与报关口径不一致：…”。快照表 `margin_alert` 列注释未改，语义已扩大，未为注释单独加迁移。
+- 计算版本升为 `review-v11`，启动后自动重算快照；不影响内容摘要，已审核报关单不需要重审。
+- 验证：`tests/test_review_original_caliber.py`；共用报关夹具 `customs()` 新增 `original=` 参数，默认原始口径与报关口径一致。
+
 ## 申报幅度（2026-10-30，同一报关行双单价）
 
 按用户确认，比较同一报关行 `unit_price`（NS `custrecord_swc_unitprice`）与 `declared_unit_price`（NS `custrecord_swc_grossamountzj`）。申报幅度 =（报关单价 − 报关行单价）÷ 报关单价 × 100%。直接使用 NS 原始单价，不按采购数量与报关数量比例重算；子采购金额、单价及币种不作为比较价格。

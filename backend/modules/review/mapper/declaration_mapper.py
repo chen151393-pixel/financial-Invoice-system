@@ -172,6 +172,8 @@ def declaration(
             # 与报关数量、报关单位配套的申报单价，和申报幅度使用同一口径；NS 未填时为试算值并标注。
             price=text(prices[row["id"]][0]),
             priceEstimated=prices[row["id"]][1],
+            originalQuantity=text(row["quantity"]),
+            originalPrice=text(row["unit_price"]),
             amount=text(row["amount"]),
             currency=text(row["currency"]),
             originalPriceUnit=unit_label(row["unit"], content.get("unit_names")),

@@ -170,7 +170,8 @@ test("明细按后端显式树展示，数量和金额保留原十进制字符�
   const tableRows = [...html.matchAll(/<tr\b[^>]*>(.*?)<\/tr>/gs)];
   assert.equal(tableRows.length, 3, "一行公共表头、一行报关、一行采购");
   assert.equal((html.match(/<colgroup>/g) || []).length, 1);
-  for (const row of tableRows) assert.equal((row[1].match(/<(?:td|th)\b/g) || []).length, 11);
+  // 2026-11-09 新增“采购单价”列
+  for (const row of tableRows) assert.equal((row[1].match(/<(?:td|th)\b/g) || []).length, 12);
   assert.match(tableRows[2][0], /data-tone="accent"/);
   // 不单设"来源"列，子采购行在首列缩进挂在报关行下
   assert.doesNotMatch(tableRows[0][1], />来源</);
@@ -574,6 +575,38 @@ test("报关行最后一列显示后端计算的申报幅度；负数与无法�
   );
   assert.match(html, /报关单价 10.65 元\/个<br\/>报关行单价 12 元\/箱/);
   assert.match(html, /fr-margin--unavailable[\s\S]*—[\s\S]*报关行单价缺失，无法计算申报幅度/);
+});
+
+test("报关行显示原始口径采购单价；单位或数量不一致时显示后端原因，不显示幅度", () => {
+  const item = group();
+  item.customsLines = [
+    {
+      ...item.customsLines[0],
+      originalQuantity: "10332",
+      originalPriceUnit: "盒",
+      originalPrice: "3.50",
+      margin: "",
+      marginStatus: "unit_mismatch",
+      marginNote: "原始单位“盒”与报关单位“平方米”不一致，不计算申报幅度",
+    },
+    {
+      ...item.customsLines[0],
+      id: "customs:1",
+      lineNo: 2,
+      originalPrice: "",
+      originalPriceUnit: "",
+      margin: "",
+      marginStatus: "quantity_mismatch",
+      marginNote: "原始数量 17000 与报关数量 17687.33 不一致，不计算申报幅度",
+    },
+  ];
+  const html = customs(item);
+  // “采购单价”列紧跟在“金额”右侧
+  assert.match(html, /<th[^>]*>金额<\/th><th[^>]*>采购单价<\/th><th[^>]*>申报幅度/);
+  assert.match(html, /aria-label="原始口径采购单价">3.50<small> \/ 盒<\/small>/);
+  assert.match(html, /data-tone="warning"[^>]*>单位不一致[\s\S]*与报关单位“平方米”不一致/);
+  assert.match(html, /data-tone="warning"[^>]*>数量不一致[\s\S]*原始数量 17000/);
+  assert.match(html, /未提供<small> \/ 单位未提供<\/small>/);
 });
 
 test("NS 未填申报单价时显示后端试算值并标注“试算”，不在前端计算", () => {
