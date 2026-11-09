@@ -90,9 +90,16 @@ def anomaly_counts(rows):
     ]
 
 
+def utc_now():
+    return datetime.now(UTC)
+
+
 class WorkbenchService:
-    def __init__(self, engine):
+    def __init__(self, engine, clock=utc_now):
         self.engine = engine
+        # “本月”、近 6 个月序列和等待天数都以 clock 返回的 UTC 时间为准；
+        # 线上使用真实时间，测试注入固定时间，避免结果随运行日期漂移。
+        self.clock = clock
 
     def read(self, query, *, export=False):
         if self.engine is None:
@@ -102,7 +109,7 @@ class WorkbenchService:
                 if connection.dialect.name == "mysql":
                     connection = connection.execution_options(isolation_level="REPEATABLE READ")
                 with connection.begin():
-                    return self._read(connection, query, datetime.now(UTC), export)
+                    return self._read(connection, query, self.clock(), export)
         except SQLAlchemyError:
             raise ApiError(503, "工作台读取失败，请检查数据库及迁移状态后重试") from None
 

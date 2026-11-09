@@ -27,9 +27,17 @@ from backend.tests.test_task import USER, approve
 from fastapi.testclient import TestClient
 from sqlalchemy import text
 
+# 夹具发票开票于 2026-10-10、报关单创建于 2026-09，“本月”固定为 2026 年 10 月（北京时间），
+# 使 KPI 与月度序列断言不随实际运行日期变化。
+NOW = datetime(2026, 10, 19, 4, tzinfo=UTC)
+
+
+def service_at(engine):
+    return WorkbenchService(engine, clock=lambda: NOW)
+
 
 def read(engine, **values):
-    return WorkbenchService(engine).read(WorkbenchQuery(**values))
+    return service_at(engine).read(WorkbenchQuery(**values))
 
 
 def test_empty_auth_validation_and_export(engine, env):
@@ -98,7 +106,7 @@ def test_review_to_task_to_receipt_and_version_review(engine, ns, world):
 def test_filters_pagination_and_full_export(engine, ns, world, reviewed):
     save(ns, engine, bundle([purchase("210", "890")], [customs("890")]))
     save(ns, engine, bundle([], [customs("880")]))
-    service = WorkbenchService(engine)
+    service = service_at(engine)
     first = read(engine, pageSize=1)
     second = read(engine, pageSize=1, page=2)
     assert first.total == 2 and first.pages == 2 and first.items[0].key != second.items[0].key
@@ -268,8 +276,8 @@ def test_receipt_totals_use_invoice_date_all_normal_cny_including_unmatched(engi
             invoice(numbers[6], [INK]),
         ],
     )
-    # 无任务、无有效匹配；全部正常人民币票也应计入。测试日期取服务当前月份。
-    current = datetime.now(UTC).astimezone(BUSINESS_ZONE).date().replace(day=1)
+    # 无任务、无有效匹配；全部正常人民币票也应计入。测试日期取服务注入的当前月份。
+    current = NOW.astimezone(BUSINESS_ZONE).date().replace(day=1)
     previous = current - timedelta(days=1)
     future = date(current.year + (current.month == 12), current.month % 12 + 1, 1)
     with engine.begin() as connection:
