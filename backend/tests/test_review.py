@@ -120,7 +120,8 @@ def test_list_states_counts_and_purchase_basis(service, seeded, engine):
         "个",
         "100.5",
     )  # 本夹具采购与报关数量相同，异单位换算见专项回归
-    assert "采购单价直接取来源含税单价" in line.note
+    assert "单价 = 含税金额 / 报关数量" in line.note
+    assert line.price == "10.05"
     assert pending.salesOrders == "SO1"  # 同一销售单在多个报关行出现，只在单头展示一次
     assert pending.company == "采购公司A"
     assert pending.customsLines[0].originPlace == "深圳"

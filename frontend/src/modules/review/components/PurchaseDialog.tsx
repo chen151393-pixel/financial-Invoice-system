@@ -15,7 +15,7 @@ export function PurchaseDialog({ line, onClose }: { line: PurchaseLine; onClose:
     ["单位", line.unit],
     ["采购数量", line.purchaseQuantity],
     ["采购单位", line.purchaseUnit],
-    ["采购含税单价（按采购单位）", line.price],
+    ["采购含税单价（金额 ÷ 展示数量）", line.price],
     [line.scope === "order" ? "订单含税金额（未分摊）" : "采购含税金额", line.amount],
     ["销售订单汇率", line.salesOrderExchangeRate],
   ];
@@ -66,8 +66,7 @@ export function PurchaseDialog({ line, onClose }: { line: PurchaseLine; onClose:
                   header: "采购含税单价",
                   width: "16%",
                   align: "right",
-                  render: (member) =>
-                    `${member.price || "未提供"} / ${member.purchaseUnit || "采购单位未提供"}`,
+                  render: (member) => `${member.price || "未提供"} / ${member.unit || "单位未提供"}`,
                 },
                 {
                   key: "amount",

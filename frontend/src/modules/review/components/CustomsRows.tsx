@@ -131,7 +131,7 @@ export function CustomsRows({
           <span aria-label={row.kind === "customs" ? "申报单价" : "采购含税单价"}>
             {row.line.price || "未提供"}
             {row.kind === "purchase" && row.line.scope === "declared" && (
-              <small> / {row.line.purchaseUnit || "采购单位未提供"}</small>
+              <small> / {row.line.unit || "报关单位未提供"}</small>
             )}
           </span>
         ),

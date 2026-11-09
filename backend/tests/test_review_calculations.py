@@ -201,6 +201,36 @@ def test_v6_purchase_snapshot_is_hidden_then_rebuilt_with_customs_prices(review,
     assert rows(engine, "SELECT id FROM review_records") == []
 
 
+def test_v9_snapshot_rebuilds_purchase_price_without_changing_review_basis(review, ns, engine):
+    order = purchase()
+    for _, row in order[2]:
+        row.update(
+            custrecord_swc_subpo_item_bgqty=Decimal("17687.33"),
+            custrecord_swc_subpo_item_amountwithtax=Decimal("242310.6"),
+        )
+    save(ns, engine, bundle([order], [customs("870")]))
+    calculations = CalculationService(review)
+    calculations.rebuild()
+    snapshot = rows(engine, "SELECT payload FROM review_declaration_snapshots")[0]
+    payload = json.loads(snapshot["payload"])
+    for line in payload["customsLines"]:
+        for child in line["purchaseLines"]:
+            child["price"] = "23.45"
+    with engine.begin() as connection:
+        connection.execute(
+            text("UPDATE review_declaration_snapshots SET payload=:p"),
+            {"p": json.dumps(payload)},
+        )
+        connection.execute(text("UPDATE review_calculation_jobs SET calculation_key='review-v9:cny=0.10'"))
+    calculations.initialize()
+    CalculationWorker(calculations).run_once()
+    fresh = review.browse(query()).groups[0]
+    assert fresh.calculationStatus == "ready"
+    assert fresh.contentSha256 == payload["contentSha256"]
+    assert all(child.price == "13.70" for line in fresh.customsLines for child in line.purchaseLines)
+    assert rows(engine, "SELECT id FROM review_records") == []
+
+
 def test_approval_enqueues_and_does_not_wait_for_account_rebuild(review, ns, engine):
     seed(ns, engine)
     calculations = CalculationService(review)

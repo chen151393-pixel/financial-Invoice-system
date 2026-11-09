@@ -60,7 +60,7 @@ CUSTOMS = {
 
 @pytest.mark.parametrize(
     "row,expected",
-    [(purchase(), "81.13"), (purchase("80", "1220", "18452.6", "230.6575"), "230.6575")],
+    [(purchase(), "5.32"), (purchase("80", "1220", "18452.6", "230.6575"), "15.13")],
 )
 def test_screenshot_values_share_declared_quantity_unit_and_tax_inclusive_price(row, expected):
     before = deepcopy(row)
@@ -92,7 +92,7 @@ def test_purchase_display_grouping_does_not_supply_margin_comparison_price():
     assert (shown["quantity"], shown["unit"], shown["price"], shown["amount"]) == (
         "1220",
         "平方米",
-        "230.66",
+        "15.13",
         "18452.6",
     )
     assert len(shown["members"]) == 4
@@ -120,7 +120,7 @@ def test_purchase_display_grouping_does_not_supply_margin_comparison_price():
 def test_missing_purchase_basis_does_not_change_customs_price_margin(field, value):
     row = {**purchase(), field: value}
     shown = purchase_line(ORDER, row)
-    assert shown.price == "81.13"  # 报关字段缺失不影响原始采购含税单价
+    assert shown.price == ("5.32" if field == "declared_unit" else "")
     if field == "declared_quantity" and value is None:
         assert shown.quantity == ""
     result = declared_margin(CUSTOMS, [row], {1: ORDER}, {})
@@ -163,7 +163,7 @@ def test_saved_source_and_materialized_page_preserve_both_quantity_bases(ns, eng
         assert (child.quantity, child.unit, child.price, child.purchaseQuantity, child.purchaseUnit) == (
             "1525",
             "平方米",
-            "81.13",
+            "5.32",
             "100",
             "卷",
         )
@@ -173,11 +173,27 @@ def test_saved_source_and_materialized_page_preserve_both_quantity_bases(ns, eng
         assert line.marginStatus == "negative" and line.margin == "-275.00%"
 
 
-def test_original_tax_inclusive_price_is_not_recomputed_from_rounded_amount():
+def test_display_price_uses_amount_and_declared_quantity_even_without_source_price():
     row = purchase(amount="8113.01")
-    assert purchase_line(ORDER, row).price == "81.13"
+    assert purchase_line(ORDER, row).price == "5.32"
     row["unit_price"] = None
-    assert purchase_line(ORDER, row).price == ""
+    assert purchase_line(ORDER, row).price == "5.32"
+
+
+@pytest.mark.parametrize(
+    "amount,quantity,expected",
+    [
+        ("242310.6", "17687.33", "13.70"),
+        ("13.699", "1", "13.70"),
+        ("13.695", "1", "13.70"),
+        ("13.694", "1", "13.69"),
+        ("14", "1", "14.00"),
+        ("0", "1", "0.00"),
+    ],
+)
+def test_display_price_rounds_half_up_and_preserves_two_decimal_places(amount, quantity, expected):
+    row = purchase(declared=quantity, amount=amount, price="23.45")
+    assert purchase_line(ORDER, row).price == expected
 
 
 @pytest.mark.parametrize(

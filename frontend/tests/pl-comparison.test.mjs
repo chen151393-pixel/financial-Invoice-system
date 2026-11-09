@@ -521,7 +521,7 @@ test("采购详情字段独立对应，保留零值和缺失值，不虚构原�
   );
   assert.match(html, /<dt>子单数量<\/dt><dd>0<\/dd>/);
   assert.match(html, /<dt>单位<\/dt><dd>千克<\/dd>/);
-  assert.match(html, /<dt>采购含税单价（按采购单位）<\/dt><dd>0<\/dd>/);
+  assert.match(html, /<dt>采购含税单价（金额 ÷ 展示数量）<\/dt><dd>0<\/dd>/);
   assert.match(html, /<dt>订单含税金额（未分摊）<\/dt><dd>来源未提供<\/dd>/);
   assert.doesNotMatch(html, /<table/);
 });
@@ -602,14 +602,14 @@ test("NS 未填申报单价时显示后端试算值并标注“试算”，不�
   assert.equal(html.match(/>试算</g).length, 1);
 });
 
-test("报关数量与原始采购含税单价分别注明单位", () => {
+test("子采购单价保留两位小数并使用展示数量单位", () => {
   const item = group();
   const line = {
     ...item.customsLines[0].purchaseLines[0],
     scope: "declared",
     quantity: "1525",
     unit: "平方米",
-    price: "81.13",
+    price: "5.32",
     purchaseQuantity: "100",
     purchaseUnit: "卷",
     amount: "8113",
@@ -618,12 +618,31 @@ test("报关数量与原始采购含税单价分别注明单位", () => {
   const html = customs(item);
   assert.match(html, /子采购报关数量[^>]*>1525/);
   assert.match(html, /平方米/);
-  assert.match(html, /采购含税单价[^>]*>81.13<small> \/ 卷/);
+  assert.match(html, /采购含税单价[^>]*>5.32<small> \/ 平方米/);
   assert.doesNotMatch(html, /订单口径/);
   const detail = renderToStaticMarkup(createElement(PurchaseDialog, { line, onClose() {} }));
   assert.match(detail, /采购数量<\/dt><dd>100/);
   assert.match(detail, /采购单位<\/dt><dd>卷/);
-  assert.match(detail, /采购含税单价（按采购单位）<\/dt><dd>81.13/);
+  assert.match(detail, /采购含税单价（金额 ÷ 展示数量）<\/dt><dd>5.32/);
+});
+
+test("子采购合并行与详情保留后端单价尾零", () => {
+  const item = group();
+  const member = {
+    ...item.customsLines[0].purchaseLines[0],
+    scope: "declared",
+    quantity: "17687.33",
+    unit: "平方米",
+    purchaseUnit: "卷",
+    price: "13.70",
+    amount: "242310.6",
+  };
+  const line = { ...member, members: [member] };
+  item.customsLines[0].purchaseLines = [line];
+  assert.match(customs(item), /采购含税单价[^>]*>13.70<small> \/ 平方米/);
+  const detail = renderToStaticMarkup(createElement(PurchaseDialog, { line, onClose() {} }));
+  assert.match(detail, /13.70 \/ 平方米/);
+  assert.doesNotMatch(detail, /13.70 \/ 卷/);
 });
 
 test("数量不一致时只展示数量提示，不显示单价异常或旧幅度", () => {
