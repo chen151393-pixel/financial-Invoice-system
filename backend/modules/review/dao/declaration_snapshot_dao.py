@@ -6,6 +6,7 @@ from ..entity.calculation_job import calculation_jobs as jobs
 from ..entity.declaration_snapshot import declaration_snapshots as snapshots
 from ..entity.snapshot_supplier import snapshot_suppliers as suppliers
 from .snapshot_search import conditions as search_conditions
+from .snapshot_search import unit_mismatch
 
 
 def replace_account(connection, account, rows, supplier_rows):
@@ -23,6 +24,7 @@ def browse(connection, query, key, month_start, declaration_ids=None):
     pending = snapshots.c.review_status == "pending"
     approved = snapshots.c.review_status == "approved"
     alert = and_(pending, fresh, snapshots.c.margin_alert.is_(True))
+    unit_alert = and_(alert, unit_mismatch(connection.dialect.name))
     auto = and_(pending, fresh, snapshots.c.auto_eligible.is_(True))
     conditions = search_conditions(query, connection.dialect.name)
     if declaration_ids is not None:
@@ -45,6 +47,7 @@ def browse(connection, query, key, month_start, declaration_ids=None):
         "changed": and_(pending, snapshots.c.source_changed.is_(True)),
         "approvedThisMonth": and_(approved, snapshots.c.approved_at >= month_start),
         "marginAlert": alert,
+        "unitMismatch": unit_alert,
         "autoApprovable": auto,
     }.items():
         aggregate[name] = func.coalesce(func.sum(case((condition, 1), else_=0)), 0)
@@ -59,10 +62,17 @@ def browse(connection, query, key, month_start, declaration_ids=None):
     )
     # MySQL SUM(CASE...) 返回 Decimal；这里是计数，不是金额，统一转为接口整数。
     counts = {name: int(value) for name, value in counts.items()}
-    selected = {"pending": pending, "approved": approved, "margin_alert": alert, "auto": auto}
+    selected = {
+        "pending": pending,
+        "approved": approved,
+        "margin_alert": alert,
+        "unit_mismatch": unit_alert,
+        "auto": auto,
+    }
     if query.status in selected:
         conditions.append(selected[query.status])
-    total = counts[{"margin_alert": "marginAlert", "auto": "autoApprovable"}.get(query.status, query.status)]
+    count_key = {"margin_alert": "marginAlert", "unit_mismatch": "unitMismatch", "auto": "autoApprovable"}
+    total = counts[count_key.get(query.status, query.status)]
     page = list(
         connection.execute(
             select(

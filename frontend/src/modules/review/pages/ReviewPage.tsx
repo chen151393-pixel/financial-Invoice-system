@@ -18,7 +18,7 @@ import type {
   ReviewFilter,
 } from "../types";
 
-// 状态切换只列三种基本状态；申报幅度异常、可自动审核由上方概况卡进入
+// 状态切换只列三种基本状态；异常分类、可自动审核由上方概况卡进入
 const FILTERS = ["all", "pending", "approved"] as const;
 const FILTER_LABELS: Record<(typeof FILTERS)[number], string> = {
   all: "全部报关单",
@@ -129,9 +129,11 @@ export function ReviewPage() {
           title={
             query.status === "margin_alert"
               ? "报关单 · 申报幅度异常"
-              : query.status === "auto"
-                ? "报关单 · 可自动审核通过"
-                : "报关单"
+              : query.status === "unit_mismatch"
+                ? "报关单 · 单位不一致"
+                : query.status === "auto"
+                  ? "报关单 · 可自动审核通过"
+                  : "报关单"
           }
           actions={
             <Segmented

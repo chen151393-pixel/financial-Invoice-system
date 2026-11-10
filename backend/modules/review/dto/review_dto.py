@@ -19,8 +19,8 @@ class DeclarationListQuery(StrictModel):
     purchaseOrderNo: SearchText = ""
     keyword: str = Field(default="", max_length=120)
     account: str = Field(default="", max_length=80, pattern=r"^[a-zA-Z0-9_-]*$")
-    # margin_alert：待审核且申报幅度异常；auto：待审核且满足可自动审核条件
-    status: Literal["all", "pending", "approved", "margin_alert", "auto"] = "all"
+    # unit_mismatch：幅度异常中含单位不一致的待审核单据；其他筛选口径保持不变
+    status: Literal["all", "pending", "approved", "margin_alert", "unit_mismatch", "auto"] = "all"
     supplierId: str = Field(default="", max_length=20, pattern=r"^([1-9][0-9]*)?$")
     page: int = Field(default=1, ge=1, le=100000)
     pageSize: int = Field(default=20, ge=1, le=50)

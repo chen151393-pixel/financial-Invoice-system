@@ -3,7 +3,7 @@ import type { ComparisonResult, ReviewFilter } from "../types";
 
 /**
  * 财务核对概况：张数全部来自后端列表计数（随查询条件变化），前端只展示。
- * 四张卡均可点击；本月审核通过卡进入全部已审核列表，其余按对应范围筛选。
+ * 五张卡均可点击；本月审核通过卡进入全部已审核列表，其余按对应范围筛选。
  */
 export function ReviewStats({
   counts,
@@ -33,6 +33,15 @@ export function ReviewStats({
         note="采购价超出报关价容差，审核前请与采购核实"
         selected={value === "margin_alert"}
         onSelect={() => onSelect("margin_alert")}
+      />
+      <StatCard
+        glyph="单"
+        tone={counts.unitMismatch > 0 ? "warning" : "neutral"}
+        label="单位不一致"
+        value={`${counts.unitMismatch} 张`}
+        note="原始单位与报关单位不同"
+        selected={value === "unit_mismatch"}
+        onSelect={() => onSelect("unit_mismatch")}
       />
       <StatCard
         glyph="自"

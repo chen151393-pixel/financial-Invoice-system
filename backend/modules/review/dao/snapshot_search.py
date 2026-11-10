@@ -46,6 +46,21 @@ def text_field(path, dialect):
     return func.json_unquote(value) if dialect == "mysql" else value
 
 
+def unit_mismatch(dialect):
+    """只匹配报关行已有的单位异常结论，不搜索原因文案或子采购行。"""
+    lines = func.json_extract(snapshots.c.payload, "$.customsLines")
+    if dialect == "mysql":
+        return func.json_contains(lines, '{"marginStatus":"unit_mismatch"}') == 1
+    entries = func.json_each(lines).table_valued("value", joins_implicitly=True)
+    return (
+        select(1)
+        .select_from(entries)
+        .where(func.json_extract(entries.c.value, "$.marginStatus") == "unit_mismatch")
+        .correlate(snapshots)
+        .exists()
+    )
+
+
 def order_matches(terms, dialect):
     # v3 投影保存所有关联子单，包括无明细子单。旧快照补算期间兼容原展示字段。
     numbers = func.json_extract(snapshots.c.payload, "$.purchaseOrderNumbers")

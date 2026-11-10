@@ -103,6 +103,7 @@ def test_list_states_counts_and_purchase_basis(service, seeded, engine):
         "changed": 0,
         "approvedThisMonth": 0,
         "marginAlert": 0,
+        "unitMismatch": 0,
         "autoApprovable": 1,
         "customs": 2,
         "purchase": 2,

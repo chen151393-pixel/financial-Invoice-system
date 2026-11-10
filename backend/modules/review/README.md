@@ -145,6 +145,12 @@ npm.cmd run dev:api
 
 验证：`test_review_calculations.py` 覆盖持久队列、初始补算、四条 SQL 分页、脏快照限制、事务回滚、失败重试、规则变化、审批更新、共享销售汇率及缺汇率。`test_review_calculations_mysql.py` 在随机隔离库验证新旧代次并发和单消费者命名锁；未提供专用 MySQL 连接时明确跳过。既有业务测试通过 `review_helpers.MaterializedReviewService` 显式模拟后台已完成，再调用真实数据库分页。
 
+## 单位不一致快捷筛选（2026-11-10）
+
+`POST /api/review/declarations/query` 新增 `status=unit_mismatch` 和 `counts.unitMismatch`：在原申报幅度异常范围内，筛选至少一条报关行 `marginStatus=unit_mismatch` 的待审核报关单，按整单计数，多条异常行不重复累计。仅数量不一致或仅价格异常不进入此分类；同单同时有单位与价格异常仍计入。原 `marginAlert` 计数与筛选范围保持不变，新卡片是其子集。
+
+复用当前快照 JSON，在数据库中筛选、计数后分页；叠加现有查询条件，过期或计算失败的快照仍排除。无需迁移、补算或重新拉取 NS。回归见 `test_review_unit_filter.py`（SQLite 与可选隔离 MySQL）。
+
 ## 真实报关单号筛选（2026-11-09）
 
 `POST /api/review/declarations/query` 新增 `declarationNo`，按快照中的真实海关报关单号（NS `custrecord_swc_realno`，响应字段 `declaration`）部分匹配，与 CD 编号 `recordNo` 是不同字段。多条输入、去重、上限与 `%`、`_` 按普通字符的规则同下文；与其他框同时满足。只读快照，不查询实时来源，无迁移。验证见 `test_review_calculations.py::test_split_bulk_search_uses_snapshot_fields_and_filtered_counts`。

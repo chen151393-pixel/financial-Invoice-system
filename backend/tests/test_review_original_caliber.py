@@ -3,6 +3,7 @@
 from decimal import Decimal
 
 import pytest
+from backend.modules.review.dto.review_dto import DeclarationListQuery
 from backend.modules.review.policy.auto_review_policy import auto_review_reasons, margin_alert
 from backend.modules.review.policy.margin_policy import caliber_mismatch, declared_margin
 from backend.tests.test_review import events as events  # 共用夹具
@@ -65,3 +66,6 @@ def test_review_page_shows_original_price_and_mismatch(ns, engine, service):
     assert (line.quantity, line.unit) == ("10", "个")
     assert line.marginStatus == "unit_mismatch" and line.margin == ""
     assert result.marginAlert and not result.autoReview.eligible
+    filtered = service.browse(DeclarationListQuery(status="unit_mismatch"))
+    assert filtered.counts["unitMismatch"] == filtered.total == 1
+    assert [item.recordNumber for item in filtered.groups] == ["CD870"]

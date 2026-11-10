@@ -16,6 +16,7 @@ let server,
   PurchaseDialog,
   PlSourceComparison,
   FinanceSearchForm,
+  ReviewStats,
   Pagination,
   viewPath,
   navigation;
@@ -46,6 +47,7 @@ before(async () => {
   ({ FinanceSearchForm } = await server.ssrLoadModule(
     "/src/modules/review/components/FinanceSearchForm.tsx",
   ));
+  ({ ReviewStats } = await server.ssrLoadModule("/src/modules/review/components/ReviewStats.tsx"));
   ({ Pagination } = await server.ssrLoadModule("/src/shared/components/Pagination.tsx"));
 });
 after(async () => {
@@ -56,6 +58,43 @@ const render = (state = createPlComparisonState(), props = {}) =>
     createElement(PlComparison, { state, onRetry() {}, onFilter() {}, onReview() {}, ...props }),
   );
 const group = () => createPlComparisonState().result.groups[0];
+test("单位不一致卡展示后端计数，选中并提交独立筛选", async (t) => {
+  const counts = {
+    pending: 49,
+    changed: 0,
+    marginAlert: 30,
+    unitMismatch: 8,
+    autoApprovable: 18,
+    approvedThisMonth: 2,
+  };
+  let selected;
+  const tree = ReviewStats({
+    counts,
+    value: "unit_mismatch",
+    onSelect: (value) => {
+      selected = value;
+    },
+  });
+  const cards = tree.props.children;
+  assert.deepEqual(
+    cards.map((card) => card.props.label),
+    ["待审核报关单", "申报幅度异常", "单位不一致", "可自动审核通过", "本月审核通过"],
+  );
+  cards[2].props.onSelect();
+  assert.equal(selected, "unit_mismatch");
+  const html = renderToStaticMarkup(tree);
+  assert.match(html, /aria-pressed="true"[^]*?单位不一致[^]*?8 张/);
+  assert.match(html, /申报幅度异常[^]*?30 张/);
+  const calls = [];
+  t.mock.method(globalThis, "fetch", async (_url, options) => {
+    calls.push(JSON.parse(options.body));
+    return Response.json({ groups: [] });
+  });
+  const { queryDeclarations } = await server.ssrLoadModule("/src/modules/review/api.ts");
+  await queryDeclarations({ status: selected, recordNo: "CD870", page: 1, pageSize: 20 });
+  assert.equal(calls[0].status, "unit_mismatch");
+  assert.equal(calls[0].recordNo, "CD870");
+});
 test("后台计算未完成时不显示顶部黄色说明，保留审核禁用及原因", () => {
   const state = createPlComparisonState();
   const reason = "来源或审核已更新，后台计算中，请稍后刷新";
