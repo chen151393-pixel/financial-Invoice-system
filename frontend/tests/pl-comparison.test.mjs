@@ -62,7 +62,7 @@ test("单位不一致卡展示后端计数，选中并提交独立筛选", async
   const counts = {
     pending: 49,
     changed: 0,
-    marginAlert: 30,
+    marginAlert: 22,
     unitMismatch: 8,
     autoApprovable: 18,
     approvedThisMonth: 2,
@@ -84,7 +84,7 @@ test("单位不一致卡展示后端计数，选中并提交独立筛选", async
   assert.equal(selected, "unit_mismatch");
   const html = renderToStaticMarkup(tree);
   assert.match(html, /aria-pressed="true"[^]*?单位不一致[^]*?8 张/);
-  assert.match(html, /申报幅度异常[^]*?30 张/);
+  assert.match(html, /申报幅度异常[^]*?22 张/);
   const calls = [];
   t.mock.method(globalThis, "fetch", async (_url, options) => {
     calls.push(JSON.parse(options.body));
@@ -200,6 +200,28 @@ test("默认只展示报关单头，PL及公司同一行且审核按钮位于最
   assert.match(html, /aria-label="审核通过：CDTEST001"/);
   assert.match(html, /aria-expanded="false"/);
   assert.doesNotMatch(html, /SUB-TEST|fr-customs-table|财务审核/);
+});
+
+test("主行按后端结果区分单位、数量和实际申报幅度异常", () => {
+  for (const [flags, expected] of [
+    [{ unitMismatch: true }, ["单位不一致"]],
+    [{ quantityMismatch: true }, ["数量不一致"]],
+    [{ marginAlert: true }, ["申报幅度异常"]],
+    [{ unitMismatch: true, marginAlert: true }, ["单位不一致", "申报幅度异常"]],
+    [{}, []],
+  ]) {
+    const state = createPlComparisonState();
+    Object.assign(
+      state.result.groups[0],
+      { marginAlert: false, unitMismatch: false, quantityMismatch: false },
+      flags,
+    );
+    const html = render(state);
+    for (const label of ["单位不一致", "数量不一致", "申报幅度异常"]) {
+      assert.equal(html.includes(`>${label}</`), expected.includes(label), label);
+    }
+    assert.equal(html.includes(" is-alert"), Boolean(flags.marginAlert));
+  }
 });
 test("明细按后端显式树展示，数量和金额保留原十进制字符串", () => {
   const html = customs(group());

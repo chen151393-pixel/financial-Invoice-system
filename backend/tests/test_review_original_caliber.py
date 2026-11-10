@@ -53,7 +53,7 @@ def test_unit_code_is_resolved_before_comparing():
 def test_mismatch_skips_margin_and_needs_manual_review():
     margin = declared_margin(row(), [], {}, {})
     assert (margin["status"], margin["margin"]) == ("unit_mismatch", None)
-    assert margin_alert([margin])
+    assert not margin_alert([margin])
     reasons = auto_review_reasons("pending", False, 0, [{"amount": Decimal(1)}], True, [margin])
     assert reasons == ["报关行原始口径与报关口径不一致：" + margin["note"]]
 
@@ -65,7 +65,8 @@ def test_review_page_shows_original_price_and_mismatch(ns, engine, service):
     assert (line.originalQuantity, line.originalPriceUnit, line.originalPrice) == ("5", "千克", "3")
     assert (line.quantity, line.unit) == ("10", "个")
     assert line.marginStatus == "unit_mismatch" and line.margin == ""
-    assert result.marginAlert and not result.autoReview.eligible
+    assert result.unitMismatch and not result.marginAlert and not result.autoReview.eligible
     filtered = service.browse(DeclarationListQuery(status="unit_mismatch"))
     assert filtered.counts["unitMismatch"] == filtered.total == 1
     assert [item.recordNumber for item in filtered.groups] == ["CD870"]
+    assert service.browse(DeclarationListQuery(status="margin_alert")).total == 0

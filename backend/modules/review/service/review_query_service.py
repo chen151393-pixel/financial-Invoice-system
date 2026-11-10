@@ -8,6 +8,7 @@ from backend.core.errors import ApiError
 from backend.modules.source.public import declaration_ids_created
 
 from ..dao import declaration_snapshot_dao
+from ..policy.auto_review_policy import margin_flags
 from ..policy.calculation_policy import FAILED_REASON, PENDING_REASON, calculation_key
 from ..vo.review_vo import AutoReview, Declaration, ReviewList, SupplierOption
 
@@ -47,14 +48,15 @@ class ReviewQueryService:
             if not row["fresh"]:
                 reason = FAILED_REASON if row["last_error"] else PENDING_REASON
                 group.calculationStatus = "failed" if row["last_error"] else "pending"
-                group.marginAlert = False
                 group.autoReview = AutoReview(eligible=False, reasons=[reason])
                 group.review.allowed = False
                 group.review.reason = reason
                 for line in group.customsLines:
                     line.margin, line.marginStatus, line.marginNote = "", "unavailable", reason
                     line.declaredUnitPriceCny, line.originalUnitPriceCny = "", ""
-            groups.append(group)
+            # 兼容旧快照中混合的 marginAlert；只归类已有逐行结果，不重算金额。
+            flags = margin_flags({"status": line.marginStatus} for line in group.customsLines)
+            groups.append(group.model_copy(update=flags))
         notices = [
             f"账套 {job['ns_account']}：{FAILED_REASON if job['last_error'] else PENDING_REASON}。"
             "当前显示上次完成的单据快照和状态统计；异常及可自动审核计数暂不包含该账套。"

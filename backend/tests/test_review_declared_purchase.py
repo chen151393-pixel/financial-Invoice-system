@@ -305,7 +305,7 @@ def test_cd000835_caliber_mismatch_takes_priority_over_quantity_and_prices():
     result = declared_margin(customs_row, children, {1: ORDER}, {})
     assert result["note"] == "原始单位“包”与报关单位“千克”不一致，不计算申报幅度"
     assert result["status"] == "unit_mismatch" and result["margin"] is None
-    assert margin_alert([result])
+    assert not margin_alert([result])
     # 两套口径一致时，报关数量与子采购合计不符仍按原规则提示
     same = {**customs_row, "unit": "千克", "quantity": Decimal("24965.5")}
     result = declared_margin(same, children, {1: ORDER}, {})

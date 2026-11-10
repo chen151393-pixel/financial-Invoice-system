@@ -2,7 +2,7 @@
 
 from decimal import Decimal
 
-from backend.modules.review.policy.auto_review_policy import auto_review_reasons, margin_alert
+from backend.modules.review.policy.auto_review_policy import auto_review_reasons, margin_alert, margin_flags
 
 OK = {"status": "ok", "margin": Decimal("5"), "note": ""}
 NEGATIVE = {"status": "negative", "margin": Decimal("-3"), "note": "报关单价低于报关行单价"}
@@ -30,3 +30,20 @@ def test_margin_negative_alerts_and_unavailable_blocks():
     reasons = auto_review_reasons("pending", False, 0, ROWS, True, [OK, NEGATIVE, UNAVAILABLE])
     assert "报关行单价高于人民币申报单价且超出容差" in reasons
     assert "申报幅度无法计算：报关行与子采购行单位不一致，不计算申报幅度" in reasons
+
+
+def test_caliber_flags_do_not_imply_price_alert_or_auto_approval():
+    unit = {"status": "unit_mismatch", "note": "单位不同"}
+    quantity = {"status": "quantity_mismatch", "note": "数量不同"}
+    assert margin_flags([OK, unit, quantity]) == {
+        "marginAlert": False,
+        "unitMismatch": True,
+        "quantityMismatch": True,
+    }
+    assert margin_flags([NEGATIVE, unit]) == {
+        "marginAlert": True,
+        "unitMismatch": True,
+        "quantityMismatch": False,
+    }
+    assert auto_review_reasons("pending", False, 0, ROWS, True, [unit])
+    assert auto_review_reasons("pending", False, 0, ROWS, True, [quantity])

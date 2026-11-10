@@ -1,5 +1,7 @@
 """快照字段搜索表达式；不查询实时来源，筛选后再聚合与分页。"""
 
+import json
+
 from sqlalchemy import case, func, or_, select
 
 from backend.core.search_terms import search_terms
@@ -46,16 +48,16 @@ def text_field(path, dialect):
     return func.json_unquote(value) if dialect == "mysql" else value
 
 
-def unit_mismatch(dialect):
-    """只匹配报关行已有的单位异常结论，不搜索原因文案或子采购行。"""
+def margin_status_matches(status, dialect):
+    """精确匹配报关行已有的幅度状态，不搜索原因文案或子采购行。"""
     lines = func.json_extract(snapshots.c.payload, "$.customsLines")
     if dialect == "mysql":
-        return func.json_contains(lines, '{"marginStatus":"unit_mismatch"}') == 1
+        return func.json_contains(lines, json.dumps({"marginStatus": status})) == 1
     entries = func.json_each(lines).table_valued("value", joins_implicitly=True)
     return (
         select(1)
         .select_from(entries)
-        .where(func.json_extract(entries.c.value, "$.marginStatus") == "unit_mismatch")
+        .where(func.json_extract(entries.c.value, "$.marginStatus") == status)
         .correlate(snapshots)
         .exists()
     )

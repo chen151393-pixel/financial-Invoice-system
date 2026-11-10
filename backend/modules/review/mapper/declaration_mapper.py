@@ -8,7 +8,7 @@ from decimal import Decimal
 
 from backend.modules.source.public import declared_unit_price, unit_label
 
-from ..policy.auto_review_policy import auto_review_reasons, margin_alert
+from ..policy.auto_review_policy import auto_review_reasons, margin_flags
 from ..policy.margin_policy import DEFAULT_UNIT_PRICE_TOLERANCE_CNY, declared_margin
 from ..policy.purchase_display_policy import display_unit_price, group_purchase_lines
 from ..policy.review_policy import CHANGED_WARNING, STATUS_LABELS
@@ -213,7 +213,7 @@ def declaration(
         purchaseCount=len(content["purchase_lines"]),
         customsLines=customs_lines,
         unlinkedLines=group_purchase_lines([line.model_dump() for line in unlinked]),
-        marginAlert=margin_alert(margins.values()),
+        **margin_flags(margins.values()),
         autoReview=AutoReview(eligible=not reasons, reasons=reasons),
         warnings=[CHANGED_WARNING] if changed else [],
         review=review_state(state, active_review, allowed, reason),

@@ -15,8 +15,18 @@ from .margin_policy import MISMATCH
 
 
 def margin_alert(margins):
-    """任一报关行单价超出申报单价容差，或原始口径与报关口径单位、数量不一致，即提醒人工核对。"""
-    return any(margin["status"] in ("negative", *MISMATCH) for margin in margins)
+    """只有已完成单价比较且超出容差，才是申报幅度异常。"""
+    return any(margin["status"] == "negative" for margin in margins)
+
+
+def margin_flags(margins):
+    """按已计算的逐行状态分别归类；同单不同明细可以有多种问题。"""
+    margins = list(margins)
+    return {
+        "marginAlert": margin_alert(margins),
+        "unitMismatch": any(margin["status"] == "unit_mismatch" for margin in margins),
+        "quantityMismatch": any(margin["status"] == "quantity_mismatch" for margin in margins),
+    }
 
 
 def auto_review_reasons(state, changed, unlinked_count, purchase_rows, currencies_known, margins):

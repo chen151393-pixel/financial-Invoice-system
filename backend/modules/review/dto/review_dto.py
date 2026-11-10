@@ -19,7 +19,7 @@ class DeclarationListQuery(StrictModel):
     purchaseOrderNo: SearchText = ""
     keyword: str = Field(default="", max_length=120)
     account: str = Field(default="", max_length=80, pattern=r"^[a-zA-Z0-9_-]*$")
-    # unit_mismatch：幅度异常中含单位不一致的待审核单据；其他筛选口径保持不变
+    # margin_alert：实际单价超容差；unit_mismatch：原始/报关单位不同；两类独立筛选待审核单据
     status: Literal["all", "pending", "approved", "margin_alert", "unit_mismatch", "auto"] = "all"
     supplierId: str = Field(default="", max_length=20, pattern=r"^([1-9][0-9]*)?$")
     page: int = Field(default=1, ge=1, le=100000)

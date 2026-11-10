@@ -101,6 +101,8 @@ class Declaration(StrictModel):
     salesOrders: str = ""
     # 任一报关行采购单价超出人民币报关单价容差时为 True
     marginAlert: bool = False
+    unitMismatch: bool = False
+    quantityMismatch: bool = False
     autoReview: AutoReview = Field(default_factory=AutoReview)
     currencyEvidenceSummary: list[str] = Field(default_factory=list)
     currencyChecks: list[CurrencyCheck] = Field(default_factory=list)

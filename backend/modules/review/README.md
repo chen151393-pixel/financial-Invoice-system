@@ -92,7 +92,7 @@
 
 - 报关行接口新增 `originalQuantity`、`originalPrice`（单位沿用 `originalPriceUnit`），页面在“金额”右侧新增“采购单价”列，显示如“3.50 / 盒”。
 - 计算申报幅度前先比同一报关行的两套口径（`margin_policy.caliber_mismatch`，单位先经单位字典转名称）：单位不同返回 `marginStatus=unit_mismatch`，单位相同数量不同返回 `quantity_mismatch`，两者都不计算幅度（两个单价单位不同，不能直接相比）；任一口径缺少单位或数量时不做此项比较，沿用原有规则。
-- 两种不一致与单价异常一样计入 `marginAlert`（概况“申报幅度异常”和筛选会包含它们），并作为不能自动审核的原因“报关行原始口径与报关口径不一致：…”。快照表 `margin_alert` 列注释未改，语义已扩大，未为注释单独加迁移。
+- 单位、数量不一致分别返回 `unitMismatch`、`quantityMismatch`，不计入 `marginAlert`；两种不一致仍作为不能自动审核的原因“报关行原始口径与报关口径不一致：…”。只有逐行 `marginStatus=negative`（实际单价超出容差）才计入申报幅度异常。
 - 计算版本升为 `review-v11`，启动后自动重算快照；不影响内容摘要，已审核报关单不需要重审。
 - 验证：`tests/test_review_original_caliber.py`；共用报关夹具 `customs()` 新增 `original=` 参数，默认原始口径与报关口径一致。
 
@@ -147,9 +147,9 @@ npm.cmd run dev:api
 
 ## 单位不一致快捷筛选（2026-11-10）
 
-`POST /api/review/declarations/query` 新增 `status=unit_mismatch` 和 `counts.unitMismatch`：在原申报幅度异常范围内，筛选至少一条报关行 `marginStatus=unit_mismatch` 的待审核报关单，按整单计数，多条异常行不重复累计。仅数量不一致或仅价格异常不进入此分类；同单同时有单位与价格异常仍计入。原 `marginAlert` 计数与筛选范围保持不变，新卡片是其子集。
+`POST /api/review/declarations/query` 支持 `status=unit_mismatch` 和 `counts.unitMismatch`：筛选至少一条报关行 `marginStatus=unit_mismatch` 的待审核报关单，按整单计数，多条异常行不重复累计。`status=margin_alert` / `counts.marginAlert` 独立筛选至少一条报关行 `marginStatus=negative` 的单据；只有单位或数量不一致不进入申报幅度异常。同单不同明细存在两类问题时同时进入对应分类，不能用两个卡片数字相加作为异常总数。
 
-复用当前快照 JSON，在数据库中筛选、计数后分页；叠加现有查询条件，过期或计算失败的快照仍排除。无需迁移、补算或重新拉取 NS。回归见 `test_review_unit_filter.py`（SQLite 与可选隔离 MySQL）。
+复用当前快照 JSON，在数据库中按逐行状态筛选、计数后分页，不依赖旧快照混合分类的 `margin_alert` 列。响应按已有逐行结果归类 `marginAlert`、`unitMismatch`、`quantityMismatch`，兼容未保存新标记的旧快照；不重算金额，不改变自动审核条件。叠加现有查询条件，过期或计算失败的快照仍排除，主行分类标记一并清空。无需迁移、补算或重新拉取 NS；重启更新后的后端并刷新页面即可使用。回归见 `test_review_unit_filter.py`（SQLite 与可选隔离 MySQL）。
 
 ## 真实报关单号筛选（2026-11-09）
 

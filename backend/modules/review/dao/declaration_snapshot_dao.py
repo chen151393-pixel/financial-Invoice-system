@@ -6,7 +6,7 @@ from ..entity.calculation_job import calculation_jobs as jobs
 from ..entity.declaration_snapshot import declaration_snapshots as snapshots
 from ..entity.snapshot_supplier import snapshot_suppliers as suppliers
 from .snapshot_search import conditions as search_conditions
-from .snapshot_search import unit_mismatch
+from .snapshot_search import margin_status_matches
 
 
 def replace_account(connection, account, rows, supplier_rows):
@@ -23,8 +23,9 @@ def browse(connection, query, key, month_start, declaration_ids=None):
     fresh = and_(jobs.c.requested_revision == jobs.c.completed_revision, jobs.c.calculation_key == key)
     pending = snapshots.c.review_status == "pending"
     approved = snapshots.c.review_status == "approved"
-    alert = and_(pending, fresh, snapshots.c.margin_alert.is_(True))
-    unit_alert = and_(alert, unit_mismatch(connection.dialect.name))
+    # 旧快照的 margin_alert 同时包含口径不一致，分类必须以逐行状态为准。
+    alert = and_(pending, fresh, margin_status_matches("negative", connection.dialect.name))
+    unit_alert = and_(pending, fresh, margin_status_matches("unit_mismatch", connection.dialect.name))
     auto = and_(pending, fresh, snapshots.c.auto_eligible.is_(True))
     conditions = search_conditions(query, connection.dialect.name)
     if declaration_ids is not None:

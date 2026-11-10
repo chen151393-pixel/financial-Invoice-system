@@ -1,4 +1,4 @@
-"""单位异常是幅度异常的子集；在快照 SQL 中按整单去重、筛选和分页。"""
+"""单位与实际幅度异常独立分类；兼容旧快照，在 SQL 中按整单去重、筛选和分页。"""
 
 import json
 
@@ -45,6 +45,9 @@ def test_unit_filter_counts_whole_declarations_before_pagination(schema_engine, 
             payload["customsLines"][0]["marginNote"] = "unit_mismatch"
             payload["customsLines"][0]["purchaseLines"][0]["note"] = "unit_mismatch"
             payload["marginAlert"] = i != 5
+            # 模拟升级前的快照：没有独立标记，marginAlert 混入单位和数量异常。
+            payload.pop("unitMismatch", None)
+            payload.pop("quantityMismatch", None)
             payload["review"]["status"] = "approved" if i == 4 else "pending"
             connection.execute(
                 text(
@@ -59,16 +62,29 @@ def test_unit_filter_counts_whole_declarations_before_pagination(schema_engine, 
                 },
             )
     page = review.browse(DeclarationListQuery(status="unit_mismatch", pageSize=1))
-    assert page.counts["marginAlert"] == 4
+    assert page.counts["marginAlert"] == 2
     assert page.counts["unitMismatch"] == page.total == 2
     assert page.pages == 2 and [g.recordNumber for g in page.groups] == ["CD871"]
+    assert page.groups[0].unitMismatch and page.groups[0].marginAlert
     second = review.browse(DeclarationListQuery(status="unit_mismatch", pageSize=1, page=2))
     assert [g.recordNumber for g in second.groups] == ["CD870"]
+    assert second.groups[0].unitMismatch and not second.groups[0].marginAlert
     filtered = review.browse(DeclarationListQuery(status="unit_mismatch", recordNo="CD870"))
-    assert filtered.total == filtered.counts["unitMismatch"] == filtered.counts["marginAlert"] == 1
+    assert filtered.total == filtered.counts["unitMismatch"] == 1
+    assert filtered.counts["marginAlert"] == 0
     assert review.browse(DeclarationListQuery(status="unit_mismatch", recordNo="CD873")).total == 0
-    assert review.browse(DeclarationListQuery(status="margin_alert")).total == 4
+    price = review.browse(DeclarationListQuery(status="margin_alert"))
+    assert price.total == 2
+    assert [g.recordNumber for g in price.groups] == ["CD873", "CD871"]
+    assert all(g.marginAlert for g in price.groups)
+    assert not price.groups[0].unitMismatch
+    quantity = review.browse(DeclarationListQuery(recordNo="CD872"))
+    assert quantity.groups[0].quantityMismatch
+    assert not quantity.groups[0].marginAlert and not quantity.groups[0].unitMismatch
+    assert quantity.counts["marginAlert"] == quantity.counts["unitMismatch"] == 0
     with engine.begin() as connection:
         connection.execute(text("UPDATE review_calculation_jobs SET requested_revision=requested_revision+1"))
     dirty = review.browse(DeclarationListQuery(status="unit_mismatch"))
     assert dirty.total == dirty.counts["unitMismatch"] == dirty.counts["marginAlert"] == 0
+    stale = review.browse(DeclarationListQuery())
+    assert all(not (g.marginAlert or g.unitMismatch or g.quantityMismatch) for g in stale.groups)
