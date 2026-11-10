@@ -49,8 +49,10 @@ def payloads(connection, ids):
 
 def latest(connection, account, record_type, ns_internal_id):
     """该来源最近一次保存的原始数据；没有时返回 None。"""
-    return connection.execute(
-        select(raw_records.c.payload)
+    # 仅排序主键，避免 MySQL filesort 携带大 JSON 耗尽 sort_buffer_size。
+    # 原始快照只追加；取得 ID 后在同一连接按主键读正文，不受后续新版本插入影响。
+    identity = connection.execute(
+        select(raw_records.c.id)
         .where(
             raw_records.c.ns_account == account,
             raw_records.c.record_type == record_type,
@@ -59,3 +61,6 @@ def latest(connection, account, record_type, ns_internal_id):
         .order_by(raw_records.c.id.desc())
         .limit(1)
     ).scalar()
+    if identity is None:
+        return None
+    return connection.execute(select(raw_records.c.payload).where(raw_records.c.id == identity)).scalar()

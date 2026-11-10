@@ -19,6 +19,7 @@ from ..policy.ns_config import parse_config
 from ..vo.partial_sync_result import PartialResult
 from .declaration_service import sync_lock_name
 from .ns_reader import PlReader
+from .storage_logging import log_database_error
 
 logger = logging.getLogger("ns_api.source")
 
@@ -51,7 +52,8 @@ class PartialSyncService:
                 else:
                     self._commit_groups(context, groups)
                 return result.response()
-        except SQLAlchemyError:
+        except SQLAlchemyError as error:
+            log_database_error(error, operation="partial_page", account=account, kind=kind)
             raise ApiError(503, "数据库连接中断，请先核实已保存单据，不要自动重试") from None
 
     def _read_whole_page(self, kind, rows, config, report, result):
@@ -118,7 +120,7 @@ class PartialSyncService:
         return list(groups.values())
 
     def _save_group(self, context, group, index, total, save):
-        _, kind, _, _, _, report, result = context
+        _, kind, _, account, _, report, result = context
         label = f"第 {index}/{total} 组（已保存 {result.saved_groups} 组）："
 
         def phase(message, completed=None, count=None):
@@ -126,7 +128,8 @@ class PartialSyncService:
 
         try:
             saved, collected = save(phase)
-        except SQLAlchemyError:
+        except SQLAlchemyError as error:
+            log_database_error(error, operation="save_group", account=account, kind=kind, group=group)
             # 不能推断异常组未写入，也不重发该组；恢复连接和账户互斥后仅继续后续组。
             result.mark(group, "unknown", "数据库保存结果待核实，本组已跳过；请核对本地记录，勿直接重试")
             return self._continue_after_failure(context, phase)
@@ -145,13 +148,14 @@ class PartialSyncService:
 
     def _continue_after_failure(self, context, report):
         """失败组结束后清理事务；断线重连必须重新取得账户锁，不能绕过互斥写后续组。"""
-        connection, _, _, _, lock, _, result = context
+        connection, kind, _, account, lock, _, result = context
         try:
             if connection.in_transaction():
                 connection.rollback()
             with connection.begin():
                 available = named_lock.owns(connection, lock) or named_lock.acquire(connection, lock)
-        except SQLAlchemyError:
+        except SQLAlchemyError as error:
+            log_database_error(error, operation="recover_group", account=account, kind=kind)
             available = False
         if not available:
             result.interrupted = True

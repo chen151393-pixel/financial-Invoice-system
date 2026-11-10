@@ -42,6 +42,7 @@ from .parent_order_service import save_header
 from .parent_reference_service import verify_missing_parents
 from .relation_reader import RelationReader
 from .sales_order_reader import read_sales_orders
+from .storage_logging import log_database_error
 
 SYNC_KINDS = ("sub-purchase-orders", "customs-declarations")
 # 提交时等待账本锁的秒数：此前读取 NS 可能已耗时数分钟，其他持锁写入都是短事务，等待放宽以免白读。
@@ -115,9 +116,11 @@ class StorageService:
                             connection.rollback()
                         with connection.begin():
                             named_lock.release(connection, lock)
-                    except SQLAlchemyError:
+                    except SQLAlchemyError as error:
+                        log_database_error(error, operation="release_lock", account=account)
                         connection.invalidate()
-        except SQLAlchemyError:
+        except SQLAlchemyError as error:
+            log_database_error(error, operation="save_page", account=account)
             raise ApiError(503, "MySQL保存未能确认，请查询本地结果；检查表结构、权限和连接后再重试") from None
         return result
 
