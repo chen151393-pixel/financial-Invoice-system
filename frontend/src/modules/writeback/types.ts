@@ -103,9 +103,12 @@ export interface TaskDetail extends TaskSummary {
     confirm: boolean;
     confirmPreview: boolean;
     execute: boolean;
+    // 账单补写：部分写入且已建 NS 发票记录、写入开关与白名单满足时可用
+    repair?: boolean;
     resolve: boolean;
     markNotWritten: boolean;
   };
+  repair?: { allowed: boolean; reason: string };
   querying: boolean;
   // actorName：操作者的飞书人员姓名（system 为“系统”）；查不到时为原标识
   audit: {

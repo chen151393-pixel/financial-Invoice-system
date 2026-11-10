@@ -17,6 +17,9 @@ export const confirmPreview = (id: string, revision: number) =>
   });
 export const executeWrite = (id: string, revision: number) =>
   http<TaskDetail>(`/writeback/tasks/${encodeURIComponent(id)}/execute`, "POST", { revision });
+// 部分写入时补写账单：只更新账单累计与关联发票，不新建 NS 发票记录；写操作不自动重试
+export const repairBills = (id: string, revision: number) =>
+  http<TaskDetail>(`/writeback/tasks/${encodeURIComponent(id)}/repair`, "POST", { revision });
 export const resolveWrite = (id: string, body: ResolveBody) =>
   http<TaskDetail>(`/writeback/tasks/${encodeURIComponent(id)}/resolve`, "POST", body);
 export const invoiceReadiness = (id: string) =>

@@ -347,3 +347,121 @@ test("无效请求在检索和写入前拒绝", () => {
     assert.equal(searches.length + writes.created.length, 0);
   }
 });
+
+// 补写（2026-11-10）：主记录 7001 已建、账单未全部更新。
+function repairFixtures(bills, changes = {}) {
+  return {
+    customrecord_swc_vendor_invoice: [
+      { id: "7001", values: { name: "INV-1", vendorId: "88", inactive: "F", ...changes.head } },
+    ],
+    customrecord_swc_vendor_invoice_detail: (
+      changes.details ?? bills.map(([id, amount]) => [id, amount])
+    ).map(([billId, amount], index) => ({ id: `80${index}`, values: { main: "7001", billId, amount } })),
+    vendorbill: bills.map(([id, , values]) => bill(id, "501", values)),
+  };
+}
+
+const repairRequest = (bills) =>
+  request({
+    action: "repair",
+    invoiceRecordId: "7001",
+    invoice: { number: "INV-1", date: "2026-03-20", amount: "300.00" },
+    bills: bills.map(([billId]) => ({
+      billId,
+      purchaseOrderId: "501",
+      amount: "100.00",
+      expectedBefore: "100.00",
+    })),
+  });
+
+test("补写只更新未完成的账单，不新建主记录；已补齐的跳过，累计已到写后值的只补关联", () => {
+  const bills = [
+    ["9001", "100.00", { received: "200", invoices: "6001,7001" }],
+    ["9002", "100.00", { received: "100", invoices: "6001" }],
+    ["9003", "100.00", { received: "200", invoices: "" }],
+  ];
+  const { api, writes } = service(repairFixtures(bills));
+  const result = api.post(repairRequest(bills));
+  assert.equal(result.action, "repair");
+  assert.equal(result.status, "APPLIED");
+  assert.equal(result.invoiceRecordId, "7001");
+  assert.deepEqual(
+    result.bills.map((item) => [item.billId, item.status, item.before, item.after, item.verified]),
+    [
+      ["9001", "ALREADY_UPDATED", "100.00", "200.00", true],
+      ["9002", "UPDATED", "100.00", "200.00", true],
+      ["9003", "UPDATED", "100.00", "200.00", true],
+    ],
+  );
+  assert.equal(writes.created.length, 0);
+  assert.deepEqual(
+    // vm 上下文创建的数组原型不同，序列化后比较
+    JSON.parse(
+      JSON.stringify(
+        writes.submitted.map((item) => [
+          item.id,
+          item.values.custbody_swc_vendor_amount,
+          item.values.custbody_swc_bill_vendor_num,
+        ]),
+      ),
+    ),
+    [
+      ["9002", 200, ["6001", "7001"]],
+      ["9003", 200, ["7001"]],
+    ],
+  );
+});
+
+test("补写前核对主记录、明细与账单累计，任一不符整单不写", () => {
+  const bills = [["9001", "100.00", { received: "100" }]];
+  const cases = [
+    [repairFixtures(bills, { head: { name: "INV-2" } }), "INVOICE_MISMATCH"],
+    [repairFixtures(bills, { head: { vendorId: "99" } }), "INVOICE_MISMATCH"],
+    [repairFixtures(bills, { details: [["9001", "90.00"]] }), "DETAIL_MISMATCH"],
+    [repairFixtures(bills, { details: [] }), "DETAIL_MISMATCH"],
+    [repairFixtures([["9001", "100.00", { received: "150" }]]), "STALE"],
+    [repairFixtures([["9001", "100.00", { received: "100", approvalStatus: "1" }]]), "NOT_APPROVED"],
+  ];
+  for (const [fixtures, code] of cases) {
+    const { api, writes } = service(fixtures);
+    const result = api.post({
+      ...repairRequest(bills),
+      invoice: { number: "INV-1", date: "2026-03-20", amount: "100.00" },
+    });
+    assert.equal(result.status, "REJECTED", code);
+    assert.equal(result.written, false);
+    assert.equal(result.problems[0].code, code);
+    assert.equal(writes.submitted.length + writes.created.length, 0);
+  }
+});
+
+test("补写仍可能因 NS 权限等失败：标为部分完成，不当作成功", () => {
+  const bills = [["9001", "100.00", { received: "100" }]];
+  const { api } = service(repairFixtures(bills), { failSubmit: "9001" });
+  const result = api.post({
+    ...repairRequest(bills),
+    invoice: { number: "INV-1", date: "2026-03-20", amount: "100.00" },
+  });
+  assert.equal(result.status, "PARTIAL");
+  assert.equal(result.written, true);
+  assert.equal(result.bills[0].status, "FAILED");
+});
+
+test("补写必须带有效主记录 ID，正常写入不接受主记录 ID", () => {
+  const bills = [["9001", "100.00", { received: "100" }]];
+  const { api, searches } = service(repairFixtures(bills));
+  const base = {
+    ...repairRequest(bills),
+    invoice: { number: "INV-1", date: "2026-03-20", amount: "100.00" },
+  };
+  for (const input of [
+    { ...base, invoiceRecordId: undefined },
+    { ...base, invoiceRecordId: "0" },
+    { ...base, action: "apply" },
+  ]) {
+    const result = api.post(input);
+    assert.equal(result.complete, false);
+    assert.equal(result.error.code, "INVALID_REQUEST");
+  }
+  assert.equal(searches.length, 0);
+});

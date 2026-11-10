@@ -11,9 +11,10 @@ import {
   ErrorState,
   Skeleton,
 } from "../../../shared/components/ui";
-import { confirmPlan, confirmPreview, executeWrite, refreshTask, resolveWrite } from "../api";
+import { confirmPlan, confirmPreview, executeWrite, refreshTask, repairBills, resolveWrite } from "../api";
 import { parentLabel, subPurchaseLabel, subsidiaryLabel } from "../bill-labels";
 import { PlanForm } from "../components/PlanForm";
+import { RepairPanel } from "../components/RepairPanel";
 import { ResolveForm } from "../components/ResolveForm";
 import { WritePanel } from "../components/WritePanel";
 import type { ConfirmBody, ResolveBody, TaskDetail } from "../types";
@@ -30,6 +31,8 @@ const actionLabels: Record<string, string> = {
   write_started: "开始写入 NS",
   write_finished: "写入结束",
   write_resolved: "人工核实写入结果",
+  repair_started: "开始补写账单",
+  repair_finished: "补写账单结束",
   changed_after_write: "写入后审核变化",
 };
 export function TaskContent({
@@ -42,6 +45,7 @@ export function TaskContent({
   onConfirmPreview,
   onExecute,
   onResolve,
+  onRepair = () => {},
 }: {
   task: TaskDetail;
   busy: boolean;
@@ -52,6 +56,7 @@ export function TaskContent({
   onConfirmPreview: () => void;
   onExecute: () => void;
   onResolve: (body: ResolveBody) => void;
+  onRepair?: () => void;
 }) {
   const bills = task.candidates?.purchaseOrders.flatMap((order) => order.bills) ?? [];
   const registrations = task.candidates?.registrationCheck?.records ?? [];
@@ -193,6 +198,13 @@ export function TaskContent({
         onConfirmPreview={onConfirmPreview}
         onExecute={onExecute}
       />
+      <RepairPanel
+        key={`repair-${task.revision}`}
+        task={task}
+        busy={busy}
+        writing={writing}
+        onRepair={onRepair}
+      />
       {task.actions.resolve && (
         <ResolveForm key={`resolve-${task.revision}`} task={task} busy={busy} onResolve={onResolve} />
       )}
@@ -246,6 +258,7 @@ export function WritebackRequestPage({ requestId }: { requestId: string }) {
           onConfirmPreview={() => void run(() => confirmPreview(requestId, task.revision))}
           onExecute={() => void run(() => executeWrite(requestId, task.revision), true)}
           onResolve={(body) => void run(() => resolveWrite(requestId, body))}
+          onRepair={() => void run(() => repairBills(requestId, task.revision), true)}
         />
       ) : (
         !error && <Skeleton label="正在加载回写任务" />

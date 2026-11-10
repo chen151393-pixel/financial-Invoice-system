@@ -491,6 +491,41 @@ test("部分完成只能标记已登记；结果不明可标记未写入，均�
   assert.doesNotMatch(unknown, /重试|回写到 NS/);
 });
 
+test("部分写入可补写账单：后端允许时按钮可用，不允许时展示原因，结果不明时不出现", () => {
+  const view = (state, repair) =>
+    render(Content, {
+      task: task({
+        state,
+        stateLabel: "部分写入，待核实",
+        request: request({ state, nsRecordId: state === "partial" ? "7001" : null }),
+        actions: { ...noActions, resolve: true, repair: repair.allowed },
+        repair,
+      }),
+      busy: false,
+      ...handlers,
+    });
+  const allowed = view("partial", { allowed: true, reason: "可补写账单" });
+  assert.match(allowed, /补写 NS 账单/);
+  assert.match(allowed, /发票记录 7001 已在 NS 建成/);
+  assert.doesNotMatch(allowed, /disabled=""[^>]*>补写账单/);
+  const closed = view("partial", { allowed: false, reason: "NS 写入开关未开启，方案停在待写入" });
+  assert.match(closed, /disabled=""[^>]*>补写账单/);
+  assert.match(closed, /暂不能补写：NS 写入开关未开启/);
+  assert.doesNotMatch(view("unknown", { allowed: false, reason: "" }), /补写 NS 账单/);
+});
+
+test("补写账单只发送任务版本，不发送金额或账单", async (t) => {
+  const calls = [];
+  t.mock.method(globalThis, "fetch", async (url, options) => {
+    calls.push({ url, options });
+    return Response.json(task());
+  });
+  await api.repairBills("12", 7);
+  assert.equal(calls[0].url, "/api/writeback/tasks/12/repair");
+  assert.equal(calls[0].options.method, "POST");
+  assert.deepEqual(JSON.parse(calls[0].options.body), { revision: 7 });
+});
+
 test("同一子采购单三条明细只需选择一次目标账单，后端金额原样展示", () => {
   const value = task();
   value.orders[0] = {

@@ -121,6 +121,7 @@ from .modules.writeback.service.execute_service import ExecuteService as Writeba
 from .modules.writeback.service.prepare_worker import PrepareWorker
 from .modules.writeback.service.query_service import QueryService as WritebackQueries
 from .modules.writeback.service.queue_service import on_matching_changed
+from .modules.writeback.service.repair_service import RepairService as WritebackRepairs
 from .modules.writeback.service.task_service import TaskService as WritebackTasks
 
 
@@ -328,7 +329,11 @@ def _register_business(app, settings, ns, contract_ns, wecom, engine, lemon_invo
     )
     writeback_queries = WritebackQueries(writeback_tasks, VendorBillQueryService(ns))
     writeback_executor = WritebackExecutor(writeback_tasks, ns)
-    app.include_router(writeback_router(writeback_tasks, writeback_queries, writeback_executor))
+    app.include_router(
+        writeback_router(
+            writeback_tasks, writeback_queries, writeback_executor, WritebackRepairs(writeback_tasks, ns)
+        )
+    )
     # 写入开关开启且写入接口已配置时，后台自动写入已就绪任务；白名单在每个任务上再判断。
     auto_write = settings.write_enabled and bool(settings.vendor_bill_writeback_script)
     app.state.writeback_prepare_worker = PrepareWorker(

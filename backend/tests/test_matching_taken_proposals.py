@@ -1,7 +1,5 @@
 """一张子采购单只由一张发票开具（2026-11-10）：整单通过后，其他发票上占用同一子采购单的待审核建议自动失效。"""
 
-from sqlalchemy import text
-
 from backend.tests.invoice_files import invoice
 from backend.tests.test_matching import FLUID, INK, confirm_group, group, import_invoices, invoice_id
 from backend.tests.test_matching import engine as engine  # 共用夹具
@@ -10,6 +8,7 @@ from backend.tests.test_matching import reviewed as reviewed  # 共用夹具
 from backend.tests.test_matching import world as world  # 共用夹具
 from backend.tests.test_source_storage import rows
 from backend.tests.test_task import USER
+from sqlalchemy import text
 
 FIRST, SECOND = "26000000000000009401", "26000000000000009402"
 

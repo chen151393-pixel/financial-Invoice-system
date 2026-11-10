@@ -7,6 +7,7 @@ from backend.core.errors import ApiError
 from ..policy.list_policy import GROUP_STATES
 from ..policy.order_policy import require_whole_orders
 from ..policy.registration_policy import require_clear_registration
+from ..policy.repair_policy import repair_allowed
 from ..policy.state_policy import WRITTEN_STATES, stuck
 from .order_vo import candidates_view, orders, parent_orders, plan_view, preview_view
 
@@ -105,6 +106,7 @@ def detail(task, plan, request, audit, busy, gate, stamp, names=None):
             }
         )
     halted = stuck(task, request, stamp)
+    repair = repair_allowed(task, request, gate)
     capability = writeback(task, gate)
     plan_issue = ""
     if plan and task["state"] in ("ready", "needs_preview"):
@@ -138,8 +140,11 @@ def detail(task, plan, request, audit, busy, gate, stamp, names=None):
             "confirm": task["state"] == "needs_confirmation" and not busy,
             "confirmPreview": task["state"] == "needs_preview" and not busy and not plan_issue,
             "execute": capability["allowed"] and not busy,
+            # 账单补写：部分写入且已建发票记录；不满足时附原因，页面按需展示
+            "repair": repair[0] and not busy,
             "resolve": task["state"] in ("unknown", "partial") or halted,
             "markNotWritten": task["state"] == "unknown" or halted,
         },
+        "repair": {"allowed": repair[0] and not busy, "reason": repair[1]},
         "querying": busy,
     }
