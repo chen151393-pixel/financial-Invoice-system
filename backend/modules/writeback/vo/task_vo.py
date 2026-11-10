@@ -70,7 +70,7 @@ def iso(value):
     return value.isoformat() if value else None
 
 
-def request_view(task, request):
+def request_view(task, request, names=None):
     if not request:
         return None
     return {
@@ -80,6 +80,7 @@ def request_view(task, request):
         "preview": preview_view(task, request["preview"]),
         "needsConfirmation": request["needs_confirmation"],
         "confirmedBy": request["confirmed_by"],
+        "confirmedByName": (names or {}).get(request["confirmed_by"], request["confirmed_by"] or ""),
         "confirmedAt": iso(request["confirmed_at"]),
         "nsRecordId": request["ns_record_id"],
         "sentAt": iso(request["sent_at"]),
@@ -87,7 +88,9 @@ def request_view(task, request):
     }
 
 
-def detail(task, plan, request, audit, busy, gate, stamp):
+def detail(task, plan, request, audit, busy, gate, stamp, names=None):
+    """names：操作者标识 → 显示名称（identity 门面），缺省时原样显示标识。"""
+    names = names or {}
     snapshot = task["snapshot"]
     rows = []
     for row in snapshot["allocations"]:
@@ -118,12 +121,13 @@ def detail(task, plan, request, audit, busy, gate, stamp):
         "orders": orders(task),
         "invoice": snapshot["invoice"],
         "candidates": candidates_view(task),
-        "plan": plan_view(task, plan),
-        "request": request_view(task, request),
+        "plan": plan_view(task, plan, names),
+        "request": request_view(task, request, names),
         "audit": [
             {
                 "action": a["action"],
                 "actor": a["actor"],
+                "actorName": names.get(a["actor"], a["actor"]),
                 "detail": a["detail"],
                 "at": a["created_at"].isoformat(),
             }

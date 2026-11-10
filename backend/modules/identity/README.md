@@ -33,6 +33,10 @@
 | `PUT /api/identity/departments/{id}/roles` | `{roles}`：部门默认角色，下级部门成员继承                               |
 | `PUT /api/identity/users/{id}/roles`       | `{roles, customRoles}`：个人角色；`customRoles` 为是时只按个人角色      |
 
+### 对外只读门面 `public.py`（2026-11-10）
+
+`actor_names(connection, actors)`：把操作者标识转为显示名称。`user:fs:<user_id>` 取本地飞书人员副本姓名（含已停用人员，历史记录仍可显示），`system` 显示“系统”，其他或查不到的原样返回。调用方在自己的事务连接中只读调用，目前由 writeback 处理记录与方案确认人使用。
+
 ## 关键规则
 
 - **人员以飞书为准**：本地只保存副本，不能新增人员或修改姓名、部门。只有同步范围内、在职、未冻结、有角色且管理员已启用的人才能登录。新导入默认待授权；同步失败时不停用任何人员，同步成功也不覆盖手工启用开关。

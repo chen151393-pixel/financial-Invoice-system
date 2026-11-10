@@ -105,7 +105,7 @@ def orders(task):
     return result
 
 
-def plan_view(task, plan):
+def plan_view(task, plan, names=None):
     if not plan:
         return None
     indexed = {str(row["id"]): group for group in order_groups(task).values() for row in group["rows"]}
@@ -129,7 +129,9 @@ def plan_view(task, plan):
             },
         )
         row["amount"] += Decimal(target["amount"])
+    confirmed_by = plan["body"].get("confirmedBy", "")
     return {
         **plan["body"],
+        "confirmedByName": (names or {}).get(confirmed_by, confirmed_by),
         "orders": [{**row, "amount": format(row["amount"], ".2f")} for row in grouped.values()],
     }

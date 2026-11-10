@@ -168,7 +168,7 @@ export function TaskContent({
         <Card>
           <CardHeader
             title={task.state === "stale" ? "历史冻结方案（当前不可用）" : "已冻结方案"}
-            description={`${task.plan.confirmedBy} · ${task.plan.confirmedAt}`}
+            description={`${task.plan.confirmedByName || task.plan.confirmedBy} · ${task.plan.confirmedAt}`}
           />
           <DataTable
             label="冻结方案"
@@ -202,7 +202,7 @@ export function TaskContent({
           <ol className="wb-audit">
             {task.audit.map((item, index) => (
               <li key={`${item.at}-${index}`}>
-                <strong>{actionLabels[item.action] || "任务处理"}</strong> · {item.actor}
+                <strong>{actionLabels[item.action] || "任务处理"}</strong> · {item.actorName || item.actor}
                 <small className="wb-secondary">
                   {item.at} {item.detail.reason || item.detail.evidence}
                 </small>

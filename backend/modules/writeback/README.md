@@ -52,9 +52,9 @@
 | 接口 | 作用 |
 | --- | --- |
 | `GET /api/writeback/tasks?keyword=&state=&page=1&pageSize=20` | 后端筛选分页，返回 items/total/pages |
-| `GET /api/writeback/tasks/{id}` | 任务、审核分配、完整候选、当前方案、最近 100 条审计、允许动作。候选账单附 `purchaseOrderNo`（NS 查询结果的母单号）、`subPurchaseOrderNo`、`subsidiaryName`（审核快照中 `subsidiary:*` 采购公司的名称），回写预览附 `purchaseOrderNo`，方案订单附 `billNumber`；取不到时为空串，均为展示字段，不改存储的查询结果与预览 |
+| `GET /api/writeback/tasks/{id}` | 任务、审核分配、完整候选、当前方案、最近 100 条审计、允许动作。候选账单附 `purchaseOrderNo`（NS 查询结果的母单号）、`subPurchaseOrderNo`、`subsidiaryName`（优先取 NS 账单查询返回的子公司名称，旧结果才用审核快照中 `subsidiary:*` 采购公司的名称）；`audit[].actorName`、`plan.confirmedByName`、`request.confirmedByName` 为操作者显示名称（飞书人员姓名，`system` 显示“系统”，查不到时为原标识），回写预览附 `purchaseOrderNo`，方案订单附 `billNumber`；取不到时为空串，均为展示字段，不改存储的查询结果与预览 |
 | `POST /api/writeback/tasks/{id}/refresh` | `{ "revision": 1 }`，只读重查候选；旧方案版本失效 |
-| `POST /api/writeback/tasks/{id}/confirm` | 确认并持久保存不可变方案与写入请求，不执行写入 |
+| `POST /api/writeback/tasks/{id}/confirm` | 确认并持久保存不可变方案与写入请求，不执行写入。`evidence`（公司与账单归属核实依据）选填、最多 1000 字（2026-11-10 起不再要求至少 5 字）；人工核实勾选仍须在页面确认 |
 | `POST /api/writeback/tasks/{id}/preview/confirm` | `{ "revision": 1, "confirmScope": true }`，确认累计与明细不一致的回写预览 |
 | `POST /api/writeback/tasks/{id}/execute` | `{ "revision": 1 }`，立即写入 NS；后端重新检查状态、开关、白名单和账单锁 |
 | `POST /api/writeback/tasks/{id}/resolve` | `{ "revision", "outcome": "applied" 或 "not_written", "evidence", "nsRecordId" }`，人工核实结论 |

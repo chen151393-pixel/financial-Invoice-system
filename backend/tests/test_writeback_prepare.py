@@ -208,6 +208,41 @@ def test_atomic_enqueue_and_idempotent_confirmation(engine, prepared):
         )
 
 
+def test_evidence_is_optional_and_audit_shows_feishu_name(engine, prepared):
+    """2026-11-10：归属核实依据选填；处理记录、方案确认人显示飞书人员姓名，system 显示“系统”。"""
+    from datetime import datetime, timezone
+
+    from backend.modules.identity.dao import user_dao
+    from backend.modules.identity.public import actor_names
+
+    feishu = "user:fs:gebca2c7"
+    with engine.begin() as connection:
+        stamp = datetime.now(timezone.utc)
+        user_dao.save(
+            connection,
+            {
+                "user_id": "gebca2c7",
+                "open_id": None,
+                "union_id": None,
+                "name": "张三",
+                "avatar_url": None,
+                "active": False,  # 已停用人员的历史记录仍显示姓名
+                "inactive_reason": "已离职",
+            },
+            stamp,
+        )
+    task = query(prepared)
+    body = confirmation(task).model_copy(update={"evidence": ""})
+    done = prepared.service.confirm(prepared.task_id, body, feishu)
+    assert done["state"] == "ready" and done["plan"]["evidence"] == ""
+    assert done["plan"]["confirmedBy"] == feishu and done["plan"]["confirmedByName"] == "张三"
+    names = {(row["action"], row["actorName"]) for row in done["audit"]}
+    # 找不到人员的标识（此处为应急管理员）原样显示，不臆造姓名
+    assert ("plan_confirmed", "张三") in names and ("queued", USER) in names
+    with engine.connect() as connection:
+        assert actor_names(connection, ["system", feishu, "", None]) == {"system": "系统", feishu: "张三"}
+
+
 @pytest.mark.parametrize(
     "buyer, normalized, allowed",
     [(None, None, True), ("", "", True), ("采购公司A", "采购公司a", True), ("其他公司", "其他公司", False)],

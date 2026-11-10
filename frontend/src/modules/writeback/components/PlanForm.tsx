@@ -74,14 +74,12 @@ export function PlanForm({
                 </Field>
               </div>
             ))}
-            <Field label="公司与账单归属核实依据">
+            <Field label="公司与账单归属核实依据（选填）">
               <textarea
-                required
-                minLength={5}
                 maxLength={1000}
                 rows={3}
                 value={evidence}
-                placeholder="填写已核实的实际 NS 采购子公司、账单与子采购的归属及凭据"
+                placeholder="可填写已核实的实际 NS 采购子公司、账单与子采购的归属及凭据"
                 onChange={(e) => {
                   requestId.current = "";
                   setEvidence(e.target.value);

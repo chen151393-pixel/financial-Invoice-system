@@ -353,6 +353,34 @@ test("失效任务保留历史方案，隐藏确认入口", () => {
   assert.doesNotMatch(html, /确认并冻结方案/);
 });
 
+test("归属核实依据选填，处理记录与方案显示飞书人员姓名", () => {
+  const form = render(Form, { task: task(), busy: false, onConfirm() {} });
+  assert.match(form, /公司与账单归属核实依据（选填）/);
+  assert.doesNotMatch(form, /<textarea[^>]*(required|minLength)/i);
+  const html = render(Content, {
+    task: task({
+      plan: {
+        allocations: [{ allocationId: "1", billId: "9", amount: "100.50" }],
+        orders: [{ subPurchaseOrderId: "200", orderNo: "SUB-1", billId: "9", amount: "100.50" }],
+        evidence: "",
+        confirmedBy: "user:fs:gebca2c7",
+        confirmedByName: "张三",
+        confirmedAt: "2026-11-10",
+      },
+      audit: [
+        { action: "queried", actor: "user:fs:gebca2c7", actorName: "张三", detail: {}, at: "2026-11-10" },
+        { action: "queued", actor: "system", actorName: "系统", detail: {}, at: "2026-11-10" },
+      ],
+    }),
+    busy: false,
+    ...handlers,
+  });
+  assert.match(html, /张三 · 2026-11-10/);
+  assert.match(html, /查询完成<\/strong> · 张三/);
+  assert.match(html, /生成任务<\/strong> · 系统/);
+  assert.doesNotMatch(html, /user:fs:gebca2c7/);
+});
+
 test("未查询和空结果独立展示", () => {
   for (const [candidates, expected] of [
     [null, /尚未查询账单/],

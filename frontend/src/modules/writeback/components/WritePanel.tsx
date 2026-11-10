@@ -81,7 +81,7 @@ export function WritePanel({
           <Alert tone="warning" title="账单累计与明细合计不一致">
             写后累计按“写前累计＋本次金额”计算，原有差额保持不变，不会被本次回写修正。
             {request.confirmedBy
-              ? ` 已由 ${request.confirmedBy} 于 ${request.confirmedAt} 确认预览。`
+              ? ` 已由 ${request.confirmedByName || request.confirmedBy} 于 ${request.confirmedAt} 确认预览。`
               : " 请核对后确认预览，确认前不会写入 NS。"}
           </Alert>
         )}
