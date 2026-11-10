@@ -34,6 +34,7 @@ export function ReviewPage() {
     supplierId: "",
     supplierName: searchParams.get("supplierName") || "",
     recordNo: searchParams.get("recordNo") || searchParams.get("keyword") || "",
+    declarationNo: searchParams.get("declarationNo") || "",
     purchaseOrderNo: searchParams.get("purchaseOrderNo") || "",
     createdFrom: searchParams.get("createdFrom") || "",
     createdTo: searchParams.get("createdTo") || "",
@@ -150,6 +151,7 @@ export function ReviewPage() {
           initial={{
             supplierName: query.supplierName || "",
             recordNo: query.recordNo || "",
+            declarationNo: query.declarationNo || "",
             purchaseOrderNo: query.purchaseOrderNo || "",
             createdFrom: query.createdFrom || "",
             createdTo: query.createdTo || "",

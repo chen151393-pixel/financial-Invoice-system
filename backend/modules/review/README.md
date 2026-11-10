@@ -145,6 +145,10 @@ npm.cmd run dev:api
 
 验证：`test_review_calculations.py` 覆盖持久队列、初始补算、四条 SQL 分页、脏快照限制、事务回滚、失败重试、规则变化、审批更新、共享销售汇率及缺汇率。`test_review_calculations_mysql.py` 在随机隔离库验证新旧代次并发和单消费者命名锁；未提供专用 MySQL 连接时明确跳过。既有业务测试通过 `review_helpers.MaterializedReviewService` 显式模拟后台已完成，再调用真实数据库分页。
 
+## 真实报关单号筛选（2026-11-09）
+
+`POST /api/review/declarations/query` 新增 `declarationNo`，按快照中的真实海关报关单号（NS `custrecord_swc_realno`，响应字段 `declaration`）部分匹配，与 CD 编号 `recordNo` 是不同字段。多条输入、去重、上限与 `%`、`_` 按普通字符的规则同下文；与其他框同时满足。只读快照，不查询实时来源，无迁移。验证见 `test_review_calculations.py::test_split_bulk_search_uses_snapshot_fields_and_filtered_counts`。
+
 ## 分字段批量搜索（2026-10-28）
 
 `POST /api/review/declarations/query` 新增 `supplierName`、`recordNo`、`purchaseOrderNo` 字符串，分别匹配供应商名称、CD 编号和子采购单号。每框支持单条或用中英文逗号、分号、换行分隔的多条内容；忽略空项、去重，最多 50 条，每条最多 120 字符，保留词内空格。框内取任一部分匹配，框间同时满足；`%`、`_` 按普通字符查询。旧 `keyword`、`supplierId` 仍兼容原调用。

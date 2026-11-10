@@ -486,8 +486,9 @@ test("比对队列显示异常分类，异常建议不能勾选批量通过；�
   assert.equal((filters.match(/type="search"/g) || []).length, 2);
   assert.match(filters, /value="001,002"/);
   assert.match(filters, /value="甲;乙"/);
-  assert.match(filters, /<span class="ui-sr-only">发票号码<\/span>/);
-  assert.match(filters, /<span class="ui-sr-only">供应商<\/span>/);
+  assert.match(filters, /<span>发票号码<\/span>/);
+  assert.match(filters, /<span>供应商<\/span>/);
+  assert.doesNotMatch(filters, /ui-sr-only/);
   assert.doesNotMatch(filters, /全部供应商/);
 });
 

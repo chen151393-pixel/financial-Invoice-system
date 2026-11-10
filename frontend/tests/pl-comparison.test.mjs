@@ -351,7 +351,7 @@ test("订单口径、缺失金额和缺失单位不冒充报关口径或零值",
   assert.doesNotMatch(html, /本次数量|本次采购金额/);
 });
 
-test("财务搜索拆为三个批量输入框，仅显示框内提示并保留可访问名称", () => {
+test("财务搜索拆为四个批量输入框（含真实报关单号），上方显示标签", () => {
   const html = renderToStaticMarkup(
     createElement(FinanceSearchForm, {
       suppliers: [{ id: "77", name: "合成供应商" }],
@@ -359,14 +359,17 @@ test("财务搜索拆为三个批量输入框，仅显示框内提示并保留�
       onSearch() {},
     }),
   );
-  assert.equal((html.match(/type="search"/g) || []).length, 3);
+  assert.equal((html.match(/type="search"/g) || []).length, 4);
   assert.equal((html.match(/type="date"/g) || []).length, 2);
+  assert.match(html, /name="declarationNo"/);
   assert.match(html, /报关单创建日期 从/);
   assert.match(html, /name="createdFrom"/);
   assert.match(html, /name="createdTo"/);
-  for (const label of ["供应商", "CD 号", "子采购单号"]) {
-    assert.ok(html.includes(`<span class="ui-sr-only">${label}</span>`));
+  // 2026-11-09 起查询栏与进项发票列表一致，标签显示在输入框上方
+  for (const label of ["供应商", "CD 号", "报关单号", "子采购单号"]) {
+    assert.ok(html.includes(`<span>${label}</span>`));
   }
+  assert.doesNotMatch(html, /ui-sr-only/);
   assert.match(render(), /刷新列表/);
   assert.doesNotMatch(html, /全部账套|来源账套|NS 环境/);
   assert.match(html, /多条用逗号分隔/);

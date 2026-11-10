@@ -38,7 +38,7 @@ export function QueueFilters({
         </>
       }
     >
-      <Field label="发票号码" hideLabel grow>
+      <Field label="发票号码" grow>
         <SearchInput
           name="invoiceNo"
           value={draft.invoiceNo}
@@ -46,7 +46,7 @@ export function QueueFilters({
           onValueChange={(invoiceNo) => set({ invoiceNo })}
         />
       </Field>
-      <Field label="供应商" hideLabel grow>
+      <Field label="供应商" grow>
         <SearchInput
           name="supplierName"
           value={draft.supplierName}

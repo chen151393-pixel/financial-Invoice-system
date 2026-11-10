@@ -14,6 +14,8 @@ class DeclarationListQuery(StrictModel):
     createdTo: date | None = Field(default=None, strict=False)
     supplierName: SearchText = ""
     recordNo: SearchText = ""
+    # 真实海关报关单号（NS custrecord_swc_realno），与 CD 编号不同；多条用逗号分隔，部分匹配
+    declarationNo: SearchText = ""
     purchaseOrderNo: SearchText = ""
     keyword: str = Field(default="", max_length=120)
     account: str = Field(default="", max_length=80, pattern=r"^[a-zA-Z0-9_-]*$")

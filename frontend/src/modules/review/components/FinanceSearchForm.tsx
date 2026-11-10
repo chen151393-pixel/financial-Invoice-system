@@ -4,6 +4,7 @@ import { Button, Field, FilterBar, SearchInput } from "../../../shared/component
 export interface SearchCriteria {
   supplierName: string;
   recordNo: string;
+  declarationNo: string;
   purchaseOrderNo: string;
   createdFrom: string;
   createdTo: string;
@@ -12,6 +13,7 @@ export interface SearchCriteria {
 const EMPTY: SearchCriteria = {
   supplierName: "",
   recordNo: "",
+  declarationNo: "",
   purchaseOrderNo: "",
   createdFrom: "",
   createdTo: "",
@@ -19,6 +21,7 @@ const EMPTY: SearchCriteria = {
 const FIELDS = [
   ["supplierName", "供应商", "输入供应商名称，多条用逗号分隔"],
   ["recordNo", "CD 号", "输入 CD 号，多条用逗号分隔"],
+  ["declarationNo", "报关单号", "输入报关单号，多条用逗号分隔"],
   ["purchaseOrderNo", "子采购单号", "输入子采购单号，多条用逗号分隔"],
 ] as const;
 
@@ -54,7 +57,7 @@ export function FinanceSearchForm({
       }
     >
       {FIELDS.map(([field, label, placeholder]) => (
-        <Field key={field} label={label} hideLabel grow>
+        <Field key={field} label={label} grow>
           <SearchInput
             name={field}
             value={criteria[field]}

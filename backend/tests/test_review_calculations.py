@@ -413,7 +413,13 @@ def test_split_bulk_search_uses_snapshot_fields_and_filtered_counts(review, ns, 
     assert review.browse(query(recordNo="SUB-201")).total == 0
     assert review.browse(query(purchaseOrderNo="清洗液")).total == 0
     assert review.browse(query(supplierName="不存在")).total == 0
-    for field in ("supplierName", "recordNo", "purchaseOrderNo"):
+    # 真实报关单号（夹具为 REAL + CD 编号数字），与 CD 号是不同字段
+    real = review.browse(query(declarationNo="不存在，REAL871"))
+    assert real.total == 1 and real.groups[0].recordNumber == "CD871"
+    assert review.browse(query(declarationNo="REAL870;REAL871")).total == 2
+    assert review.browse(query(declarationNo="CD871")).total == 0
+    assert review.browse(query(declarationNo="REAL870", recordNo="871")).total == 0
+    for field in ("supplierName", "recordNo", "declarationNo", "purchaseOrderNo"):
         assert review.browse(query(**{field: "%"})).total == 0
     assert review.browse(query(recordNo="，；\n ")).total == 2
 

@@ -24,13 +24,26 @@ def conditions(query, dialect):
             )
         )
     if query.recordNo:
-        record = func.json_extract(snapshots.c.payload, "$.recordNumber")
-        if dialect == "mysql":
-            record = func.json_unquote(record)
+        record = text_field("$.recordNumber", dialect)
         result.append(or_(*(record.contains(term, autoescape=True) for term in search_terms(query.recordNo))))
+    if query.declarationNo:
+        result.append(
+            or_(
+                *(
+                    text_field("$.declaration", dialect).contains(term, autoescape=True)
+                    for term in search_terms(query.declarationNo)
+                )
+            )
+        )
     if query.purchaseOrderNo:
         result.append(order_matches(search_terms(query.purchaseOrderNo), dialect))
     return result
+
+
+def text_field(path, dialect):
+    """快照 payload 中的文本字段；MySQL 需去掉 JSON 引号。"""
+    value = func.json_extract(snapshots.c.payload, path)
+    return func.json_unquote(value) if dialect == "mysql" else value
 
 
 def order_matches(terms, dialect):

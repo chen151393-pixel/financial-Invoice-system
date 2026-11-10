@@ -58,7 +58,7 @@ export function SupplierProfileSearch({
       }
     >
       {FIELDS.map(([field, label, placeholder]) => (
-        <Field key={field} label={label} hideLabel grow>
+        <Field key={field} label={label} grow>
           <SearchInput
             name={field}
             value={draft[field] || ""}
@@ -67,7 +67,7 @@ export function SupplierProfileSearch({
           />
         </Field>
       ))}
-      <Field label="绑定状态" hideLabel>
+      <Field label="绑定状态">
         <select
           name="status"
           value={draft.status}

@@ -123,6 +123,8 @@ export interface DeclarationListQuery {
   createdTo?: string;
   supplierName?: string;
   recordNo?: string;
+  // 真实报关单号，与 CD 号不同
+  declarationNo?: string;
   purchaseOrderNo?: string;
   keyword: string;
   supplierId: string;
