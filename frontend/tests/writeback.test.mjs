@@ -508,6 +508,9 @@ test("部分写入可补写账单：后端允许时按钮可用，不允许时�
   assert.match(allowed, /补写 NS 账单/);
   assert.match(allowed, /发票记录 7001 已在 NS 建成/);
   assert.doesNotMatch(allowed, /disabled=""[^>]*>补写账单/);
+  // 两种方式并存：点“补写账单”，或在 NS 手工补齐后用原有表单标记“NS 已完整登记”
+  assert.match(allowed, /核实 NS 写入结果/);
+  assert.match(allowed, /NS 已完整登记/);
   const closed = view("partial", { allowed: false, reason: "NS 写入开关未开启，方案停在待写入" });
   assert.match(closed, /disabled=""[^>]*>补写账单/);
   assert.match(closed, /暂不能补写：NS 写入开关未开启/);
