@@ -1,13 +1,11 @@
-"""专业版官方网页 GET /api/Invoice 明细协议；只读且不复用其他账套上下文。"""
+"""两版官方网页 GET /api/Invoice 明细协议；只读且不复用其他账套上下文。"""
 
 import time
 
 from backend.core.errors import ApiError
 
-from .professional_accounts import PRO_HOST
 
-
-class LemonProfessionalInvoiceDetails:
+class LemonInvoiceDetails:
     def __init__(self, accounts):
         self.accounts = accounts
 
@@ -18,11 +16,13 @@ class LemonProfessionalInvoiceDetails:
         with self.accounts.open(token) as (session, context, accounts):
             chosen = next((row for row in accounts or [] if row["asid"] == asid), None)
             if chosen is None:
-                raise ApiError(403, "当前账号已无该专业版账套访问权限，本次未保存")
+                raise ApiError(403, f"当前账号已无该{self.accounts.label}账套访问权限，本次未保存")
             appasid = chosen["appasid"]
             if not isinstance(appasid, str) or not appasid or len(appasid) > 2048:
-                raise ApiError(502, "柠檬云未返回所选专业版账套上下文，本次未保存")
-            params = {"serviceId": context["serviceId"], "appasid": appasid}
+                raise ApiError(502, f"柠檬云未返回所选{self.accounts.label}账套上下文，本次未保存")
+            params = {"appasid": appasid}
+            if "serviceId" in context:
+                params["serviceId"] = context["serviceId"]
             result = []
             for row in records:
                 if row["InvoiceId"] not in selected_ids:
@@ -39,7 +39,7 @@ class LemonProfessionalInvoiceDetails:
             raise ApiError(502, "柠檬云发票缺少有效种类，无法读取商品明细；本次未保存")
         payload = self.accounts.request(
             session,
-            PRO_HOST + "/api/Invoice",
+            self.accounts.host + "/api/Invoice",
             "invoice_detail",
             params={**params, "invoiceId": row["InvoiceId"], "invoiceType": invoice_type},
             headers={"appasid": params["appasid"]},

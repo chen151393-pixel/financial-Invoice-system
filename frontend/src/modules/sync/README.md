@@ -10,7 +10,7 @@
 
 同步结果支持展开 `detailIssues` 查看逐票未补齐原因（最多 100 张）；空商品行和缺少匹配字段分别说明。历史结果没有诊断字段时不编造原因。进项发票列表新增单张与当前页批量补拉，继续复用本模块原拉取及持久结果查询逻辑。
 
-`/sync` 提供真实后台任务历史、状态筛选、分页及计划状态；`/sync/ns` 独立提供 NS 拉取；`/sync/lemon` 提供全部/指定授权账套后台拉票和每日计划，保留账号绑定、单账套手动拉票与 Excel 导入。专业版商品明细已接入，默认版明细与附件尚未接入。
+`/sync` 提供真实后台任务历史、状态筛选、分页及计划状态；`/sync/ns` 独立提供 NS 拉取；`/sync/lemon` 提供全部/指定授权账套后台拉票和每日计划，保留账号绑定、单账套手动拉票与 Excel 导入。专业版与免费版商品明细均已接入，附件尚未接入。
 
 `SyncOverview.tsx` 展示平台入口卡片（`SyncSourceCards`，NS 与柠檬云均显示计划启用状态和下次执行时间）并读取持久批次；`pages/LemonBackgroundPanel.tsx` 装配后台拉取/计划表单，`SyncBatchDetailPage.tsx` 展示 `/sync/batches/:requestId` 的账套及日期分片结果。类型/API/hooks/业务组件分目录，样式在 `components/sync-background.css`（面板、表单、表格）与 `components/sync-layout.css`（平台卡片、状态条、页签、状态标签）；批次状态标签统一用 `SyncPhaseTag`。柠檬云页面依次为同步状态条（`LemonSyncStatus`）、“手动补拉 / 定时计划”页签（计划表单 `SyncPlanForm` 左栏执行时间与业务类型、右栏账套范围；`SyncAccountScope` 查询后按后端返回列出各账套“专业版／免费版”及可拉取内容）、最近执行（`LemonRecentBatches`，取执行记录第一页前三条）和“更多操作”（账号授权、单账套即时拉取、Excel 导入，默认收起）；加载、失败、空记录和执行状态均来自真实接口。任务详情可刷新恢复，失败重试服从后端 allowed/reason。覆盖范围与部署见[后台同步说明](../../../../docs/lemon-background-sync.md)。
 
@@ -36,7 +36,7 @@ NS 页面采用左侧单据选择、右侧结果工作区，窄屏改为上下�
 
 实现：`PullPanel.tsx` 收集条件并展示状态，`useRangePull.ts` 管理请求与批次，`range-pull.ts` 串行调用，`PullResults.tsx` 展示单批结果。`tests/sync-range.test.mjs` 覆盖跨批、失败、停止、空结果与日期保持。
 
-柠檬云绑定工作区按“当前状态与操作 / 官方授权步骤”分栏展示，窄屏按阅读顺序上下排列。配置不满足后端条件时只显示原因与管理员配置说明，不展示无法提交的手机号表单；已有绑定可核实，结果未知不提供重新提交入口。底部说明已支持后台及定时 API 拉票，默认版商品明细待接入，并保留 Excel 入口。`useLemonBinding.ts` 管理请求与刷新时的过期响应，`LemonBindingView.tsx` 只展示状态、收集输入；密码在提交及刷新时清空。
+柠檬云绑定工作区按“当前状态与操作 / 官方授权步骤”分栏展示，窄屏按阅读顺序上下排列。配置不满足后端条件时只显示原因与管理员配置说明，不展示无法提交的手机号表单；已有绑定可核实，结果未知不提供重新提交入口。底部说明已支持后台及定时 API 拉票，两版商品明细均可拉取，并保留 Excel 入口。`useLemonBinding.ts` 管理请求与刷新时的过期响应，`LemonBindingView.tsx` 只展示状态、收集输入；密码在提交及刷新时清空。
 
 保存（2026-10-19 起）：每批生成 UUID 请求编号，`startRun` 提交到后台批次接口后立即返回，`run-wait.ts` 每秒串行按原编号查询，直到后端返回结束状态；提交连接中断或代理超时只继续查询、不重新提交，后端明确拒绝（4xx）才直接显示原因，连续 3 次查不到才判定本批未发起。`PullProgress.tsx` 展示当前阶段、阶段计数、本批耗时与请求编号；查询暂不可用单独提示。completed/partial/interrupted 才作为批次结果，failed 与 unknown（待核实）显示后端原因并停止后续批次。未结束批次的编号存于本标签页 `sessionStorage`，刷新后自动恢复查看该批结果（不继续后续批次）。旧 `progress-poll.ts` 已删除；后端说明见[同步模块](../../../../backend/modules/sync/README.md#后台保存批次与耗时日志2026-10-19)。
 

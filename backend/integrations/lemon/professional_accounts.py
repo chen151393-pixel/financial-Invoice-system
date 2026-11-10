@@ -16,6 +16,9 @@ PRO_HOST = "https://jproapi.ningmengyun.com"
 
 
 class LemonProfessionalAccounts:
+    host = PRO_HOST
+    label = "专业版"
+
     def __init__(self, settings, session_factory=None):
         self.settings = settings
         self.session_factory = session_factory or (
@@ -78,30 +81,33 @@ class LemonProfessionalAccounts:
             "accounts",
             params={"serviceId": service_id, "appasid": appasid},
         )
+        return self.account_rows(payload)
+
+    def account_rows(self, payload):
         if payload.get("state") != 1000 or not isinstance(payload.get("data"), dict):
-            raise ApiError(502, "柠檬云未确认专业版账套查询成功")
+            raise ApiError(502, f"柠檬云未确认{self.label}账套查询成功")
         rows = payload["data"].get("accountList")
         if not isinstance(rows, list) or len(rows) > 1000:
-            raise ApiError(502, "柠檬云专业版账套列表异常或超过查询上限")
+            raise ApiError(502, f"柠檬云{self.label}账套列表异常或超过查询上限")
         result, seen = [], set()
         for row in rows:
             if not isinstance(row, dict):
-                raise ApiError(502, "柠檬云专业版账套格式异常")
+                raise ApiError(502, f"柠檬云{self.label}账套格式异常")
             asid, name = row.get("asid"), row.get("asname")
             if type(asid) is not int or asid <= 0 or not isinstance(name, str) or not name.strip():
-                raise ApiError(502, "柠檬云专业版账套缺少有效编号或名称")
+                raise ApiError(502, f"柠檬云{self.label}账套缺少有效编号或名称")
             if asid in seen or len(name) > 255:
-                raise ApiError(502, "柠檬云专业版账套重复或名称过长")
+                raise ApiError(502, f"柠檬云{self.label}账套重复或名称过长")
             seen.add(asid)
             result.append(
                 {
                     "asid": str(asid),
                     "name": name,
-                    "edition": "professional",
+                    "edition": "professional" if self.host == PRO_HOST else "free",
                     "appasid": row.get("appAsId"),
                 }
             )
-        logger.info("lemon_accounts_read source=professional count=%s", len(result))
+        logger.info("lemon_accounts_read edition=%s count=%s", self.label, len(result))
         return result
 
     @staticmethod
@@ -117,23 +123,21 @@ class LemonProfessionalAccounts:
             ) as response:
                 status = response.status_code
                 if status != 200:
-                    logger.warning("lemon_professional_failed stage=%s upstream_status=%s", stage, status)
-                    raise ApiError(
-                        502, f"柠檬云专业版查询失败（阶段 {stage}，HTTP {status}），未使用默认账套替代"
-                    )
+                    logger.warning("lemon_web_failed stage=%s upstream_status=%s", stage, status)
+                    raise ApiError(502, f"柠檬云查询失败（阶段 {stage}，HTTP {status}），本次未保存")
                 chunks, size = [], 0
                 for chunk in response.iter_bytes():
                     size += len(chunk)
                     if size > 4 * 1024 * 1024:
-                        raise ApiError(502, "柠檬云专业版响应超过查询上限")
+                        raise ApiError(502, "柠檬云响应超过查询上限")
                     chunks.append(chunk)
                 if not expect_json:
                     return None
                 payload = json.loads(b"".join(chunks), parse_float=Decimal)
         except (httpx.HTTPError, ValueError) as error:
             # URL 含临时令牌或加密账套；不记录异常正文、重定向地址或上游消息。
-            logger.warning("lemon_professional_failed stage=%s type=%s", stage, type(error).__name__)
-            raise ApiError(502, "柠檬云专业版查询连接或响应异常，未使用默认账套替代") from None
+            logger.warning("lemon_web_failed stage=%s type=%s", stage, type(error).__name__)
+            raise ApiError(502, "柠檬云查询连接或响应异常，本次未保存") from None
         if not isinstance(payload, dict):
-            raise ApiError(502, "柠檬云专业版响应结构异常")
+            raise ApiError(502, "柠檬云响应结构异常")
         return payload

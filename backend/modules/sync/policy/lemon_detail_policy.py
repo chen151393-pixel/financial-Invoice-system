@@ -11,10 +11,10 @@ def account_namespace(host, asid, professional=True):
     ).hexdigest()
 
 
-# 账套版本决定能拉到的内容：专业版有商品明细接口，免费版（open2 默认版）只返回票头。
+# 两版均使用各自网页会话补全商品明细，附件不在本次同步范围。
 EDITIONS = {
     "professional": ("专业版", "票头 + 商品明细"),
-    "free": ("免费版", "仅票头；商品明细与附件尚未接入"),
+    "free": ("免费版", "票头 + 商品明细"),
 }
 
 
@@ -27,8 +27,8 @@ def edition_view(account):
 def refresh_action(row, account):
     if row is None:
         reason = "发票不存在，请刷新列表"
-    elif row["source"] != "lemon_professional":
-        reason = "仅支持柠檬云专业版接口发票；Excel 或免费版请使用原导入方式"
+    elif row["source"] not in ("lemon_professional", "lemon_open2"):
+        reason = "仅支持柠檬云专业版或免费版接口发票；Excel 请使用原导入方式"
     elif row["lemon_account"] != account:
         reason = "当前账套与发票原账套不一致，请到柠檬云同步页选择原账套"
     elif not row["external_id"] or not row["invoice_date"]:

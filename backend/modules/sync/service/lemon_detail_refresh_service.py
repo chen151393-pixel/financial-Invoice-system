@@ -20,13 +20,13 @@ class LemonDetailRefreshService:
         with self.service.engine.connect() as connection:
             rows = read_lemon_refresh_targets(connection, [int(value) for value in body.invoiceIds])
         by_id = {str(row["id"]): row for row in rows}
-        account = self._account(config["selected"]["asid"]) if config["selected"] else None
+        asid = config["selected"]["asid"] if config["selected"] else None
         return {
             "rows": [
                 {
                     "invoiceId": identifier,
                     **(
-                        refresh_action(by_id.get(identifier), account)
+                        refresh_action(by_id.get(identifier), self._account(asid, by_id.get(identifier)))
                         if config["sync"]["allowed"]
                         else config["sync"]
                     ),
@@ -47,9 +47,8 @@ class LemonDetailRefreshService:
             rows = read_lemon_refresh_targets(connection, [int(value) for value in body.invoiceIds])
         if len(rows) != len(body.invoiceIds):
             raise ApiError(404, "部分所选发票不存在，请刷新列表")
-        account = self._account(binding["selected_asid"])
         for row in rows:
-            action = refresh_action(row, account)
+            action = refresh_action(row, self._account(binding["selected_asid"], row))
             if not action["allowed"]:
                 raise ApiError(409, action["reason"])
         try:
@@ -64,5 +63,9 @@ class LemonDetailRefreshService:
             raise ApiError(422, "所选发票日期跨度超过 366 天或来源信息不完整，请分批补拉") from None
         return self.service.pull(owner, request, targets=rows)
 
-    def _account(self, asid):
-        return account_namespace(self.accounts.binding.settings.lemon_host, asid)
+    def _account(self, asid, row):
+        if not asid or row is None:
+            return None
+        return account_namespace(
+            self.accounts.binding.settings.lemon_host, asid, row["source"] == "lemon_professional"
+        )

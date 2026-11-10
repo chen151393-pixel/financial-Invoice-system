@@ -51,7 +51,9 @@ test("全部账套的排除语义和新增自动纳入明确", () => {
     change() {},
     query() {},
     disabled: false,
-    accounts: [{ asid: "9", name: "测试账套", edition: "free", editionLabel: "免费版", content: "仅票头" }],
+    accounts: [
+      { asid: "9", name: "测试账套", edition: "free", editionLabel: "免费版", content: "票头 + 商品明细" },
+    ],
   });
   assert.match(html, /新增账套自动纳入/);
   assert.match(html, /已排除/);
@@ -85,12 +87,12 @@ test("授权账套列出版本与可拉取内容，文字来自后端", () => {
         name: "免费账套",
         edition: "free",
         editionLabel: "免费版",
-        content: "仅票头；商品明细与附件尚未接入",
+        content: "票头 + 商品明细",
       },
     ],
   });
   assert.match(html, /专业账套[\s\S]*专业版[\s\S]*票头 \+ 商品明细/);
-  assert.match(html, /免费账套[\s\S]*免费版[\s\S]*仅票头/);
+  assert.match(html, /免费账套[\s\S]*免费版[\s\S]*票头 \+ 商品明细/);
   assert.match(html, /aria-label="排除 免费账套"/);
 });
 test("未授权不能提交，等待任务详情时不显示伪成功", () => {

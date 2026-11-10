@@ -5,8 +5,7 @@ from copy import deepcopy
 import httpx
 import pytest
 from backend.core.errors import ApiError
-from backend.integrations.lemon import professional_invoice_details as protocol
-from backend.integrations.lemon.invoice_client import LemonInvoiceClient
+from backend.integrations.lemon import invoice_details as protocol
 from backend.tests.sync.lemon_detail_fixtures import full_invoice
 from backend.tests.sync.test_lemon_account_services import PRO_ROW, adapter, reply
 
@@ -19,7 +18,7 @@ def enrich(payload, calls=None, records=None, accounts=None):
             calls.append(request)
         return httpx.Response(200, json=payload)
 
-    return protocol.LemonProfessionalInvoiceDetails(adapter(handler)).enrich(
+    return protocol.LemonInvoiceDetails(adapter(handler)).enrich(
         "private-user-token", "21", records or [full_invoice()], {1}
     )
 
@@ -71,12 +70,11 @@ def test_revoked_account_or_missing_context_stops_read(accounts):
     assert not calls
 
 
-def test_empty_selection_no_session_and_default_edition_stays_pending():
+def test_empty_selection_no_session():
     raw = full_invoice()
     raw.pop("Detail")
-    client = protocol.LemonProfessionalInvoiceDetails(None)
+    client = protocol.LemonInvoiceDetails(None)
     assert client.enrich("token", "7", [raw], set()) == [raw]
-    assert LemonInvoiceClient.invoice_details(None, "token", "7", [raw], {1}, professional=False) == [raw]
 
 
 def test_deadline_prevents_detail_call(monkeypatch):
@@ -105,7 +103,7 @@ def test_later_detail_failure_aborts_whole_read():
         )
 
     with pytest.raises(ApiError, match="HTTP 503"):
-        protocol.LemonProfessionalInvoiceDetails(adapter(handler)).enrich(
+        protocol.LemonInvoiceDetails(adapter(handler)).enrich(
             "private-user-token", "21", [raw, second], {1, 2}
         )
     assert len(calls) == 2

@@ -12,13 +12,14 @@ from backend.tests.sync.test_lemon_invoices import setup as setup
 from sqlalchemy import select, update
 
 
-@pytest.fixture
-def seeded(setup):
+@pytest.fixture(params=["professional", "free"])
+def seeded(setup, request):
     upstream = setup.upstream
-    upstream.allowed[0]["edition"] = "professional"
-    upstream.professional_accounts = lambda token: deepcopy(upstream.allowed)
-    upstream.accounts = lambda token: []  # 同一账套只属于一个版本
-    upstream.professional_invoices = upstream.invoices
+    if request.param == "professional":
+        upstream.allowed[0]["edition"] = "professional"
+        upstream.professional_accounts = lambda token: deepcopy(upstream.allowed)
+        upstream.accounts = lambda token: []  # 同一账套只属于一个版本
+        upstream.professional_invoices = upstream.invoices
     upstream.rows = [
         {key: value for key, value in full_invoice(InvoiceId=i, Number=str(i)).items() if key != "Detail"}
         for i in range(1, 4)
@@ -139,3 +140,16 @@ def test_change_during_network_read_is_rejected(seeded):
 def test_unauthenticated_selection_is_rejected(seeded):
     seeded.client.cookies.clear()
     assert refresh(seeded).status_code == 401
+
+
+def test_changed_account_edition_blocks_refresh_before_reading_invoices(seeded):
+    upstream = seeded.upstream
+    was_professional = bool(upstream.professional_accounts("token"))
+    upstream.professional_accounts = lambda token: (
+        [] if was_professional else [{**row, "edition": "professional"} for row in upstream.allowed]
+    )
+    upstream.accounts = lambda token: deepcopy(upstream.allowed) if was_professional else []
+    calls = upstream.pulls
+    response = refresh(seeded)
+    assert response.status_code == 409 and "版本或来源已变化" in response.json()["error"]
+    assert upstream.pulls == calls and count(seeded.engine, items) == 0

@@ -1,4 +1,4 @@
-"""专业版商品行校验：票头与明细必须同票、同金额，缺少数量单位不得确认匹配。"""
+"""柠檬云两版商品行校验：票头与明细必须同票、同金额，缺少数量单位不得确认匹配。"""
 
 from datetime import date
 from decimal import Decimal, InvalidOperation
