@@ -8,7 +8,7 @@ from ..policy.list_policy import GROUP_STATES
 from ..policy.order_policy import require_whole_orders
 from ..policy.registration_policy import require_clear_registration
 from ..policy.state_policy import WRITTEN_STATES, stuck
-from .order_vo import orders, parent_orders, plan_view
+from .order_vo import candidates_view, orders, parent_orders, plan_view, preview_view
 
 LABELS = {
     "queued": "待匹配账单",
@@ -70,14 +70,14 @@ def iso(value):
     return value.isoformat() if value else None
 
 
-def request_view(request):
+def request_view(task, request):
     if not request:
         return None
     return {
         "requestId": request["request_id"],
         "state": request["state"],
         "invoice": request["payload"]["invoice"],
-        "preview": request["preview"],
+        "preview": preview_view(task, request["preview"]),
         "needsConfirmation": request["needs_confirmation"],
         "confirmedBy": request["confirmed_by"],
         "confirmedAt": iso(request["confirmed_at"]),
@@ -117,9 +117,9 @@ def detail(task, plan, request, audit, busy, gate, stamp):
         "allocations": rows,
         "orders": orders(task),
         "invoice": snapshot["invoice"],
-        "candidates": task["candidates"],
+        "candidates": candidates_view(task),
         "plan": plan_view(task, plan),
-        "request": request_view(request),
+        "request": request_view(task, request),
         "audit": [
             {
                 "action": a["action"],

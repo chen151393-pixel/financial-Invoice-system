@@ -12,6 +12,7 @@ import {
   Skeleton,
 } from "../../../shared/components/ui";
 import { confirmPlan, confirmPreview, executeWrite, refreshTask, resolveWrite } from "../api";
+import { parentLabel, subPurchaseLabel, subsidiaryLabel } from "../bill-labels";
 import { PlanForm } from "../components/PlanForm";
 import { ResolveForm } from "../components/ResolveForm";
 import { WritePanel } from "../components/WritePanel";
@@ -141,9 +142,9 @@ export function TaskContent({
             rowKey={(row) => row.billId}
             columns={[
               { key: "bill", header: "账单", render: (row) => row.billNumber },
-              { key: "parent", header: "母采购 ID", render: (row) => row.purchaseOrderId },
-              { key: "subpo", header: "子采购 ID", render: (row) => row.subPurchaseOrderId || "未明确关联" },
-              { key: "company", header: "实际子公司 ID", render: (row) => row.subsidiaryId },
+              { key: "parent", header: "母采购单", render: (row) => parentLabel(row.purchaseOrderNo) },
+              { key: "subpo", header: "子采购单", render: subPurchaseLabel },
+              { key: "company", header: "实际子公司", render: (row) => subsidiaryLabel(row.subsidiaryName) },
               {
                 key: "available",
                 header: "可收金额",
@@ -176,7 +177,7 @@ export function TaskContent({
             minWidth={480}
             columns={[
               { key: "order", header: "子采购单", render: (row) => row.orderNo },
-              { key: "bill", header: "账单 ID", render: (row) => row.billId },
+              { key: "bill", header: "账单", render: (row) => row.billNumber || "账单不在当前查询结果中" },
               { key: "amount", header: "金额（元）", align: "right", render: (row) => row.amount },
             ]}
           />

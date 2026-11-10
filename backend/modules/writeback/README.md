@@ -23,7 +23,7 @@
 
 任务与审核快照按 `(invoice_id, fingerprint)` 去重。确认、人工分配、批量确认、原子替换的最后一步发出整票事件；取消、发票换版、采购依据变化使旧任务失效。写库失败会回滚整笔审核。使用现有数据库账本锁和唯一约束串行化本地变更。
 
-唯一候选不等于归属明确：仅非历史任务、精确子采购关联唯一、真实 `subsidiary:*` 公司映射且全部校验通过时自动冻结方案。`classification:*`、空子采购关联、多候选、历史扫描均需人工确认实际子公司与账单归属，并保存证据。明确关联其他子采购的账单不能人工覆盖。查询结果不预留额度；即使 ready，也不能写入 NS。
+唯一候选不等于归属明确：仅非历史任务、真实 `subsidiary:*` 公司映射、每张子采购单的账单归属唯一且全部校验通过时自动冻结方案，依据写入方案证据。归属唯一指：账单精确关联该子采购单且只有一张；或账单未填子采购单（NS 2026-04 起新账单均未填写），但母单只有这一张账单，且本地来源中该母单只有一张有效子采购单（`source.public.parent_sub_order_counts`，含未进入本票的子单），此时直接对应。母单有多张账单或多张子采购单、本地子单数未知、`classification:*`、多候选、历史扫描均需人工确认实际子公司与账单归属，并保存证据。明确关联其他子采购的账单不能人工覆盖。查询结果不预留额度；即使 ready，也不能写入 NS。
 
 确认需当前 `revision`、UUID `requestId`、`confirmScope: true`、5–1000 字依据和完整 `orders: [{subPurchaseOrderId, billId}]`；前端不提交金额，由后端审核快照汇总。兼容的 `allocations` 请求也须满足整单不拆分、逐明细金额不变且覆盖完整的约束。相同请求与身份重复提交返回原处理后的当前状态，正文或身份不同返回 409。重新查询清除当前方案指针并增加版本；旧方案与审计仍保留。
 
@@ -52,7 +52,7 @@
 | 接口 | 作用 |
 | --- | --- |
 | `GET /api/writeback/tasks?keyword=&state=&page=1&pageSize=20` | 后端筛选分页，返回 items/total/pages |
-| `GET /api/writeback/tasks/{id}` | 任务、审核分配、完整候选、当前方案、最近 100 条审计、允许动作 |
+| `GET /api/writeback/tasks/{id}` | 任务、审核分配、完整候选、当前方案、最近 100 条审计、允许动作。候选账单附 `purchaseOrderNo`（NS 查询结果的母单号）、`subPurchaseOrderNo`、`subsidiaryName`（审核快照中 `subsidiary:*` 采购公司的名称），回写预览附 `purchaseOrderNo`，方案订单附 `billNumber`；取不到时为空串，均为展示字段，不改存储的查询结果与预览 |
 | `POST /api/writeback/tasks/{id}/refresh` | `{ "revision": 1 }`，只读重查候选；旧方案版本失效 |
 | `POST /api/writeback/tasks/{id}/confirm` | 确认并持久保存不可变方案与写入请求，不执行写入 |
 | `POST /api/writeback/tasks/{id}/preview/confirm` | `{ "revision": 1, "confirmScope": true }`，确认累计与明细不一致的回写预览 |

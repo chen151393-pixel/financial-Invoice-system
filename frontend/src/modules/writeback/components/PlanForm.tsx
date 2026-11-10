@@ -1,5 +1,6 @@
 import { useRef, useState } from "react";
 import { Button, Card, CardContent, CardHeader, Field } from "../../../shared/components/ui";
+import { subsidiaryLabel } from "../bill-labels";
 import type { ConfirmBody, TaskDetail } from "../types";
 
 export function PlanForm({
@@ -63,7 +64,7 @@ export function PlanForm({
                       .filter((bill) => row.eligibleBillIds.includes(bill.billId))
                       .map((bill) => (
                         <option key={bill.billId} value={bill.billId}>
-                          {bill.billNumber} · 子公司 {bill.subsidiaryId}
+                          {bill.billNumber} · {subsidiaryLabel(bill.subsidiaryName)}
                         </option>
                       ))}
                   </select>

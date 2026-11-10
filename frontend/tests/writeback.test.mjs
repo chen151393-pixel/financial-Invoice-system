@@ -138,6 +138,7 @@ const request = (changes = {}) => ({
       billId: "9",
       billNumber: "TEST-BILL",
       purchaseOrderId: "100",
+      purchaseOrderNo: "PO-1",
       before: "30.00",
       amount: "100.50",
       after: "130.50",
@@ -203,6 +204,9 @@ const task = (changes = {}) => ({
             purchaseOrderId: "100",
             subPurchaseOrderId: "",
             subsidiaryId: "1",
+            purchaseOrderNo: "PO-1",
+            subPurchaseOrderNo: "",
+            subsidiaryName: "上海毅鑫实业有限公司",
             currency: "CNY",
             availableInvoiceAmount: "1000.00",
             issues: ["缺少子采购关联"],
@@ -291,7 +295,11 @@ test("候选、历史风险与不写入状态明确展示", () => {
   const html = render(Content, { task: task(), busy: false, ...handlers });
   assert.match(html, /历史发票，须人工核实/);
   assert.match(html, /归属需要核实/);
-  assert.match(html, /未明确关联/);
+  // 候选账单显示母采购单号、子采购单号与子公司名称，不显示 NS 内部 ID
+  assert.match(html, /NS 账单未填子采购单/);
+  assert.match(html, /<td[^>]*>PO-1<\/td>/);
+  assert.match(html, /TEST-BILL · 上海毅鑫实业有限公司/);
+  assert.doesNotMatch(html, /母采购 ID|子采购 ID|子公司 ID|子公司 1</);
   assert.match(html, /确认并冻结方案/);
   assert.doesNotMatch(html, /确认执行|模拟成功|执行回写/);
 });
@@ -386,6 +394,7 @@ test("累计与明细不一致时展示预览差额，确认前没有回写按�
   });
   assert.match(html, /NS 回写预览/);
   assert.match(html, /130.50/);
+  assert.match(html, /<td[^>]*>PO-1<\/td>/);
   assert.match(html, /不一致，差额 10.00 元/);
   assert.match(html, /确认回写预览/);
   assert.doesNotMatch(html, /回写到 NS/);

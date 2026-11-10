@@ -5,6 +5,7 @@ from uuid import uuid4
 
 from backend.core.errors import ApiError
 from backend.core.write_lock import transaction
+from backend.modules.source.public import parent_sub_order_counts
 
 from ..dao import audit_dao, task_dao
 from ..policy.plan_policy import automatic_targets, candidates
@@ -61,7 +62,7 @@ class QueryService:
             # 租约已被取代或审核已失效：丢弃本次结果，按当前状态返回。
             if task["lease_token"] == lease and still_current(connection, task):
                 stamp = now()
-                state, reason, targets = "blocked", failure, None
+                state, reason, targets, basis = "blocked", failure, None, ""
                 if result:
                     try:
                         registrations = (result.get("registrationCheck") or {}).get("records", [])
@@ -75,7 +76,10 @@ class QueryService:
                             state, reason = "waiting_bill", "部分母采购尚无可见账单，稍后重查"
                         else:
                             candidates(task, result)
-                            targets = automatic_targets(task, result)
+                            parents = sorted({s["parent_id"] for s in task["snapshot"]["sources"].values()})
+                            targets, basis = automatic_targets(
+                                task, result, parent_sub_order_counts(connection, parents)
+                            )
                             state, reason = (
                                 "needs_confirmation",
                                 "请核实实际采购子公司、账单归属及各笔分配金额",
@@ -114,6 +118,6 @@ class QueryService:
                         str(uuid4()),
                         "automatic",
                         "system",
-                        "精确子采购关联及真实子公司映射唯一，所有金额校验通过",
+                        basis,
                     )
         return self.tasks.get(task_id)

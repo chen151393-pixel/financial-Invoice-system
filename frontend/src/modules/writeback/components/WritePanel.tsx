@@ -9,6 +9,7 @@ import {
   DataTable,
   Dialog,
 } from "../../../shared/components/ui";
+import { parentLabel } from "../bill-labels";
 import type { TaskDetail } from "../types";
 
 // 回写预览与写入：金额全部展示后端字符串；能否确认、能否写入以后端 actions 为准，点击后后端仍会重新校验。
@@ -58,7 +59,7 @@ export function WritePanel({
         minWidth={760}
         columns={[
           { key: "bill", header: "账单", render: (row) => row.billNumber },
-          { key: "parent", header: "母采购 ID", render: (row) => row.purchaseOrderId },
+          { key: "parent", header: "母采购单", render: (row) => parentLabel(row.purchaseOrderNo) },
           { key: "before", header: "写前累计（元）", align: "right", render: (row) => row.before },
           { key: "amount", header: "本次金额（元）", align: "right", render: (row) => row.amount },
           { key: "after", header: "写后累计（元）", align: "right", render: (row) => row.after },

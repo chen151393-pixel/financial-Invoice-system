@@ -81,27 +81,51 @@ def validate_plan(task, result, targets):
     return prepared
 
 
-def automatic_targets(task, result):
+# 自动冻结方案的依据，写入方案证据
+EXACT_BASIS = "精确子采购关联及真实子公司映射唯一，所有金额校验通过"
+SINGLE_BASIS = (
+    "母单仅一张账单且仅一张子采购单，账单未填子采购单时直接对应；真实子公司映射唯一，所有金额校验通过"
+)
+
+
+def _target_bill(bills, source, sub_counts):
+    parent_bills = [b for b in bills.values() if b["purchaseOrderId"] == source["parent_id"]]
+    exact = [b for b in parent_bills if b["subPurchaseOrderId"] == source["subpo_id"]]
+    if len(exact) == 1:
+        return exact[0], EXACT_BASIS
+    # NS 账单 2026-04 起不再填写子采购单；母单只有一张账单、一张有效子采购单时归属唯一
+    if (
+        not exact
+        and len(parent_bills) == 1
+        and not parent_bills[0]["subPurchaseOrderId"]
+        and sub_counts.get(str(source["parent_id"])) == 1
+    ):
+        return parent_bills[0], SINGLE_BASIS
+    return None, ""
+
+
+def automatic_targets(task, result, sub_counts=None):
+    """归属唯一时自动生成整单方案，返回 (分配目标, 依据)；不唯一或历史任务返回 (None, "")。
+
+    sub_counts：NS 母单内部 ID → 本地有效子采购单张数（含未进入本票的子单）。
+    """
     bills = candidates(task, result)
     if task["historical"] or any(
         not (s["company_ns_id"] or "").startswith("subsidiary:") for s in task["snapshot"]["sources"].values()
     ):
-        return None
-    targets = []
+        return None, ""
+    targets, bases = [], set()
     for row in task["snapshot"]["allocations"]:
         source = task["snapshot"]["sources"][str(row["purchase_line_id"])]
-        eligible = [
-            b
-            for b in bills.values()
-            if b["subPurchaseOrderId"] == source["subpo_id"] and b["purchaseOrderId"] == source["parent_id"]
-        ]
-        if len(eligible) != 1:
-            return None
+        bill, basis = _target_bill(bills, source, sub_counts or {})
+        if not bill:
+            return None, ""
+        bases.add(basis)
         targets.append(
             {
                 "allocationId": str(row["id"]),
-                "billId": eligible[0]["billId"],
+                "billId": bill["billId"],
                 "amount": format(Decimal(row["amount"]), ".2f"),
             }
         )
-    return validate_plan(task, result, targets)
+    return validate_plan(task, result, targets), "；".join(sorted(bases))

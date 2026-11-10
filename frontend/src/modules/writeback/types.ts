@@ -48,6 +48,10 @@ export interface Bill {
   purchaseOrderId: string;
   subPurchaseOrderId: string;
   subsidiaryId: string;
+  // 后端按审核快照与查询结果补的业务名称；取不到时为空串，页面不展示内部 ID
+  purchaseOrderNo: string;
+  subPurchaseOrderNo: string;
+  subsidiaryName: string;
   currency: string;
   availableInvoiceAmount: string;
   issues: string[];
@@ -73,7 +77,7 @@ export interface TargetLine {
 }
 export interface Plan {
   allocations: TargetLine[];
-  orders: (OrderTarget & { orderNo: string; amount: string })[];
+  orders: (OrderTarget & { orderNo: string; billNumber: string; amount: string })[];
   evidence: string;
   confirmedBy: string;
   confirmedAt: string;
@@ -107,6 +111,7 @@ export interface PreviewLine {
   billId: string;
   billNumber: string;
   purchaseOrderId: string;
+  purchaseOrderNo: string;
   before: string;
   amount: string;
   after: string;
