@@ -89,7 +89,7 @@ function order(id, vendorId = "88") {
   return {
     id,
     values: { number: `PO${id}`, vendorId, subsidiaryId: "3", currencyId: "1" },
-    texts: { currencyId: "人民币" },
+    texts: { currencyId: "人民币", subsidiaryId: "上海毅鑫实业有限公司" },
   };
 }
 
@@ -112,7 +112,7 @@ function bill(id, purchaseOrderId, values = {}) {
       applied: "0",
       ...values,
     },
-    texts: { currencyId: "人民币" },
+    texts: { currencyId: "人民币", subsidiaryId: "上海毅鑫实业有限公司" },
   };
 }
 
@@ -188,6 +188,9 @@ test("按母单返回全部账单，额度按平台口径用整数分计算", ()
   const [po] = result.purchaseOrders;
   assert.equal(po.status, "FOUND");
   assert.equal(po.currencyName, "人民币");
+  // 子公司显示名称随账单与母单返回，供回写页面展示实际 NS 子公司
+  assert.equal(po.subsidiaryName, "上海毅鑫实业有限公司");
+  assert.equal(po.bills[0].subsidiaryName, "上海毅鑫实业有限公司");
   const [found] = po.bills;
   assert.deepEqual(found.amounts, {
     remaining: "200.00",

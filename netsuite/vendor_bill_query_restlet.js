@@ -170,6 +170,8 @@ define(["N/search", "N/runtime", "N/log"], (search, runtime, log) => {
         number: read.value(row, "number"),
         vendorId: read.value(row, "vendorId"),
         subsidiaryId: read.value(row, "subsidiaryId"),
+        // 子公司显示名称，供回写页面展示实际 NS 子公司；不参与校验
+        subsidiaryName: read.label(row, "subsidiaryId"),
         currencyId: read.value(row, "currencyId"),
         currencyName: read.label(row, "currencyId"),
       };
@@ -226,6 +228,8 @@ define(["N/search", "N/runtime", "N/log"], (search, runtime, log) => {
         purchaseOrderId: read.value(row, "purchaseOrderId"),
         subPurchaseOrderId: read.value(row, "subPurchaseOrderId"),
         subsidiaryId: read.value(row, "subsidiaryId"),
+        // 子公司显示名称，供回写页面展示实际 NS 子公司；不参与校验
+        subsidiaryName: read.label(row, "subsidiaryId"),
         currencyId: read.value(row, "currencyId"),
         currencyName: read.label(row, "currencyId"),
         approvalStatus: read.value(row, "approvalStatus"),
@@ -312,6 +316,7 @@ define(["N/search", "N/runtime", "N/log"], (search, runtime, log) => {
       purchaseOrderId: bill.purchaseOrderId,
       subPurchaseOrderId: bill.subPurchaseOrderId,
       subsidiaryId: bill.subsidiaryId,
+      subsidiaryName: bill.subsidiaryName,
       currencyId: bill.currencyId,
       currencyName: bill.currencyName,
       approvalStatus: bill.approvalStatus,

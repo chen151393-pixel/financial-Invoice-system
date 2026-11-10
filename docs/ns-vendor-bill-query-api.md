@@ -45,6 +45,7 @@
       "number": "PO456",
       "vendorId": "123",
       "subsidiaryId": "3",
+      "subsidiaryName": "上海毅鑫实业有限公司",
       "currencyId": "1",
       "currencyName": "人民币",
       "status": "FOUND",
@@ -56,6 +57,7 @@
           "purchaseOrderId": "456",
           "subPurchaseOrderId": "",
           "subsidiaryId": "3",
+          "subsidiaryName": "上海毅鑫实业有限公司",
           "currencyId": "1",
           "currencyName": "人民币",
           "approvalStatus": "2",
@@ -85,6 +87,7 @@
   - `NO_BILLS`：母单存在、供应商一致，但还没有账单；
   - `PO_NOT_FOUND`：母单不存在；
   - `VENDOR_MISMATCH`：母单属于其他供应商，不检索它的账单。
+- `subsidiaryName`（母单与账单，2026-11-10 新增）：NS 子公司显示名称，只用于回写页面展示“实际子公司”，不参与校验。后端接收时可缺省（旧版脚本不返回），因此**先部署后端，再在 NS 更新本脚本**；顺序反过来时，旧后端会拒绝多出的字段，账单查询失败。
 - 账单字段：
   - `subPurchaseOrderId`：账单上的子单字段，2026-04 起通常为空。
   - `approvalStatus`：`1` 待审批、`2` 已批准、`3` 已拒绝，空为无审批流程。

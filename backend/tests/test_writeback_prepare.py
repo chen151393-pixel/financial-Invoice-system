@@ -558,6 +558,12 @@ def test_bill_view_shows_order_numbers_and_subsidiary_name_not_internal_ids(engi
     assert named["subPurchaseOrderNo"] == source["order_no"]
     assert named["subsidiaryName"] == source["company_name"]
     assert preview_view(task, [{"purchaseOrderId": "100"}])[0]["purchaseOrderNo"] == "PO-100"
+    # NS 查询返回实际子公司名称时直接展示，不依赖采购公司是否为 subsidiary 身份（2026-11-10）
+    for row in task["snapshot"]["sources"].values():
+        row["company_ns_id"] = "classification:3"
+    task["candidates"]["purchaseOrders"][0]["bills"][0]["subsidiaryName"] = "上海毅鑫实业有限公司"
+    [actual] = candidates_view(task)["purchaseOrders"][0]["bills"]
+    assert actual["subsidiaryName"] == "上海毅鑫实业有限公司"
 
 
 def test_splits_across_bills_are_rejected_even_with_conserved_total(prepared):

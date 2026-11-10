@@ -17,7 +17,10 @@ def parent_orders(task):
 
 
 def _labels(task):
-    """NS 内部 ID → 业务名称。母单号以本次 NS 查询结果为准；子采购单号和子公司名称取任务冻结的审核快照。"""
+    """NS 内部 ID → 业务名称。母单号以本次 NS 查询结果为准；子采购单号取任务冻结的审核快照。
+
+    子公司名称优先取 NS 查询返回的 subsidiaryName；旧查询结果没有该字段时，才用审核快照中“subsidiary:<ID>”身份的公司名称。
+    """
     sources = (task["snapshot"].get("sources") or {}).values()
     parents = {
         str(s["parent_id"]): s["parent_number"]
@@ -49,7 +52,7 @@ def candidates_view(task):
             **bill,
             "purchaseOrderNo": parents.get(bill["purchaseOrderId"], ""),
             "subPurchaseOrderNo": subpos.get(bill["subPurchaseOrderId"], ""),
-            "subsidiaryName": companies.get(bill["subsidiaryId"], ""),
+            "subsidiaryName": bill.get("subsidiaryName") or companies.get(bill["subsidiaryId"], ""),
         }
 
     return {
