@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { Alert, Button, Field, FilterBar } from "../../../shared/components/ui";
 import type { InvoiceAccountOption, InvoiceFilters as Filters } from "../types/invoice";
 import "./invoice-status.css";
@@ -22,6 +23,7 @@ export function InvoiceFilters({
   onSubmit,
   onReset,
   onRefresh,
+  extraActions,
 }: {
   draft: Filters;
   applied?: Filters;
@@ -31,6 +33,8 @@ export function InvoiceFilters({
   onSubmit: () => void;
   onReset: () => void;
   onRefresh: () => void;
+  /** 查询栏右侧的附加操作（如进项发票列表的“批量生成建议”） */
+  extraActions?: ReactNode;
 }) {
   const pending =
     applied && (Object.keys(emptyFilters) as (keyof Filters)[]).some((key) => draft[key] !== applied[key]);
@@ -51,6 +55,7 @@ export function InvoiceFilters({
             <Button disabled={loading} onClick={onRefresh}>
               刷新数据
             </Button>
+            {extraActions}
           </>
         }
       >

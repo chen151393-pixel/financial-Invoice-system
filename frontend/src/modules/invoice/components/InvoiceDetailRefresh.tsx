@@ -5,18 +5,20 @@ import "./invoice-detail-refresh.css";
 export function InvoiceDetailRefresh({ state }: { state: ReturnType<typeof useDetailRefresh> }) {
   const { selected, busy, blocked, error, run, pending, execute, actions } = state;
   const needsQuery = Boolean(pending) || run?.status === "running";
+  // 勾选不受补拉权限限制，补拉只提交其中后端允许的发票
+  const allowed = selected.filter((id) => actions[id]?.allowed);
   if (!selected.length && !busy && !error && !run && !pending) return null;
   return (
     <div className="invoice-detail-refresh" aria-busy={busy}>
       {selected.length > 0 && (
         <div className="invoice-detail-refresh__actions">
-          <Button
-            disabled={blocked || !selected.length || selected.some((id) => !actions[id]?.allowed)}
-            onClick={() => void execute(selected)}
-          >
+          <Button disabled={blocked || !allowed.length} onClick={() => void execute(allowed)}>
             {busy ? "正在处理…" : "重新拉取商品明细"}
           </Button>
-          <span>已选 {selected.length} 张</span>
+          <span>
+            已选 {selected.length} 张
+            {allowed.length < selected.length && `，其中可补拉 ${allowed.length} 张（其余见行内补拉原因）`}
+          </span>
         </div>
       )}
       {needsQuery && (

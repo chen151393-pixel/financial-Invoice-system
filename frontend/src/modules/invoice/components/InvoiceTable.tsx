@@ -43,14 +43,9 @@ export function InvoiceTable({
               <th scope="col">
                 <input
                   type="checkbox"
-                  aria-label="选择本页可补拉发票"
-                  disabled={refresh.blocked || !rows.some((row) => refresh.actions[row.id]?.allowed)}
-                  checked={
-                    rows.some((row) => refresh.actions[row.id]?.allowed) &&
-                    rows
-                      .filter((row) => refresh.actions[row.id]?.allowed)
-                      .every((row) => refresh.selected.includes(row.id))
-                  }
+                  aria-label="选择本页发票"
+                  disabled={refresh.blocked || rows.length === 0}
+                  checked={rows.length > 0 && rows.every((row) => refresh.selected.includes(row.id))}
                   onChange={(event) => refresh.selectAll(event.target.checked)}
                 />
               </th>
@@ -82,8 +77,7 @@ export function InvoiceTable({
                     <input
                       type="checkbox"
                       aria-label={`选择发票${row.number}`}
-                      title={refresh.actions[row.id]?.reason ?? "正在读取补拉权限"}
-                      disabled={refresh.blocked || !refresh.actions[row.id]?.allowed}
+                      disabled={refresh.blocked}
                       checked={refresh.selected.includes(row.id)}
                       onChange={(event) => refresh.select(row.id, event.target.checked)}
                     />

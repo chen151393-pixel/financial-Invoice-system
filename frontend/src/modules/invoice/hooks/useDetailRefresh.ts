@@ -104,8 +104,8 @@ export function useDetailRefresh(ids: string[], onSaved: () => void) {
     selected,
     select,
     clearSelection: () => setSelection({ scope: "", ids: [] }),
-    selectAll: (checked: boolean) =>
-      setSelection({ scope, ids: checked ? ids.filter((id) => actions[id]?.allowed) : [] }),
+    // 勾选是列表的通用选择（补拉商品明细、批量生成建议共用），不受补拉权限限制；补拉时只提交其中允许的发票
+    selectAll: (checked: boolean) => setSelection({ scope, ids: checked ? ids : [] }),
     busy,
     error,
     run,

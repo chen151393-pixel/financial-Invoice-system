@@ -27,6 +27,7 @@ import { InvoiceDetailDrawer } from "../components/InvoiceDetailDrawer";
 import { InvoiceSummary } from "../components/InvoiceSummary";
 import { InvoiceTable } from "../components/InvoiceTable";
 import { InvoiceDetailRefresh } from "../components/InvoiceDetailRefresh";
+import { GenerateSelected } from "../components/GenerateSelected";
 import { useDetailRefresh } from "../hooks/useDetailRefresh";
 import { useInvoiceAccounts } from "../hooks/useInvoiceAccounts";
 import type { InvoiceDetail, InvoiceListResult, InvoiceStats } from "../types/invoice";
@@ -52,6 +53,13 @@ const MATCH_OPTIONS: readonly [MatchFilter, string][] = [
 ];
 const readMatch = (value: string | null): MatchFilter =>
   MATCH_OPTIONS.find(([key]) => key === value)?.[0] ?? "all";
+
+// 批量生成建议的结果说明；张数为本次提交的勾选张数，新增条数来自后端
+function generatedMessage(invoices: number, created: number) {
+  if (created === 0)
+    return `已对勾选的 ${invoices} 张发票重新生成，没有新增建议；仍未匹配的发票请在比对页人工关联，或等待对应子采购单完成财务审核。`;
+  return `已对勾选的 ${invoices} 张发票重新生成建议，新增 ${created} 条待审核建议（按子采购明细计），可切换到“待审核”查看。`;
+}
 
 export function InvoiceListPage() {
   const navigate = useNavigate();
@@ -79,6 +87,7 @@ export function InvoiceListPage() {
   const [selected, setSelected] = useState<string | null>(null);
   const [detail, setDetail] = useState<InvoiceDetail | null>(null);
   const [detailError, setDetailError] = useState("");
+  const [generated, setGenerated] = useState<{ tone: "success" | "danger"; text: string } | null>(null);
   const accounts = useInvoiceAccounts(query.version);
 
   function updateQuery(next: Query) {
@@ -105,6 +114,7 @@ export function InvoiceListPage() {
   }
   function changeQuery(next: Query) {
     detailRefresh.clearSelection();
+    setGenerated(null);
     updateQuery(next);
   }
 
@@ -238,6 +248,18 @@ export function InvoiceListPage() {
             });
           }}
           onRefresh={() => changeQuery({ ...query, version: query.version + 1 })}
+          extraActions={
+            <GenerateSelected
+              ids={detailRefresh.selected}
+              disabled={loading || detailRefresh.blocked}
+              onDone={(invoices, created) => {
+                detailRefresh.clearSelection();
+                refresh();
+                setGenerated({ tone: "success", text: generatedMessage(invoices, created) });
+              }}
+              onError={(text) => setGenerated({ tone: "danger", text })}
+            />
+          }
         />
         <div className="invoice-list__match">
           <Segmented
@@ -253,6 +275,7 @@ export function InvoiceListPage() {
           <span>概况卡与分布图按票面条件统计，不随匹配状态变化</span>
         </div>
         {notice && <Alert tone="warning">{notice}</Alert>}
+        {generated && <Alert tone={generated.tone}>{generated.text}</Alert>}
         <InvoiceDetailRefresh state={detailRefresh} />
         {error && <Alert tone="danger">{error}，可点击“刷新数据”重试。</Alert>}
         {totalsError && totalsError !== error && (
