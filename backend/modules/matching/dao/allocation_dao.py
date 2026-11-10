@@ -112,6 +112,34 @@ def confirmed_by_purchase_lines(connection, purchase_line_ids):
     return {row[0]: (row[1], row[2], bool(row[3])) for row in connection.execute(query)}
 
 
+def proposed_by_purchase_lines(connection, purchase_line_ids, *, exclude_invoice_id=None):
+    """占用这些子采购行的待审核建议（锁定读）；exclude_invoice_id 排除指定发票。"""
+    if not purchase_line_ids:
+        return []
+    query = select(allocations).where(
+        allocations.c.purchase_line_id.in_(sorted(set(purchase_line_ids))), allocations.c.status == "proposed"
+    )
+    if exclude_invoice_id is not None:
+        query = query.where(allocations.c.invoice_id != exclude_invoice_id)
+    return [
+        dict(row) for row in connection.execute(query.order_by(allocations.c.id).with_for_update()).mappings()
+    ]
+
+
+def confirmed_invoices_by_lines(connection, purchase_line_ids):
+    """{子采购行: 已通过分配所属发票 ID 集合}，用于识别已被其他发票开具的子采购明细。"""
+    if not purchase_line_ids:
+        return {}
+    query = select(allocations.c.purchase_line_id, allocations.c.invoice_id).where(
+        allocations.c.purchase_line_id.in_(sorted(set(purchase_line_ids))),
+        allocations.c.status == "confirmed",
+    )
+    result = {}
+    for line_id, invoice_id in connection.execute(query):
+        result.setdefault(line_id, set()).add(invoice_id)
+    return result
+
+
 def _scope(line_ids, invoice_ids):
     """供应商、开票日期筛选：调用方经门面预先算出子采购行 / 发票 ID；None 为不限，空集合无结果。"""
     where = []

@@ -24,7 +24,7 @@ from ..dao import allocation_dao
 from ..policy.allocation_policy import SYSTEM
 from ..policy.order_group_policy import share_snapshot
 from ..policy.pending_order_policy import REGENERATE, legacy_ids
-from . import group_plan_service
+from . import group_plan_service, taken_proposal_service
 
 # 比较新旧建议是否相同的字段；相同时不重复追加。
 _SAME = (
@@ -63,8 +63,13 @@ def generate(connection, invoice_ids, actor, *, refresh=False):
         return 0
     active = {}
     saved = allocation_dao.by_invoices(connection, [invoice["id"] for invoice in invoices])
-    retired = legacy_ids(saved) if refresh else set()
     now, created = _now(), 0
+    if refresh and taken_proposal_service.retire_taken(
+        connection, [invoice["id"] for invoice in invoices], now
+    ):
+        # 子采购单已被其他发票整单通过的旧建议已失效，重新读取后再生成
+        saved = allocation_dao.by_invoices(connection, [invoice["id"] for invoice in invoices])
+    retired = legacy_ids(saved) if refresh else set()
     for row in saved:
         if row["id"] in retired:
             # 无新候选也退出旧规则；与新建议同事务，失败时全部回滚。

@@ -17,7 +17,7 @@ from ..policy.order_group_policy import ONE_INVOICE, order_share, short_lines, t
 from ..policy.pending_order_policy import REGENERATE, whole_order
 from ..public import ClosedLine, LinesClosedByDifference
 from ..vo.matching_vo import Capability
-from . import approval_service
+from . import approval_service, taken_proposal_service
 from .group_comparison_view import comparison_view
 
 SHORT_REASON = "发票少于子采购单，差额按差异结束"
@@ -149,6 +149,10 @@ def approve_rows(service, connection, rows, body, actor):
             now,
             grouped=True,
         )
+    # 一张子采购单只由一张发票开具：其他发票上占用这些明细的待审核建议同一事务内失效
+    taken_proposal_service.retire_after_confirm(
+        connection, invoice_id, sorted({row["purchase_line_id"] for row in rows}), now
+    )
     if short:
         # 一张子采购单只由一张发票开具：发票少的明细在同一事务内按差异结束，不再等待其他发票。
         service.events.publish(
