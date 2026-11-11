@@ -67,13 +67,19 @@ def line_links(connection, declaration_id, order_ids, evidence):
     details = customs_declaration_dao.lines(connection, declaration_id)
     orders = purchase_order_dao.orders(connection, sorted(order_ids))
     lines = purchase_order_dao.lines(connection, sorted(order_ids))
+    diagnostics = []
     bindings = local_line_relations(
         {**head, "tenant_id": "", "source_data": head["raw_payload"]},
         details,
         [{**order, "tenant_id": "", "source_data": order["raw_payload"]} for order in orders],
         lines,
         {**evidence, "mode": "full_sync"},
+        diagnostics=diagnostics,
     )
+    # 与 PL 联查一样保留单位候选诊断；随本次原始依据保存，不冒充不可变历史引用。
+    evidence["localLineDiagnostics"] = [
+        entry for index, entry in enumerate(diagnostics) if entry not in diagnostics[:index]
+    ]
     order_of_line = {line["id"]: line["purchase_order_id"] for line in lines}
     return {
         (order_of_line[int(line_id)], int(customs_line_id), int(line_id), "local_packing")

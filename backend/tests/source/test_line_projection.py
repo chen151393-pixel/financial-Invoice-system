@@ -126,6 +126,16 @@ def test_line_projection_keeps_rule_fields_and_custom_mapping_compatibility(ns):
     assert line_projection(config.purchase_line) is None
 
 
+def test_summary_unit_is_read_even_when_not_configured_for_display(ns):
+    config = parse_config(ns.settings)
+    spec = config.customs_line
+    for mapping in (spec.fields, spec.storage_fields):
+        for key in list(mapping):
+            if mapping[key] == "custrecord_swc_delare_unit":
+                del mapping[key]
+    assert line_projection(spec)["custrecord_swc_delare_unit"] is False
+
+
 def test_purchase_declaration_unit_keeps_ns_display_name(ns):
     from backend.modules.source.mapper.storage_mapper import project
 

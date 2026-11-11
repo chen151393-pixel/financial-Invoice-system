@@ -72,8 +72,85 @@ def packing_index(evidence, declaration_id):
     return index
 
 
-def local_line_relations(head, details, purchases, lines, evidence):
-    """仅接收唯一的公司＋原报关品名＋Packing 货源地汇总行；不按普通商品名猜配。"""
+def original_packing_consistent(raw, pack):
+    """与 PL pl_trace.rawPackingConsistent 一致，核对原始报关行的来源身份。"""
+    if not value(raw.get("plId")) or value(raw.get("plId")) != value(
+        pack.get("custrecord_swc_sublist_packingmain")
+    ):
+        return False
+    if value(raw.get("parentPurchaseId")) != value(pack.get("custrecord_swc_sublist_protranid")):
+        return False
+    explicit = value(raw.get("packingId"))
+    if explicit and explicit != value(pack.get("id")):
+        return False
+    for original, field in (
+        ("companyId", "custrecord_swc_sublist_purchaseorderhead"),
+        ("itemId", "custrecord_swc_sublist_itemid"),
+        ("fulfillmentId", "custrecord_swc_sublist_fulreq_tranid"),
+        ("fulfillmentLine", "custrecord_swc_sublist_fulreq_lineid"),
+    ):
+        left, right = value(raw.get(original)), value(pack.get(field))
+        if (left and right and left != right) or (not explicit and not (left and right)):
+            return False
+    return True
+
+
+def original_packing_index(evidence, declaration_id):
+    """无显式 Packing 引用时只接受完整来源唯一命中，不借用别单或停用来源。"""
+    packs = [
+        pack
+        for pack in evidence.get("packingLines", [])
+        if active(pack) and value(pack.get("custrecord_swc_declare_record")) == declaration_id
+    ]
+    packs_by_id = defaultdict(list)
+    for pack in packs:
+        packs_by_id[value(pack.get("id"))].append(pack)
+    result = defaultdict(list)
+    for raw in evidence.get("rawLines", []):
+        if not active(raw) or value(raw.get("declarationId")) != declaration_id:
+            continue
+        candidates = packs_by_id[value(raw["packingId"])] if value(raw.get("packingId")) else packs
+        matches = [pack for pack in candidates if original_packing_consistent(raw, pack)]
+        if len(matches) == 1:
+            result[(value(matches[0].get("id")), value(raw.get("companyId")), value(raw.get("name")))].append(
+                raw
+            )
+    return result
+
+
+def summary_target(candidates, originals, diagnostics):
+    """保留原唯一候选；多候选时仅用创建来源的报关单位 ID 消歧，不按数量或规格猜配。"""
+    if len(candidates) <= 1:
+        return [identity for identity, _ in candidates]
+    if not originals or not all(unit for _, unit in candidates):
+        return []
+    targets = set()
+    resolved = []
+    for raw in originals:
+        unit = value(raw.get("declarationUnitId"))
+        matches = [identity for identity, candidate_unit in candidates if unit and unit == candidate_unit]
+        if len(matches) != 1:
+            return []
+        targets.add(matches[0])
+        resolved.append(
+            {
+                "code": "RAW_SUMMARY_UNIT_CANDIDATE",
+                "rawLineId": value(raw.get("id")),
+                "originalUnitId": unit,
+                "customsLineId": matches[0],
+                "message": "按原始报关单位定位到唯一报关明细候选，请核实该汇总行报关单位未被修改。",
+            }
+        )
+    # 一条采购来源跨两条汇总行不能复制整行金额。
+    if len(targets) != 1:
+        return []
+    diagnostics.extend(resolved)
+    return list(targets)
+
+
+def local_line_relations(head, details, purchases, lines, evidence, *, diagnostics=None):
+    """按 Packing 来源定位报关汇总行；同名多候选沿用 PL 的原始报关单位消歧规则。"""
+    diagnostics = diagnostics if diagnostics is not None else []
     if not evidence or evidence.get("mode") not in ("full_sync", "evidence_backfill"):
         return {}
     if evidence.get("mode") == "evidence_backfill":
@@ -98,8 +175,13 @@ def local_line_relations(head, details, purchases, lines, evidence):
             value(record.get("custrecord_swc_goods_place")),
         )
         if all(key):
-            summary_index[key].append(str(row["id"]))
+            summary_index[key].append((str(row["id"]), value(record.get("custrecord_swc_delare_unit"))))
     packing = packing_index(evidence, declaration_id)
+    originals = (
+        original_packing_index(evidence, declaration_id)
+        if any(len(candidates) > 1 for candidates in summary_index.values())
+        else defaultdict(list)
+    )
     bindings = {}
     for order in purchases:
         record, raw_lines = source_records(
@@ -145,7 +227,11 @@ def local_line_relations(head, details, purchases, lines, evidence):
                 and (not sales_line or value(pack.get("custrecord_swc_so_lineid")) == sales_line)
             ]
             targets = [
-                summary_index[(company, name, value(pack.get("custrecord_swc_sublist_purchasesource")))]
+                summary_target(
+                    summary_index[(company, name, value(pack.get("custrecord_swc_sublist_purchasesource")))],
+                    originals[(value(pack.get("id")), company, name)],
+                    diagnostics,
+                )
                 for pack in candidates
             ]
             # 一条子采购汇总行若跨多个报关汇总行，必须保留未定位，不能复制整行金额。
