@@ -56,9 +56,12 @@ from .modules.review.service.calculation_worker import CalculationWorker
 from .modules.review.service.purchase_basis_service import on_source_changed
 from .modules.review.service.review_service import ReviewService
 from .modules.source.controller.pl_comparison_controller import create_router as source_pl_router
+from .modules.source.controller.relation_rebuild_controller import create_router as source_relation_router
 from .modules.source.controller.vendor_bill_controller import create_router as vendor_bill_router
 from .modules.source.public import DeclarationService, PlScriptService, SourceChanged, SourceDirectory
 from .modules.source.public import SubpoContractSource as SourceContracts
+from .modules.source.service.relation_rebuild_service import RelationRebuildService
+from .modules.source.service.relation_rebuild_worker import RelationRebuildWorker
 from .modules.source.service.storage_service import StorageService as SourceStorageService
 from .modules.source.service.vendor_bill_query_service import VendorBillQueryService
 from .modules.sync.controller import create_router as sync_router
@@ -152,10 +155,13 @@ def create_app(settings=None, ns=None, engine=None, wecom=None, lemon=None, lemo
             app.state.lemon_worker.start()
             app.state.ns_plan_worker.start()
             app.state.review_calculation_worker.start()
+            app.state.source_relation_worker.start()
             app.state.directory_sync_worker.start()
             app.state.writeback_prepare_worker.start()
             yield
         finally:
+            if hasattr(app.state, "source_relation_worker"):
+                await asyncio.to_thread(app.state.source_relation_worker.stop)
             if hasattr(app.state, "wecom_directory_worker"):
                 await asyncio.to_thread(app.state.wecom_directory_worker.stop)
             if hasattr(app.state, "writeback_prepare_worker"):
@@ -263,6 +269,9 @@ def _register_business(app, settings, ns, contract_ns, wecom, engine, lemon_invo
     app.include_router(vendor_bill_router(VendorBillQueryService(ns)))
     # source 保存来源，review 冻结依据，task 订阅审核通过生成任务。
     source_storage = SourceStorageService(ns, engine, events)
+    relation_rebuild = RelationRebuildService(engine, events)
+    app.state.source_relation_worker = RelationRebuildWorker(relation_rebuild)
+    app.include_router(source_relation_router(relation_rebuild))
     declarations = DeclarationService(engine)
     review = ReviewService(engine, declarations, events, settings.review_unit_price_tolerance_cny)
     app.state.review_calculations = CalculationService(review)

@@ -4,6 +4,8 @@ from collections import defaultdict
 
 from .purchase_summary_policy import purchase_summary_bindings
 
+LOCAL_RELATION_VERSION = "purchase-unit-quantity-v1"
+
 
 def value(raw):
     if isinstance(raw, dict):

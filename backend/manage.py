@@ -76,11 +76,14 @@ def main():
             "business-sql",
             "rebuild-ledger",
             "rebuild-review",
+            "rebuild-source-links",
             "schema-map",
         ],
         help="upgrade：升级新迁移链；schema-sql：仅输出结构 DDL 供审阅，不能代替在线数据升级；"
         "schema-map：重新生成 docs/mysql/schema-map.md 表与迁移对照，不连接数据库",
     )
+    parser.add_argument("--record-no", help="rebuild-source-links：仅重建该 CD 单号")
+    parser.add_argument("--account", help="rebuild-source-links：仅处理该 NS 账套")
     args = parser.parse_args()
     if args.command in ("schema-sql", "mysql-sql", "business-sql"):
         upgrade_schema(OFFLINE_MYSQL_URL, sql=True)
@@ -91,6 +94,33 @@ def main():
         print(f"已生成 {write().relative_to(ROOT).as_posix()}")
         return
     settings = load_settings()
+    if args.command == "rebuild-source-links":
+        from .app import create_events
+        from .modules.review.service.calculation_service import CalculationService
+        from .modules.review.service.review_service import ReviewService
+        from .modules.source.public import DeclarationService
+        from .modules.source.service.relation_rebuild_service import RelationRebuildService
+
+        engine = make_business_engine(settings.business_database_url)
+        if engine is None:
+            raise ValueError("请先配置业务 MySQL")
+        try:
+            verify_database(engine)
+            events = create_events(writeback_queue_enabled=settings.writeback_queue_enabled)
+            results = RelationRebuildService(engine, events).rebuild(
+                record_no=args.record_no, account=args.account
+            )
+            print(json.dumps({"results": results}, ensure_ascii=False))
+            service = ReviewService(
+                engine, DeclarationService(engine), events, settings.review_unit_price_tolerance_cny
+            )
+            CalculationService(service).rebuild()
+            if not results or any(row["status"] == "skipped" for row in results):
+                raise SystemExit("未找到目标或有本地依据不足的单据，详见结果；未调用 NS")
+            print("本地关联与财务快照重建完成；未调用 NS、未自动审核")
+        finally:
+            engine.dispose()
+        return
     if args.command == "rebuild-review":
         from .core.events import EventBus
         from .modules.review.service.calculation_service import CalculationService
