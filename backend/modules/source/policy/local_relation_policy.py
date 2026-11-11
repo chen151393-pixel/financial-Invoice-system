@@ -2,6 +2,8 @@
 
 from collections import defaultdict
 
+from .purchase_summary_policy import purchase_summary_bindings
+
 
 def value(raw):
     if isinstance(raw, dict):
@@ -149,7 +151,7 @@ def summary_target(candidates, originals, diagnostics):
 
 
 def local_line_relations(head, details, purchases, lines, evidence, *, diagnostics=None):
-    """按 Packing 来源定位报关汇总行；同名多候选沿用 PL 的原始报关单位消歧规则。"""
+    """先核实 Packing 来源；原始行缺失时用子采购报关单位和整组数量消歧。"""
     diagnostics = diagnostics if diagnostics is not None else []
     if not evidence or evidence.get("mode") not in ("full_sync", "evidence_backfill"):
         return {}
@@ -165,6 +167,7 @@ def local_line_relations(head, details, purchases, lines, evidence, *, diagnosti
         "customrecord_swc_delare_detail",
     )
     summary_index = defaultdict(list)
+    summary_quantities = {}
     for row in details:
         record = summaries.get(row.get("source_line_key"), {})
         if value(record.get("custrecord_swc_relate_record")) != declaration_id:
@@ -176,6 +179,7 @@ def local_line_relations(head, details, purchases, lines, evidence, *, diagnosti
         )
         if all(key):
             summary_index[key].append((str(row["id"]), value(record.get("custrecord_swc_delare_unit"))))
+            summary_quantities[str(row["id"])] = record.get("custrecord_swc_delare_quantity")
     packing = packing_index(evidence, declaration_id)
     originals = (
         original_packing_index(evidence, declaration_id)
@@ -183,6 +187,8 @@ def local_line_relations(head, details, purchases, lines, evidence, *, diagnosti
         else defaultdict(list)
     )
     bindings = {}
+    purchase_groups = defaultdict(list)
+    blocked_groups = set()
     for order in purchases:
         record, raw_lines = source_records(
             order.get("source_data"),
@@ -226,6 +232,23 @@ def local_line_relations(head, details, purchases, lines, evidence, *, diagnosti
                 and (not sales or value(pack.get("custrecord_swc_sublist_createdfrom")) == sales)
                 and (not sales_line or value(pack.get("custrecord_swc_so_lineid")) == sales_line)
             ]
+            if not evidence.get("rawLines"):
+                keys = {
+                    (company, name, value(pack.get("custrecord_swc_sublist_purchasesource")))
+                    for pack in candidates
+                }
+                if len(keys) == 1:
+                    key = next(iter(keys))
+                    purchase_groups[key].append(
+                        (
+                            str(line["id"]),
+                            value(raw.get("custrecord_swc_subpo_item_bgunit")),
+                            raw.get("custrecord_swc_subpo_item_bgqty"),
+                        )
+                    )
+                else:
+                    # 跨货源地的整条采购行不能拆开或重复加入两个数量分组。
+                    blocked_groups.update(keys)
             targets = [
                 summary_target(
                     summary_index[(company, name, value(pack.get("custrecord_swc_sublist_purchasesource")))],
@@ -239,4 +262,9 @@ def local_line_relations(head, details, purchases, lines, evidence, *, diagnosti
                 unique = {target[0] for target in targets}
                 if len(unique) == 1:
                     bindings[str(line["id"])] = next(iter(unique))
+    bindings.update(
+        purchase_summary_bindings(
+            purchase_groups, summary_index, summary_quantities, blocked_groups, diagnostics
+        )
+    )
     return bindings

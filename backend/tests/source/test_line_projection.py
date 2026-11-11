@@ -136,6 +136,23 @@ def test_summary_unit_is_read_even_when_not_configured_for_display(ns):
     assert line_projection(spec)["custrecord_swc_delare_unit"] is False
 
 
+@pytest.mark.parametrize(
+    "kind,field,is_reference",
+    [
+        ("customs_line", "custrecord_swc_delare_quantity", False),
+        ("purchase_line", "custrecord_swc_subpo_item_bgqty", False),
+        ("purchase_line", "custrecord_swc_subpo_item_bgunit", True),
+    ],
+)
+def test_quantity_matching_fields_are_always_read(ns, kind, field, is_reference):
+    spec = getattr(parse_config(ns.settings), kind)
+    for mapping in (spec.fields, spec.storage_fields):
+        for key in list(mapping):
+            if mapping[key] == field:
+                del mapping[key]
+    assert line_projection(spec)[field] is is_reference
+
+
 def test_purchase_declaration_unit_keeps_ns_display_name(ns):
     from backend.modules.source.mapper.storage_mapper import project
 

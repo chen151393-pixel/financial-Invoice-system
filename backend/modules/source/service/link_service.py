@@ -76,7 +76,7 @@ def line_links(connection, declaration_id, order_ids, evidence):
         {**evidence, "mode": "full_sync"},
         diagnostics=diagnostics,
     )
-    # 与 PL 联查一样保留单位候选诊断；随本次原始依据保存，不冒充不可变历史引用。
+    # 保留原始单位或子采购数量、单位的匹配依据；不冒充不可变历史引用。
     evidence["localLineDiagnostics"] = [
         entry for index, entry in enumerate(diagnostics) if entry not in diagnostics[:index]
     ]
