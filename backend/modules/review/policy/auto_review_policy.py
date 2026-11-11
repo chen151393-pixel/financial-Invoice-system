@@ -7,7 +7,7 @@
 - 全部子采购行含税金额齐全；
 - 全部子采购单币种已确定（来源给出或已人工核实）；
 - 每条报关行的原始口径与报关口径单位、数量一致；
-- 每条报关行的申报幅度都已算出，报关行单价超过申报单价的差额未超出容差。
+- 每条报关行的申报幅度都已算出，采购单价超过申报单价的差额未超出容差。
 供应商白名单待业务确认，暂未纳入。
 """
 
@@ -45,7 +45,7 @@ def auto_review_reasons(state, changed, unlinked_count, purchase_rows, currencie
     if not currencies_known:
         reasons.append("子采购币种待核实")
     if any(margin["status"] == "negative" for margin in margins):
-        reasons.append("报关行单价高于人民币申报单价且超出容差")
+        reasons.append("采购单价高于人民币申报单价且超出容差")
     mismatched = [margin["note"] for margin in margins if margin["status"] in MISMATCH]
     if mismatched:
         reasons.append(f"报关行原始口径与报关口径不一致：{mismatched[0]}")

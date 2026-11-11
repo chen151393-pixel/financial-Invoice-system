@@ -254,7 +254,7 @@ def test_v7_negative_snapshot_rebuilds_as_quantity_mismatch(review, ns, engine):
     snapshot = rows(engine, "SELECT id,payload FROM review_declaration_snapshots")[0]
     payload = json.loads(snapshot["payload"])
     for line in payload["customsLines"]:
-        line.update(margin="-100.00%", marginStatus="negative", marginNote="报关单价低于报关行单价")
+        line.update(margin="-100.00%", marginStatus="negative", marginNote="报关单价低于采购单价")
     with engine.begin() as connection:
         connection.execute(
             text("UPDATE review_declaration_snapshots SET payload=:p,margin_alert=1"),

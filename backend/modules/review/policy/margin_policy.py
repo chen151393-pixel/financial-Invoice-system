@@ -24,7 +24,7 @@ CENT = Decimal("0.01")
 DEFAULT_UNIT_PRICE_TOLERANCE_CNY = Decimal("0.10")
 
 
-# 原始口径与报关口径不一致的状态；与“报关单价低于报关行单价”一样需要人工核对
+# 原始口径与报关口径不一致的状态；与“报关单价低于采购单价”一样需要人工核对
 MISMATCH = ("unit_mismatch", "quantity_mismatch")
 
 
@@ -75,9 +75,9 @@ def declared_margin(
         return unavailable(issue)
     original_price = customs_row["unit_price"]
     if original_price is None:
-        return unavailable("报关行单价缺失，无法计算申报幅度")
+        return unavailable("采购单价缺失，无法计算申报幅度")
     if original_price <= 0:
-        return unavailable("报关行单价须大于 0，无法计算申报幅度")
+        return unavailable("采购单价须大于 0，无法计算申报幅度")
     source_price, _ = declared_unit_price(customs_row)
     if source_price is None:
         return unavailable("报关单价缺失，且报关金额缺失或报关数量无效，无法试算")
@@ -99,7 +99,7 @@ def declared_margin(
     # 按未舍入的人民币单价差额判断，避免把刚超出阈值的差额舍入后放行。
     difference = original - declared
     abnormal = difference > tolerance
-    note = "报关单价低于报关行单价" if abnormal else ""
+    note = "报关单价低于采购单价" if abnormal else ""
     if Decimal(0) < difference <= tolerance:
         difference_text = format(difference, "f")
         if "." in difference_text:

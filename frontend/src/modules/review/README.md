@@ -2,6 +2,8 @@
 
 `/review`（旧地址 `/finance-reconciliation` 自动跳转）。架构 v2 第 4b 步由 `reconciliation` 移出，改用 review 模块新接口。后端规则见[后端 review 模块](../../../../backend/modules/review/README.md)。
 
+2026-11-11：申报幅度区域的“报关行单价”统一显示为“采购单价”，对应 `originalUnitPriceCny`；相关异常提示同步改名，价格来源和计算逻辑不变。
+
 ## 文件
 
 | 文件                                                   | 说明                                                                                                    |

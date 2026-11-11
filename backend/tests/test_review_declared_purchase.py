@@ -227,7 +227,7 @@ def test_invalid_original_price_is_not_replaced_by_total_or_purchase_amount(pric
     result = declared_margin(
         {**CUSTOMS, "unit_price": price, "amount": Decimal("8113")}, [purchase()], {1: ORDER}, {}
     )
-    assert result["status"] == "unavailable" and "报关行单价" in result["note"]
+    assert result["status"] == "unavailable" and "采购单价" in result["note"]
     assert result["original"] is None and result["margin"] is None
 
 

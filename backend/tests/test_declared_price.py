@@ -75,7 +75,7 @@ def test_margin_uses_both_customs_prices_without_purchase_amount_or_unit_convers
         Decimal("21.3"),
         Decimal("10.65"),
     )
-    assert result["note"] == "报关单价低于报关行单价"
+    assert result["note"] == "报关单价低于采购单价"
     assert customs_row == before
     # 采购金额、币种不参与幅度；报关行已有单价也不按总价重算。
     assert declared_margin(customs_row, [{**line, "amount": Decimal("999999")}], orders, sales) == result
@@ -138,7 +138,7 @@ def test_margin_does_not_display_negative_zero():
     )
     assert str(result["margin"]) == "0.00"
     assert result["status"] == "negative"  # 关闭容差时，即使幅度舍入为零仍提示倒挂
-    assert result["note"] == "报关单价低于报关行单价"
+    assert result["note"] == "报关单价低于采购单价"
 
 
 def test_review_page_shows_margin_per_customs_line(ns, engine, service):
@@ -155,7 +155,7 @@ def test_review_page_shows_margin_per_customs_line(ns, engine, service):
         ("-100.00%", "negative"),
     ]
     assert lines[0].declaredUnitPriceCny == "10.65" and lines[0].originalUnitPriceCny == "21.3"
-    assert lines[0].marginNote == "报关单价低于报关行单价"
+    assert lines[0].marginNote == "报关单价低于采购单价"
     assert lines[0].purchaseLines[0].salesOrderExchangeRate == "7.1"
     set_rate(engine, None)
     lines = group(service, "CD870").customsLines
