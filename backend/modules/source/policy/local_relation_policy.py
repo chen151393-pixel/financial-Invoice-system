@@ -2,9 +2,10 @@
 
 from collections import defaultdict
 
+from .parent_summary_policy import parent_summary_bindings
 from .purchase_summary_policy import purchase_summary_bindings
 
-LOCAL_RELATION_VERSION = "purchase-unit-quantity-v1"
+LOCAL_RELATION_VERSION = "parent-summary-quantity-v2"
 
 
 def value(raw):
@@ -35,13 +36,18 @@ def source_records(source, record_type, identity, line_type):
     }
 
 
-def packing_index(evidence, declaration_id):
-    """母行使用 NS 原生行号和销售采购行链接核实，不能拿本地自增 ID 代替。"""
-    parent_items = {
+def parent_item_keys(evidence):
+    """只接受有效母采购商品行的原生行号；主行、税行不提供商品归属。"""
+    return {
         (value(row.get("transaction")), value(row.get("id")), value(row.get("item")))
         for row in evidence.get("parentLines", [])
         if row.get("mainline") == "F" and row.get("taxline") == "F" and row.get("item")
     }
+
+
+def packing_index(evidence, declaration_id):
+    """母行使用 NS 原生行号和销售采购行链接核实，不能拿本地自增 ID 代替。"""
+    parent_items = parent_item_keys(evidence)
     parents_by_sales = defaultdict(set)
     for row in evidence.get("purchaseLinks", []):
         if row.get("nexttype") != "PurchOrd" or row.get("previoustype") != "SalesOrd":
@@ -170,6 +176,8 @@ def local_line_relations(head, details, purchases, lines, evidence, *, diagnosti
     )
     summary_index = defaultdict(list)
     summary_quantities = {}
+    parent_summaries = defaultdict(list)
+    blocked_parent_headers = set()
     for row in details:
         record = summaries.get(row.get("source_line_key"), {})
         if value(record.get("custrecord_swc_relate_record")) != declaration_id:
@@ -182,6 +190,22 @@ def local_line_relations(head, details, purchases, lines, evidence, *, diagnosti
         if all(key):
             summary_index[key].append((str(row["id"]), value(record.get("custrecord_swc_delare_unit"))))
             summary_quantities[str(row["id"])] = record.get("custrecord_swc_delare_quantity")
+        parent_key = (
+            value(record.get("custrecord_swc_packing_no")),
+            key[0],
+            value(record.get("custrecord_swc_purachse_no")),
+            value(record.get("custrecord_swc_salesorder_number")),
+            key[1],
+            value(record.get("custrecord_swc_delare_unit")),
+        )
+        if all(parent_key[:4]):
+            if not all(parent_key[4:]) or not key[2]:
+                # 不可忽略字段缺失的汇总行，把剩余候选误当成唯一匹配。
+                blocked_parent_headers.add(parent_key[:4])
+            else:
+                parent_summaries[parent_key].append(
+                    (str(row["id"]), record.get("custrecord_swc_delare_quantity"))
+                )
     packing = packing_index(evidence, declaration_id)
     originals = (
         original_packing_index(evidence, declaration_id)
@@ -191,6 +215,10 @@ def local_line_relations(head, details, purchases, lines, evidence, *, diagnosti
     bindings = {}
     purchase_groups = defaultdict(list)
     blocked_groups = set()
+    # 只补足整个 Packing/原始行来源缺失的情况，不能覆盖已有来源之间的矛盾。
+    use_parent_summary = not evidence.get("packingLines") and not evidence.get("rawLines")
+    parent_items = parent_item_keys(evidence) if use_parent_summary else set()
+    parent_groups = defaultdict(list)
     for order in purchases:
         record, raw_lines = source_records(
             order.get("source_data"),
@@ -211,18 +239,47 @@ def local_line_relations(head, details, purchases, lines, evidence, *, diagnosti
         sales = value(record.get("custrecord_swc_subpo_so"))
         if not pl or not company:
             continue
+        if use_parent_summary and any(
+            not all(
+                value(raw_lines.get(line.get("source_line_key"), {}).get(field))
+                for field in ("custrecord_swc_subpo_item_bgname", "custrecord_swc_subpo_item_bgunit")
+            )
+            for line in lines
+            if line["purchase_order_id"] == order["id"]
+        ):
+            # 缺失品名或单位的子行无法分组，不允许只用同单剩余明细凑出报关数量。
+            blocked_parent_headers.add((pl, company, parent, sales))
         for line in lines:
             if line["purchase_order_id"] != order["id"]:
                 continue
             raw = raw_lines.get(line.get("source_line_key"), {})
-            if value(raw.get("custrecord_swc_subpo_main")) != value(order.get("ns_internal_id")):
-                continue
+            belongs_to_order = value(raw.get("custrecord_swc_subpo_main")) == value(
+                order.get("ns_internal_id")
+            )
             item = value(raw.get("custrecord_swc_subpo_item_item"))
             parent_line = value(raw.get("custrecord_swc_subpo_item_mainpo_lineid")) if parent else ""
             fulfillment = value(raw.get("custrecord_swc_subpo_item_ifreqid"))
             sales_line = value(raw.get("custrecord_swc_subpo_item_solineid"))
             # NS 创建脚本由原报关子行复制 bgname，普通采购品名不具有同等来源含义。
             name = value(raw.get("custrecord_swc_subpo_item_bgname"))
+            parent_key = (
+                pl,
+                company,
+                parent,
+                sales,
+                name,
+                value(raw.get("custrecord_swc_subpo_item_bgunit")),
+            )
+            if use_parent_summary and all(parent_key):
+                parent_groups[parent_key].append(
+                    (
+                        str(line["id"]),
+                        raw.get("custrecord_swc_subpo_item_bgqty"),
+                        belongs_to_order and (parent, parent_line, item) in parent_items,
+                    )
+                )
+            if not belongs_to_order:
+                continue
             if not item or not name or (parent and not parent_line):
                 continue
             if not parent and not all((fulfillment, sales, sales_line)):
@@ -268,5 +325,8 @@ def local_line_relations(head, details, purchases, lines, evidence, *, diagnosti
         purchase_summary_bindings(
             purchase_groups, summary_index, summary_quantities, blocked_groups, diagnostics
         )
+    )
+    bindings.update(
+        parent_summary_bindings(parent_summaries, parent_groups, blocked_parent_headers, diagnostics)
     )
     return bindings

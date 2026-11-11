@@ -140,6 +140,8 @@ def test_summary_unit_is_read_even_when_not_configured_for_display(ns):
     "kind,field,is_reference",
     [
         ("customs_line", "custrecord_swc_delare_quantity", False),
+        ("customs_line", "custrecord_swc_purachse_no", True),
+        ("customs_line", "custrecord_swc_salesorder_number", True),
         ("purchase_line", "custrecord_swc_subpo_item_bgqty", False),
         ("purchase_line", "custrecord_swc_subpo_item_bgunit", True),
     ],

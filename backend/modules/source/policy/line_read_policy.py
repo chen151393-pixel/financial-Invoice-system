@@ -68,6 +68,8 @@ def line_projection(spec):
             "custrecord_swc_delare_name",
             "custrecord_swc_delare_unit",
             "custrecord_swc_delare_quantity",
+            "custrecord_swc_purachse_no",
+            "custrecord_swc_salesorder_number",
             spec.pl,
             spec.company,
         }

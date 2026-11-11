@@ -129,7 +129,7 @@
 
 ### 已存来源关联补算（2026-11-11）
 
-`relation_rebuild_service.py` 只依赖本地数据库和事件总线，不接收 NS 客户端。`relation_rebuild_worker.py` 随后端启动分页检查有效报关单，使用已保存的报关/子采购原始快照及 relation_evidence，复用 `link_service.refresh_declaration` 重建行关联和内容摘要。依据中记录 `localRelationVersion=purchase-unit-quantity-v1` 及独立的本地重建时间；保留来源 `readAt` 和单据 `synced_at`，不冒充新同步。正常同步也写该版本。
+`relation_rebuild_service.py` 只依赖本地数据库和事件总线，不接收 NS 客户端。`relation_rebuild_worker.py` 随后端启动分页检查有效报关单，使用已保存的报关/子采购原始快照及 relation_evidence，复用 `link_service.refresh_declaration` 重建行关联和内容摘要。依据中记录 `localRelationVersion=parent-summary-quantity-v2` 及独立的本地重建时间；保留来源 `readAt` 和单据 `synced_at`，不冒充新同步。正常同步也写该版本；此前 `purchase-unit-quantity-v1` 的单据会在启动时按新规则重新检查。
 
 每张单在原有账户锁和账本锁内读取、重建、更新摘要；只有业务摘要变化时才在同一事务发布 `SourceChanged`，由既有财务后台消费者刷新展示。失败回滚关联、版本及队列，启动任务等待后重试；重复启动跳过已完成版本。已有审核记录不重写、不自动审核，来源变化仍按现有规则要求复核。缺少本地快照、依据身份不一致或关联依赖已被其他同步改动时跳过并记录具体原因，不调用 NS 补数据，也不清空原有链接。
 
@@ -142,6 +142,16 @@ docker compose exec -T app python -m backend.manage rebuild-source-links --recor
 登录保护接口：`POST /api/source/relations/rebuild`，请求 `{"recordNo":"CD000990","account":"5939865"}`（account 可省略）；响应 results 含各单 status（rebuilt/current/skipped）、关联及未关联明细数。接口提交后由财务后台刷新，不能把队列尚未完成当作已显示更新。没有目标时 results 为空；skipped 带原因。此入口只重建指定单号，不能用空参数执行全量。
 
 验证：`tests/source/test_relation_rebuild.py` 覆盖旧来源快照直接重建→财务更新、启动补算、数量金额和原同步时间保留、幂等、错误回滚、范围隔离、过期依据保护、接口身份认证与禁止 NS 请求。另用此前已下载的 CD000990 快照进行隔离 SQLite 入库→本地重建→财务查询，73 条采购行全部关联，两条冷裱膜各对应 9 条采购明细；没有重新请求 NS。该离线库缺少线上单位字典、母单币种和汇率，只用于确认关联和原始数量金额，不代替线上部署验收。
+
+### Packing 缺失时的显式母采购关联（2026-11-11，CD000926）
+
+本地业务库中 CD000926 的既有快照包含 4 条报关汇总行、2 张子采购单、11 条子采购明细及 15 条母采购来源行，但 `packingLines`、`purchaseLinks` 和 `rawLines` 均为空。旧规则必须先经 Packing 定位货源地，因此全部采购行在进入品名、单位、数量比较前就被排除；部署 v1 的重复重建无法补足该路径。
+
+`parent_summary_policy.py` 补充仅在 Packing 和原始报关行均为空时使用的本地路径：同一报关单、账套内，要求双方快照中的 PL、公司、母采购、销售单内部 ID，以及子采购原报关品名、报关单位全部一致；每条子采购必须通过“母采购 ID＋原生行号＋商品 ID”在已保存有效母采购商品行中核实。完整组的子采购报关数量合计须精确等于唯一候选汇总行的报关数量。候选必须含货源地；同一母单跨多个货源地或多条同名同单位汇总行时，不按数量挑选其中一条。缺失品名/单位的同母单子行会阻止剩余行凑数匹配，已有 Packing 或原始行时不启用这条路径，不覆盖其冲突。
+
+该路径使用双方显式引用交叉验证，不按母采购单号文字、供应商或金额推测货源地，也不把汇总行的母采购字段视为所有来源。诊断代码 `PARENT_SUMMARY_UNIT_QUANTITY` 保存母采购、PL、公司、销售单、单位、整组数量和对应采购行 ID。报关汇总行的母采购、销售单引用加入批量读取必需字段；现存本地字段齐全时无需重新读取 NS。
+
+验证：`tests/source/test_parent_summary_relations.py` 覆盖完整组数量、重复候选/跨货源地保护、双方引用冲突、母采购行商品核实、缺失字段、已有 Packing 冲突保护，以及 v1 本地快照升级重建→财务刷新→幂等。另将本地库已存 CD000926 的来源记录及必要外键引用原样复制到隔离 SQLite 后执行真实重建服务，11 条全部关联：杭州热升华转印纸 2 条／2572.5 千克／33927.15 元，嘉兴相纸 9 条／12955.2 千克／139232.40 元。六安相纸、PP 合成纸在本地没有对应子采购行，保持为空；不复制这 11 条到其他汇总行。未请求 NS、未改原业务库；该验证不代替新版本的线上部署确认。
 
 - 依据状态：关联依据 `status=matched` 时为 `complete`，否则 `partial` 并保存原因。
 - 本次未完整同步、但关联的子采购单已更新的报关单：依据改为 `partial`（"关联子采购已更新，请重新完整同步本报关单。"）并重算内容摘要，审核侧据此要求重新审核。
