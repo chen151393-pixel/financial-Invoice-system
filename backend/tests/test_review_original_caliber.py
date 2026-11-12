@@ -55,7 +55,7 @@ def test_mismatch_skips_margin_and_needs_manual_review():
     assert (margin["status"], margin["margin"]) == ("unit_mismatch", None)
     assert not margin_alert([margin])
     reasons = auto_review_reasons("pending", False, 0, [{"amount": Decimal(1)}], True, [margin])
-    assert reasons == ["报关行原始口径与报关口径不一致：" + margin["note"]]
+    assert reasons == ["报关或关联子采购口径不一致：" + margin["note"]]
 
 
 def test_review_page_shows_original_price_and_mismatch(ns, engine, service):

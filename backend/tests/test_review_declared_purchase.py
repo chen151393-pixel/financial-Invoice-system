@@ -217,7 +217,8 @@ def test_existing_prices_require_valid_matching_declared_quantity(quantity):
     result = declared_margin(
         {**CUSTOMS, "quantity": None, "declared_quantity": quantity}, [row], {1: ORDER}, {}
     )
-    assert result["status"] == "unavailable" and result["margin"] is None
+    expected = "unavailable" if quantity is None or quantity <= 0 else "quantity_mismatch"
+    assert result["status"] == expected and result["margin"] is None
     assert "数量" in result["note"]
     assert not margin_alert([result])
 
@@ -280,13 +281,33 @@ def test_materialized_page_shows_quantity_mismatch_without_price_alert(ns, engin
         row["custrecord_swc_subpo_item_bgqty"] = Decimal("9")
     save(ns, engine, bundle([order], [declaration]))
     result = group(service, "CD870")
+    assert result.quantityMismatch and not result.unitMismatch
     assert not result.marginAlert and not result.autoReview.eligible
     for line in result.customsLines:
-        assert line.marginStatus == "unavailable" and line.margin == ""
+        assert line.marginStatus == "quantity_mismatch" and line.margin == ""
         assert line.marginNote == "数量不一致（报关行 10，子采购报关合计 9）"
         assert line.originalUnitPriceCny == line.declaredUnitPriceCny == ""
     page = service.browse(DeclarationListQuery(status="margin_alert"))
     assert page.total == page.counts["marginAlert"] == 0
+
+
+def test_cd000954_child_total_mismatch_sets_quantity_label_and_blocks_auto_review():
+    customs_row = {
+        **CUSTOMS,
+        "unit": "卷",
+        "declared_unit": "卷",
+        "quantity": Decimal("1259"),
+        "declared_quantity": Decimal("1259"),
+    }
+    children = [{**purchase(declared="245"), "declared_unit": "卷"}]
+    result = declared_margin(customs_row, children, {1: ORDER}, {})
+    assert result["status"] == "quantity_mismatch"
+    assert result["note"] == "数量不一致（报关行 1259，子采购报关合计 245）"
+    assert result["margin"] is result["original"] is result["declared"] is None
+    assert not margin_alert([result])
+    assert auto_review_reasons("pending", False, 0, children, True, [result]) == [
+        "报关或关联子采购口径不一致：数量不一致（报关行 1259，子采购报关合计 245）"
+    ]
 
 
 def test_cd000835_caliber_mismatch_takes_priority_over_quantity_and_prices():
@@ -311,7 +332,7 @@ def test_cd000835_caliber_mismatch_takes_priority_over_quantity_and_prices():
     same = {**customs_row, "unit": "千克", "quantity": Decimal("24965.5")}
     result = declared_margin(same, children, {1: ORDER}, {})
     assert result["note"] == "数量不一致（报关行 24965.5，子采购报关合计 41260）"
-    assert result["status"] == "unavailable" and not margin_alert([result])
+    assert result["status"] == "quantity_mismatch" and not margin_alert([result])
 
 
 def test_quantity_check_resolves_unit_ids_and_preserves_raw_purchase_quantity():

@@ -747,14 +747,15 @@ test("数量不一致时只展示数量提示，不显示单价异常或旧幅�
   item.marginAlert = false;
   Object.assign(item.customsLines[0], {
     margin: "",
-    marginStatus: "unavailable",
+    marginStatus: "quantity_mismatch",
     marginNote: "数量不一致（报关行 24965.5，子采购报关合计 41260）",
     originalUnitPriceCny: "",
     declaredUnitPriceCny: "",
   });
   const html = customs(item);
   assert.match(html, /数量不一致（报关行 24965.5，子采购报关合计 41260）/);
-  assert.doesNotMatch(html, /单价异常|报关单价低于不含税采购单价|fr-margin--negative|-65.59%/);
+  assert.match(html, /data-tone="warning"[^>]*>数量不一致/);
+  assert.doesNotMatch(html, /单价异常|报关单价低于不含税采购单价|data-tone="danger"|-65.59%/);
 });
 
 test("采购单价缺失时保留原因，不显示低价异常或旧幅度", () => {

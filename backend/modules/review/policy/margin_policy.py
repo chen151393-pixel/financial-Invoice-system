@@ -25,7 +25,7 @@ DEFAULT_UNIT_PRICE_TOLERANCE_CNY = Decimal("0.10")
 PURCHASE_TAX_FACTOR = Decimal("1.13")
 
 
-# 原始口径与报关口径不一致的状态；与“报关单价低于采购单价”一样需要人工核对
+# 报关行原始／报关口径或关联子采购报关数量不一致；需要人工核对
 MISMATCH = ("unit_mismatch", "quantity_mismatch")
 
 
@@ -73,7 +73,8 @@ def declared_margin(
         return mismatch
     issue = quantity_issue(customs_row, purchase_rows, unit_names)
     if issue:
-        return unavailable(issue)
+        status, note = issue
+        return unavailable(note, status)
     original_price = customs_row["unit_price"]
     if original_price is None:
         return unavailable("采购单价缺失，无法计算申报幅度")

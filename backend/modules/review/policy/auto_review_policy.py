@@ -48,7 +48,7 @@ def auto_review_reasons(state, changed, unlinked_count, purchase_rows, currencie
         reasons.append("不含税采购单价高于人民币申报单价且超出容差")
     mismatched = [margin["note"] for margin in margins if margin["status"] in MISMATCH]
     if mismatched:
-        reasons.append(f"报关行原始口径与报关口径不一致：{mismatched[0]}")
+        reasons.append(f"报关或关联子采购口径不一致：{mismatched[0]}")
     unavailable = [margin["note"] for margin in margins if margin["status"] == "unavailable"]
     if unavailable:
         reasons.append(f"申报幅度无法计算：{unavailable[0]}")

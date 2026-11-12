@@ -290,7 +290,7 @@ def test_approval_enqueues_and_does_not_wait_for_account_rebuild(review, ns, eng
     assert page.total == 1 and page.counts["approvedThisMonth"] == 1
 
 
-def test_v7_negative_snapshot_rebuilds_as_quantity_mismatch(review, ns, engine):
+def test_v13_unavailable_snapshot_rebuilds_as_quantity_mismatch(review, ns, engine):
     order = purchase()
     for _, row in order[2]:
         row["custrecord_swc_subpo_item_bgqty"] = Decimal("9")
@@ -300,21 +300,25 @@ def test_v7_negative_snapshot_rebuilds_as_quantity_mismatch(review, ns, engine):
     snapshot = rows(engine, "SELECT id,payload FROM review_declaration_snapshots")[0]
     payload = json.loads(snapshot["payload"])
     for line in payload["customsLines"]:
-        line.update(margin="-100.00%", marginStatus="negative", marginNote="报关单价低于不含税采购单价")
+        line.update(
+            margin="", marginStatus="unavailable", marginNote="数量不一致（报关行 10，子采购报关合计 9）"
+        )
+    payload["quantityMismatch"] = False
     with engine.begin() as connection:
         connection.execute(
-            text("UPDATE review_declaration_snapshots SET payload=:p,margin_alert=1"),
+            text("UPDATE review_declaration_snapshots SET payload=:p,margin_alert=0"),
             {"p": json.dumps(payload)},
         )
-        connection.execute(text("UPDATE review_calculation_jobs SET calculation_key='review-v7:cny=0.10'"))
+        connection.execute(text("UPDATE review_calculation_jobs SET calculation_key='review-v13:cny=0.10'"))
     assert review.browse(query()).counts["marginAlert"] == 0
     calculations.initialize()
     CalculationWorker(calculations).run_once()
     fresh = review.browse(query()).groups[0]
     assert fresh.calculationStatus == "ready" and not fresh.marginAlert and not fresh.autoReview.eligible
+    assert fresh.quantityMismatch and not fresh.unitMismatch
     assert fresh.contentSha256 == payload["contentSha256"]
     for line in fresh.customsLines:
-        assert line.marginStatus == "unavailable" and line.margin == ""
+        assert line.marginStatus == "quantity_mismatch" and line.margin == ""
         assert line.marginNote == "数量不一致（报关行 10，子采购报关合计 9）"
     assert review.browse(query(status="margin_alert")).total == 0
     assert rows(engine, "SELECT id FROM review_records") == []
