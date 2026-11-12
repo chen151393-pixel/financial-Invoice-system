@@ -1,4 +1,4 @@
-"""权限管理：同步范围、部门默认角色、个人角色；只有系统管理员可以操作。
+"""权限管理：同步范围、部门默认角色、个人角色；按人员与权限页面授权校验。
 
 人员与部门以飞书为准，这里不能新增人员或修改姓名、部门。
 """
@@ -16,7 +16,8 @@ from ..policy.department_policy import ancestors, subtree
 from ..policy.login_policy import feishu_user_id
 from ..policy.role_policy import ROLES, ordered, unknown_roles
 from ..vo.access_vo import AccessOverview
-from .access_reader import in_scope, load_index, roles_for
+from .access_reader import load_index, roles_for
+from .user_access_preview import evaluate
 
 
 def _now():
@@ -201,7 +202,7 @@ class AccessService:
         except SQLAlchemyError:
             raise ApiError(503, "权限保存失败，请检查业务数据库") from None
 
-    def set_user_access(self, user_pk, roles, custom, enabled, actor):
+    def set_user_access(self, user_pk, roles, custom, enabled, actor, version=None):
         self.identity.require_manage(actor)
         roles = _check_roles(roles)
 
@@ -209,18 +210,15 @@ class AccessService:
             user = user_dao.get(connection, user_pk, lock=True)
             if user is None:
                 raise ApiError(404, "人员不存在，请先同步飞书成员")
-            departments = user_dao.departments_by_user(connection, [user_pk]).get(user_pk, set())
-            effective = roles_for(
-                load_index(connection), {**user, "custom_roles": custom}, departments, set(roles)
-            )
-            if enabled and (
-                not user["active"]
-                or not effective
-                or not in_scope(connection, load_index(connection), user, departments)
-            ):
+            preview = evaluate(connection, user, roles, custom)
+            if version is not None and version != preview.version:
+                raise ApiError(409, "成员或角色权限已变化，请重新读取成员后再保存")
+            if enabled and not preview.canEnable:
                 raise ApiError(400, "启用前须确认人员在同步范围内、在职且至少有一个生效角色")
-            if user["user_id"] == feishu_user_id(actor) and (not enabled or "admin" not in effective):
-                raise ApiError(400, "不能停用当前管理员或移除自身管理员角色，请由其他管理员操作")
+            if user["user_id"] == feishu_user_id(actor) and (
+                not enabled or not any(page.code == "access" for page in preview.pages)
+            ):
+                raise ApiError(400, "不能停用当前账号或移除自身人员管理权限，请由其他有权限成员操作")
             before = {
                 "enabled": user["enabled"],
                 "customRoles": user["custom_roles"],

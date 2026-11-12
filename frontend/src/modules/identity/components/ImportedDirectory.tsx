@@ -27,7 +27,7 @@ export function ImportedDirectory({
     })),
   ];
   return (
-    <Card>
+    <div className="identity-people-layout">
       {data.importedDepartments === undefined && (
         <CardContent>
           <Alert tone="warning">
@@ -35,7 +35,7 @@ export function ImportedDirectory({
           </Alert>
         </CardContent>
       )}
-      <div className="identity-directory-layout">
+      <Card>
         <DepartmentTree
           items={items}
           selected={current?.openDepartmentId ?? ""}
@@ -46,17 +46,17 @@ export function ImportedDirectory({
           }
           onSelect={onSelect}
         />
-        <section className="identity-directory-members" aria-label="已导入员工">
-          <UserCard
-            key={current?.id ?? "all"}
-            departments={departments}
-            roles={data.roles}
-            selectedDepartment={current}
-            onSaved={onSaved}
-            embedded
-          />
-        </section>
-      </div>
-    </Card>
+      </Card>
+      <section className="identity-directory-members" aria-label="已导入员工">
+        <UserCard
+          key={current?.id ?? "all"}
+          departments={departments}
+          roles={data.roles}
+          selectedDepartment={current}
+          onSaved={onSaved}
+          embedded
+        />
+      </section>
+    </div>
   );
 }

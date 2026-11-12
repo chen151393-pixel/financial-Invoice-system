@@ -21,7 +21,7 @@ React + TypeScript + Vite 前端，Python + FastAPI + SQLAlchemy + Alembic 后�
 
 | 入口 | 当前实现 | 主要边界 |
 | --- | --- | --- |
-| `/login` | 单管理员账号密码登录、退出及会话失效跳转 | 账号来自服务器配置；会话保存在单进程内存中 |
+| `/login`、`/settings/access`、`/settings/access/roles` | 飞书登录与应急管理员登录；人员角色授权、页面权限配置、菜单与接口访问校验 | 会话保存在单进程内存中；页面访问与具体业务操作权限分开，部署前须执行 `0041_identity_role_pages` 迁移 |
 | `/sync/ns` | NS 分页读取；子采购和报关可补齐来源并保存 | 没有持久定时同步队列；依赖来源接口及字段配置 |
 | `/workbench`（默认首页） | [总体工作台](docs/invoice-workbench.md)：关键指标、业务流程分布、待办处理、供应商待收金额与已开票趋势 | 仅汇总已入库数据，口径见页面说明；超期暂不展示 |
 | `/pl-reconciliation` | 通过 NS 共用脚本实时查询采购报关依据 | 只读对照，页面查询不自动入库或审核 |

@@ -81,6 +81,7 @@ TABLES = {
     "identity_audit",
     "identity_directory_previews",
     "identity_user_sync_scopes",
+    "identity_role_pages",
 }
 NOW = "2026-10-10 00:00:00"
 
@@ -318,6 +319,7 @@ def test_downgrade_refuses_to_erase_version_evidence(tmp_path):
                 "task_wecom_directories",
                 "task_wecom_directory_groups",
                 "sync_ns_plans",
+                "identity_role_pages",
             }
             assert evidence_tables <= set(inspect(connection).get_table_names())
             assert connection.execute(text("SELECT id FROM invoice_lines")).scalar_one() == 77

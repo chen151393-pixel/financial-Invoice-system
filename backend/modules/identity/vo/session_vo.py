@@ -14,6 +14,7 @@ class SessionUser(StrictModel):
     name: str
     roles: list[RoleItem]
     canManageAccess: bool
+    pages: list[str]
 
 
 class SessionInfo(StrictModel):

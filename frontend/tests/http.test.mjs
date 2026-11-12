@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { http, HttpError, onUnauthorized } from "../src/shared/api/http.ts";
+import { http, HttpError, onForbidden, onUnauthorized } from "../src/shared/api/http.ts";
 
 test("明确的业务拒绝保留HTTP状态供表单恢复", async (t) => {
   t.mock.method(globalThis, "fetch", async () =>
@@ -97,6 +97,28 @@ test("会话失效通知可取消订阅，403和网络失败不触发重新登�
     unsubscribe();
     mock.mock.mockImplementation(async () => Response.json({ error: "请先登录" }, { status: 401 }));
     await assert.rejects(http("/invoices"), /请先登录/);
+    assert.equal(notified, 1);
+  } finally {
+    unsubscribe();
+  }
+});
+
+test("403 可刷新页面权限但不自动重放业务请求，监听可取消", async (t) => {
+  let notified = 0,
+    calls = 0;
+  const unsubscribe = onForbidden(() => {
+    notified++;
+  });
+  t.mock.method(globalThis, "fetch", async () => {
+    calls++;
+    return Response.json({ error: "没有页面权限" }, { status: 403 });
+  });
+  try {
+    await assert.rejects(http("/review/declarations/query", "POST", {}), /没有页面权限/);
+    assert.equal(calls, 1);
+    assert.equal(notified, 1);
+    unsubscribe();
+    await assert.rejects(http("/invoices"));
     assert.equal(notified, 1);
   } finally {
     unsubscribe();

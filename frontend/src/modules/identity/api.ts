@@ -1,5 +1,6 @@
 import { http } from "../../shared/api/http";
 import type { AccessOverview, FeishuOutcome, LoginOptions, SessionInfo, SyncRun } from "./types";
+import type { RolePageOverview, RolePages, UserAccessDetail, UserAccessPreview } from "./types";
 import type {
   DirectoryMembers,
   DirectoryPlan,
@@ -22,8 +23,14 @@ export const getFeishuOutcome = () => http<FeishuOutcome>("/session/feishu/outco
 // 兼容现有业务调用方：只检查会话，不再签发本机免密会话。
 export const openLocalSession = getSession;
 
-// 人员与权限（仅系统管理员）
+// 人员与权限（由后端按角色的页面授权校验）
 export const getAccess = () => http<AccessOverview>("/identity/access");
+export const getRolePages = () => http<RolePageOverview>("/identity/role-pages");
+export const saveRolePages = (role: string, pages: string[], revision: number) =>
+  http<RolePages>(`/identity/role-pages/${encodeURIComponent(role)}`, "PUT", { pages, revision });
+export const getUserAccess = (id: number) => http<UserAccessDetail>(`/identity/users/${id}/access`);
+export const previewUserAccess = (id: number, roles: string[], customRoles: boolean) =>
+  http<UserAccessPreview>(`/identity/users/${id}/access-preview`, "POST", { roles, customRoles });
 export const saveDepartmentRoles = (departmentId: number, roles: string[]) =>
   http<{ saved: boolean }>(`/identity/departments/${departmentId}/roles`, "PUT", { roles });
 
@@ -49,5 +56,16 @@ export const queryAccessUsers = (query: string, departmentId: string, page: numb
   http<UserList>(
     `/identity/users?${new URLSearchParams({ query, page: String(page), ...(departmentId ? { department_id: departmentId } : {}) })}`,
   );
-export const saveUserAccess = (id: number, roles: string[], customRoles: boolean, enabled: boolean) =>
-  http<{ saved: boolean }>(`/identity/users/${id}/access`, "PUT", { roles, customRoles, enabled });
+export const saveUserAccess = (
+  id: number,
+  roles: string[],
+  customRoles: boolean,
+  enabled: boolean,
+  version?: string,
+) =>
+  http<{ saved: boolean }>(`/identity/users/${id}/access`, "PUT", {
+    roles,
+    customRoles,
+    enabled,
+    ...(version ? { version } : {}),
+  });

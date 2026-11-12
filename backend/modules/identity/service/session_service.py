@@ -12,7 +12,9 @@ from threading import Lock
 
 from backend.core.errors import ApiError
 
+from ..policy.api_page_policy import required_pages
 from ..policy.login_policy import feishu_user_id
+from ..policy.page_policy import PAGE_CODES
 from ..policy.role_policy import EMERGENCY_ROLES, ROLES, can_manage_access
 
 SESSION_SECONDS = 8 * 3600
@@ -125,16 +127,31 @@ class IdentityService:
             name, kind, roles = "管理员（应急账号）", "admin", list(EMERGENCY_ROLES)
         else:
             name, kind, roles = actor, "service", []
+        pages = self.pages_of(roles)
         return {
             "kind": kind,
             "name": name,
             "roles": [{"code": code, "label": ROLES[code]} for code in roles],
-            "canManageAccess": can_manage_access(roles),
+            "canManageAccess": "access" in pages,
+            "pages": pages,
         }
 
+    def pages_of(self, roles):
+        if "admin" in roles:
+            return list(PAGE_CODES)
+        return self.access.pages(roles) if self.access is not None else []
+
+    def require_api(self, actor, method, route):
+        required = required_pages(method, route)
+        # 服务密钥沿用原有接口范围，仍不能绕过已有管理员业务校验。
+        if required is None or actor == "service:feishu":
+            return
+        if not set(required).intersection(self.pages_of(self.roles_of(actor))):
+            raise ApiError(403, "没有此页面的访问权限，请联系系统管理员")
+
     def require_manage(self, actor):
-        if not can_manage_access(self.roles_of(actor)):
-            raise ApiError(403, "需要系统管理员角色才能管理人员与权限")
+        if "access" not in self.pages_of(self.roles_of(actor)):
+            raise ApiError(403, "没有人员与权限的管理权限，请联系管理员授权")
 
     def require_admin(self, actor):
         """业务管理入口复用实时角色校验，不把飞书管理员限定为应急账号。"""

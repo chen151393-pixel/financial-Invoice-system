@@ -1879,3 +1879,17 @@ NS 来源按批后台保存记录与结果，不保存令牌。
 | request_id | BIGINT | 否 | 持有锁的写入请求 |
 | created_at | DATETIME | 否 | 本地记录创建时间，UTC |
 | updated_at | DATETIME | 否 | 本地记录最后更新时间，UTC；由 DAO 更新 |
+
+### identity_role_pages｜角色页面访问权限
+
+| 字段 | 类型 | 可空 | 说明 |
+| --- | --- | --- | --- |
+| id | BIGINT | 否 | 自增主键 |
+| role | VARCHAR(40) | 否 | 固定角色代码，唯一；管理员权限不可改 |
+| pages | JSON | 否 | 页面代码数组；空数组明确表示无可访问页面 |
+| revision | INTEGER | 否 | 编辑版本；未配置时接口使用 0 |
+| updated_by | VARCHAR(200) | 否 | 最近保存的认证管理员 |
+| created_at | DATETIME(6) | 否 | 创建时间，UTC |
+| updated_at | DATETIME(6) | 否 | 更新时间，UTC |
+
+迁移 `0041_identity_role_pages` 新增；角色绑定仍保存在既有 identity 人员、部门角色表。多角色页面取并集，未配置的角色保留升级前页面范围，已保存为空时不能退回默认值。

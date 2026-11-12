@@ -1,15 +1,13 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Alert, Button, Dialog } from "../../../shared/components/ui";
 import type { RoleItem } from "../types";
 
-/** 选择角色并保存；角色是否有效、保存是否允许都由后端校验。 */
+/** 部门默认角色编辑；个人角色与启用状态由成员编辑区维护。 */
 export function RoleDialog({
   title,
   description,
   roles,
   initial,
-  customRoles,
-  enabled,
   onSave,
   onClose,
 }: {
@@ -17,17 +15,13 @@ export function RoleDialog({
   description: string;
   roles: RoleItem[];
   initial: string[];
-  /** 传入时显示“角色来源”选择（个人角色） */
-  customRoles?: boolean;
-  enabled?: boolean;
-  onSave: (roles: string[], customRoles: boolean, enabled: boolean) => Promise<void>;
+  onSave: (roles: string[]) => Promise<void>;
   onClose: () => void;
 }) {
   const [selected, setSelected] = useState(new Set(initial));
-  const [custom, setCustom] = useState(customRoles ?? false);
-  const [enable, setEnable] = useState(enabled ?? false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const submitting = useRef(false);
 
   function toggle(code: string) {
     setSelected((current) => {
@@ -39,18 +33,18 @@ export function RoleDialog({
   }
 
   async function save() {
+    if (submitting.current) return;
+    submitting.current = true;
     setBusy(true);
     setError("");
     try {
-      await onSave(
-        roles.map((role) => role.code).filter((code) => selected.has(code)),
-        custom,
-        enable,
-      );
+      await onSave(roles.map((role) => role.code).filter((code) => selected.has(code)));
       onClose();
     } catch (failure) {
       setError(failure instanceof Error ? failure.message : "保存失败");
       setBusy(false);
+    } finally {
+      submitting.current = false;
     }
   }
 
@@ -59,23 +53,10 @@ export function RoleDialog({
       <div className="identity-role-dialog">
         <p>{description}</p>
         <Alert>
-          角色当前用于登录资格和人员管理权限；财务、采购等业务操作的细分权限尚未接入，“只读”角色暂不能限制所有业务写操作。
+          角色决定可访问的页面，多角色取并集。页面内操作仍按现有规则校验，“只读”角色尚不能限制所有业务写操作。
         </Alert>
-        {customRoles !== undefined && (
-          <fieldset>
-            <legend>角色来源</legend>
-            <label>
-              <input type="radio" checked={!custom} disabled={busy} onChange={() => setCustom(false)} />
-              部门默认角色，再加上以下个人角色
-            </label>
-            <label>
-              <input type="radio" checked={custom} disabled={busy} onChange={() => setCustom(true)} />
-              只按以下角色（不使用部门默认角色）
-            </label>
-          </fieldset>
-        )}
         <fieldset>
-          <legend>{customRoles !== undefined ? "个人角色" : "默认角色"}</legend>
+          <legend>部门默认角色</legend>
           {roles.map((role) => (
             <label key={role.code}>
               <input
@@ -88,21 +69,6 @@ export function RoleDialog({
             </label>
           ))}
         </fieldset>
-        {enabled !== undefined && (
-          <fieldset>
-            <legend>平台访问</legend>
-            <label>
-              <input
-                type="checkbox"
-                checked={enable}
-                disabled={busy}
-                onChange={(event) => setEnable(event.target.checked)}
-              />
-              启用此成员
-            </label>
-            <p>启用需要在职、处于同步范围内且有生效角色；关闭后现有会话立即失效。</p>
-          </fieldset>
-        )}
         {selected.has("admin") && (
           <Alert tone="warning">系统管理员可以修改所有人员的角色、启用状态和同步范围，请确认授权对象。</Alert>
         )}
@@ -116,7 +82,7 @@ export function RoleDialog({
             取消
           </Button>
           <Button variant="primary" disabled={busy} onClick={() => void save()}>
-            {busy ? "保存中…" : enabled !== undefined ? "保存角色与启用状态" : "保存角色"}
+            {busy ? "保存中…" : "保存部门角色"}
           </Button>
         </div>
       </div>

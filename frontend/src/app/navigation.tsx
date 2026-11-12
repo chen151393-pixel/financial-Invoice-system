@@ -62,6 +62,11 @@ export const navigation: readonly SidebarGroup<View>[] = [
         icon: <MenuIcon path="M4 21V4h11v17 M15 9h5v12 M7 8h4 M7 12h4 M7 16h4 M2 21h20" />,
       },
       {
+        id: "writeback",
+        label: "NS 回写",
+        icon: <MenuIcon path="M4 12h12 M12 6l6 6-6 6 M20 4v16" />,
+      },
+      {
         id: "pl",
         label: "采购报关联查",
         icon: <MenuIcon path="M3 4h18v16H3z M3 9h18 M3 14h18 M9 4v16" />,
@@ -77,11 +82,6 @@ export const navigation: readonly SidebarGroup<View>[] = [
         icon: (
           <MenuIcon path="M20 11a8 8 0 0 0-14.6-4.5L3 9 M3 3v6h6 M4 13a8 8 0 0 0 14.6 4.5L21 15 M21 21v-6h-6" />
         ),
-      },
-      {
-        id: "writeback",
-        label: "NS 回写",
-        icon: <MenuIcon path="M4 12h12 M12 6l6 6-6 6 M20 4v16" />,
       },
       {
         // 只有系统管理员可见，由 WorkspaceFrame 按会话过滤

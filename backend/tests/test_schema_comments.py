@@ -53,6 +53,7 @@ TABLES = ALL_TABLES - {
     "identity_audit",
     "identity_directory_previews",
     "identity_user_sync_scopes",
+    "identity_role_pages",
 }
 COMMENT_HEAD = "0015_sync_comments"
 
