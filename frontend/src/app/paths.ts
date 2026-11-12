@@ -86,6 +86,7 @@ export function viewPath(view: View): string {
 }
 
 export function homePath(pages: readonly string[] = []): string {
+  if (pages.includes("workbench")) return paths.workbench;
   const first = pages.find((code): code is View => Object.hasOwn(viewPaths, code));
   return first ? viewPaths[first] : paths.forbidden;
 }

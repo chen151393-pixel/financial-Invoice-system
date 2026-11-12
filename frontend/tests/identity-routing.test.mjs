@@ -3,11 +3,11 @@ import { after, before, test } from "node:test";
 import { fileURLToPath } from "node:url";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { matchRoutes, MemoryRouter } from "react-router";
+import { matchRoutes, MemoryRouter, Navigate } from "react-router";
 import { createServer } from "vite";
 
 let server, navigation, identityRoutes, LoginPage, PasswordLoginForm, SessionContext, ImportedDirectory;
-let RolePageForm, RequirePage, WorkspaceFrame, menu, pagePaths, identityApi;
+let RolePageForm, RequirePage, AccessDeniedPage, WorkspaceFrame, menu, pagePaths, identityApi;
 before(async () => {
   server = await createServer({
     configFile: fileURLToPath(new URL("../vite.config.ts", import.meta.url)),
@@ -27,6 +27,7 @@ before(async () => {
   ));
   ({ RolePageForm } = await server.ssrLoadModule("/src/modules/identity/components/RolePageForm.tsx"));
   ({ RequirePage } = await server.ssrLoadModule("/src/modules/identity/RequirePage.tsx"));
+  ({ default: AccessDeniedPage } = await server.ssrLoadModule("/src/app/AccessDeniedWorkspacePage.tsx"));
   ({ AppFrame: WorkspaceFrame } = await server.ssrLoadModule("/src/app/WorkspaceFrame.tsx"));
   ({ navigation: menu } = await server.ssrLoadModule("/src/app/navigation.tsx"));
   pagePaths = await server.ssrLoadModule("/src/app/paths.ts");
@@ -192,6 +193,56 @@ test("页面守卫信任后端页面列表，不因角色名称或缺失字段�
   assert.equal(pagePaths.homePath(["pl"]), "/pl-reconciliation");
   assert.equal(pagePaths.homePath(["finance", "invoices"]), "/review");
   assert.equal(pagePaths.homePath([]), "/access-denied");
+});
+
+// SSR 不执行 Navigate 的副作用，直接捕获页面在真实会话上下文中返回的跳转目标。
+function renderDestination(pages, Component, props = {}) {
+  let redirect;
+  function CaptureDestination() {
+    const element = Component(props);
+    if (element.type === Navigate) {
+      redirect = { to: element.props.to, replace: element.props.replace };
+      return null;
+    }
+    return element;
+  }
+  const markup = withUser(pages, createElement(CaptureDestination));
+  return { redirect, markup };
+}
+
+test("默认首页优先总体工作台，不受后端页面列表顺序影响", () => {
+  const pages = ["invoice-followup", "sync", "workbench"];
+  assert.equal(pagePaths.homePath(pages), "/workbench");
+  assert.deepEqual(renderDestination(pages, LoginPage).redirect, { to: "/workbench", replace: true });
+});
+
+test("未授权页面自动返回总体工作台，已授权页面继续显示", () => {
+  const props = { view: "finance", children: createElement("p", null, "财务页面内容") };
+  const denied = renderDestination(["invoice-followup", "workbench"], RequirePage, props);
+  assert.deepEqual(denied.redirect, { to: "/workbench", replace: true });
+  assert.doesNotMatch(denied.markup, /财务页面内容/);
+  const allowed = renderDestination(["finance", "workbench"], RequirePage, props);
+  assert.equal(allowed.redirect, undefined);
+  assert.match(allowed.markup, /财务页面内容/);
+});
+
+test("已停留在无权限地址的账号自动回首页，无页面权限时不循环跳转", () => {
+  assert.deepEqual(renderDestination(["sync", "workbench"], AccessDeniedPage).redirect, {
+    to: "/workbench",
+    replace: true,
+  });
+  assert.deepEqual(renderDestination(["pl"], AccessDeniedPage).redirect, {
+    to: "/pl-reconciliation",
+    replace: true,
+  });
+  const noPages = renderDestination([], AccessDeniedPage);
+  assert.equal(noPages.redirect, undefined);
+  assert.match(noPages.markup, /尚未分配可访问页面/);
+  assert.equal(renderDestination(undefined, AccessDeniedPage).redirect, undefined);
+  assert.deepEqual(renderDestination([], RequirePage, { view: "workbench" }).redirect, {
+    to: "/access-denied",
+    replace: true,
+  });
 });
 
 test("共用侧栏只展示授权页面并隐藏空分组，NS 回写归采购", () => {

@@ -111,7 +111,7 @@ export const router = createBrowserRouter([
               </Suspense>
             ),
           },
-          // 首页及未知地址进入首个已授权页面。
+          // 首页及未知地址优先进入总体工作台，未授权时使用其他可访问页面。
           { path: "*", element: <HomeRedirect /> },
         ],
       },
