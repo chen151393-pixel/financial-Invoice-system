@@ -327,8 +327,11 @@ def test_reapproval_carries_received_progress(ns, engine, world, reviewed):
 
 
 def test_queue_batch_and_service_identity(engine, world, reviewed):
+    from backend.tests.matching_batch_helpers import complete_buyer
+
     complete_documents(engine)  # 完结需资料齐全；本测试关注收票与账本
     import_invoices(world, [invoice("26000000000000008010", [INK, FLUID], remark="SUB-200")])
+    complete_buyer(engine, world, invoice_id(engine, "26000000000000008010"))
     queue = world["queries"].queue(QueueQuery(tier="high"))
     assert queue.total == 2 and queue.counts["high"] == 2
     with pytest.raises(ApiError) as error:
@@ -372,10 +375,12 @@ def test_http_matching_routes(context, ns, engine):
         assert grouped.json()["total"] == 1 and grouped.json()["rows"][0]["proposalCount"] == 2
         ids = [row["allocation"]["id"] for row in queue["rows"]]
         batch = client.post("/api/matching/allocations/confirm-batch", json={"ids": ids}, headers=headers)
-        assert batch.status_code == 200 and batch.json()["confirmed"] == 2
+        # Excel 未提供购买方，置信度 95%，旧批量入口同样不得绕过 100% 限制。
+        assert batch.status_code == 200 and batch.json()["confirmed"] == 0
+        assert len(batch.json()["skipped"]) == 2
         task_id = client.post("/api/tasks/query", json={}, headers=headers).json()["groups"][0]["tasks"][0][
             "id"
         ]
-        assert client.get(f"/api/tasks/{task_id}", headers=headers).json()["task"]["status"] == "completed"
+        assert client.get(f"/api/tasks/{task_id}", headers=headers).json()["task"]["status"] != "completed"
         bad = client.post("/api/matching/allocations", json={"requestId": "x"}, headers=headers)
         assert bad.status_code == 400

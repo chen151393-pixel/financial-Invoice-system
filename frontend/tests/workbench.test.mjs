@@ -7,7 +7,7 @@ import { MemoryRouter } from "react-router";
 import { createServer } from "vite";
 
 let server, Todos, Page, Metrics, Kpis, api, paths, Queue, Filters, Nodes, WbQueue, Suppliers, Unbound;
-let Checks, Candidates, LineNav, matchingApi;
+let Checks, Candidates, LineNav, matchingApi, BatchDialog, MatchingQueuePage;
 before(async () => {
   server = await createServer({
     configFile: fileURLToPath(new URL("../vite.config.ts", import.meta.url)),
@@ -51,9 +51,71 @@ before(async () => {
   ({ QueueFilters: Filters } = await server.ssrLoadModule(
     "/src/modules/matching/components/QueueFilters.tsx",
   ));
+  ({ BatchApproveDialog: BatchDialog } = await server.ssrLoadModule(
+    "/src/modules/matching/components/BatchApproveDialog.tsx",
+  ));
+  ({ MatchingQueuePage } = await server.ssrLoadModule("/src/modules/matching/pages/MatchingQueuePage.tsx"));
 });
 after(async () => {
   await server?.close();
+});
+
+test("批量审核按钮固定在查询栏清除右侧，未勾选时禁用且有范围说明", () => {
+  const html = render(MatchingQueuePage, {});
+  assert.match(html, /清除<\/button><button[^>]*disabled=""[^>]*>批量审核通过<\/button>/);
+  assert.match(html, /勾选当前页置信度为 100%/);
+});
+
+const batchRows = ["1", "2"].map((id) => ({
+  invoice: { id, number: `TEST-${id}`, seller: "测试供应商", versionId: "7" },
+  confidence: "100",
+  batch: { allowed: true, reason: "可审核" },
+  batchIds: [`${id}1`, `${id}2`],
+}));
+
+test("批量确认列出所选发票，结果按张展示通过及跳过原因", () => {
+  const props = { rows: batchRows, busy: false, result: null, error: "", onClose() {}, onApprove() {} };
+  const confirm = render(BatchDialog, props);
+  assert.match(confirm, /当前页已选 2 张发票/);
+  assert.match(confirm, /审核通过 2 张/);
+  assert.match(confirm, /TEST-1/);
+  assert.match(confirm, /TEST-2/);
+  const result = render(BatchDialog, {
+    ...props,
+    result: {
+      approved: [{ id: "1", reason: "" }],
+      skipped: [{ id: "2", reason: "发票版本已变化" }],
+    },
+  });
+  assert.match(result, /已通过 1 张，跳过 1 张/);
+  assert.match(result, /发票版本已变化/);
+  assert.doesNotMatch(result, /审核通过 2 张/);
+  const error = render(BatchDialog, { ...props, error: "连接中断，请刷新核实" });
+  assert.match(error, /结果待核实，请刷新查看/);
+  assert.doesNotMatch(error, /审核通过 2 张/);
+});
+
+test("批量接口携带完整发票版本和建议集合，一次请求不按明细拆分", async (t) => {
+  const calls = [];
+  t.mock.method(globalThis, "fetch", async (url, options) => {
+    calls.push([url, JSON.parse(options.body)]);
+    return new Response(JSON.stringify({ approved: [], skipped: [] }), { status: 200 });
+  });
+  const large = { ...batchRows[0], batchIds: Array.from({ length: 105 }, (_, i) => `${i + 1}`) };
+  await matchingApi.confirmInvoiceBatch([large, batchRows[1]], "已核实");
+  assert.deepEqual(calls, [
+    [
+      "/api/matching/invoice-queue/confirm-batch",
+      {
+        items: [large, batchRows[1]].map((row) => ({
+          invoiceId: row.invoice.id,
+          invoiceVersionId: row.invoice.versionId,
+          allocationIds: row.batchIds,
+        })),
+        note: "已核实",
+      },
+    ],
+  ]);
 });
 const counts = { all: 3, review: 1, matching: 1, task: 1, blocked: 0, reverify: 0, preparation: 1 };
 
@@ -570,7 +632,7 @@ test("节点分布、比对队列与供应商排行只展示后端计数和比�
   const queue = render(WbQueue, {
     queue: { all: 5, high: 3, medium: 1, low: 1, anomalies: [{ label: "单位", count: 2, percent: "100.0" }] },
   });
-  assert.match(queue, /高置信度 3 条，去队列批量通过 →/);
+  assert.match(queue, /高置信度 3 条，去队列审核（100% 可批量通过） →/);
   assert.match(queue, /href="\/matching\?tier=high"/);
   assert.match(queue, /单位不一致/);
   const empty = render(WbQueue, { queue: { all: 0, high: 0, medium: 0, low: 0, anomalies: [] } });

@@ -596,15 +596,15 @@ test("单价异常由后端判定，舍入为零仍突出显示", () => {
   Object.assign(item.customsLines[0], {
     margin: "0.00%",
     marginStatus: "negative",
-    marginNote: "报关单价低于采购单价",
+    marginNote: "报关单价低于不含税采购单价",
     declaredUnitPriceCny: "237.8695",
     originalUnitPriceCny: "237.87",
   });
-  assert.match(customs(item), /data-tone="danger"[\s\S]*报关单价低于采购单价/);
+  assert.match(customs(item), /data-tone="danger"[\s\S]*报关单价低于不含税采购单价/);
   item.customsLines[0].marginStatus = "ok";
   item.customsLines[0].margin = "-0.01%";
   item.customsLines[0].marginNote = "精度范围内一致（人民币单价差额 0.0305 元，容差 0.10 元）";
-  assert.doesNotMatch(customs(item), /data-tone="danger"|报关单价低于采购单价/);
+  assert.doesNotMatch(customs(item), /data-tone="danger"|报关单价低于不含税采购单价/);
   assert.match(customs(item), /精度范围内一致/);
   assert.match(customs(item), /-0.01%/);
 });
@@ -616,7 +616,7 @@ test("报关行最后一列显示后端计算的申报幅度；负数与无法�
       ...item.customsLines[0],
       margin: "-12.68%",
       marginStatus: "negative",
-      marginNote: "报关单价低于采购单价",
+      marginNote: "报关单价低于不含税采购单价",
       declaredUnitPriceCny: "10.65",
       originalUnitPriceCny: "12",
       originalPriceUnit: "箱",
@@ -635,13 +635,13 @@ test("报关行最后一列显示后端计算的申报幅度；负数与无法�
   assert.match(html, /申报幅度/);
   assert.match(
     html,
-    /fr-margin--negative[\s\S]*-12.68%[\s\S]*data-tone="danger"[\s\S]*报关单价低于采购单价/,
+    /fr-margin--negative[\s\S]*-12.68%[\s\S]*data-tone="danger"[\s\S]*报关单价低于不含税采购单价/,
   );
-  assert.match(html, /报关单价 10.65 元\/个<br\/>采购单价 12 元\/箱/);
+  assert.match(html, /报关单价 10.65 元\/个<br\/>不含税采购单价 12 元\/箱/);
   assert.match(html, /fr-margin--unavailable[\s\S]*—[\s\S]*采购单价缺失，无法计算申报幅度/);
 });
 
-test("报关行显示原始口径采购单价；单位或数量不一致时显示后端原因，不显示幅度", () => {
+test("报关行显示原始口径含税采购单价；单位或数量不一致时显示后端原因，不显示幅度", () => {
   const item = group();
   item.customsLines = [
     {
@@ -666,8 +666,8 @@ test("报关行显示原始口径采购单价；单位或数量不一致时显�
   ];
   const html = customs(item);
   // “采购单价”列紧跟在“金额”右侧
-  assert.match(html, /<th[^>]*>金额<\/th><th[^>]*>采购单价<\/th><th[^>]*>申报幅度/);
-  assert.match(html, /aria-label="原始口径采购单价">3.50<small> \/ 盒<\/small>/);
+  assert.match(html, /<th[^>]*>金额<\/th><th[^>]*>采购单价（含税）<\/th><th[^>]*>申报幅度/);
+  assert.match(html, /aria-label="原始口径含税采购单价">3.50<small> \/ 盒<\/small>/);
   assert.match(html, /data-tone="warning"[^>]*>单位不一致[\s\S]*与报关单位“平方米”不一致/);
   assert.match(html, /data-tone="warning"[^>]*>数量不一致[\s\S]*原始数量 17000/);
   assert.match(html, /未提供<small> \/ 单位未提供<\/small>/);
@@ -682,7 +682,7 @@ test("NS 未填申报单价时显示后端试算值并标注“试算”，不�
       priceEstimated: true,
       margin: "-12.68%",
       marginStatus: "negative",
-      marginNote: "报关单价低于采购单价",
+      marginNote: "报关单价低于不含税采购单价",
       declaredUnitPriceCny: "10.65",
       originalUnitPriceCny: "12",
       originalPriceUnit: "箱",
@@ -695,7 +695,7 @@ test("NS 未填申报单价时显示后端试算值并标注“试算”，不�
     html,
     /aria-label="申报单价 1.5，NS 未填写，按报关金额除以报关数量试算"[^>]*>1.5<span class="ui-badge" data-tone="info">试算<\/span>/,
   );
-  assert.match(html, /报关单价 10.65 元\/个（试算）<br\/>采购单价 12 元\/箱/);
+  assert.match(html, /报关单价 10.65 元\/个（试算）<br\/>不含税采购单价 12 元\/箱/);
   assert.equal(html.match(/>试算</g).length, 1);
 });
 
@@ -754,7 +754,7 @@ test("数量不一致时只展示数量提示，不显示单价异常或旧幅�
   });
   const html = customs(item);
   assert.match(html, /数量不一致（报关行 24965.5，子采购报关合计 41260）/);
-  assert.doesNotMatch(html, /单价异常|报关单价低于采购单价|fr-margin--negative|-65.59%/);
+  assert.doesNotMatch(html, /单价异常|报关单价低于不含税采购单价|fr-margin--negative|-65.59%/);
 });
 
 test("采购单价缺失时保留原因，不显示低价异常或旧幅度", () => {
@@ -768,5 +768,5 @@ test("采购单价缺失时保留原因，不显示低价异常或旧幅度", ()
   });
   const html = customs(item);
   assert.match(html, /采购单价缺失，无法计算申报幅度/);
-  assert.doesNotMatch(html, /单价异常|报关单价低于采购单价|fr-margin--negative/);
+  assert.doesNotMatch(html, /单价异常|报关单价低于不含税采购单价|fr-margin--negative/);
 });

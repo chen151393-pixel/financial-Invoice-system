@@ -154,13 +154,13 @@ export function CustomsRows({
     },
     {
       key: "original",
-      header: "采购单价",
+      header: "采购单价（含税）",
       width: "7%",
       align: "right",
       // 报关行原始口径（NS 数量、单位、单价）；与报关口径不一致时后端在申报幅度列提示
       render: (row) =>
         row.kind === "customs" ? (
-          <span aria-label="原始口径采购单价">
+          <span aria-label="原始口径含税采购单价">
             {row.line.originalPrice || "未提供"}
             <small> / {row.line.originalPriceUnit || "单位未提供"}</small>
           </span>

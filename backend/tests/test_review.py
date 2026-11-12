@@ -140,7 +140,7 @@ def test_negative_margin_is_alerted_and_not_auto_approvable(service, ns, engine)
     assert result.counts["marginAlert"] == 1 and result.counts["autoApprovable"] == 0
     item = result.groups[0]
     assert item.marginAlert and not item.autoReview.eligible
-    assert "采购单价高于人民币申报单价且超出容差" in item.autoReview.reasons
+    assert "不含税采购单价高于人民币申报单价且超出容差" in item.autoReview.reasons
     assert [g.recordNumber for g in service.browse(query(status="margin_alert")).groups] == ["CD870"]
 
 

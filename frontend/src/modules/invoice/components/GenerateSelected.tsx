@@ -3,7 +3,7 @@ import { Button } from "../../../shared/components/ui";
 import { generateProposals } from "../../matching/api";
 
 /**
- * 查询栏右侧“批量生成建议”：对列表中勾选的发票重新生成比对建议（与比对页“重新生成建议”同一接口和规则）。
+ * 查询栏右侧“批量重新匹配”：对列表中勾选的发票重新生成比对建议（与比对页“重新生成建议”同一接口和规则）。
  * 哪些发票、哪些发票行能生成由后端判定；这里只提交勾选的发票 ID 并回传真实结果。
  */
 export function GenerateSelected({
@@ -26,7 +26,7 @@ export function GenerateSelected({
       onDone(ids.length, result.created);
     } catch (cause) {
       // 写操作不自动重试；结果不明时刷新列表核实，再次提交不会重复追加相同建议
-      onError(cause instanceof Error ? cause.message : "批量生成建议失败，请刷新列表核实结果");
+      onError(cause instanceof Error ? cause.message : "批量重新匹配失败，请刷新列表核实结果");
     } finally {
       setBusy(false);
     }
@@ -34,7 +34,7 @@ export function GenerateSelected({
 
   return (
     <Button disabled={disabled || busy || ids.length === 0} onClick={() => void run()}>
-      {busy ? "正在生成…" : `批量生成建议（已选 ${ids.length} 张）`}
+      {busy ? "正在重新匹配…" : `批量重新匹配（已选 ${ids.length} 张）`}
     </Button>
   );
 }

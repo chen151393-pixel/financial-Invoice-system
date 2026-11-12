@@ -6,6 +6,7 @@ from fastapi import APIRouter, Path, Query
 
 from backend.core.dependencies import Owner
 
+from ..dto.invoice_batch_dto import InvoiceBatchBody
 from ..dto.invoice_list_dto import InvoiceListQuery
 from ..dto.invoice_totals_dto import InvoiceTotalsQuery
 from ..dto.manual_order_dto import ManualOrderBody
@@ -25,6 +26,7 @@ from ..dto.matching_dto import (
     SummaryBody,
 )
 from ..dto.order_matching_dto import OrderCandidateQuery, OrderConfirmBody
+from ..vo.invoice_batch_vo import InvoiceBatchResult
 from ..vo.invoice_list_vo import InvoiceListResult
 from ..vo.invoice_queue_vo import InvoiceQueue
 from ..vo.invoice_totals_vo import InvoiceTotals
@@ -58,6 +60,11 @@ def create_router(queries, allocations, proposals, invoice_lists):
     @router.post("/invoice-queue/query", response_model=InvoiceQueue)
     def invoice_queue(body: QueueQuery, owner: Owner):
         return queries.invoice_queue(body)
+
+    @router.post("/invoice-queue/confirm-batch", response_model=InvoiceBatchResult)
+    def confirm_invoice_batch(body: InvoiceBatchBody, owner: Owner):
+        """当前页最多 50 张；仅 100% 建议，逐票原子审核并返回通过或跳过原因。"""
+        return allocations.confirm_invoice_batch(body, owner)
 
     @router.post("/summaries", response_model=Summaries)
     def summaries(body: SummaryBody, owner: Owner):

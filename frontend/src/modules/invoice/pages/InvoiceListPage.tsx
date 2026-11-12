@@ -54,11 +54,11 @@ const MATCH_OPTIONS: readonly [MatchFilter, string][] = [
 const readMatch = (value: string | null): MatchFilter =>
   MATCH_OPTIONS.find(([key]) => key === value)?.[0] ?? "all";
 
-// 批量生成建议的结果说明；张数为本次提交的勾选张数，新增条数来自后端
+// 批量重新匹配的结果说明；张数为本次提交的勾选张数，新增条数来自后端
 function generatedMessage(invoices: number, created: number) {
   if (created === 0)
-    return `已对勾选的 ${invoices} 张发票重新生成，没有新增建议；仍未匹配的发票请在比对页人工关联，或等待对应子采购单完成财务审核。`;
-  return `已对勾选的 ${invoices} 张发票重新生成建议，新增 ${created} 条待审核建议（按子采购明细计），可切换到“待审核”查看。`;
+    return `已对勾选的 ${invoices} 张发票重新匹配，没有新增建议；仍未匹配的发票请在比对页人工关联，或等待对应子采购单完成财务审核。`;
+  return `已对勾选的 ${invoices} 张发票重新匹配，新增 ${created} 条待审核建议（按子采购明细计），可切换到“待审核”查看。`;
 }
 
 export function InvoiceListPage() {
