@@ -1,0 +1,140 @@
+/* 海关报关单比对页：只做排布，列表沿用财务核对的报关单主行样式（review.css）。 */
+/* 标题右侧操作较多，窄屏时操作换到标题下方，标题不被挤压成竖排 */
+.cm-page .fr-panel > .ui-card__header {
+  flex-wrap: wrap;
+}
+.cm-page .fr-panel > .ui-card__header .ui-card__title {
+  white-space: nowrap;
+}
+.cm-page .fr-panel > .ui-card__header > .ui-card__actions {
+  flex-shrink: 1;
+  min-width: 0;
+  max-width: 100%;
+}
+.cm-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-small);
+}
+.cm-rules {
+  margin: var(--space-control) 20px 0;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-control);
+  background: var(--color-canvas);
+  font-size: 12px;
+}
+.cm-rules summary {
+  cursor: pointer;
+  padding: 8px 12px;
+  font-weight: 600;
+}
+.cm-rules ol {
+  margin: 0;
+  padding: 0 16px 10px 32px;
+  display: grid;
+  gap: 3px;
+  color: var(--color-muted);
+}
+.cm-notice:not(:empty) {
+  margin: var(--space-control) 20px 0;
+}
+.cm-table {
+  margin-top: var(--space-control);
+}
+.cm-number {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+.cm-number strong {
+  font-variant-numeric: tabular-nums;
+}
+.cm-number small {
+  color: var(--color-muted);
+  font-size: 11px;
+  font-weight: 400;
+}
+.cm-consignee {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+.cm-detail {
+  display: grid;
+  gap: var(--space-small);
+  padding: var(--space-control) 14px 14px 36px;
+  background: var(--color-canvas);
+}
+.cm-source {
+  display: inline-block;
+  padding: 0 6px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  background: var(--color-inactive-surface);
+  color: var(--color-text);
+}
+.cm-source[data-source="customs"] {
+  background: color-mix(in srgb, var(--color-table-purchase) 60%, var(--color-chart-3));
+}
+.cm-result {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+.cm-muted,
+.cm-meta {
+  margin: 0;
+  color: var(--color-muted);
+  font-size: 12px;
+}
+.ui-dialog.cm-import {
+  width: min(820px, calc(100vw - 32px));
+}
+.cm-import__body {
+  display: grid;
+  gap: var(--space-control);
+  padding-top: var(--space-control);
+}
+.cm-import__picked {
+  margin: 0;
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+.cm-import__outcome {
+  display: grid;
+  gap: 6px;
+}
+.cm-import__outcome h4 {
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+.cm-import__outcome h4 .cm-muted {
+  font-weight: 400;
+}
+.cm-import__footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-small);
+  padding-top: var(--space-control);
+  margin-top: var(--space-control);
+  border-top: 1px solid var(--color-border);
+}
+@media (max-width: 760px) {
+  .cm-rules,
+  .cm-notice:not(:empty) {
+    margin-inline: 12px;
+  }
+  .cm-detail {
+    padding-left: 12px;
+  }
+}

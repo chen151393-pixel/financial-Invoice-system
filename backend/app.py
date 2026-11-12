@@ -49,10 +49,12 @@ from .modules.matching.service.matching_query_service import MatchingQueryServic
 from .modules.matching.service.proposal_service import ProposalService, on_invoices_imported
 from .modules.matching.service.task_proposal_service import on_review_approved as on_task_review_approved
 from .modules.matching.service.workbench_service import WorkbenchService
+from .modules.review.controller.customs_receipt_controller import create_router as customs_receipt_router
 from .modules.review.controller.review_controller import create_router as review_router
 from .modules.review.public import PurchaseBasisInvalidated, ReviewApproved
 from .modules.review.service.calculation_service import CalculationService, request_calculation
 from .modules.review.service.calculation_worker import CalculationWorker
+from .modules.review.service.customs_receipt_service import CustomsReceiptService
 from .modules.review.service.purchase_basis_service import on_source_changed
 from .modules.review.service.review_service import ReviewService
 from .modules.source.controller.pl_comparison_controller import create_router as source_pl_router
@@ -277,6 +279,7 @@ def _register_business(app, settings, ns, contract_ns, wecom, engine, lemon_invo
     app.state.review_calculations = CalculationService(review)
     app.state.review_calculation_worker = CalculationWorker(app.state.review_calculations)
     app.include_router(review_router(review))
+    app.include_router(customs_receipt_router(CustomsReceiptService(engine)))
     directory = SourceDirectory(engine)
     app.include_router(
         external_group_router(

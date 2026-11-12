@@ -42,6 +42,8 @@ TABLES = ALL_TABLES - {
     "review_calculation_jobs",
     "review_declaration_snapshots",
     "review_snapshot_suppliers",
+    "review_customs_receipts",
+    "review_customs_receipt_lines",
     "identity_departments",
     "identity_sync_scopes",
     "identity_department_roles",

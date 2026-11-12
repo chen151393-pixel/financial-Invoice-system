@@ -212,3 +212,23 @@ def lines(connection, declaration_id):
         .order_by(customs_lines.c.id)
     )
     return [dict(row) for row in connection.execute(query).mappings()]
+
+
+def active_by_numbers(connection, numbers):
+    """按真实报关单号读取有效报关单头（海关回执比对用）；同号多张时全部返回，由调用方判定。"""
+    if not numbers:
+        return []
+    query = (
+        select(
+            customs_declarations.c.id,
+            customs_declarations.c.record_no,
+            customs_declarations.c.declaration_no,
+            customs_declarations.c.declaration_date,
+        )
+        .where(
+            customs_declarations.c.declaration_no.in_(numbers),
+            customs_declarations.c.is_active.is_(True),
+        )
+        .order_by(customs_declarations.c.id)
+    )
+    return [dict(row) for row in connection.execute(query).mappings()]

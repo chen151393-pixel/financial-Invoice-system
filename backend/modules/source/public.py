@@ -13,6 +13,7 @@ from .policy.declared_price_policy import (
 )
 from .policy.unit_policy import unit_label
 from .service.contract_service import SubpoContractSource
+from .service.customs_number_reader import declarations_by_number
 from .service.declaration_service import DeclarationService, digest, snapshot
 from .service.directory_service import SourceDirectory, china_day_range, declaration_ids_created
 from .service.pl_comparison_service import PlScriptService
@@ -56,6 +57,8 @@ __all__ = [
     # 中国日期区间换算为 UTC 区间（报关单创建日期筛选）
     "china_day_range",
     "declaration_ids_created",
+    # 海关回执比对（review）：按真实报关单号读取有效报关单与报关口径行
+    "declarations_by_number",
     "SourceChanged",
 ]
 

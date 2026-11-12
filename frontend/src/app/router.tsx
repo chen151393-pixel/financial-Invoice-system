@@ -9,6 +9,7 @@ import { legacyPaths, paths } from "./paths";
 const PlWorkspacePage = lazy(() => import("./PlWorkspacePage"));
 const WorkbenchWorkspacePage = lazy(() => import("./WorkbenchWorkspacePage"));
 const ReviewWorkspacePage = lazy(() => import("./ReviewWorkspacePage"));
+const CustomsMatchWorkspacePage = lazy(() => import("./CustomsMatchWorkspacePage"));
 const SyncWorkspacePage = lazy(() => import("./SyncWorkspacePage"));
 const SyncBatchWorkspacePage = lazy(() => import("./SyncBatchWorkspacePage"));
 const SyncNsBatchWorkspacePage = lazy(() => import("./SyncNsBatchWorkspacePage"));
@@ -43,6 +44,7 @@ export const router = createBrowserRouter([
           { path: paths.workbench, element: page("总体工作台", <WorkbenchWorkspacePage />) },
           { path: paths.pl, element: page("采购报关联查", <PlWorkspacePage />) },
           { path: paths.review, element: page("财务核对", <ReviewWorkspacePage />) },
+          { path: paths.reviewCustoms, element: page("报关单比对", <CustomsMatchWorkspacePage />) },
           { path: legacyPaths.finance, element: <Navigate to={paths.review} replace /> },
           { path: paths.tasks, element: page("开票跟进", <TaskWorkspacePage />) },
           { path: legacyPaths.taskBoard, element: <TaskBoardRedirect /> },

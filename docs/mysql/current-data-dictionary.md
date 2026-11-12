@@ -1879,3 +1879,63 @@ NS 来源按批后台保存记录与结果，不保存令牌。
 | request_id | BIGINT | 否 | 持有锁的写入请求 |
 | created_at | DATETIME | 否 | 本地记录创建时间，UTC |
 | updated_at | DATETIME | 否 | 本地记录最后更新时间，UTC；由 DAO 更新 |
+
+
+## 海关回执（0041，2026-11-12）
+
+海关回执按出口报关单号导入，与 NS 报关单（真实报关单号）比对明细行的品名、单位与数量；境外收货人只来自回执。表归 review 所有，`ns_declaration_id` 只存 source 报关单 ID，不建跨模块外键。重新导入内容变化时 `revision` 加 1，旧版本明细保留。
+
+<a id="review_customs_receipts"></a>
+
+### review_customs_receipts｜海关回执报关单头与比对结果
+
+| 字段 | 类型 | 可空 | 说明 |
+| --- | --- | --- | --- |
+| id | BIGINT | 否 | 海关回执本地主键 |
+| declaration_no | VARCHAR(150) | 否 | 海关出口报关单号，即 NS 真实报关单号 |
+| revision | INTEGER | 否 | 当前明细版本号；内容变化的重新导入递增 |
+| content_sha256 | CHAR(64) | 否 | 当前版本回执内容摘要，相同内容重复导入不换版 |
+| export_date | DATE | 是 | 出口日期（海关回执） |
+| consignee | VARCHAR(500) | 是 | 境外收货人（仅来自海关回执；回执为空时为 NULL） |
+| file_name | VARCHAR(255) | 否 | 当前版本来源文件名 |
+| imported_by | VARCHAR(190) | 否 | 当前版本导入人（认证身份） |
+| imported_at | DATETIME | 否 | 当前版本导入时间，UTC |
+| ns_declaration_id | BIGINT | 是 | 匹配到的 NS 报关单本地 ID（source_customs_declarations.id，跨模块不建外键） |
+| match_status | VARCHAR(24) | 否 | 比对结果：matched 一致；split_matched 拆行/合并后一致；different 有差异；ns_missing 未找到 NS 报关单；ns_duplicate NS 有多张同号报关单 |
+| match_result | JSON | 是 | 比对明细（分组、NS 报关行快照与差异说明），用于展示 |
+| matched_at | DATETIME | 否 | 最近一次比对时间，UTC |
+| created_at | DATETIME | 否 | 本地记录创建时间，UTC |
+| updated_at | DATETIME | 否 | 本地记录最后更新时间，UTC；由 DAO 更新 |
+
+- 唯一约束 `uq_review_customs_receipt_no`：`(declaration_no)`。
+
+<a id="review_customs_receipt_lines"></a>
+
+### review_customs_receipt_lines｜海关回执报关明细，按版本保留
+
+| 字段 | 类型 | 可空 | 说明 |
+| --- | --- | --- | --- |
+| id | BIGINT | 否 | 海关回执明细本地主键 |
+| receipt_id | BIGINT | 否 | 所属海关回执，指向 review_customs_receipts.id |
+| revision | INTEGER | 否 | 所属回执版本号 |
+| item_no | VARCHAR(20) | 否 | 项号（两位数字文本） |
+| source_row | INTEGER | 否 | 来源文件中的行号，便于核对 |
+| hs_code | VARCHAR(20) | 是 | 商品代码 |
+| name | VARCHAR(500) | 否 | 海关商品名称 |
+| specification | VARCHAR(500) | 是 | 规格型号 |
+| contract_no | VARCHAR(100) | 是 | 出口合同号 |
+| tax_type | VARCHAR(40) | 是 | 征免类型，如征税、退税 |
+| check_status | VARCHAR(40) | 是 | 数据检查状态 |
+| deal_unit | VARCHAR(50) | 否 | 成交单位，与 NS 报关单位比较 |
+| deal_quantity | DECIMAL(26, 8) | 否 | 成交数量，与 deal_unit 配套 |
+| currency | VARCHAR(20) | 是 | 成交币制 |
+| deal_total | DECIMAL(24, 6) | 是 | 成交总价，与 currency 配套 |
+| usd_fob | DECIMAL(24, 6) | 是 | 美元离岸价 |
+| legal_unit | VARCHAR(50) | 是 | 法定单位，仅展示不参与比对 |
+| legal_quantity | DECIMAL(26, 8) | 是 | 法定数量，与 legal_unit 配套，仅展示 |
+| customs_doc | VARCHAR(20) | 是 | 关单信息，如存在、不存在 |
+| usage_flag | VARCHAR(20) | 是 | 使用标志，如未使用 |
+| created_at | DATETIME | 否 | 本地记录创建时间，UTC |
+| updated_at | DATETIME | 否 | 本地记录最后更新时间，UTC；由 DAO 更新 |
+
+- 唯一约束 `uq_review_customs_receipt_line`：`(receipt_id, revision, item_no)`。

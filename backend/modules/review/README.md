@@ -175,3 +175,46 @@ npm.cmd run dev:api
 ## 数量校验与双单价规则（2026-10-30）
 
 `review-v8` 恢复 `review-v6` 的报关数量校验，保留 `review-v7` 的同一报关行双单价算法。审核冻结和子采购展示仍使用各自原有字段。
+
+## 海关回执与报关单比对（2026-11-12）
+
+财务导入单一窗口导出的海关回执，按出口报关单号对应 NS 报关单的真实报关单号（不是 CD 号），比对明细行的品名、单位与数量，并保存回执中的境外收货人。NS 报关单没有境外收货人字段，因此该字段只来自回执、不参与比对。
+
+### 拥有的表
+
+`review_customs_receipts`（每个报关单号一行：境外收货人、当前版本、比对结果、匹配到的 NS 报关单 ID）、`review_customs_receipt_lines`（按版本保留的海关明细）。迁移 `0041_review_customs_receipts`。
+
+### 文件
+
+| 层 | 文件 | 说明 |
+| --- | --- | --- |
+| controller | `customs_receipt_controller.py` | `POST /api/review/customs-receipts/import`、`/query`、`/rematch` |
+| service | `customs_receipt_reader.py` | 读取 .xlsx / .xls / .csv 为原始文本行（限 4MB、6000 行，拒绝公式与错误值） |
+| | `customs_receipt_parser.py` | 表头别名识别（标题行可在前 10 行内）、逐行校验、按报关单号分组、内容摘要 |
+| | `customs_receipt_service.py` | 导入（解析在事务外，保存/换版与比对在 review 模块写锁事务内）、列表、重新匹配（每批 200 张短事务） |
+| policy | `customs_match_policy.py` | 比对规则（纯函数） |
+| dao / entity | `customs_receipt_dao.py`、`customs_receipt.py` | 两张表的读写与定义 |
+| dto / vo / mapper | `customs_receipt_dto.py`、`customs_receipt_vo.py`、`customs_receipt_mapper.py` | 请求、响应与行 → VO 转换 |
+
+### 比对规则
+
+1. 以出口报关单号查找 source 中有效的 NS 报关单：没有为 `ns_missing`，多张同号为 `ns_duplicate`，两者都不比对明细。
+2. 同一报关单内，海关项与 NS 报关行各自按“规范化品名（`normalize_name`）+ 规范化单位”归组并合计数量，精确比较、不设容差：NS 一行对海关多项为拆行一致，NS 多行对海关一项为合并一致。
+3. 单位：海关取成交单位；NS 取报关单位（经单位字典显示名）。法定单位与数量只展示。品名相同但单位不同的剩余组为“单位不一致”，其余为“NS 无对应行”或“海关无对应项”。
+4. 整单状态：全部一致为 `matched`，含拆行或合并为 `split_matched`，任一组不一致为 `different`。
+5. 境外收货人：同一报关单内各项须一致（空值不比较），否则整份文件拒绝；匹配到 NS 报关单后状态为“已保存”，回执为空为“回执未提供”，未匹配为“待关联”。
+
+### 导入与换版
+
+- 一个文件内任一行有误（缺必需列、长号码被存为数字、项号重复、出口日期或境外收货人前后不一致、数值格式或精度超限）时整份拒绝并返回行号。
+- 同一报关单号再次导入：内容相同不换版，只刷新比对；内容变化时版本号加 1，新增一版明细，旧版本保留。
+- 重新匹配只按当前 NS 报关单重算比对结果，不修改回执内容；不传 ID 时处理全部回执。
+- 服务身份（`service:`）只读，导入与重新匹配返回 403。
+
+### 依赖
+
+经 `backend.modules.source.public.declarations_by_number(connection, numbers)` 在同一连接中只读 NS 报关单与报关行，不读写 source 的表。
+
+### 验证
+
+`backend/tests/test_customs_receipts.py`：比对规则（拆行、合并、单位/数量不一致、单边缺失、重号）、文件解析（xlsx 与带标题行的 GBK CSV、各类拒绝）、导入换版、列表筛选计数与重新匹配。MySQL 变体需提供 `BUSINESS_MIGRATION_TEST_SERVER_URL`，未配置时跳过。

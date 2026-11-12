@@ -1150,3 +1150,10 @@ API 发票默认版使用 `source=lemon_open2`、`lemon_account=open2:` 加 `SHA
 - 到期后按单据类型在 `sync_runs` 各建一个批次：`source` 为 `ns_customs`/`ns_purchase`，`trigger_type=schedule`，`ns_plan_id` 指向计划；`plan_id` 的外键仍只指向柠檬云计划，NS 批次保持为空。
 - 每页执行记录复用 `sync_ns_runs`，`run_id` 指向所属批次；结果 JSON 与手动按批保存相同。近 14 天同步情况只按批次统计，带 `run_id` 的分页记录不重复计数。
 - 只读 NS；来源保存仍由 source 在账户锁内完成，按 NS 身份更新已有单据、补齐字段、新增缺失单据，本表结构不改变 source 表。迁移只在尚无计划及计划记录时允许降级，已有数据时拒绝，以免丢失待核实证据。
+
+## 海关回执与报关单比对（2026-11-12，迁移 0041）
+
+- `review_customs_receipts`：每个海关出口报关单号一行（唯一），保存出口日期、境外收货人、当前明细版本 `revision` 与内容摘要，以及最近一次比对结果（`match_status`、`match_result`、`matched_at`）和匹配到的 NS 报关单 ID `ns_declaration_id`（source 报关单，跨模块只存 ID，不建外键）。
+- `review_customs_receipt_lines`：海关明细（项号、海关商品名称、成交单位与数量、法定单位与数量、成交总价等），按 `(receipt_id, revision, item_no)` 唯一；内容变化的重新导入新增一版，旧版本保留不删除。
+- 境外收货人只来自海关回执，NS 报关单没有该字段；报关单号匹配后即随报关单保存，未匹配的回执找到 NS 报关单后再关联。比对规则见 review 模块 `policy/customs_match_policy.py` 与[模块说明](../../backend/modules/review/README.md#海关回执与报关单比对2026-11-12)。
+- 写入只涉及 review 自己的两张表，使用 review 模块写锁，不进入开票账本事件链；NS 报关单经 source 门面 `declarations_by_number` 只读获取。字段见[字段字典](../mysql/current-data-dictionary.md#review_customs_receipts)。迁移仅在回执表为空时允许降级，已有数据时拒绝，避免丢失境外收货人。

@@ -4,6 +4,8 @@ export const paths = {
   workbench: "/workbench",
   pl: "/pl-reconciliation",
   review: "/review",
+  // 海关报关单比对（财务核对下的独立页面）
+  reviewCustoms: "/review/customs",
   tasks: "/tasks",
   taskWorkflowDemo: "/tasks/workflow-demo",
   supplierGroups: "/suppliers",
@@ -61,6 +63,7 @@ export type View =
   | "sync"
   | "pl"
   | "finance"
+  | "customs-match"
   | "invoice-followup"
   | "writeback"
   | "supplier-profiles"
@@ -73,6 +76,7 @@ const viewPaths: Record<View, string> = {
   sync: paths.sync,
   pl: paths.pl,
   finance: paths.review,
+  "customs-match": paths.reviewCustoms,
   "invoice-followup": paths.tasks,
   writeback: paths.writeback,
   "supplier-profiles": paths.supplierGroups,

@@ -72,3 +72,23 @@
 搜索栏提供供应商、CD 号、子采购单号三个批量输入框，以及“报关单创建日期 从／至”日期范围。文本框复用 `SearchInput`，支持部分内容、逗号/分号分隔及粘贴多行。日期按 NS 创建时间的北京时间日期筛选，包含起止两天，须同时填写。查询或回车提交给后端，清空恢复所有空条件并回到第一页；切换状态和分页保留已提交的日期，计数、筛选、分页仍由后端完成。旧混合关键词和供应商下拉已从搜索栏移除，响应供应商选项保留兼容旧调用。
 
 2026-11-09：采购行数量/单位取后端报关字段；单价由后端按金额 / 展示数量计算，合并时为总金额 / 总报关数量，固定保留两位小数（如 `13.70`），旁注 `unit`。缺失金额或有效数量时显示未提供。详情分别展示报关数量与原 `purchaseQuantity`、`purchaseUnit`。幅度比较中的折算报关单价独立标注，全部数值由后端计算。
+
+## 海关报关单比对（2026-11-12）
+
+`/review/customs`，侧栏“财务”分组中位于“财务核对”下方（`app/paths.ts` 的 `reviewCustoms`，视图 `customs-match`）。导入海关回执，按真实报关单号与 NS 报关单比对明细，并保存回执中的境外收货人。后端规则见[后端 review 模块](../../../../backend/modules/review/README.md#海关回执与报关单比对2026-11-12)。
+
+| 文件 | 说明 |
+| --- | --- |
+| `pages/CustomsMatchPage.tsx` | 概况卡、状态切换、查询栏、比对口径、列表与分页；条件变化时取消旧请求；默认展开“有差异”的报关单 |
+| `components/CustomsStats.tsx` | 海关回执 / 明细一致 / 数量或单位不一致 / 未找到 NS 报关单，点击筛选；数字均为后端计数 |
+| `components/CustomsSearchForm.tsx` | 出口报关单号（批量）、海关商品名称、境外收货人、出口日期范围 |
+| `components/CustomsReceiptRow.tsx` | 主行（复用财务核对报关单主行样式）与展开后的比对明细、来源文件与比对时间 |
+| `components/CustomsCompareTable.tsx` | 紧凑 `DataTable`：同组 NS 报关行（白底）在前、海关项（浅蓝底）在后，结论写在组内第一行 |
+| `components/CustomsImportDialog.tsx` | 选择或拖入 .xlsx / .xls / .csv，逐个文件上传，展示列识别与逐张结果；失败文件单独提示 |
+| `components/customs-match.css` | 本页排布；窄屏时标题右侧操作换行 |
+| `customs-api.ts`、`customs-types.ts` | `POST /api/review/customs-receipts/query`、`/import`、`/rematch` 与对应类型 |
+
+- 比对结论、分组、文案、计数全部来自后端；前端不合计数量、不判断一致。
+- “重新匹配”按当前 NS 报关单重算（单张或全部），结果以提示和刷新后的列表展示。
+
+验证（2026-11-12）：`npm.cmd run build`、`lint`、`typecheck`、`test:web` 通过。在本地隔离 SQLite（合成 NS 报关单 + 截图中的 4 张回执）预览：1440px 下列表、拆行一致展开、单位不一致展开、全部重新匹配、导入 CSV（更新与新增）、错误文件提示、导入后计数刷新；375px 下无页面横向溢出，宽表在容器内滚动，标题操作换行可见。未连接真实 NS 与 MySQL。

@@ -37,6 +37,13 @@ export const navigation: readonly SidebarGroup<View>[] = [
         icon: <MenuIcon path="M9 11l3 3 8-8 M20 12v7a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1h11" />,
       },
       {
+        id: "customs-match",
+        label: "报关单比对",
+        icon: (
+          <MenuIcon path="M4 5h7v14H4z M13 5h7v14h-7z M6.5 9h2 M6.5 12h2 M15.5 9h2 M15.5 12h2 M15.5 15h2" />
+        ),
+      },
+      {
         id: "invoices",
         label: "进项发票",
         icon: <MenuIcon path="M6 3h12v18l-3-2-3 2-3-2-3 2z M9 8h6 M9 12h6" />,
