@@ -7,8 +7,9 @@ from sqlalchemy.exc import SQLAlchemyError
 
 from backend.core.errors import ApiError
 
-from ..dao import department_dao, directory_preview_dao, user_dao
+from ..dao import department_dao, directory_preview_dao, role_page_dao, user_dao
 from ..policy.department_policy import ancestors, subtree
+from ..policy.page_policy import PAGE_CODES, effective_pages
 from ..policy.role_policy import effective_roles
 
 
@@ -54,6 +55,17 @@ def roles_for(index, user, department_ids, personal_roles):
 class AccessReader:
     def __init__(self, engine):
         self.engine = engine
+
+    def pages(self, roles):
+        if "admin" in roles:
+            return list(PAGE_CODES)
+        if not roles:
+            return []
+        try:
+            with self.engine.connect() as connection:
+                return effective_pages(roles, role_page_dao.configurations(connection))
+        except SQLAlchemyError:
+            raise ApiError(503, "页面权限读取失败，请检查业务数据库") from None
 
     def principal(self, connection, user_id):
         """(人员, 生效角色)；人员不存在时为 (None, [])。"""

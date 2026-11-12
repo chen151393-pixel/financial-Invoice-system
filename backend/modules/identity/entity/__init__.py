@@ -4,6 +4,7 @@ from .audit import audit
 from .department import department_roles, departments, sync_scopes
 from .directory_preview import directory_previews, user_sync_scopes
 from .login_flow import login_flows
+from .role_page import role_pages
 from .sync_run import sync_runs
 from .user import user_departments, user_roles, users
 
@@ -14,6 +15,7 @@ __all__ = [
     "directory_previews",
     "user_sync_scopes",
     "login_flows",
+    "role_pages",
     "sync_runs",
     "sync_scopes",
     "user_departments",

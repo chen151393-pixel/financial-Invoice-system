@@ -33,7 +33,7 @@ export function InvoiceFilters({
   onSubmit: () => void;
   onReset: () => void;
   onRefresh: () => void;
-  /** 查询栏右侧的附加操作（如进项发票列表的“批量生成建议”） */
+  /** 查询栏右侧的附加操作（如进项发票列表的“批量重新匹配”） */
   extraActions?: ReactNode;
 }) {
   const pending =

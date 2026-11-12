@@ -10,12 +10,14 @@ import {
   Dialog,
 } from "../../../shared/components/ui";
 import { DirectoryConfirmation } from "../components/DirectoryConfirmation";
+import { AccessTabs } from "../components/AccessTabs";
 import { DirectoryPicker } from "../components/DirectoryPicker";
 import { ImportedDirectory } from "../components/ImportedDirectory";
 import { useAccess } from "../hooks/useAccess";
 import { useDirectorySelection } from "../hooks/useDirectorySelection";
 import { formatTime } from "../format";
 import "./access.css";
+import "./role-pages.css";
 
 export function AccessPage() {
   const [params, setParams] = useSearchParams();
@@ -38,14 +40,14 @@ export function AccessPage() {
       />
     );
   return (
-    <div className="identity-access-page">
+    <div className="identity-access-page identity-permissions">
+      <AccessTabs value="people" />
       <Card>
         <CardHeader
-          title="飞书组织同步"
-          description="默认展示已导入员工。点击同步飞书读取最新组织，选择部门或人员后确认导入。"
+          title="飞书组织"
+          description="人员与部门来自飞书；角色和启用状态在此管理"
           actions={
             <Button
-              variant="primary"
               disabled={(flow.busy && data.feishuConfigured) || !data.feishuConfigured}
               onClick={() => void flow.start()}
             >

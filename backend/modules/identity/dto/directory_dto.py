@@ -20,3 +20,5 @@ class UserAccessSave(StrictModel):
     roles: list[str] = Field(max_length=10)
     customRoles: bool
     enabled: bool
+    # 旧客户端一个版本兼容；新页面必须提交预览返回的版本。
+    version: str | None = Field(default=None, min_length=64, max_length=64)

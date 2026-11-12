@@ -211,6 +211,11 @@ export type InvoiceQueueRow = {
 };
 export type InvoiceQueue = Omit<Queue, "rows"> & { rows: InvoiceQueueRow[] };
 
+export type InvoiceBatchResult = {
+  approved: { id: string; reason: string }[];
+  skipped: { id: string; reason: string }[];
+};
+
 // 发票匹配状态（后端 invoice_match_policy 判定）；excluded 为红字、已被红冲、作废等不参与比对的发票
 export type MatchStatus = "confirmed" | "partial" | "proposed" | "needs_review" | "none" | "excluded";
 export type MatchingSummary = {

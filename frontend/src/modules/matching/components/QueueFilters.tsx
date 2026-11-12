@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { Button, Field, FilterBar, SearchInput } from "../../../shared/components/ui";
 import type { QueueQuery } from "../types/matching";
 
@@ -10,10 +10,12 @@ export function QueueFilters({
   value,
   busy,
   onApply,
+  batchAction,
 }: {
   value: Filters;
   busy: boolean;
   onApply: (filters: Filters) => void;
+  batchAction?: ReactNode;
 }) {
   const [draft, setDraft] = useState<Filters>(value);
   const set = (patch: Partial<Filters>) => setDraft((current) => ({ ...current, ...patch }));
@@ -35,6 +37,7 @@ export function QueueFilters({
           >
             清除
           </Button>
+          {batchAction}
         </>
       }
     >

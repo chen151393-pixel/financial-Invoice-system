@@ -11,6 +11,41 @@ export interface SessionUser {
   name: string;
   roles: RoleItem[];
   canManageAccess: boolean;
+  pages: string[];
+}
+
+export interface PageItem {
+  code: string;
+  label: string;
+  group: string;
+  description: string;
+  assignable: boolean;
+}
+export interface RolePages extends RoleItem {
+  pages: string[];
+  revision: number;
+  editable: boolean;
+}
+export interface RolePageOverview {
+  pages: PageItem[];
+  roles: RolePages[];
+}
+export interface UserAccessPreview {
+  version: string;
+  inheritedRoles: string[];
+  roles: string[];
+  pages: PageItem[];
+  canEnable: boolean;
+  reason: string | null;
+}
+export interface UserAccessDetail {
+  id: number;
+  name: string;
+  departments: string[];
+  personalRoles: string[];
+  customRoles: boolean;
+  enabled: boolean;
+  preview: UserAccessPreview;
 }
 
 export interface SessionInfo {

@@ -231,7 +231,8 @@ def test_directory_migration_can_downgrade_and_upgrade_without_touching_other_ta
         "task_wecom_directories",
         "task_wecom_directory_groups",
         "sync_ns_plans",  # 0040 在没有计划数据时随之回退
-        # 0041 在没有海关回执时随之回退
+        "identity_role_pages",  # 0041 的未配置空表随之回退；有授权时由迁移保护拒绝降级
+        # 0042 在没有海关回执时随之回退
         "review_customs_receipts",
         "review_customs_receipt_lines",
     }

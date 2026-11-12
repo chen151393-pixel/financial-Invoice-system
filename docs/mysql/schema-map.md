@@ -3,7 +3,7 @@
 > 本文件由 `npm.cmd run db:map` 根据迁移链离线 MySQL DDL、实体定义和字段字典生成，请勿手工修改；迁移或实体变化后重新生成，`backend/tests/test_schema_map.py` 会检查是否过期。
 > “修改”含加列、改列、索引与中文备注；数据回填仅在线执行，不在离线 DDL 中体现。
 
-当前最新迁移：`0041_review_customs_receipts`；共 41 个迁移、65 张实体表。
+当前最新迁移：`0042_review_customs_receipts`；共 42 个迁移、66 张实体表。
 
 ## 1. 按模块查表
 
@@ -28,8 +28,8 @@
 | 表 | 中文说明 | 新建 | 后续修改 | 字段字典 |
 | --- | --- | --- | --- | --- |
 | `review_calculation_jobs` | 财务后台计算队列，按账套合并请求并持久重试 | `0032` | — | [查看](current-data-dictionary.md#review_calculation_jobs) |
-| `review_customs_receipt_lines` | 海关回执报关明细，按版本保留 | `0041` | — | [查看](current-data-dictionary.md#review_customs_receipt_lines) |
-| `review_customs_receipts` | 海关回执报关单头与比对结果 | `0041` | — | [查看](current-data-dictionary.md#review_customs_receipts) |
+| `review_customs_receipt_lines` | 海关回执报关明细，按版本保留 | `0042` | — | [查看](current-data-dictionary.md#review_customs_receipt_lines) |
+| `review_customs_receipts` | 海关回执报关单头与比对结果 | `0042` | — | [查看](current-data-dictionary.md#review_customs_receipts) |
 | `review_declaration_snapshots` | 财务报关单查询快照，后台计算后原子更新，列表只读取本表 | `0032` | — | [查看](current-data-dictionary.md#review_declaration_snapshots) |
 | `review_lines` | 审核冻结的子采购行范围，不可修改 | `0001` | `0006`、`0011` | [查看](current-data-dictionary.md#review_lines) |
 | `review_purchase_bases` | 全局开票依据版本 | `0006` | `0011` | [查看](current-data-dictionary.md#review_purchase_bases) |
@@ -96,6 +96,7 @@
 | `identity_departments` | 飞书部门副本，用于选择同步范围与配置部门默认角色 | `0033` | — | [查看](current-data-dictionary.md#identity_departments) |
 | `identity_directory_previews` | 短期飞书组织预览；有效期十分钟 | `0035` | — | [查看](current-data-dictionary.md#identity_directory_previews飞书组织预览) |
 | `identity_login_flows` | 飞书登录流程：state 只能使用一次 | `0033` | — | [查看](current-data-dictionary.md#identity_login_flows) |
+| `identity_role_pages` | 角色的页面访问范围，多角色取并集，独立于具体业务操作权限 | `0041` | — | [查看](current-data-dictionary.md#identity_role_pages角色页面访问权限) |
 | `identity_sync_runs` | 飞书部门与成员同步记录 | `0033` | — | [查看](current-data-dictionary.md#identity_sync_runs) |
 | `identity_sync_scopes` | 成员同步范围：只同步这些部门及其下级部门的成员，范围外的人不能登录 | `0033` | — | [查看](current-data-dictionary.md#identity_sync_scopes) |
 | `identity_user_departments` | 人员所属部门，以飞书为准；每次同步整体替换 | `0033` | — | [查看](current-data-dictionary.md#identity_user_departments) |
@@ -158,4 +159,5 @@
 | [`0038_source_purchase_line_tax_rate`](../../backend/migrations/versions/0038_source_purchase_line_tax_rate.py) | — | `source_purchase_order_lines` | source：子采购明细保存税率（2026-10-29）。 |
 | [`0039_task_wecom_directory`](../../backend/migrations/versions/0039_task_wecom_directory.py) | `task_wecom_directories`、`task_wecom_directory_groups` | — | 企微只读目录与同步状态；按企业及凭证摘要隔离，不存凭证或群成员清单。 |
 | [`0040_sync_ns_plans`](../../backend/migrations/versions/0040_sync_ns_plans.py) | `sync_ns_plans` | `sync_ns_runs`、`sync_runs` | sync：NS 来源定时同步计划；批次复用 sync_runs，分页执行记录复用 sync_ns_runs 并指向所属批次。 |
-| [`0041_review_customs_receipts`](../../backend/migrations/versions/0041_review_customs_receipts.py) | `review_customs_receipt_lines`、`review_customs_receipts` | — | review：海关回执（按出口报关单号保存海关明细、境外收货人与 NS 比对结果）。 |
+| [`0041_identity_role_pages`](../../backend/migrations/versions/0041_identity_role_pages.py) | `identity_role_pages` | — | identity：角色页面范围；已有人员和角色绑定不变。有配置时拒绝降级丢弃授权。 |
+| [`0042_review_customs_receipts`](../../backend/migrations/versions/0042_review_customs_receipts.py) | `review_customs_receipt_lines`、`review_customs_receipts` | — | review：海关回执（按出口报关单号保存海关明细、境外收货人与 NS 比对结果）。 |

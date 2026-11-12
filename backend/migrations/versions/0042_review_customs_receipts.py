@@ -19,8 +19,8 @@ from sqlalchemy import (
     UniqueConstraint,
 )
 
-revision = "0041_review_customs_receipts"
-down_revision = "0040_sync_ns_plans"
+revision = "0042_review_customs_receipts"
+down_revision = "0041_identity_role_pages"
 branch_labels = None
 depends_on = None
 metadata = MetaData()

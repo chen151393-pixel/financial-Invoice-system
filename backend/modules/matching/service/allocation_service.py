@@ -218,6 +218,8 @@ class AllocationService:
                 group_view_service.confirm(self, key, GroupBatch.body(invoice_id), actor, batch=True)
                 confirmed += len(ids)
             except ApiError as error:
+                if error.status not in (400, 404, 409, 422):
+                    raise
                 skipped += [{"id": value, "reason": error.message} for value in ids]
         for allocation_id in dict.fromkeys(int(value) for value in body.ids if value not in groups.ids):
 
@@ -235,6 +237,12 @@ class AllocationService:
             except ApiError as error:
                 skipped.append({"id": str(allocation_id), "reason": error.message})
         return {"confirmed": confirmed, "skipped": skipped}
+
+    def confirm_invoice_batch(self, body, actor):
+        from .invoice_batch_service import confirm
+
+        _require_user(actor)
+        return confirm(self, body, actor)
 
 
 def _verify_replay(existing, body, actor, fingerprint):

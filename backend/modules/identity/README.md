@@ -1,6 +1,6 @@
 # 身份模块（identity）
 
-飞书登录、飞书部门与人员同步、角色与权限管理，以及应急管理员账号密码登录。方案与分期见 [飞书登录、部门同步与权限方案](../../../docs/feishu-identity-plan.md)；本文对应第 1 期（2026-10-28）。
+飞书登录、飞书部门与人员同步、角色与权限管理，以及应急管理员账号密码登录。方案与分期见 [飞书登录、部门同步与权限方案](../../../docs/feishu-identity-plan.md)；本文涵盖第 1 期身份能力与 2026-11-12 新增的页面授权，具体业务操作权限的细分仍待后续。
 
 测试生命周期（2026-10-30）：`test_feishu_login.py` 与 `test_directory_selection.py` 共用 `application_clients`，每个应用只进入一次 lifespan；管理员和飞书登录浏览器只隔离 Cookie，统一登记关闭，不各自启动后台消费者。退出时先关闭浏览器，再退出应用生命周期，并断言实际后台线程全部结束。回归 `test_login_browsers_do_not_restart_background_workers` 禁止新增浏览器重启消费者；保留 `test_write_scope.py` 的精确锁记录断言，不过滤其他数据库调用来掩盖线程残留。
 
@@ -27,8 +27,8 @@
 | `POST /api/session/feishu/start`           | 请求 `{returnTo}`；返回飞书授权地址，并设置流程 Cookie                  |
 | `GET /api/session/feishu/callback`         | 飞书回调；成功签发会话并 303 回到 `returnTo`，失败 303 回到 `/login`    |
 | `GET /api/session/feishu/outcome`          | 本浏览器最近一次飞书登录的状态与失败原因（10 分钟内）                   |
-| `GET /api/identity/access`                 | 部门、同步范围、部门角色、人员、最近同步记录（仅系统管理员）            |
-| `POST /api/identity/sync`                  | 立即同步飞书（仅系统管理员）                                            |
+| `GET /api/identity/access`                 | 部门、同步范围、部门角色、人员、最近同步记录（需要人员与权限页面授权） |
+| `POST /api/identity/sync`                  | 立即同步飞书（需要人员与权限页面授权） |
 | `PUT /api/identity/scopes`                 | `{departmentIds}`：同步根部门，含全部下级                               |
 | `PUT /api/identity/departments/{id}/roles` | `{roles}`：部门默认角色，下级部门成员继承                               |
 | `PUT /api/identity/users/{id}/roles`       | `{roles, customRoles}`：个人角色；`customRoles` 为是时只按个人角色      |
@@ -50,7 +50,7 @@
   - 仍在 API 进程内存中，8 小时有效，因此保持单 API 进程部署；会话落库按方案放到后续。
   - 飞书用户的会话每次请求都按数据库校验在职状态与角色，停用、移出范围或收回全部角色后，下一次请求返回 401。
 - **操作者**：飞书用户为 `user:fs:<飞书 user_id>`；应急管理员为 `user:<ADMIN_USERNAME>`，固定拥有系统管理员角色；`service:feishu` 服务密钥身份不变。
-- **当前权限**：人员与权限管理、柠檬云绑定、账套配置及同步任务按系统管理员角色校验，支持飞书个人角色和部门继承角色；同步入口由 `app.py` 注入 `IdentityService.require_admin`，复用实时人员状态与角色读取，不信任前端角色。其他业务操作按角色细分仍在第 2 期落实。
+- **当前权限**：人员与权限管理按角色的 `access` 页面授权校验，授权可分配给财务主管等其他角色；柠檬云绑定、账套配置及同步任务继续使用既有管理员校验。同步入口由 `app.py` 注入 `IdentityService.require_admin`，复用实时人员状态与角色读取，不信任前端角色。其他业务操作按角色细分仍在第 2 期落实。
 - **审计**：登录成功与失败、同步范围、部门角色、个人角色变更写入 `identity_audit`。
 
 ## 配置
@@ -88,4 +88,25 @@
 
 真实应用只读验证返回 32 个部门、133 名成员、24 条父子关系；未写生产账号。隔离 API 测试覆盖单人导入、整部门未来新增、移部门、去重、待授权、会话失效、失败保护、过期和篡改。MySQL 多连接并发及生产迁移仍需部署环境验收。
 
-本期角色继续控制登录和人员管理资格；其他业务接口的细粒度操作权限仍属于第 2 期，本次未扩大改动范围。
+## 页面授权与成员预览（2026-11-12）
+
+已接通角色页面权限。支持系统管理员、财务主管、财务专员、采购主管（`purchase_manager`）、采购专员和只读六种角色，系统管理员固定拥有全部页面；其他角色可独立配置全部页面，包括人员与权限，授权后即可管理成员、部门角色与角色页面权限，多角色取并集。部门角色向下继承、个人追加或覆盖均沿用原规则。未配置时保留原有普通角色的页面范围（除人员与权限外的全部页面），空配置表示无页面；其他业务页面的授权不代替其操作校验，“只读”标签也不代表完整操作只读控制。采购主管复用同一套配置、个人授权与部门继承机制，不预设额外操作权限；新增角色无需数据库迁移。
+
+| 接口 | 中文说明 |
+| --- | --- |
+| `GET /api/identity/role-pages` | 返回页面目录（code、label、group、description、assignable）及角色配置（pages、revision、editable）；前端直接展示可分配性 |
+| `PUT /api/identity/role-pages/{role}` | `{pages, revision}`，保存后返回真实配置；旧版本返回 409，非管理员及非法页面拒绝保存 |
+| `GET /api/identity/users/{id}/access` | 最新成员设置和后端权限预览，避免使用旧列表行覆盖最新设置 |
+| `POST /api/identity/users/{id}/access-preview` | `{roles, customRoles}`，只读计算 inheritedRoles、roles、pages、canEnable、reason、version |
+| `PUT /api/identity/users/{id}/access` | 新页面额外提交 version；成员、部门继承或页面授权变化时返回 409。无 version 仅保留一个版本兼容旧客户端 |
+| `GET /api/session` | user 新增 pages，供菜单过滤及路由守卫使用；空数组可登录但无业务页面 |
+
+`policy/page_policy.py` 是目录与页面并集规则；`policy/api_page_policy.py` 对应服务端路由模板，复用查询单独登记，未知接口默认拒绝普通页面授权。`core/dependencies.py` 仅调用注入的身份服务校验，不持有页面规则；`app.py` 只装配服务。服务密钥维持原接口范围，已有管理员校验仍有效。
+
+`service/role_page_service.py` 在 identity 模块锁下重新校验权限和版本、持久化并追加审计；`service/user_access_preview.py` 与成员保存复用相同计算。角色修改、成员修改下一次请求即生效；前端在路由变化、窗口重新聚焦和收到 403 时重新读取会话，不自动重放操作。
+
+部署须先执行 `npm.cmd run db:upgrade`，再一起更新前后端并重启。迁移 `0041_identity_role_pages` 只新增 identity 表，不修改原有人员或角色；已有页面配置时拒绝降级丢弃授权。测试使用隔离数据，不替代真实飞书登录、NS 写入或生产部署验收。并发专项见 `backend/tests/identity/test_role_pages_mysql.py`；未提供专用 MySQL 测试连接时跳过。
+
+合并进项发票批量重新匹配后，`POST /api/matching/proposals/generate` 按“进项发票／发票比对”任一页面授权放行；无页面授权仍返回 403，不能借此访问整单确认等仅限比对页的接口。
+
+来源本地关联修复 `POST /api/source/relations/rebuild` 归入数据同步页面授权；采购报关联查页面仅提供查询，不因查看来源而取得重建关联入口。

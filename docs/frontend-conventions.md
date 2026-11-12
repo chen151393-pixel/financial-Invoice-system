@@ -84,4 +84,6 @@ frontend/src/modules/matching/
 
 ## 统一页面框架
 
+人员与权限包含两个独立地址：`/settings/access`（人员授权）、`/settings/access/roles`（角色管理）。两页复用下划线页签，成员编辑区展示后端计算的权限预览。所有业务路由按会话 `pages` 校验；首页、未知地址和未授权页面优先进入总体工作台，工作台未授权时使用其他可访问页面。`/access-denied` 仅在没有任何可访问页面时保留提示，其余账号自动返回首页，避免循环跳转。
+
 导航由 `frontend/src/app/navigation.tsx` 维护，正式路由由 `frontend/src/app/router.tsx` 登记，路径由 `frontend/src/app/paths.ts` 统一维护，共用 AppFrame 和 Sidebar。采购报关联查、财务核对及其他已接入页面标明真实来源；公共导航不展示虚构业务计数或身份。首页与旧 `/demo?view=...` 地址进入 `/workbench`；`/pl-reconciliation` 进入采购报关联查，财务核对独立进入 `/review`。旧独立 PL 外壳样式、演示顶部横幅和重复页头已移除。

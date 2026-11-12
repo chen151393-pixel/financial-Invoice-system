@@ -13,12 +13,13 @@ import {
   Tabs,
 } from "../../../shared/components/ui";
 import { openLocalSession } from "../../identity/api";
-import { confirmBatch, getMatchingQueue } from "../api";
+import { confirmInvoiceBatch, getMatchingQueue } from "../api";
 import { uploadInvoiceFiles } from "../api/invoice-file-api";
 import { InvoiceFileUploadDialog } from "../components/InvoiceFileUploadDialog";
+import { BatchApproveDialog } from "../components/BatchApproveDialog";
 import { QueueFilters } from "../components/QueueFilters";
 import { batchable, QueueTable } from "../components/QueueTable";
-import type { InvoiceQueue, QueueQuery } from "../types/matching";
+import type { InvoiceBatchResult, InvoiceQueue, InvoiceQueueRow, QueueQuery } from "../types/matching";
 import "./matching.css";
 import "./matching-parts.css";
 
@@ -53,6 +54,9 @@ export function MatchingQueuePage() {
   const [busy, setBusy] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [feedback, setFeedback] = useState<{ error: boolean; text: string } | null>(null);
+  const [batchRows, setBatchRows] = useState<InvoiceQueueRow[] | null>(null);
+  const [batchResult, setBatchResult] = useState<InvoiceBatchResult | null>(null);
+  const [batchError, setBatchError] = useState("");
 
   useEffect(() => {
     let active = true;
@@ -75,36 +79,26 @@ export function MatchingQueuePage() {
   }, [query, refresh]);
 
   function change(patch: Partial<QueueQuery>) {
+    if (busy) return;
     setSelected([]);
     setState({ kind: "loading" });
     setQuery((current) => ({ ...current, page: 1, ...patch }));
   }
-  async function confirmSelected() {
-    if (busy) return;
+  async function confirmSelected(note: string) {
+    if (busy || !batchRows?.length || batchResult || batchError) return;
     setBusy(true);
     setFeedback(null);
-    let confirmed = 0;
-    const skipped: string[] = [];
     try {
-      const ids =
-        state.kind === "ready"
-          ? state.data.rows.filter((row) => selected.includes(row.invoice.id)).flatMap((row) => row.batchIds)
-          : [];
-      // 保持现有每次最多 100 条的接口约束；失败停止后续提交，不自动重发。
-      for (let start = 0; start < ids.length; start += 100) {
-        const result = await confirmBatch(ids.slice(start, start + 100));
-        confirmed += result.confirmed;
-        skipped.push(...result.skipped.map((item) => item.reason));
-      }
+      const result = await confirmInvoiceBatch(batchRows, note);
+      setBatchResult(result);
       setFeedback({
-        error: skipped.length > 0,
-        text: `已通过 ${confirmed} 条建议${skipped.length ? `，跳过 ${skipped.length} 条：${skipped.join("；")}` : "。"}`,
+        error: result.skipped.length > 0,
+        text: `已通过 ${result.approved.length} 张发票，跳过 ${result.skipped.length} 张。`,
       });
     } catch (error) {
-      setFeedback({
-        error: true,
-        text: `已收到成功结果 ${confirmed} 条建议。${error instanceof Error ? error.message : "批量通过失败"}；后续提交已停止，请刷新核对当前结果。`,
-      });
+      const message = `${error instanceof Error ? error.message : "批量审核请求失败"}；部分发票可能已完成审核，请刷新核实后再操作。`;
+      setBatchError(message);
+      setFeedback({ error: true, text: message });
     } finally {
       setSelected([]);
       setState({ kind: "loading" });
@@ -114,8 +108,19 @@ export function MatchingQueuePage() {
   }
 
   const data = state.kind === "ready" ? state.data : null;
+  const chosen = data?.rows.filter((row) => selected.includes(row.invoice.id) && batchable(row)) ?? [];
   return (
     <div className="matching-page">
+      {batchRows && (
+        <BatchApproveDialog
+          rows={batchRows}
+          busy={busy}
+          result={batchResult}
+          error={batchError}
+          onClose={() => setBatchRows(null)}
+          onApprove={(note) => void confirmSelected(note)}
+        />
+      )}
       {uploading && (
         <InvoiceFileUploadDialog upload={uploadInvoiceFiles} onClose={() => setUploading(false)} />
       )}
@@ -153,6 +158,19 @@ export function MatchingQueuePage() {
           }}
           busy={busy || state.kind === "loading"}
           onApply={(filters) => change(filters)}
+          batchAction={
+            <Button
+              disabled={busy || chosen.length === 0}
+              aria-describedby="matching-batch-hint"
+              onClick={() => {
+                setBatchResult(null);
+                setBatchError("");
+                setBatchRows(chosen);
+              }}
+            >
+              {busy ? "审核中…" : `批量审核通过${chosen.length ? `（${chosen.length}）` : ""}`}
+            </Button>
+          }
         />
         <div className="matching-queue__tabs">
           <Tabs
@@ -163,19 +181,19 @@ export function MatchingQueuePage() {
           />
         </div>
         <div className="matching-body">
+          <p id="matching-batch-hint" className="matching-help">
+            勾选当前页置信度为 100% 且可审核的发票后，可批量审核通过。
+          </p>
           {data?.notice && <Alert tone="info">{data.notice}</Alert>}
           {feedback && <Alert tone={feedback.error ? "danger" : "success"}>{feedback.text}</Alert>}
           {selected.length > 0 && (
             <div className="matching-selection" role="status">
               <span>
-                <strong>已选 {selected.length} 张</strong> · 批量通过所选发票的全部待审核建议
+                <strong>当前页已选 {selected.length} 张</strong> · 将审核所选发票的全部待审核建议
               </span>
               <span className="matching-row">
                 <Button disabled={busy} onClick={() => setSelected([])}>
                   取消选择
-                </Button>
-                <Button variant="primary" disabled={busy} onClick={() => void confirmSelected()}>
-                  {busy ? "处理中…" : `批量通过（${selected.length}）`}
                 </Button>
               </span>
             </div>

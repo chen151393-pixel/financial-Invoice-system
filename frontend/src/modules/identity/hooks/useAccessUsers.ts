@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "react-router";
-import { queryAccessUsers, saveDepartmentRoles, saveUserAccess } from "../api";
+import { queryAccessUsers, saveDepartmentRoles } from "../api";
 import type { UserList } from "../types";
 
 export function useAccessUsers(onSaved: () => Promise<void>, fixedDepartment?: number | null) {
@@ -75,11 +75,6 @@ export function useAccessUsers(onSaved: () => Promise<void>, fixedDepartment?: n
     page,
     filter,
     reload,
-    saveUser: async (id: number, roles: string[], custom: boolean, enabled: boolean) => {
-      await saveUserAccess(id, roles, custom, enabled);
-      await reload();
-      await onSaved();
-    },
     saveDepartment: async (id: number, roles: string[]) => {
       await saveDepartmentRoles(id, roles);
       await reload();

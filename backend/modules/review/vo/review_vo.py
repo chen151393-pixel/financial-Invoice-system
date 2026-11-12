@@ -17,7 +17,7 @@ class UnitPriceMargin(StrictModel):
     )
     marginNote: str = ""
     declaredUnitPriceCny: str = ""
-    # 只为读出旧快照并显示“后台计算中”兼容旧键；新响应只输出报关行单价。
+    # 报关行含税采购单价 ÷ 1.13 后折人民币；兼容旧键仅用于读取旧快照并显示“后台计算中”。
     originalUnitPriceCny: str = Field(
         default="", validation_alias=AliasChoices("originalUnitPriceCny", "combinedPurchaseUnitPrice")
     )

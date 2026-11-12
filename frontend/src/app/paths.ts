@@ -19,6 +19,8 @@ export const paths = {
   syncNsBatches: "/sync/ns/batches",
   writeback: "/writeback",
   access: "/settings/access",
+  rolePages: "/settings/access/roles",
+  forbidden: "/access-denied",
 } as const;
 
 // 旧地址，路由中重定向到新地址；保留一个版本后删除。
@@ -85,4 +87,10 @@ const viewPaths: Record<View, string> = {
 
 export function viewPath(view: View): string {
   return viewPaths[view];
+}
+
+export function homePath(pages: readonly string[] = []): string {
+  if (pages.includes("workbench")) return paths.workbench;
+  const first = pages.find((code): code is View => Object.hasOwn(viewPaths, code));
+  return first ? viewPaths[first] : paths.forbidden;
 }

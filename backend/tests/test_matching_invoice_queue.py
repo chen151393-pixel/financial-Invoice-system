@@ -38,7 +38,9 @@ def test_invoice_queue_groups_before_paging(engine, world, reviewed):
     assert first.rows[0].proposalCount == 2
     assert first.rows[0].invoice.number == "26000000000000009901"
     assert first.rows[0].invoice.id != second.rows[0].invoice.id
-    assert first.rows[0].batch.allowed and len(first.rows[0].batchIds) == 2
+    # 高档不等于 100%；Excel 样本缺购买方，仅 95%，不能批量通过。
+    assert first.rows[0].confidence == "95"
+    assert not first.rows[0].batch.allowed and not first.rows[0].batchIds
     assert not second.rows[0].batch.allowed
     assert world["queries"].invoice_queue(QueueQuery(tier="high")).total == 1
     low = world["queries"].invoice_queue(QueueQuery(tier="low", pageSize=1, page=2))

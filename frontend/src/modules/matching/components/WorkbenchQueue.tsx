@@ -59,7 +59,7 @@ export function WorkbenchQueue({ queue }: { queue: NonNullable<Workbench["queue"
         )}
         {queue.high > 0 ? (
           <Link className="wb-queue__action" to={matchingQueuePath({ tier: "high" })}>
-            高置信度 {queue.high} 条，去队列批量通过 →
+            高置信度 {queue.high} 条，去队列审核（100% 可批量通过） →
           </Link>
         ) : (
           <Link className="wb-queue__action" to={matchingQueuePath({})}>

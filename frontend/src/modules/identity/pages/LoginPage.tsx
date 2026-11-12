@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Navigate, useLocation } from "react-router";
 import { Button } from "../../../shared/components/ui";
-import { paths } from "../../../app/paths";
+import { homePath, paths } from "../../../app/paths";
 import { startFeishuLogin } from "../api";
 import { PasswordLoginForm } from "../components/PasswordLoginForm";
 import { useLoginOptions } from "../hooks/useLoginOptions";
@@ -10,7 +10,7 @@ import { useSession } from "../session-context";
 import "./login.css";
 
 export function LoginPage() {
-  const { phase, busy, error, retry, signIn } = useSession();
+  const { phase, busy, error, retry, signIn, user } = useSession();
   const location = useLocation();
   const state: unknown = location.state;
   const { options, failure, loadError } = useLoginOptions(phase === "login");
@@ -26,7 +26,10 @@ export function LoginPage() {
   if (location.search || location.hash) {
     return <Navigate to={paths.login} state={state} replace />;
   }
-  if (phase === "ready") return <Navigate to={getLoginDestination(state)} replace />;
+  if (phase === "ready") {
+    const destination = getLoginDestination(state);
+    return <Navigate to={destination === paths.workbench ? homePath(user?.pages) : destination} replace />;
+  }
 
   async function feishuLogin() {
     if (redirecting) return;

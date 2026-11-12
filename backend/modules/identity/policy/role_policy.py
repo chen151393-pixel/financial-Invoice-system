@@ -1,12 +1,13 @@
 """角色定义与生效规则（docs/feishu-identity-plan.md 第 5 节）。
 
-第 1 期只区分“能否管理人员与权限”；其余写权限按角色细分在第 2 期落实。
+页面范围由 page_policy 计算；具体业务操作继续使用所属模块的校验。
 """
 
 ROLES = {
     "admin": "系统管理员",
     "finance_manager": "财务主管",
     "finance": "财务专员",
+    "purchase_manager": "采购主管",
     "purchaser": "采购专员",
     "viewer": "只读",
 }

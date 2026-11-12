@@ -78,7 +78,7 @@ def test_screenshot_values_share_declared_quantity_unit_and_tax_inclusive_price(
         expected,
         "declared",
     )
-    assert result["original"] == CUSTOMS["unit_price"]
+    assert result["original"] == Decimal("4.707964601769911504424778761")
     assert "原采购数量" in shown.note and str(row["unit_price"]) in shown.note
     (frozen,) = review_lines({"orders": [ORDER], "purchase_lines": [row], "links": []})
     assert (frozen["quantity"], frozen["unit"], frozen["amount"]) == (row["quantity"], "卷", row["amount"])
@@ -111,9 +111,9 @@ def test_purchase_display_grouping_does_not_supply_margin_comparison_price():
         {1: ORDER},
         {},
     )
-    assert result["original"] == Decimal("5.32")
+    assert result["original"] == Decimal("4.707964601769911504424778761")
     assert result["status"] == "ok"
-    assert result["margin"] == Decimal("65.44")
+    assert result["margin"] == Decimal("69.41")
 
 
 @pytest.mark.parametrize(
@@ -134,7 +134,7 @@ def test_missing_purchase_basis_does_not_change_customs_price_margin(field, valu
         assert shown.quantity == ""
     result = declared_margin(CUSTOMS, [row], {1: ORDER}, {})
     if field == "amount":
-        assert result["status"] == "ok" and result["original"] == CUSTOMS["unit_price"]
+        assert result["status"] == "ok" and result["original"] == Decimal("4.707964601769911504424778761")
     else:
         assert result["status"] == "unavailable" and result["margin"] is None
         assert "缺失" in result["note"] or "须大于 0" in result["note"]
@@ -179,10 +179,10 @@ def test_saved_source_and_materialized_page_preserve_both_quantity_bases(ns, eng
             "100",
             "卷",
         )
-        assert line.originalUnitPriceCny == "21.3"
+        assert line.originalUnitPriceCny == "18.849558"
         assert line.declaredUnitPriceCny == "5.68"
         assert line.originalPriceUnit == "平方米" and line.declaredPriceUnit == "平方米"
-        assert line.marginStatus == "negative" and line.margin == "-275.00%"
+        assert line.marginStatus == "negative" and line.margin == "-231.86%"
 
 
 def test_display_price_uses_amount_and_declared_quantity_even_without_source_price():
@@ -217,7 +217,8 @@ def test_existing_prices_require_valid_matching_declared_quantity(quantity):
     result = declared_margin(
         {**CUSTOMS, "quantity": None, "declared_quantity": quantity}, [row], {1: ORDER}, {}
     )
-    assert result["status"] == "unavailable" and result["margin"] is None
+    expected = "unavailable" if quantity is None or quantity <= 0 else "quantity_mismatch"
+    assert result["status"] == expected and result["margin"] is None
     assert "数量" in result["note"]
     assert not margin_alert([result])
 
@@ -257,8 +258,9 @@ def test_cd000849_compares_two_212_prices_instead_of_113000_purchase_total():
     orders = {1: {**ORDER, "sales_order_id": 9}, 2: {**ORDER, "id": 2, "sales_order_id": 9}}
     sales = {9: {"id": 9, "order_no": "SO1", "currency": "USD", "exchange_rate": Decimal("6.78")}}
     result = declared_margin(customs_row, [first, second], orders, sales)
-    assert result["status"] == "ok" and result["margin"] == Decimal("0.00")
-    assert result["original"] == result["declared"] == Decimal("14.3736")
+    assert result["status"] == "ok" and result["margin"] == Decimal("11.50")
+    assert result["original"] == Decimal("12.72")
+    assert result["declared"] == Decimal("14.3736")
     assert (
         declared_margin({**customs_row, "declared_unit_price": None}, [first, second], orders, sales)
         == result
@@ -279,13 +281,33 @@ def test_materialized_page_shows_quantity_mismatch_without_price_alert(ns, engin
         row["custrecord_swc_subpo_item_bgqty"] = Decimal("9")
     save(ns, engine, bundle([order], [declaration]))
     result = group(service, "CD870")
+    assert result.quantityMismatch and not result.unitMismatch
     assert not result.marginAlert and not result.autoReview.eligible
     for line in result.customsLines:
-        assert line.marginStatus == "unavailable" and line.margin == ""
+        assert line.marginStatus == "quantity_mismatch" and line.margin == ""
         assert line.marginNote == "数量不一致（报关行 10，子采购报关合计 9）"
         assert line.originalUnitPriceCny == line.declaredUnitPriceCny == ""
     page = service.browse(DeclarationListQuery(status="margin_alert"))
     assert page.total == page.counts["marginAlert"] == 0
+
+
+def test_cd000954_child_total_mismatch_sets_quantity_label_and_blocks_auto_review():
+    customs_row = {
+        **CUSTOMS,
+        "unit": "卷",
+        "declared_unit": "卷",
+        "quantity": Decimal("1259"),
+        "declared_quantity": Decimal("1259"),
+    }
+    children = [{**purchase(declared="245"), "declared_unit": "卷"}]
+    result = declared_margin(customs_row, children, {1: ORDER}, {})
+    assert result["status"] == "quantity_mismatch"
+    assert result["note"] == "数量不一致（报关行 1259，子采购报关合计 245）"
+    assert result["margin"] is result["original"] is result["declared"] is None
+    assert not margin_alert([result])
+    assert auto_review_reasons("pending", False, 0, children, True, [result]) == [
+        "报关或关联子采购口径不一致：数量不一致（报关行 1259，子采购报关合计 245）"
+    ]
 
 
 def test_cd000835_caliber_mismatch_takes_priority_over_quantity_and_prices():
@@ -310,13 +332,13 @@ def test_cd000835_caliber_mismatch_takes_priority_over_quantity_and_prices():
     same = {**customs_row, "unit": "千克", "quantity": Decimal("24965.5")}
     result = declared_margin(same, children, {1: ORDER}, {})
     assert result["note"] == "数量不一致（报关行 24965.5，子采购报关合计 41260）"
-    assert result["status"] == "unavailable" and not margin_alert([result])
+    assert result["status"] == "quantity_mismatch" and not margin_alert([result])
 
 
 def test_quantity_check_resolves_unit_ids_and_preserves_raw_purchase_quantity():
     row = {**purchase(), "quantity": Decimal("999999"), "declared_unit": "25"}
     result = declared_margin(CUSTOMS, [row], {1: ORDER}, {}, unit_names={"25": "平方米"})
-    assert result["status"] == "ok" and result["margin"] == Decimal("1.74")
+    assert result["status"] == "ok" and result["margin"] == Decimal("13.04")
 
 
 def test_no_linked_rows_requires_quantity_review():

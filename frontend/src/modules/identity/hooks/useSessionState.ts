@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
-import { HttpError, onUnauthorized } from "../../../shared/api/http";
+import { HttpError, onForbidden, onUnauthorized } from "../../../shared/api/http";
+import { useLocation } from "react-router";
 import { getSession, login, logout } from "../api";
 import type { SessionPhase, SessionState } from "../session-context";
 import type { SessionUser } from "../types";
@@ -11,6 +12,36 @@ export function useSessionState(): SessionState {
   const [busy, setBusy] = useState(false);
   const [attempt, setAttempt] = useState(0);
   const submitting = useRef(false);
+  const location = useLocation();
+
+  useEffect(() => {
+    if (phase !== "ready") return;
+    let active = true;
+    let refreshing = false;
+    async function refresh() {
+      if (refreshing || submitting.current) return;
+      refreshing = true;
+      try {
+        const session = await getSession();
+        if (active) setUser(session.user ?? null);
+      } catch (failure) {
+        if (active && failure instanceof HttpError && failure.status === 401) {
+          setUser(null);
+          setPhase("login");
+        }
+      } finally {
+        refreshing = false;
+      }
+    }
+    const unsubscribe = onForbidden(() => void refresh());
+    window.addEventListener("focus", refresh);
+    void refresh();
+    return () => {
+      active = false;
+      unsubscribe();
+      window.removeEventListener("focus", refresh);
+    };
+  }, [phase, location.key]);
 
   useEffect(() => {
     let active = true;

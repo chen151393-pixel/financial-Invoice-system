@@ -96,7 +96,7 @@ test("展示真实空明细原因及完整计数", () => {
   assert.match(render({ error: "读取失败" }), /role="alert"/);
 });
 test("列表提供行选择及单张补拉，后端禁用原因可见", () => {
-  // 勾选不受补拉权限限制（批量生成建议共用），补拉按钮按后端原因禁用
+  // 勾选不受补拉权限限制（批量重新匹配共用），补拉按钮按后端原因禁用
   const html = renderToStaticMarkup(
     createElement(Table, {
       rows: [{ id: "1", number: "26001", importedAt: "2026-10-19T00:00:00Z" }],
@@ -123,16 +123,16 @@ test("勾选含不可补拉发票时仍可补拉其余发票，并说明可补�
   assert.doesNotMatch(html, /disabled=""[^>]*>重新拉取商品明细/);
 });
 
-test("批量生成建议显示勾选张数，未勾选时禁用", () => {
+test("批量重新匹配显示勾选张数，未勾选时禁用", () => {
   const props = { disabled: false, onDone() {}, onError() {} };
   const none = renderToStaticMarkup(createElement(Generate, { ...props, ids: [] }));
-  assert.match(none, /disabled=""[^>]*>批量生成建议（已选 0 张）/);
+  assert.match(none, /disabled=""[^>]*>批量重新匹配（已选 0 张）/);
   const two = renderToStaticMarkup(createElement(Generate, { ...props, ids: ["1", "2"] }));
-  assert.match(two, /批量生成建议（已选 2 张）/);
+  assert.match(two, /批量重新匹配（已选 2 张）/);
   assert.doesNotMatch(two, /disabled=""/);
 });
 
-test("批量生成建议只提交勾选的发票 ID，复用比对页重新生成接口", async (t) => {
+test("批量重新匹配只提交勾选的发票 ID，复用比对页重新生成接口", async (t) => {
   const calls = [];
   t.mock.method(globalThis, "fetch", async (url, options) => {
     calls.push({ url, options });

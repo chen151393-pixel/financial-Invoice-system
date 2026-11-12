@@ -1,4 +1,4 @@
-"""权限管理接口：飞书同步、同步范围、部门默认角色、个人角色；仅系统管理员。"""
+"""权限管理接口：飞书同步、同步范围、部门默认角色、个人角色；按页面权限授权。"""
 
 from fastapi import APIRouter, Query
 
@@ -65,7 +65,7 @@ def create_router(access, sync, identity, previews):
 
     @router.put("/users/{user_id}/access")
     def save_user_access(user_id: int, body: UserAccessSave, owner: Owner):
-        access.set_user_access(user_id, body.roles, body.customRoles, body.enabled, owner)
+        access.set_user_access(user_id, body.roles, body.customRoles, body.enabled, owner, body.version)
         return {"saved": True}
 
     return router

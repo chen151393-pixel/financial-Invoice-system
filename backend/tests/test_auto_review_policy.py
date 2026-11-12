@@ -28,7 +28,7 @@ def test_each_condition_blocks_with_reason():
 def test_margin_negative_alerts_and_unavailable_blocks():
     assert margin_alert([OK, NEGATIVE]) and not margin_alert([OK, UNAVAILABLE])
     reasons = auto_review_reasons("pending", False, 0, ROWS, True, [OK, NEGATIVE, UNAVAILABLE])
-    assert "采购单价高于人民币申报单价且超出容差" in reasons
+    assert "不含税采购单价高于人民币申报单价且超出容差" in reasons
     assert "申报幅度无法计算：报关行与子采购行单位不一致，不计算申报幅度" in reasons
 
 

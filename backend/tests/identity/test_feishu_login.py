@@ -223,6 +223,18 @@ def test_feishu_login_issues_session_with_inherited_roles(app, context, feishu):
         "name": "李采购",
         "roles": [{"code": "purchaser", "label": "采购专员"}],
         "canManageAccess": False,
+        "pages": [
+            "workbench",
+            "finance",
+            "customs-match",
+            "invoices",
+            "match",
+            "invoice-followup",
+            "supplier-profiles",
+            "pl",
+            "writeback",
+            "sync",
+        ],
     }
     assert app.state.identity.owner(session_token=client.cookies.get("ns_session")) == "user:fs:u-li"
     # 非系统管理员不能打开权限管理

@@ -23,6 +23,7 @@ from .integrations.wecom_messaging import WeComMessaging
 from .manage import verify_database
 from .modules.identity.controller.access_controller import create_router as identity_access_router
 from .modules.identity.controller.feishu_controller import create_router as feishu_login_router
+from .modules.identity.controller.role_page_controller import create_router as role_page_router
 from .modules.identity.controller.session_controller import create_router as identity_router
 from .modules.identity.service.access_reader import AccessReader
 from .modules.identity.service.access_service import AccessService
@@ -30,7 +31,9 @@ from .modules.identity.service.directory_preview_service import DirectoryPreview
 from .modules.identity.service.directory_sync_service import DirectorySyncService
 from .modules.identity.service.directory_sync_worker import DirectorySyncWorker
 from .modules.identity.service.feishu_login_service import FeishuLoginService
+from .modules.identity.service.role_page_service import RolePageService
 from .modules.identity.service.session_service import IdentityService
+from .modules.identity.service.user_access_preview import UserAccessPreviewService
 from .modules.invoice.controller.invoice_controller import create_router as invoice_router
 from .modules.invoice.public import InvoiceChanged, InvoiceChanging, InvoicesImported, LemonInvoicesStored
 from .modules.invoice.service.import_service import ImportService
@@ -200,6 +203,9 @@ def create_app(settings=None, ns=None, engine=None, wecom=None, lemon=None, lemo
     app = FastAPI(title="NS 发票对账后端", lifespan=lifespan, docs_url=None, redoc_url=None, openapi_url=None)
     identity = IdentityService(settings, AccessReader(engine))
     app.state.identity = identity
+    app.include_router(
+        role_page_router(RolePageService(engine, identity), UserAccessPreviewService(engine, identity))
+    )
     app.add_middleware(
         RequestGuard, secure=settings.origin.startswith("https://"), json_body_limits=JSON_BODY_LIMITS
     )

@@ -49,7 +49,7 @@
 
 仅保留报关单主行的展开/收起。申报抬头与销售单号集中在主行；展开即展示全部报关行及其关联子采购行，共用母采购单号、子采购单号、货源地、供应商、品名、型号、数量、单位、单价、金额列。白底报关、浅蓝采购，同时保留来源文字；数量标注报关口径，采购单价旁注明同一报关单位，未定位的子采购行列在表尾并提示。金额与申报幅度直接展示后端结果。
 
-申报幅度按单价显示：后端先校验报关数量与关联子采购报关数量合计，不一致时返回 `unavailable`，页面显示“数量不一致”及两边数量，幅度为“—”，不显示“单价异常”或异常底色。校验通过后比较同一报关行的原始单价与报关单价，报关单价缺失时按本行总价 / 报关数量试算。`UnitPriceMargin` 显示两项后端人民币单价 `originalUnitPriceCny` / `declaredUnitPriceCny` 及各自单位；仅后端判定报关行单价超出报关单价容差（`marginStatus=negative`）时突出异常。容差内按 `ok` 展示“精度范围内一致”、实际差额和容差，保留真实幅度（可为负数），不显示异常徽标或异常底色；前端不计算容差，不以百分比是否小于零自行判断。无法计算保留后端原因。
+申报幅度按单价显示：后端先校验报关数量与关联子采购报关数量合计，数量合计不一致时返回 `quantity_mismatch`，主行与明细显示“数量不一致”标签及两边数量，幅度为“—”，不显示“单价异常”或异常底色。校验通过后比较同一报关行的含税采购单价 ÷ 1.13 与报关单价，报关单价缺失时按本行总价 / 报关数量试算。`UnitPriceMargin` 显示两项后端人民币单价 `originalUnitPriceCny` / `declaredUnitPriceCny` 及各自单位；仅后端判定不含税采购单价超出报关单价容差（`marginStatus=negative`）时突出异常。容差内按 `ok` 展示“精度范围内一致”、实际差额和容差，保留真实幅度（可为负数），不显示异常徽标或异常底色；前端不计算容差，不以百分比是否小于零自行判断。无法计算保留后端原因。
 
 同一报关行的同子采购单号、供应商、品名、单位由后端合并，前端展示汇总数量、金额及加权单价，并标记“合并 N 行”。采购详情弹窗使用统一 DataTable 展示 `members` 各行报关数量、采购含税单价（标注报关单位）与金额；前端不自行求和，审核仍以原始行执行。
 
@@ -58,6 +58,10 @@
 ## 采购单价列（2026-11-09）
 
 报关行在“金额”右侧新增“采购单价”列，显示后端 `originalPrice / originalPriceUnit`（报关行原始口径，如“3.50 / 盒”），采购行显示“—”。后端判定原始口径与报关口径单位或数量不一致时（`marginStatus` 为 `unit_mismatch`／`quantity_mismatch`），申报幅度列显示“—”、“单位不一致”或“数量不一致”徽标及后端原因，不显示幅度；前端不比较单位或数量。
+
+## 采购单价除税口径（2026-11-12）
+
+“采购单价（含税）”列继续显示 `originalPrice` 原值。申报幅度区域显示后端 `originalUnitPriceCny` 作为“不含税采购单价”，标注“含税价 ÷ 1.13”；它与报关单价共同用于后端幅度和容差判断。前端只显示结果，不自行除税或重算。旧快照由后端 `review-v13` 启动补算，期间显示后台计算状态。
 
 ## 申报幅度（2026-10-23）
 
@@ -73,20 +77,22 @@
 
 2026-11-09：采购行数量/单位取后端报关字段；单价由后端按金额 / 展示数量计算，合并时为总金额 / 总报关数量，固定保留两位小数（如 `13.70`），旁注 `unit`。缺失金额或有效数量时显示未提供。详情分别展示报关数量与原 `purchaseQuantity`、`purchaseUnit`。幅度比较中的折算报关单价独立标注，全部数值由后端计算。
 
+2026-11-12：报关数量与关联子采购报关数量合计不一致也纳入后端 `quantityMismatch`，复用现有主行／明细标签；旧快照由 `review-v14` 在部署重启后补算，前端不按原因文字推断分类。
+
 ## 海关报关单比对（2026-11-12）
 
-`/review/customs`，侧栏“财务”分组中位于“财务核对”下方（`app/paths.ts` 的 `reviewCustoms`，视图 `customs-match`）。导入海关回执，按真实报关单号与 NS 报关单比对明细，并保存回执中的境外收货人。后端规则见[后端 review 模块](../../../../backend/modules/review/README.md#海关回执与报关单比对2026-11-12)。
+`/review/customs`，侧栏“财务”分组中位于“财务核对”下方（`app/paths.ts` 的 `reviewCustoms`，视图与页面权限代码均为 `customs-match`，路由由 `RequirePage` 校验）。导入海关回执，按真实报关单号与 NS 报关单比对明细，并保存回执中的境外收货人。后端规则见[后端 review 模块](../../../../backend/modules/review/README.md#海关回执与报关单比对2026-11-12)。
 
-| 文件 | 说明 |
-| --- | --- |
-| `pages/CustomsMatchPage.tsx` | 概况卡、状态切换、查询栏、比对口径、列表与分页；条件变化时取消旧请求；默认展开“有差异”的报关单 |
-| `components/CustomsStats.tsx` | 海关回执 / 明细一致 / 数量或单位不一致 / 未找到 NS 报关单，点击筛选；数字均为后端计数 |
-| `components/CustomsSearchForm.tsx` | 出口报关单号（批量）、海关商品名称、境外收货人、出口日期范围 |
-| `components/CustomsReceiptRow.tsx` | 主行（复用财务核对报关单主行样式）与展开后的比对明细、来源文件与比对时间 |
-| `components/CustomsCompareTable.tsx` | 紧凑 `DataTable`：同组 NS 报关行（白底）在前、海关项（浅蓝底）在后，结论写在组内第一行 |
-| `components/CustomsImportDialog.tsx` | 选择或拖入 .xlsx / .xls / .csv，逐个文件上传，展示列识别与逐张结果；失败文件单独提示 |
-| `components/customs-match.css` | 本页排布；窄屏时标题右侧操作换行 |
-| `customs-api.ts`、`customs-types.ts` | `POST /api/review/customs-receipts/query`、`/import`、`/rematch` 与对应类型 |
+| 文件                                 | 说明                                                                                           |
+| ------------------------------------ | ---------------------------------------------------------------------------------------------- |
+| `pages/CustomsMatchPage.tsx`         | 概况卡、状态切换、查询栏、比对口径、列表与分页；条件变化时取消旧请求；默认展开“有差异”的报关单 |
+| `components/CustomsStats.tsx`        | 海关回执 / 明细一致 / 数量或单位不一致 / 未找到 NS 报关单，点击筛选；数字均为后端计数          |
+| `components/CustomsSearchForm.tsx`   | 出口报关单号（批量）、海关商品名称、境外收货人、出口日期范围                                   |
+| `components/CustomsReceiptRow.tsx`   | 主行（复用财务核对报关单主行样式）与展开后的比对明细、来源文件与比对时间                       |
+| `components/CustomsCompareTable.tsx` | 紧凑 `DataTable`：同组 NS 报关行（白底）在前、海关项（浅蓝底）在后，结论写在组内第一行         |
+| `components/CustomsImportDialog.tsx` | 选择或拖入 .xlsx / .xls / .csv，逐个文件上传，展示列识别与逐张结果；失败文件单独提示           |
+| `components/customs-match.css`       | 本页排布；窄屏时标题右侧操作换行                                                               |
+| `customs-api.ts`、`customs-types.ts` | `POST /api/review/customs-receipts/query`、`/import`、`/rematch` 与对应类型                    |
 
 - 比对结论、分组、文案、计数全部来自后端；前端不合计数量、不判断一致。
 - “重新匹配”按当前 NS 报关单重算（单张或全部），结果以提示和刷新后的列表展示。
