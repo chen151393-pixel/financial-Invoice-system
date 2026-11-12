@@ -8,9 +8,9 @@ from decimal import Decimal
 
 from backend.modules.source.public import declared_unit_price, unit_label
 
-from ..policy.auto_review_policy import auto_review_reasons, margin_alert
+from ..policy.auto_review_policy import auto_review_reasons, margin_flags
 from ..policy.margin_policy import DEFAULT_UNIT_PRICE_TOLERANCE_CNY, declared_margin
-from ..policy.purchase_display_policy import group_purchase_lines
+from ..policy.purchase_display_policy import display_unit_price, group_purchase_lines
 from ..policy.review_policy import CHANGED_WARNING, STATUS_LABELS
 from ..public import ApprovedLine
 from ..vo.review_vo import AutoReview, CustomsLine, Declaration, PurchaseLine, ReviewState
@@ -47,7 +47,8 @@ def line_bindings(content):
 
 
 def purchase_line(order, row, basis=None, unit_names=None, sales_order=None):
-    note = "数量、单位取子采购行的报关字段；采购单价直接取来源含税单价，按采购单位计价。"
+    price = display_unit_price(row["amount"], row["declared_quantity"])
+    note = "数量、单位取子采购行的报关字段；单价 = 含税金额 / 报关数量，四舍五入保留两位小数。"
     note += (
         f"原采购数量 {text(row['quantity']) or '未提供'} {unit_label(row['unit'], unit_names) or '单位未提供'}，"
         f"原采购含税单价 {text(row['unit_price']) or '未提供'}。"
@@ -55,6 +56,8 @@ def purchase_line(order, row, basis=None, unit_names=None, sales_order=None):
     )
     if row["amount_status"] == "source_missing":
         note += "来源金额缺失，开票后只能人工按差异结束。"
+    if not price:
+        note += "金额或报关数量缺失，或报关数量非正数，无法计算单价。"
     return PurchaseLine(
         id=f"purchase-{row['id']}",
         name=text(row["declaration_name"] or row["item_name"]),
@@ -64,7 +67,7 @@ def purchase_line(order, row, basis=None, unit_names=None, sales_order=None):
         supplier=text(order["supplier_name"]),
         quantity=text(row["declared_quantity"]),
         unit=unit_label(row["declared_unit"], unit_names),
-        price=text(row["unit_price"]),
+        price=price,
         purchaseQuantity=text(row["quantity"]),
         purchaseUnit=unit_label(row["unit"], unit_names),
         amount=text(row["amount"]),
@@ -169,6 +172,8 @@ def declaration(
             # 与报关数量、报关单位配套的申报单价，和申报幅度使用同一口径；NS 未填时为试算值并标注。
             price=text(prices[row["id"]][0]),
             priceEstimated=prices[row["id"]][1],
+            originalQuantity=text(row["quantity"]),
+            originalPrice=text(row["unit_price"]),
             amount=text(row["amount"]),
             currency=text(row["currency"]),
             originalPriceUnit=unit_label(row["unit"], content.get("unit_names")),
@@ -208,7 +213,7 @@ def declaration(
         purchaseCount=len(content["purchase_lines"]),
         customsLines=customs_lines,
         unlinkedLines=group_purchase_lines([line.model_dump() for line in unlinked]),
-        marginAlert=margin_alert(margins.values()),
+        **margin_flags(margins.values()),
         autoReview=AutoReview(eligible=not reasons, reasons=reasons),
         warnings=[CHANGED_WARNING] if changed else [],
         review=review_state(state, active_review, allowed, reason),

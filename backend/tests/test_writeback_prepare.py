@@ -208,6 +208,41 @@ def test_atomic_enqueue_and_idempotent_confirmation(engine, prepared):
         )
 
 
+def test_evidence_is_optional_and_audit_shows_feishu_name(engine, prepared):
+    """2026-11-10：归属核实依据选填；处理记录、方案确认人显示飞书人员姓名，system 显示“系统”。"""
+    from datetime import datetime, timezone
+
+    from backend.modules.identity.dao import user_dao
+    from backend.modules.identity.public import actor_names
+
+    feishu = "user:fs:gebca2c7"
+    with engine.begin() as connection:
+        stamp = datetime.now(timezone.utc)
+        user_dao.save(
+            connection,
+            {
+                "user_id": "gebca2c7",
+                "open_id": None,
+                "union_id": None,
+                "name": "张三",
+                "avatar_url": None,
+                "active": False,  # 已停用人员的历史记录仍显示姓名
+                "inactive_reason": "已离职",
+            },
+            stamp,
+        )
+    task = query(prepared)
+    body = confirmation(task).model_copy(update={"evidence": ""})
+    done = prepared.service.confirm(prepared.task_id, body, feishu)
+    assert done["state"] == "ready" and done["plan"]["evidence"] == ""
+    assert done["plan"]["confirmedBy"] == feishu and done["plan"]["confirmedByName"] == "张三"
+    names = {(row["action"], row["actorName"]) for row in done["audit"]}
+    # 找不到人员的标识（此处为应急管理员）原样显示，不臆造姓名
+    assert ("plan_confirmed", "张三") in names and ("queued", USER) in names
+    with engine.connect() as connection:
+        assert actor_names(connection, ["system", feishu, "", None]) == {"system": "系统", feishu: "张三"}
+
+
 @pytest.mark.parametrize(
     "buyer, normalized, allowed",
     [(None, None, True), ("", "", True), ("采购公司A", "采购公司a", True), ("其他公司", "其他公司", False)],
@@ -486,19 +521,84 @@ def test_waiting_bill_and_query_failure_are_distinct(prepared):
 
 
 def test_automatic_only_with_exact_child_company_and_nonhistorical_snapshot(engine, prepared):
-    from backend.modules.writeback.policy.plan_policy import automatic_targets
+    from backend.modules.writeback.policy.plan_policy import EXACT_BASIS, automatic_targets
 
     query(prepared)
     with engine.connect() as connection:
         task = task_dao.get(connection, prepared.task_id)
     candidates = task["candidates"]
-    assert automatic_targets(task, candidates) is None
+    assert automatic_targets(task, candidates) == (None, "")
     for source in task["snapshot"]["sources"].values():
         source["company_ns_id"] = "subsidiary:1"
     candidates["purchaseOrders"][0]["bills"][0]["subPurchaseOrderId"] = "200"
-    assert len(automatic_targets(task, candidates)) == 2
+    targets, basis = automatic_targets(task, candidates)
+    assert len(targets) == 2 and basis == EXACT_BASIS
     task["historical"] = True
-    assert automatic_targets(task, candidates) is None
+    assert automatic_targets(task, candidates) == (None, "")
+
+
+def test_single_bill_and_single_sub_order_map_directly(engine, prepared):
+    from backend.modules.source.public import parent_sub_order_counts
+    from backend.modules.writeback.policy.plan_policy import SINGLE_BASIS, automatic_targets
+
+    query(prepared)
+    with engine.connect() as connection:
+        task = task_dao.get(connection, prepared.task_id)
+        # 合成来源中母单 100 只有一张有效子采购单
+        assert parent_sub_order_counts(connection, ["100"]) == {"100": 1}
+    for source in task["snapshot"]["sources"].values():
+        source["company_ns_id"] = "subsidiary:1"
+    candidates = task["candidates"]
+    # 账单未填子采购单：母单仅一张账单且仅一张子采购单时直接对应
+    targets, basis = automatic_targets(task, candidates, {"100": 1})
+    assert len(targets) == 2 and {t["billId"] for t in targets} == {"395762"} and basis == SINGLE_BASIS
+    # 母单还有其他子采购单（可能尚未生成账单）、子单数未知，均不自动对应
+    assert automatic_targets(task, candidates, {"100": 2}) == (None, "")
+    assert automatic_targets(task, candidates, {}) == (None, "")
+    # 母单有两张账单时须人工确认
+    other = deepcopy(candidates["purchaseOrders"][0]["bills"][0])
+    other.update(billId="395763", billNumber="TEST-2")
+    candidates["purchaseOrders"][0]["bills"].append(other)
+    assert automatic_targets(task, candidates, {"100": 1}) == (None, "")
+
+
+def test_single_bill_rule_freezes_plan_after_query(engine, prepared):
+    from backend.modules.writeback.policy.plan_policy import SINGLE_BASIS
+
+    with engine.begin() as connection:
+        task = task_dao.get(connection, prepared.task_id)
+        snapshot = deepcopy(task["snapshot"])
+        for source in snapshot["sources"].values():
+            source["company_ns_id"] = "subsidiary:1"
+        task_dao.change(connection, prepared.task_id, {"snapshot": snapshot}, task["updated_at"])
+    done = query(prepared)
+    assert done["state"] == "ready" and done["plan"]["evidence"] == SINGLE_BASIS
+    assert done["plan"]["orders"][0]["billNumber"] == "TEST-BILL"
+
+
+def test_bill_view_shows_order_numbers_and_subsidiary_name_not_internal_ids(engine, prepared):
+    from backend.modules.writeback.vo.order_vo import candidates_view, preview_view
+
+    [bill] = query(prepared)["candidates"]["purchaseOrders"][0]["bills"]
+    # 母单号取自 NS 查询结果；账单未填子采购单、采购公司不是 subsidiary 身份时名称为空，由页面说明原因
+    assert bill["purchaseOrderNo"] == "PO-100"
+    assert bill["subPurchaseOrderNo"] == "" and bill["subsidiaryName"] == ""
+    with engine.connect() as connection:
+        task = task_dao.get(connection, prepared.task_id)
+    source = next(iter(task["snapshot"]["sources"].values()))
+    for row in task["snapshot"]["sources"].values():
+        row["company_ns_id"] = "subsidiary:1"
+    task["candidates"]["purchaseOrders"][0]["bills"][0]["subPurchaseOrderId"] = source["subpo_id"]
+    [named] = candidates_view(task)["purchaseOrders"][0]["bills"]
+    assert named["subPurchaseOrderNo"] == source["order_no"]
+    assert named["subsidiaryName"] == source["company_name"]
+    assert preview_view(task, [{"purchaseOrderId": "100"}])[0]["purchaseOrderNo"] == "PO-100"
+    # NS 查询返回实际子公司名称时直接展示，不依赖采购公司是否为 subsidiary 身份（2026-11-10）
+    for row in task["snapshot"]["sources"].values():
+        row["company_ns_id"] = "classification:3"
+    task["candidates"]["purchaseOrders"][0]["bills"][0]["subsidiaryName"] = "上海毅鑫实业有限公司"
+    [actual] = candidates_view(task)["purchaseOrders"][0]["bills"]
+    assert actual["subsidiaryName"] == "上海毅鑫实业有限公司"
 
 
 def test_splits_across_bills_are_rejected_even_with_conserved_total(prepared):
@@ -532,9 +632,10 @@ def test_whole_order_confirmation_freezes_one_bill_and_keeps_line_evidence(engin
     )
     done = prepared.service.confirm(prepared.task_id, body, USER)
     assert done["state"] == "ready"
-    assert len(done["plan"]["orders"]) == 1
+    assert len(done["plan"]["orders"]) == 1 and done["plan"]["orders"][0]["billNumber"] == "TEST-BILL"
     assert len(done["plan"]["allocations"]) == 2
     assert done["request"]["preview"][0]["amount"] == "120.50"
+    assert done["request"]["preview"][0]["purchaseOrderNo"] == "PO-100"
     assert not done["writeback"]["allowed"]
     prepared.service.confirm(prepared.task_id, body, USER)
     with engine.connect() as connection:

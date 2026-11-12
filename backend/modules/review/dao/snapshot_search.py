@@ -1,5 +1,7 @@
 """快照字段搜索表达式；不查询实时来源，筛选后再聚合与分页。"""
 
+import json
+
 from sqlalchemy import case, func, or_, select
 
 from backend.core.search_terms import search_terms
@@ -24,13 +26,41 @@ def conditions(query, dialect):
             )
         )
     if query.recordNo:
-        record = func.json_extract(snapshots.c.payload, "$.recordNumber")
-        if dialect == "mysql":
-            record = func.json_unquote(record)
+        record = text_field("$.recordNumber", dialect)
         result.append(or_(*(record.contains(term, autoescape=True) for term in search_terms(query.recordNo))))
+    if query.declarationNo:
+        result.append(
+            or_(
+                *(
+                    text_field("$.declaration", dialect).contains(term, autoescape=True)
+                    for term in search_terms(query.declarationNo)
+                )
+            )
+        )
     if query.purchaseOrderNo:
         result.append(order_matches(search_terms(query.purchaseOrderNo), dialect))
     return result
+
+
+def text_field(path, dialect):
+    """快照 payload 中的文本字段；MySQL 需去掉 JSON 引号。"""
+    value = func.json_extract(snapshots.c.payload, path)
+    return func.json_unquote(value) if dialect == "mysql" else value
+
+
+def margin_status_matches(status, dialect):
+    """精确匹配报关行已有的幅度状态，不搜索原因文案或子采购行。"""
+    lines = func.json_extract(snapshots.c.payload, "$.customsLines")
+    if dialect == "mysql":
+        return func.json_contains(lines, json.dumps({"marginStatus": status})) == 1
+    entries = func.json_each(lines).table_valued("value", joins_implicitly=True)
+    return (
+        select(1)
+        .select_from(entries)
+        .where(func.json_extract(entries.c.value, "$.marginStatus") == status)
+        .correlate(snapshots)
+        .exists()
+    )
 
 
 def order_matches(terms, dialect):

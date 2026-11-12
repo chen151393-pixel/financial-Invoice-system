@@ -78,8 +78,10 @@ export function DeclarationRow({
             <span title={review.reason}>
               <Badge tone={STATUS_TONE[review.status] ?? "neutral"}>{review.label}</Badge>
             </span>
-            {/* 申报幅度为负时突出显示；可自动审核为后端预判，悬停显示依据 */}
+            {/* 按后端分类分别展示；同单不同明细的问题可以并存。 */}
             {group.marginAlert && <Badge tone="danger">申报幅度异常</Badge>}
+            {group.unitMismatch && <Badge tone="warning">单位不一致</Badge>}
+            {group.quantityMismatch && <Badge tone="warning">数量不一致</Badge>}
             {group.autoReview?.eligible && (
               <span title="关联、金额、币种齐全且申报幅度正常">
                 <Badge tone="info">可自动审核</Badge>

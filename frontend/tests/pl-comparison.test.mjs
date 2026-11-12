@@ -16,6 +16,7 @@ let server,
   PurchaseDialog,
   PlSourceComparison,
   FinanceSearchForm,
+  ReviewStats,
   Pagination,
   viewPath,
   navigation;
@@ -46,6 +47,7 @@ before(async () => {
   ({ FinanceSearchForm } = await server.ssrLoadModule(
     "/src/modules/review/components/FinanceSearchForm.tsx",
   ));
+  ({ ReviewStats } = await server.ssrLoadModule("/src/modules/review/components/ReviewStats.tsx"));
   ({ Pagination } = await server.ssrLoadModule("/src/shared/components/Pagination.tsx"));
 });
 after(async () => {
@@ -56,6 +58,43 @@ const render = (state = createPlComparisonState(), props = {}) =>
     createElement(PlComparison, { state, onRetry() {}, onFilter() {}, onReview() {}, ...props }),
   );
 const group = () => createPlComparisonState().result.groups[0];
+test("单位不一致卡展示后端计数，选中并提交独立筛选", async (t) => {
+  const counts = {
+    pending: 49,
+    changed: 0,
+    marginAlert: 22,
+    unitMismatch: 8,
+    autoApprovable: 18,
+    approvedThisMonth: 2,
+  };
+  let selected;
+  const tree = ReviewStats({
+    counts,
+    value: "unit_mismatch",
+    onSelect: (value) => {
+      selected = value;
+    },
+  });
+  const cards = tree.props.children;
+  assert.deepEqual(
+    cards.map((card) => card.props.label),
+    ["待审核报关单", "申报幅度异常", "单位不一致", "可自动审核通过", "本月审核通过"],
+  );
+  cards[2].props.onSelect();
+  assert.equal(selected, "unit_mismatch");
+  const html = renderToStaticMarkup(tree);
+  assert.match(html, /aria-pressed="true"[^]*?单位不一致[^]*?8 张/);
+  assert.match(html, /申报幅度异常[^]*?22 张/);
+  const calls = [];
+  t.mock.method(globalThis, "fetch", async (_url, options) => {
+    calls.push(JSON.parse(options.body));
+    return Response.json({ groups: [] });
+  });
+  const { queryDeclarations } = await server.ssrLoadModule("/src/modules/review/api.ts");
+  await queryDeclarations({ status: selected, recordNo: "CD870", page: 1, pageSize: 20 });
+  assert.equal(calls[0].status, "unit_mismatch");
+  assert.equal(calls[0].recordNo, "CD870");
+});
 test("后台计算未完成时不显示顶部黄色说明，保留审核禁用及原因", () => {
   const state = createPlComparisonState();
   const reason = "来源或审核已更新，后台计算中，请稍后刷新";
@@ -162,6 +201,28 @@ test("默认只展示报关单头，PL及公司同一行且审核按钮位于最
   assert.match(html, /aria-expanded="false"/);
   assert.doesNotMatch(html, /SUB-TEST|fr-customs-table|财务审核/);
 });
+
+test("主行按后端结果区分单位、数量和实际申报幅度异常", () => {
+  for (const [flags, expected] of [
+    [{ unitMismatch: true }, ["单位不一致"]],
+    [{ quantityMismatch: true }, ["数量不一致"]],
+    [{ marginAlert: true }, ["申报幅度异常"]],
+    [{ unitMismatch: true, marginAlert: true }, ["单位不一致", "申报幅度异常"]],
+    [{}, []],
+  ]) {
+    const state = createPlComparisonState();
+    Object.assign(
+      state.result.groups[0],
+      { marginAlert: false, unitMismatch: false, quantityMismatch: false },
+      flags,
+    );
+    const html = render(state);
+    for (const label of ["单位不一致", "数量不一致", "申报幅度异常"]) {
+      assert.equal(html.includes(`>${label}</`), expected.includes(label), label);
+    }
+    assert.equal(html.includes(" is-alert"), Boolean(flags.marginAlert));
+  }
+});
 test("明细按后端显式树展示，数量和金额保留原十进制字符串", () => {
   const html = customs(group());
   for (const text of ["SUB-TEST", "12.5000", "9007199254740993.01", "16.2500", "USD", "CNY"])
@@ -170,7 +231,8 @@ test("明细按后端显式树展示，数量和金额保留原十进制字符�
   const tableRows = [...html.matchAll(/<tr\b[^>]*>(.*?)<\/tr>/gs)];
   assert.equal(tableRows.length, 3, "一行公共表头、一行报关、一行采购");
   assert.equal((html.match(/<colgroup>/g) || []).length, 1);
-  for (const row of tableRows) assert.equal((row[1].match(/<(?:td|th)\b/g) || []).length, 11);
+  // 2026-11-09 新增“采购单价”列
+  for (const row of tableRows) assert.equal((row[1].match(/<(?:td|th)\b/g) || []).length, 12);
   assert.match(tableRows[2][0], /data-tone="accent"/);
   // 不单设"来源"列，子采购行在首列缩进挂在报关行下
   assert.doesNotMatch(tableRows[0][1], />来源</);
@@ -350,7 +412,7 @@ test("订单口径、缺失金额和缺失单位不冒充报关口径或零值",
   assert.doesNotMatch(html, /本次数量|本次采购金额/);
 });
 
-test("财务搜索拆为三个批量输入框，仅显示框内提示并保留可访问名称", () => {
+test("财务搜索拆为四个批量输入框（含真实报关单号），上方显示标签", () => {
   const html = renderToStaticMarkup(
     createElement(FinanceSearchForm, {
       suppliers: [{ id: "77", name: "合成供应商" }],
@@ -358,14 +420,17 @@ test("财务搜索拆为三个批量输入框，仅显示框内提示并保留�
       onSearch() {},
     }),
   );
-  assert.equal((html.match(/type="search"/g) || []).length, 3);
+  assert.equal((html.match(/type="search"/g) || []).length, 4);
   assert.equal((html.match(/type="date"/g) || []).length, 2);
+  assert.match(html, /name="declarationNo"/);
   assert.match(html, /报关单创建日期 从/);
   assert.match(html, /name="createdFrom"/);
   assert.match(html, /name="createdTo"/);
-  for (const label of ["供应商", "CD 号", "子采购单号"]) {
-    assert.ok(html.includes(`<span class="ui-sr-only">${label}</span>`));
+  // 2026-11-09 起查询栏与进项发票列表一致，标签显示在输入框上方
+  for (const label of ["供应商", "CD 号", "报关单号", "子采购单号"]) {
+    assert.ok(html.includes(`<span>${label}</span>`));
   }
+  assert.doesNotMatch(html, /ui-sr-only/);
   assert.match(render(), /刷新列表/);
   assert.doesNotMatch(html, /全部账套|来源账套|NS 环境/);
   assert.match(html, /多条用逗号分隔/);
@@ -521,7 +586,7 @@ test("采购详情字段独立对应，保留零值和缺失值，不虚构原�
   );
   assert.match(html, /<dt>子单数量<\/dt><dd>0<\/dd>/);
   assert.match(html, /<dt>单位<\/dt><dd>千克<\/dd>/);
-  assert.match(html, /<dt>采购含税单价（按采购单位）<\/dt><dd>0<\/dd>/);
+  assert.match(html, /<dt>采购含税单价（金额 ÷ 展示数量）<\/dt><dd>0<\/dd>/);
   assert.match(html, /<dt>订单含税金额（未分摊）<\/dt><dd>来源未提供<\/dd>/);
   assert.doesNotMatch(html, /<table/);
 });
@@ -531,15 +596,15 @@ test("单价异常由后端判定，舍入为零仍突出显示", () => {
   Object.assign(item.customsLines[0], {
     margin: "0.00%",
     marginStatus: "negative",
-    marginNote: "报关单价低于报关行单价",
+    marginNote: "报关单价低于不含税采购单价",
     declaredUnitPriceCny: "237.8695",
     originalUnitPriceCny: "237.87",
   });
-  assert.match(customs(item), /data-tone="danger"[\s\S]*报关单价低于报关行单价/);
+  assert.match(customs(item), /data-tone="danger"[\s\S]*报关单价低于不含税采购单价/);
   item.customsLines[0].marginStatus = "ok";
   item.customsLines[0].margin = "-0.01%";
   item.customsLines[0].marginNote = "精度范围内一致（人民币单价差额 0.0305 元，容差 0.10 元）";
-  assert.doesNotMatch(customs(item), /data-tone="danger"|报关单价低于报关行单价/);
+  assert.doesNotMatch(customs(item), /data-tone="danger"|报关单价低于不含税采购单价/);
   assert.match(customs(item), /精度范围内一致/);
   assert.match(customs(item), /-0.01%/);
 });
@@ -551,7 +616,7 @@ test("报关行最后一列显示后端计算的申报幅度；负数与无法�
       ...item.customsLines[0],
       margin: "-12.68%",
       marginStatus: "negative",
-      marginNote: "报关单价低于报关行单价",
+      marginNote: "报关单价低于不含税采购单价",
       declaredUnitPriceCny: "10.65",
       originalUnitPriceCny: "12",
       originalPriceUnit: "箱",
@@ -563,17 +628,49 @@ test("报关行最后一列显示后端计算的申报幅度；负数与无法�
       lineNo: 2,
       margin: "",
       marginStatus: "unavailable",
-      marginNote: "报关行单价缺失，无法计算申报幅度",
+      marginNote: "采购单价缺失，无法计算申报幅度",
     },
   ];
   const html = customs(item);
   assert.match(html, /申报幅度/);
   assert.match(
     html,
-    /fr-margin--negative[\s\S]*-12.68%[\s\S]*data-tone="danger"[\s\S]*报关单价低于报关行单价/,
+    /fr-margin--negative[\s\S]*-12.68%[\s\S]*data-tone="danger"[\s\S]*报关单价低于不含税采购单价/,
   );
-  assert.match(html, /报关单价 10.65 元\/个<br\/>报关行单价 12 元\/箱/);
-  assert.match(html, /fr-margin--unavailable[\s\S]*—[\s\S]*报关行单价缺失，无法计算申报幅度/);
+  assert.match(html, /报关单价 10.65 元\/个<br\/>不含税采购单价 12 元\/箱/);
+  assert.match(html, /fr-margin--unavailable[\s\S]*—[\s\S]*采购单价缺失，无法计算申报幅度/);
+});
+
+test("报关行显示原始口径含税采购单价；单位或数量不一致时显示后端原因，不显示幅度", () => {
+  const item = group();
+  item.customsLines = [
+    {
+      ...item.customsLines[0],
+      originalQuantity: "10332",
+      originalPriceUnit: "盒",
+      originalPrice: "3.50",
+      margin: "",
+      marginStatus: "unit_mismatch",
+      marginNote: "原始单位“盒”与报关单位“平方米”不一致，不计算申报幅度",
+    },
+    {
+      ...item.customsLines[0],
+      id: "customs:1",
+      lineNo: 2,
+      originalPrice: "",
+      originalPriceUnit: "",
+      margin: "",
+      marginStatus: "quantity_mismatch",
+      marginNote: "原始数量 17000 与报关数量 17687.33 不一致，不计算申报幅度",
+    },
+  ];
+  const html = customs(item);
+  // “采购单价”列紧跟在“金额”右侧
+  assert.match(html, /<th[^>]*>金额<\/th><th[^>]*>采购单价（含税）<\/th><th[^>]*>申报幅度/);
+  assert.match(html, /aria-label="原始口径含税采购单价">3.50<small> \/ 盒<\/small>/);
+  assert.match(html, /data-tone="warning"[^>]*>单位不一致[\s\S]*与报关单位“平方米”不一致/);
+  assert.match(html, /data-tone="warning"[^>]*>数量不一致[\s\S]*原始数量 17000/);
+  assert.match(html, /未提供<small> \/ 单位未提供<\/small>/);
 });
 
 test("NS 未填申报单价时显示后端试算值并标注“试算”，不在前端计算", () => {
@@ -585,7 +682,7 @@ test("NS 未填申报单价时显示后端试算值并标注“试算”，不�
       priceEstimated: true,
       margin: "-12.68%",
       marginStatus: "negative",
-      marginNote: "报关单价低于报关行单价",
+      marginNote: "报关单价低于不含税采购单价",
       declaredUnitPriceCny: "10.65",
       originalUnitPriceCny: "12",
       originalPriceUnit: "箱",
@@ -598,18 +695,18 @@ test("NS 未填申报单价时显示后端试算值并标注“试算”，不�
     html,
     /aria-label="申报单价 1.5，NS 未填写，按报关金额除以报关数量试算"[^>]*>1.5<span class="ui-badge" data-tone="info">试算<\/span>/,
   );
-  assert.match(html, /报关单价 10.65 元\/个（试算）<br\/>报关行单价 12 元\/箱/);
+  assert.match(html, /报关单价 10.65 元\/个（试算）<br\/>不含税采购单价 12 元\/箱/);
   assert.equal(html.match(/>试算</g).length, 1);
 });
 
-test("报关数量与原始采购含税单价分别注明单位", () => {
+test("子采购单价保留两位小数并使用展示数量单位", () => {
   const item = group();
   const line = {
     ...item.customsLines[0].purchaseLines[0],
     scope: "declared",
     quantity: "1525",
     unit: "平方米",
-    price: "81.13",
+    price: "5.32",
     purchaseQuantity: "100",
     purchaseUnit: "卷",
     amount: "8113",
@@ -618,12 +715,31 @@ test("报关数量与原始采购含税单价分别注明单位", () => {
   const html = customs(item);
   assert.match(html, /子采购报关数量[^>]*>1525/);
   assert.match(html, /平方米/);
-  assert.match(html, /采购含税单价[^>]*>81.13<small> \/ 卷/);
+  assert.match(html, /采购含税单价[^>]*>5.32<small> \/ 平方米/);
   assert.doesNotMatch(html, /订单口径/);
   const detail = renderToStaticMarkup(createElement(PurchaseDialog, { line, onClose() {} }));
   assert.match(detail, /采购数量<\/dt><dd>100/);
   assert.match(detail, /采购单位<\/dt><dd>卷/);
-  assert.match(detail, /采购含税单价（按采购单位）<\/dt><dd>81.13/);
+  assert.match(detail, /采购含税单价（金额 ÷ 展示数量）<\/dt><dd>5.32/);
+});
+
+test("子采购合并行与详情保留后端单价尾零", () => {
+  const item = group();
+  const member = {
+    ...item.customsLines[0].purchaseLines[0],
+    scope: "declared",
+    quantity: "17687.33",
+    unit: "平方米",
+    purchaseUnit: "卷",
+    price: "13.70",
+    amount: "242310.6",
+  };
+  const line = { ...member, members: [member] };
+  item.customsLines[0].purchaseLines = [line];
+  assert.match(customs(item), /采购含税单价[^>]*>13.70<small> \/ 平方米/);
+  const detail = renderToStaticMarkup(createElement(PurchaseDialog, { line, onClose() {} }));
+  assert.match(detail, /13.70 \/ 平方米/);
+  assert.doesNotMatch(detail, /13.70 \/ 卷/);
 });
 
 test("数量不一致时只展示数量提示，不显示单价异常或旧幅度", () => {
@@ -631,26 +747,27 @@ test("数量不一致时只展示数量提示，不显示单价异常或旧幅�
   item.marginAlert = false;
   Object.assign(item.customsLines[0], {
     margin: "",
-    marginStatus: "unavailable",
+    marginStatus: "quantity_mismatch",
     marginNote: "数量不一致（报关行 24965.5，子采购报关合计 41260）",
     originalUnitPriceCny: "",
     declaredUnitPriceCny: "",
   });
   const html = customs(item);
   assert.match(html, /数量不一致（报关行 24965.5，子采购报关合计 41260）/);
-  assert.doesNotMatch(html, /单价异常|报关单价低于报关行单价|fr-margin--negative|-65.59%/);
+  assert.match(html, /data-tone="warning"[^>]*>数量不一致/);
+  assert.doesNotMatch(html, /单价异常|报关单价低于不含税采购单价|data-tone="danger"|-65.59%/);
 });
 
-test("报关行单价缺失时保留原因，不显示低价异常或旧幅度", () => {
+test("采购单价缺失时保留原因，不显示低价异常或旧幅度", () => {
   const item = group();
   Object.assign(item.customsLines[0], {
     margin: "",
     marginStatus: "unavailable",
-    marginNote: "报关行单价缺失，无法计算申报幅度",
+    marginNote: "采购单价缺失，无法计算申报幅度",
     declaredUnitPriceCny: "",
     originalUnitPriceCny: "",
   });
   const html = customs(item);
-  assert.match(html, /报关行单价缺失，无法计算申报幅度/);
-  assert.doesNotMatch(html, /单价异常|报关单价低于报关行单价|fr-margin--negative/);
+  assert.match(html, /采购单价缺失，无法计算申报幅度/);
+  assert.doesNotMatch(html, /单价异常|报关单价低于不含税采购单价|fr-margin--negative/);
 });

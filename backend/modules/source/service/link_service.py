@@ -7,7 +7,7 @@
 """
 
 from ..dao import customs_declaration_dao, customs_purchase_link_dao, purchase_order_dao, raw_record_dao
-from ..policy.local_relation_policy import local_line_relations
+from ..policy.local_relation_policy import LOCAL_RELATION_VERSION, local_line_relations
 from .declaration_service import EVIDENCE_TYPE, digest, snapshot
 
 DEPENDENCY_ISSUE = "关联子采购已更新，请重新完整同步本报关单。"
@@ -67,13 +67,20 @@ def line_links(connection, declaration_id, order_ids, evidence):
     details = customs_declaration_dao.lines(connection, declaration_id)
     orders = purchase_order_dao.orders(connection, sorted(order_ids))
     lines = purchase_order_dao.lines(connection, sorted(order_ids))
+    diagnostics = []
     bindings = local_line_relations(
         {**head, "tenant_id": "", "source_data": head["raw_payload"]},
         details,
         [{**order, "tenant_id": "", "source_data": order["raw_payload"]} for order in orders],
         lines,
         {**evidence, "mode": "full_sync"},
+        diagnostics=diagnostics,
     )
+    # 保留原始单位或子采购数量、单位的匹配依据；不冒充不可变历史引用。
+    evidence["localLineDiagnostics"] = [
+        entry for index, entry in enumerate(diagnostics) if entry not in diagnostics[:index]
+    ]
+    evidence["localRelationVersion"] = LOCAL_RELATION_VERSION
     order_of_line = {line["id"]: line["purchase_order_id"] for line in lines}
     return {
         (order_of_line[int(line_id)], int(customs_line_id), int(line_id), "local_packing")

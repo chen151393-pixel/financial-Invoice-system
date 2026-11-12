@@ -1,7 +1,9 @@
 """整单分组规划：整张发票对应一张或多张完整子采购单，不拆分子采购明细行（2026-10-30 业务规则）。
 
 - 一张子采购单只由一张发票开具：已有收票（含待复核占用）的子采购单不能再关联其他发票。
-- 子采购全部有效明细按综合得分定位发票行，不以品名单项作门槛；组合必须覆盖整张发票。
+- 发票按 NS 子采购合同开具：先按合同口径（报关品名 + 单位，见 contract_row_policy）合并明细，
+  再以合同行的数量、金额合计按综合得分定位发票行，不以品名单项作门槛；组合必须覆盖整张发票。
+- 金额只差尾差（不超过 AMOUNT_TOLERANCE）且数量足额时视为开足，不按差异结束，与任务收齐口径一致。
 - 发票少于子采购单时按明细顺序记到发票为止，差额在确认时按差异结束；发票多时明细记满应开。
 建议本身不代表审核通过；并列时不猜测归属。
 """
@@ -9,6 +11,8 @@
 from decimal import Decimal
 
 from .allocation_policy import hard_block
+from .comparison_policy import AMOUNT_TOLERANCE
+from .contract_row_policy import contract_rows
 from .group_comparison_policy import compare_group
 
 ONE_INVOICE = "子采购单已关联其他发票；一张子采购单只能由一张发票开具，开少的请按差异结束"
@@ -51,33 +55,33 @@ def order_shares(invoice, lines, tasks, bases):
 
 
 def order_parts(invoice, items, lines, tasks, bases, units):
-    """一张子采购单的整单分配 (parts, 阻断原因)；parts 每行为整条明细的剩余应开，按品名对应发票行。"""
+    """一张子采购单的整单分配 (parts, 阻断原因)；parts 每行为整条明细的剩余应开，按合同行对应发票行。"""
     shares, block = order_shares(invoice, lines, tasks, bases)
     if block:
         return [], block
     parts = []
-    for line_id, (quantity, amount) in shares.items():
-        line, basis = lines[line_id], bases[line_id]
-        # 不一致项只影响得分；同一采购行按综合得分定位发票行，不以品名作准入门槛。
-        ranked = [
-            (item, compare_group(invoice, item, item.get("tax_amount"), [(line, quantity, amount)])[1])
-            for item in items
-        ]
+    for row in contract_rows({line_id: lines[line_id] for line_id in shares}):
+        own = [(lines[line_id], *shares[line_id]) for line_id in row]
+        # 合同行整体定位发票行：同名发票行（如两行都是 PVC膜）靠合同行的数量、金额合计区分；
+        # 不一致项只影响得分，不以品名作准入门槛。
+        ranked = [(item, compare_group(invoice, item, item.get("tax_amount"), own)[1]) for item in items]
         best = max((score for _, score in ranked), default=0)
         matches = [item for item, score in ranked if score == best and score > 0]
         if len(matches) != 1:
             return [], "最高置信度并列或缺少匹配证据，须人工选择发票行"
         item = matches[0]
-        parts.append(
-            {
-                "invoice_item_id": item["id"],
-                "purchase_line_id": line_id,
-                "purchase_basis_id": basis["id"],
-                "quantity": quantity,
-                "purchase_quantity": quantity,
-                "amount": amount,
-            }
-        )
+        for line_id in row:
+            quantity, amount = shares[line_id]
+            parts.append(
+                {
+                    "invoice_item_id": item["id"],
+                    "purchase_line_id": line_id,
+                    "purchase_basis_id": bases[line_id]["id"],
+                    "quantity": quantity,
+                    "purchase_quantity": quantity,
+                    "amount": amount,
+                }
+            )
     return parts, ""
 
 
@@ -123,12 +127,16 @@ def order_share(allocation):
 
 
 def short_lines(allocations):
-    """记账少于整单应开的分配（发票少）；确认时这些子采购明细按差异结束。"""
+    """记账少于整单应开的分配（发票少）；确认时这些子采购明细按差异结束。
+
+    数量足额、金额只差不超过 AMOUNT_TOLERANCE 的尾差（合同行合并后票面四舍五入）视为开足，
+    与 task 的收齐容差一致，不要求按差异结束。
+    """
     result = []
     for row in allocations:
         if (row["checks"] or {}).get("orderShare"):
             quantity, amount = order_share(row)
-            if row["quantity"] < quantity or row["amount"] < amount:
+            if row["quantity"] < quantity or amount - row["amount"] > AMOUNT_TOLERANCE:
                 result.append(row)
     return result
 

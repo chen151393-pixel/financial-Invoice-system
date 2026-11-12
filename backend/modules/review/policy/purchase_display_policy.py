@@ -16,6 +16,13 @@ def total(rows, field):
     return sum((Decimal(row[field]) for row in rows), Decimal(0))
 
 
+def display_unit_price(amount, quantity):
+    """按展示数量计算含税单价，四舍五入并固定保留两位小数。"""
+    if amount is None or quantity is None or quantity <= 0:
+        return ""
+    return format((amount / quantity).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP), ".2f")
+
+
 def group_purchase_lines(lines):
     groups = defaultdict(list)
     for line in lines:
@@ -36,11 +43,9 @@ def group_purchase_lines(lines):
         quantity, amount = total(members, "quantity"), total(members, "amount")
         purchase_quantity = total(members, "purchaseQuantity")
         price = (
-            amount / purchase_quantity
-            if amount is not None
-            and purchase_quantity is not None
-            and all(Decimal(row["purchaseQuantity"]) > 0 for row in members)
-            else None
+            display_unit_price(amount, quantity)
+            if quantity is not None and all(Decimal(row["quantity"]) > 0 for row in members)
+            else ""
         )
         models = list(dict.fromkeys(row["model"] for row in members if row["model"]))
         result.append(
@@ -50,12 +55,10 @@ def group_purchase_lines(lines):
                 "quantity": number(quantity),
                 "purchaseQuantity": number(purchase_quantity),
                 "amount": number(amount),
-                "price": number(price.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP))
-                if price is not None
-                else "",
+                "price": price,
                 "model": "、".join(models),
-                "note": f"合并 {len(members)} 条原始采购行；展示报关数量，合并采购单价 = 含税总金额 / 总采购数量。"
-                + ("金额或数量缺失，或总数量非正数，无法计算合并单价。" if price is None else ""),
+                "note": f"合并 {len(members)} 条原始采购行；合并单价 = 含税总金额 / 总报关数量，四舍五入保留两位小数。"
+                + ("金额或数量缺失，或数量非正数，无法计算合并单价。" if not price else ""),
                 "members": members,
             }
         )

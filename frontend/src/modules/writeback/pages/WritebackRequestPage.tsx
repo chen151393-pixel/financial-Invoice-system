@@ -11,8 +11,10 @@ import {
   ErrorState,
   Skeleton,
 } from "../../../shared/components/ui";
-import { confirmPlan, confirmPreview, executeWrite, refreshTask, resolveWrite } from "../api";
+import { confirmPlan, confirmPreview, executeWrite, refreshTask, repairBills, resolveWrite } from "../api";
+import { parentLabel, subPurchaseLabel, subsidiaryLabel } from "../bill-labels";
 import { PlanForm } from "../components/PlanForm";
+import { RepairPanel } from "../components/RepairPanel";
 import { ResolveForm } from "../components/ResolveForm";
 import { WritePanel } from "../components/WritePanel";
 import type { ConfirmBody, ResolveBody, TaskDetail } from "../types";
@@ -29,6 +31,8 @@ const actionLabels: Record<string, string> = {
   write_started: "开始写入 NS",
   write_finished: "写入结束",
   write_resolved: "人工核实写入结果",
+  repair_started: "开始补写账单",
+  repair_finished: "补写账单结束",
   changed_after_write: "写入后审核变化",
 };
 export function TaskContent({
@@ -41,6 +45,7 @@ export function TaskContent({
   onConfirmPreview,
   onExecute,
   onResolve,
+  onRepair = () => {},
 }: {
   task: TaskDetail;
   busy: boolean;
@@ -51,6 +56,7 @@ export function TaskContent({
   onConfirmPreview: () => void;
   onExecute: () => void;
   onResolve: (body: ResolveBody) => void;
+  onRepair?: () => void;
 }) {
   const bills = task.candidates?.purchaseOrders.flatMap((order) => order.bills) ?? [];
   const registrations = task.candidates?.registrationCheck?.records ?? [];
@@ -141,9 +147,9 @@ export function TaskContent({
             rowKey={(row) => row.billId}
             columns={[
               { key: "bill", header: "账单", render: (row) => row.billNumber },
-              { key: "parent", header: "母采购 ID", render: (row) => row.purchaseOrderId },
-              { key: "subpo", header: "子采购 ID", render: (row) => row.subPurchaseOrderId || "未明确关联" },
-              { key: "company", header: "实际子公司 ID", render: (row) => row.subsidiaryId },
+              { key: "parent", header: "母采购单", render: (row) => parentLabel(row.purchaseOrderNo) },
+              { key: "subpo", header: "子采购单", render: subPurchaseLabel },
+              { key: "company", header: "实际子公司", render: (row) => subsidiaryLabel(row.subsidiaryName) },
               {
                 key: "available",
                 header: "可收金额",
@@ -167,7 +173,7 @@ export function TaskContent({
         <Card>
           <CardHeader
             title={task.state === "stale" ? "历史冻结方案（当前不可用）" : "已冻结方案"}
-            description={`${task.plan.confirmedBy} · ${task.plan.confirmedAt}`}
+            description={`${task.plan.confirmedByName || task.plan.confirmedBy} · ${task.plan.confirmedAt}`}
           />
           <DataTable
             label="冻结方案"
@@ -176,7 +182,7 @@ export function TaskContent({
             minWidth={480}
             columns={[
               { key: "order", header: "子采购单", render: (row) => row.orderNo },
-              { key: "bill", header: "账单 ID", render: (row) => row.billId },
+              { key: "bill", header: "账单", render: (row) => row.billNumber || "账单不在当前查询结果中" },
               { key: "amount", header: "金额（元）", align: "right", render: (row) => row.amount },
             ]}
           />
@@ -192,6 +198,13 @@ export function TaskContent({
         onConfirmPreview={onConfirmPreview}
         onExecute={onExecute}
       />
+      <RepairPanel
+        key={`repair-${task.revision}`}
+        task={task}
+        busy={busy}
+        writing={writing}
+        onRepair={onRepair}
+      />
       {task.actions.resolve && (
         <ResolveForm key={`resolve-${task.revision}`} task={task} busy={busy} onResolve={onResolve} />
       )}
@@ -201,7 +214,7 @@ export function TaskContent({
           <ol className="wb-audit">
             {task.audit.map((item, index) => (
               <li key={`${item.at}-${index}`}>
-                <strong>{actionLabels[item.action] || "任务处理"}</strong> · {item.actor}
+                <strong>{actionLabels[item.action] || "任务处理"}</strong> · {item.actorName || item.actor}
                 <small className="wb-secondary">
                   {item.at} {item.detail.reason || item.detail.evidence}
                 </small>
@@ -245,6 +258,7 @@ export function WritebackRequestPage({ requestId }: { requestId: string }) {
           onConfirmPreview={() => void run(() => confirmPreview(requestId, task.revision))}
           onExecute={() => void run(() => executeWrite(requestId, task.revision), true)}
           onResolve={(body) => void run(() => resolveWrite(requestId, body))}
+          onRepair={() => void run(() => repairBills(requestId, task.revision), true)}
         />
       ) : (
         !error && <Skeleton label="正在加载回写任务" />

@@ -138,6 +138,7 @@ const request = (changes = {}) => ({
       billId: "9",
       billNumber: "TEST-BILL",
       purchaseOrderId: "100",
+      purchaseOrderNo: "PO-1",
       before: "30.00",
       amount: "100.50",
       after: "130.50",
@@ -203,6 +204,9 @@ const task = (changes = {}) => ({
             purchaseOrderId: "100",
             subPurchaseOrderId: "",
             subsidiaryId: "1",
+            purchaseOrderNo: "PO-1",
+            subPurchaseOrderNo: "",
+            subsidiaryName: "上海毅鑫实业有限公司",
             currency: "CNY",
             availableInvoiceAmount: "1000.00",
             issues: ["缺少子采购关联"],
@@ -291,7 +295,11 @@ test("候选、历史风险与不写入状态明确展示", () => {
   const html = render(Content, { task: task(), busy: false, ...handlers });
   assert.match(html, /历史发票，须人工核实/);
   assert.match(html, /归属需要核实/);
-  assert.match(html, /未明确关联/);
+  // 候选账单显示母采购单号、子采购单号与子公司名称，不显示 NS 内部 ID
+  assert.match(html, /NS 账单未填子采购单/);
+  assert.match(html, /<td[^>]*>PO-1<\/td>/);
+  assert.match(html, /TEST-BILL · 上海毅鑫实业有限公司/);
+  assert.doesNotMatch(html, /母采购 ID|子采购 ID|子公司 ID|子公司 1</);
   assert.match(html, /确认并冻结方案/);
   assert.doesNotMatch(html, /确认执行|模拟成功|执行回写/);
 });
@@ -345,6 +353,34 @@ test("失效任务保留历史方案，隐藏确认入口", () => {
   assert.doesNotMatch(html, /确认并冻结方案/);
 });
 
+test("归属核实依据选填，处理记录与方案显示飞书人员姓名", () => {
+  const form = render(Form, { task: task(), busy: false, onConfirm() {} });
+  assert.match(form, /公司与账单归属核实依据（选填）/);
+  assert.doesNotMatch(form, /<textarea[^>]*(required|minLength)/i);
+  const html = render(Content, {
+    task: task({
+      plan: {
+        allocations: [{ allocationId: "1", billId: "9", amount: "100.50" }],
+        orders: [{ subPurchaseOrderId: "200", orderNo: "SUB-1", billId: "9", amount: "100.50" }],
+        evidence: "",
+        confirmedBy: "user:fs:gebca2c7",
+        confirmedByName: "张三",
+        confirmedAt: "2026-11-10",
+      },
+      audit: [
+        { action: "queried", actor: "user:fs:gebca2c7", actorName: "张三", detail: {}, at: "2026-11-10" },
+        { action: "queued", actor: "system", actorName: "系统", detail: {}, at: "2026-11-10" },
+      ],
+    }),
+    busy: false,
+    ...handlers,
+  });
+  assert.match(html, /张三 · 2026-11-10/);
+  assert.match(html, /查询完成<\/strong> · 张三/);
+  assert.match(html, /生成任务<\/strong> · 系统/);
+  assert.doesNotMatch(html, /user:fs:gebca2c7/);
+});
+
 test("未查询和空结果独立展示", () => {
   for (const [candidates, expected] of [
     [null, /尚未查询账单/],
@@ -386,6 +422,7 @@ test("累计与明细不一致时展示预览差额，确认前没有回写按�
   });
   assert.match(html, /NS 回写预览/);
   assert.match(html, /130.50/);
+  assert.match(html, /<td[^>]*>PO-1<\/td>/);
   assert.match(html, /不一致，差额 10.00 元/);
   assert.match(html, /确认回写预览/);
   assert.doesNotMatch(html, /回写到 NS/);
@@ -452,6 +489,44 @@ test("部分完成只能标记已登记；结果不明可标记未写入，均�
   const unknown = view("unknown", true);
   assert.match(unknown, /NS 没有任何写入，可重新写入/);
   assert.doesNotMatch(unknown, /重试|回写到 NS/);
+});
+
+test("部分写入可补写账单：后端允许时按钮可用，不允许时展示原因，结果不明时不出现", () => {
+  const view = (state, repair) =>
+    render(Content, {
+      task: task({
+        state,
+        stateLabel: "部分写入，待核实",
+        request: request({ state, nsRecordId: state === "partial" ? "7001" : null }),
+        actions: { ...noActions, resolve: true, repair: repair.allowed },
+        repair,
+      }),
+      busy: false,
+      ...handlers,
+    });
+  const allowed = view("partial", { allowed: true, reason: "可补写账单" });
+  assert.match(allowed, /补写 NS 账单/);
+  assert.match(allowed, /发票记录 7001 已在 NS 建成/);
+  assert.doesNotMatch(allowed, /disabled=""[^>]*>补写账单/);
+  // 两种方式并存：点“补写账单”，或在 NS 手工补齐后用原有表单标记“NS 已完整登记”
+  assert.match(allowed, /核实 NS 写入结果/);
+  assert.match(allowed, /NS 已完整登记/);
+  const closed = view("partial", { allowed: false, reason: "NS 写入开关未开启，方案停在待写入" });
+  assert.match(closed, /disabled=""[^>]*>补写账单/);
+  assert.match(closed, /暂不能补写：NS 写入开关未开启/);
+  assert.doesNotMatch(view("unknown", { allowed: false, reason: "" }), /补写 NS 账单/);
+});
+
+test("补写账单只发送任务版本，不发送金额或账单", async (t) => {
+  const calls = [];
+  t.mock.method(globalThis, "fetch", async (url, options) => {
+    calls.push({ url, options });
+    return Response.json(task());
+  });
+  await api.repairBills("12", 7);
+  assert.equal(calls[0].url, "/api/writeback/tasks/12/repair");
+  assert.equal(calls[0].options.method, "POST");
+  assert.deepEqual(JSON.parse(calls[0].options.body), { revision: 7 });
 });
 
 test("同一子采购单三条明细只需选择一次目标账单，后端金额原样展示", () => {

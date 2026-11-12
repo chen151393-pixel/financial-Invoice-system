@@ -7,6 +7,8 @@ SHARED = {
     ("GET", "/api/matching/invoice-totals"): ("invoices",),
     ("POST", "/api/matching/invoices/query"): ("invoices",),
     ("POST", "/api/matching/summaries"): ("invoices", "match"),
+    ("POST", "/api/matching/proposals/generate"): ("invoices", "match"),
+    ("POST", "/api/source/relations/rebuild"): ("sync",),
     ("GET", "/api/sync/lemon/invoices/accounts"): ("invoices", "sync"),
     ("POST", "/api/sync/lemon/invoices/detail-actions"): ("invoices", "sync"),
     ("POST", "/api/sync/lemon/invoices/refresh-details"): ("invoices", "sync"),

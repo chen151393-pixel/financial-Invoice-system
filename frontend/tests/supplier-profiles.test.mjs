@@ -36,7 +36,7 @@ after(async () => {
   await server?.close();
 });
 
-test("供应商查询拆分三个独立输入并保留批量值与隐藏标签", () => {
+test("供应商查询拆分三个独立输入并保留批量值，上方显示标签", () => {
   const html = renderToStaticMarkup(
     createElement(
       MemoryRouter,
@@ -58,8 +58,8 @@ test("供应商查询拆分三个独立输入并保留批量值与隐藏标签",
     ),
   );
   assert.equal((html.match(/type="search"/g) || []).length, 3);
-  for (const label of ["供应商", "外部群", "群主"])
-    assert.ok(html.includes(`<span class="ui-sr-only">${label}</span>`));
+  for (const label of ["供应商", "外部群", "群主"]) assert.ok(html.includes(`<span>${label}</span>`));
+  assert.doesNotMatch(html, /ui-sr-only/);
   assert.match(html, /value="甲,乙"/);
   assert.match(html, /value="采购群;开票群"/);
   assert.match(html, /清空/);

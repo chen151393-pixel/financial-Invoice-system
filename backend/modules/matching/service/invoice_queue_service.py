@@ -1,5 +1,7 @@
 """整票审核队列的读取编排；沿用逐行比对，不改变审核规则。"""
 
+from decimal import Decimal
+
 from backend.modules.invoice.public import read_invoices
 
 from ..dao import allocation_dao, invoice_queue_dao
@@ -24,7 +26,8 @@ def invoice_queue(connection, query, render_rows, suppliers):
         for group in batch:
             own = rows_by_invoice[str(group["invoice_id"])]
             batchable = bool(own) and all(
-                row.allocation.tier == "high"
+                row.allocation.confidence is not None
+                and Decimal(row.allocation.confidence) == Decimal(100)
                 and row.allocation.confirm.allowed
                 and not row.allocation.noteReasons
                 for row in own
@@ -43,7 +46,9 @@ def invoice_queue(connection, query, render_rows, suppliers):
                     anomalies=list(dict.fromkeys(name for row in own for name in row.anomalies)),
                     batch=Capability(
                         allowed=batchable,
-                        reason="全部待审核建议均可直接通过" if batchable else "请进入详情逐行核对",
+                        reason="全部待审核建议置信度为 100%，可批量审核通过"
+                        if batchable
+                        else "仅 100% 且无需异常说明的发票可批量审核，请进入详情核对",
                     ),
                     batchIds=[row.allocation.id for row in own] if batchable else [],
                 )

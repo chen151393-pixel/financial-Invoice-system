@@ -13,7 +13,7 @@
 
 ## 使用方式
 
-`Field` 默认显示上方标签；仅需输入框内提示时传 `hideLabel`，标签仍为读屏提供名称，不影响其他页面默认布局。
+`Field` 始终在控件上方显示中文标签（2026-11-09 起全站查询栏与进项发票列表一致，已移除仅视觉隐藏标签的 `hideLabel`），占位文字只作补充示例。
 
 ```tsx
 import { Card, CardHeader, CardContent, MetricCard, MetricGrid, Badge } from "../../../shared/components/ui";
@@ -85,4 +85,4 @@ import { Card, CardHeader, CardContent, MetricCard, MetricGrid, Badge } from "..
 
 ### SearchInput 批量查询输入
 
-`SearchInput` 复用查询栏原生输入样式，使用 `value` / `onValueChange` 管理草稿；粘贴换行或制表符时转换为分号保留条目边界，后端负责拆分、去重和数量限制。配合 `<Field label="供应商" hideLabel grow>` 仅显示框内提示，同时保留读屏标签。当前用于供应商档案和财务报关单搜索；输入框回车提交所属 `FilterBar`。
+`SearchInput` 复用查询栏原生输入样式，使用 `value` / `onValueChange` 管理草稿；粘贴换行或制表符时转换为分号保留条目边界，后端负责拆分、去重和数量限制。配合 `<Field label="供应商" grow>` 使用，上方显示标签、框内提示多条输入方式。当前用于供应商档案和财务报关单搜索；输入框回车提交所属 `FilterBar`。

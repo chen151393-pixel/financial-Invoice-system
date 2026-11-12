@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { Button, Field, FilterBar, SearchInput } from "../../../shared/components/ui";
 import type { QueueQuery } from "../types/matching";
 
@@ -10,10 +10,12 @@ export function QueueFilters({
   value,
   busy,
   onApply,
+  batchAction,
 }: {
   value: Filters;
   busy: boolean;
   onApply: (filters: Filters) => void;
+  batchAction?: ReactNode;
 }) {
   const [draft, setDraft] = useState<Filters>(value);
   const set = (patch: Partial<Filters>) => setDraft((current) => ({ ...current, ...patch }));
@@ -35,10 +37,11 @@ export function QueueFilters({
           >
             清除
           </Button>
+          {batchAction}
         </>
       }
     >
-      <Field label="发票号码" hideLabel grow>
+      <Field label="发票号码" grow>
         <SearchInput
           name="invoiceNo"
           value={draft.invoiceNo}
@@ -46,7 +49,7 @@ export function QueueFilters({
           onValueChange={(invoiceNo) => set({ invoiceNo })}
         />
       </Field>
-      <Field label="供应商" hideLabel grow>
+      <Field label="供应商" grow>
         <SearchInput
           name="supplierName"
           value={draft.supplierName}

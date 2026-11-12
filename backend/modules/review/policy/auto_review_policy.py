@@ -6,14 +6,27 @@
 - 子采购行全部有行级关联（没有未关联报关行的子采购行）；
 - 全部子采购行含税金额齐全；
 - 全部子采购单币种已确定（来源给出或已人工核实）；
-- 每条报关行的申报幅度都已算出，报关行单价超过申报单价的差额未超出容差。
+- 每条报关行的原始口径与报关口径单位、数量一致；
+- 每条报关行的申报幅度都已算出，不含税采购单价超过申报单价的差额未超出容差。
 供应商白名单待业务确认，暂未纳入。
 """
 
+from .margin_policy import MISMATCH
+
 
 def margin_alert(margins):
-    """任一报关行的报关行单价超出申报单价容差即提醒。"""
+    """只有已完成单价比较且超出容差，才是申报幅度异常。"""
     return any(margin["status"] == "negative" for margin in margins)
+
+
+def margin_flags(margins):
+    """按已计算的逐行状态分别归类；同单不同明细可以有多种问题。"""
+    margins = list(margins)
+    return {
+        "marginAlert": margin_alert(margins),
+        "unitMismatch": any(margin["status"] == "unit_mismatch" for margin in margins),
+        "quantityMismatch": any(margin["status"] == "quantity_mismatch" for margin in margins),
+    }
 
 
 def auto_review_reasons(state, changed, unlinked_count, purchase_rows, currencies_known, margins):
@@ -31,8 +44,11 @@ def auto_review_reasons(state, changed, unlinked_count, purchase_rows, currencie
         reasons.append("子采购含税金额缺失")
     if not currencies_known:
         reasons.append("子采购币种待核实")
-    if margin_alert(margins):
-        reasons.append("报关行单价高于人民币申报单价且超出容差")
+    if any(margin["status"] == "negative" for margin in margins):
+        reasons.append("不含税采购单价高于人民币申报单价且超出容差")
+    mismatched = [margin["note"] for margin in margins if margin["status"] in MISMATCH]
+    if mismatched:
+        reasons.append(f"报关或关联子采购口径不一致：{mismatched[0]}")
     unavailable = [margin["note"] for margin in margins if margin["status"] == "unavailable"]
     if unavailable:
         reasons.append(f"申报幅度无法计算：{unavailable[0]}")

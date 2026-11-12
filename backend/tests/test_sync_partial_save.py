@@ -12,6 +12,7 @@ from backend.tests.test_source_storage import engine as engine
 from backend.tests.test_source_storage import ns as ns
 from backend.tests.test_source_storage import rows
 from backend.tests.test_sync_optimization import batch as batch
+from pymysql.err import OperationalError as DriverError
 from sqlalchemy.exc import OperationalError
 
 
@@ -161,6 +162,50 @@ def test_transaction_business_failure_rolls_back_only_its_group(batch, engine, m
     assert result["batch"]["counts"]["saved"] == 2
     assert len(rows(engine, "SELECT id FROM source_customs_declarations")) == 2
     assert len(rows(engine, "SELECT id FROM source_purchase_orders")) == 2
+
+
+@pytest.mark.parametrize("fallback", [False, True])
+def test_sort_memory_failure_logs_group_and_rolls_back_without_retry(
+    batch, engine, monkeypatch, caplog, fallback
+):
+    ns, page, _, _ = batch
+    service = StorageService(ns, engine)
+    original = service._write
+    attempted = []
+    if fallback:
+        read_bundle = service.read_bundle
+        first = True
+
+        def read(*args):
+            nonlocal first
+            if first:
+                first = False
+                raise ApiError(502, "整页读取失败，改为逐组读取")
+            return read_bundle(*args)
+
+        monkeypatch.setattr(service, "read_bundle", read)
+
+    def write(connection, account, bundle, documents, now):
+        identity = documents["customs"][0]["ns_internal_id"]
+        attempted.append(identity)
+        value = original(connection, account, bundle, documents, now)
+        if identity == "871":
+            raise OperationalError(
+                "SELECT private-sql", {"payload": "private-payload"}, DriverError(1038, "private-error")
+            )
+        return value
+
+    monkeypatch.setattr(service, "_write", write)
+    result = service.sync_partial_page("customs-declarations", lambda: page_result(page[:3]))
+    assert attempted == ["870", "871", "872"]
+    assert [item["status"] for item in result["batch"]["items"]] == ["saved", "unknown", "saved"]
+    assert len(rows(engine, "SELECT id FROM source_customs_declarations")) == 2
+    assert not rows(engine, "SELECT id FROM source_raw_records WHERE ns_internal_id='871'")
+    logs = [r.getMessage() for r in caplog.records if "ns_storage_database_error" in r.getMessage()]
+    assert len(logs) == 1
+    assert "operation=save_group" in logs[0] and "db_code=1038" in logs[0]
+    assert '"record_ids": ["871"]' in logs[0]
+    assert "private-" not in caplog.text
 
 
 def test_header_failure_returns_page_scope_and_saves_other_headers(batch, engine):

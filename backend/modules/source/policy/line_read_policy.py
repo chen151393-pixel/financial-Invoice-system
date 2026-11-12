@@ -55,6 +55,8 @@ def line_projection(spec):
             "custrecord_swc_subpo_item_mainpo_lineid",
             "custrecord_swc_subpo_item_solineid",
             "custrecord_swc_subpo_item_bgname",
+            "custrecord_swc_subpo_item_bgunit",
+            "custrecord_swc_subpo_item_bgqty",
         }
     elif spec.type == "customrecord_swc_delare_detail":
         references, values = CUSTOMS_REFERENCES, CUSTOMS_VALUES
@@ -64,6 +66,10 @@ def line_projection(spec):
             "custrecord_swc_company",
             "custrecord_swc_goods_place",
             "custrecord_swc_delare_name",
+            "custrecord_swc_delare_unit",
+            "custrecord_swc_delare_quantity",
+            "custrecord_swc_purachse_no",
+            "custrecord_swc_salesorder_number",
             spec.pl,
             spec.company,
         }

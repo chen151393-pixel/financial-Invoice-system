@@ -10,7 +10,7 @@ from ..dto.task_dto import ConfirmPlan, ConfirmPreview, ResolveWrite, RevisionBo
 Id = Annotated[int, Path(ge=1, le=2**63 - 1)]
 
 
-def create_router(tasks, queries, executor):
+def create_router(tasks, queries, executor, repairs):
     router = APIRouter(prefix="/api/writeback", tags=["NS 回写"])
 
     @router.get("/tasks")
@@ -36,6 +36,11 @@ def create_router(tasks, queries, executor):
     @router.post("/tasks/{task_id}/execute")
     def execute(task_id: Id, body: RevisionBody, owner: Owner):
         return executor.execute(task_id, body.revision, owner)
+
+    @router.post("/tasks/{task_id}/repair")
+    def repair(task_id: Id, body: RevisionBody, owner: Owner):
+        """部分写入时补写账单累计与关联发票，不新建 NS 发票记录。"""
+        return repairs.repair(task_id, body.revision, owner)
 
     @router.post("/tasks/{task_id}/resolve")
     def resolve(task_id: Id, body: ResolveWrite, owner: Owner):

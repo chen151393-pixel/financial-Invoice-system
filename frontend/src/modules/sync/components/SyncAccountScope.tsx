@@ -12,7 +12,7 @@ type Props = {
 
 /**
  * 账套范围（手动拉取与定时计划共用）：全部或指定账套；查询后列出各账套版本与能拉到的内容。
- * 版本与内容说明由后端给出：专业版含商品明细，免费版只有票头。
+ * 版本与内容说明由后端给出：专业版和免费版均支持商品明细。
  */
 export function SyncAccountScope({ value, change, accounts, query, disabled }: Props) {
   const excluding = value.accountMode === "all";

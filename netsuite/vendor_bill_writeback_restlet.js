@@ -8,15 +8,19 @@
 // 首期简化口径（docs/ns-invoice-writeback-plan.md 第 1.1 节）：不建 NS 请求账本和唯一键；
 // 写前按“发票号码＋供应商”只读查一次已有记录，并要求账单累计等于调用方冻结的写前值，任一不符整单不写。
 // 账单读取口径与 vendor_bill_query_restlet.js 相同；两个脚本独立部署，故各自保留检索代码。
+// action=repair（2026-11-10）：主记录已建、账单未全部更新时补写账单，不新建主记录；先核对主记录与明细，
+// 再逐张判定账单（已补齐跳过、仍为写前值则补写、累计已到写后值只补关联），任一不符整单不写。
 define(["N/search", "N/record", "N/runtime", "N/log"], (search, record, runtime, log) => {
-  const REVISION = "2026-10-29.1";
+  const REVISION = "2026-11-10.1";
   const MAX_BILLS = 20;
   const MAX_ROWS = 1000;
   const INVOICE = "customrecord_swc_vendor_invoice";
   const SUBLIST = "recmachcustrecord_swc_vid_main";
+  const DETAIL = "customrecord_swc_vendor_invoice_detail";
   const FIELDS = {
     invoiceDate: "custrecord_swc_vi_billdate",
     invoiceVendor: "custrecord_swc_vi_vendor",
+    detailMain: "custrecord_swc_vid_main",
     detailBill: "custrecord_swc_vid_bill",
     detailOrder: "custrecord_swc_vid_po",
     detailPayable: "custrecord_swc_vid_billamount",
@@ -109,9 +113,12 @@ define(["N/search", "N/record", "N/runtime", "N/log"], (search, record, runtime,
       typeof value === "object" &&
       !Array.isArray(value) &&
       Object.keys(value).every((key) => allowed.includes(key));
+    const repair = Boolean(input) && input.action === "repair";
+    const allowed = ["action", "requestId", "vendorId", "invoice", "bills"];
     if (
-      !keys(input, ["action", "requestId", "vendorId", "invoice", "bills"]) ||
-      input.action !== "apply" ||
+      !keys(input, repair ? [...allowed, "invoiceRecordId"] : allowed) ||
+      !["apply", "repair"].includes(input.action) ||
+      (repair && !id(input.invoiceRecordId)) ||
       typeof input.requestId !== "string" ||
       !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(input.requestId) ||
       !id(input.vendorId) ||
@@ -137,12 +144,20 @@ define(["N/search", "N/record", "N/runtime", "N/log"], (search, record, runtime,
     )
       fail("INVALID_REQUEST");
     return {
+      action: input.action,
       requestId: input.requestId,
       vendorId: input.vendorId,
+      invoiceRecordId: repair ? input.invoiceRecordId : null,
       invoice: { ...input.invoice },
       bills: input.bills.map((line) => ({ ...line })),
     };
   }
+
+  const linkedIds = (value) =>
+    text(value)
+      .split(",")
+      .map((item) => item.trim())
+      .filter(Boolean);
 
   // 同号发票只读检查一次；不是并发唯一保证，查到即停下交人工核对。
   function findExisting(request) {
@@ -256,14 +271,9 @@ define(["N/search", "N/record", "N/runtime", "N/log"], (search, record, runtime,
   }
 
   // 写后累计 = 写前累计 ＋ 本次金额；不按明细重算，不改动历史差异。
-  function updateBill(line, bill, invoiceId) {
-    const after = bill.received + cents(line.amount);
-    const linked = bill.invoices
-      ? bill.invoices
-          .split(",")
-          .map((value) => value.trim())
-          .filter(Boolean)
-      : [];
+  // 补写“累计已到写后值、只缺关联”的账单时由调用方传入 after，累计保持不变。
+  function updateBill(line, bill, invoiceId, after = bill.received + cents(line.amount)) {
+    const linked = linkedIds(bill.invoices);
     record.submitFields({
       type: record.Type.VENDOR_BILL,
       id: line.billId,
@@ -283,7 +293,7 @@ define(["N/search", "N/record", "N/runtime", "N/log"], (search, record, runtime,
       billId: line.billId,
       billNumber: bill.billNumber,
       status: "UPDATED",
-      before: money(bill.received),
+      before: money(after - cents(line.amount)),
       amount: line.amount,
       after: money(after),
       verified: cents(saved[FIELDS.billReceived] || "0") === after && savedLinks.includes(invoiceId),
@@ -303,10 +313,29 @@ define(["N/search", "N/record", "N/runtime", "N/log"], (search, record, runtime,
     trace.stage = "invoice_create";
     const invoiceId = createInvoice(request, found);
     trace.invoiceId = invoiceId;
+    return updateBills(request.bills, found, invoiceId, trace);
+  }
+
+  // 主记录已建成后逐张更新账单；某张失败后不再尝试后续账单，逐张标明结果交人工核实。
+  // plans：{billId: {after, done}}，补写时 done 的账单不再写入；正常写入不传。
+  function updateBills(lines, found, invoiceId, trace, plans = {}) {
     const bills = [];
     let failed = false;
-    for (const line of request.bills) {
+    for (const line of lines) {
       const bill = found.bills.get(line.billId);
+      const plan = plans[line.billId];
+      if (plan && plan.done) {
+        bills.push({
+          billId: line.billId,
+          billNumber: bill.billNumber,
+          status: "ALREADY_UPDATED",
+          before: line.expectedBefore,
+          amount: line.amount,
+          after: money(plan.after),
+          verified: true,
+        });
+        continue;
+      }
       if (failed) {
         bills.push({
           billId: line.billId,
@@ -319,7 +348,7 @@ define(["N/search", "N/record", "N/runtime", "N/log"], (search, record, runtime,
       trace.stage = `bill_update:${line.billId}`;
       try {
         budget(50);
-        bills.push(updateBill(line, bill, invoiceId));
+        bills.push(updateBill(line, bill, invoiceId, plan ? plan.after : undefined));
       } catch (error) {
         // 主记录已建成：不回滚、不重试，逐张标明结果交人工核实。
         failed = true;
@@ -334,6 +363,79 @@ define(["N/search", "N/record", "N/runtime", "N/log"], (search, record, runtime,
     }
     const complete = !failed && bills.every((item) => item.verified);
     return { status: complete ? "APPLIED" : "PARTIAL", written: true, invoiceRecordId: invoiceId, bills };
+  }
+
+  // 补写：主记录须为本请求所建（号码、供应商一致且有效），明细须与请求逐张账单、金额完全一致。
+  function checkInvoiceRecord(request) {
+    const head = [
+      column("name", "name"),
+      column("vendorId", FIELDS.invoiceVendor),
+      column("inactive", "isinactive"),
+    ];
+    const readHead = reader(head);
+    const found = rows(INVOICE, [["internalid", "anyof", request.invoiceRecordId]], head, 1);
+    const main = found.find((row) => text(row.id) === request.invoiceRecordId);
+    if (
+      !main ||
+      readHead.value(main, "name") !== request.invoice.number ||
+      readHead.value(main, "vendorId") !== request.vendorId ||
+      ["T", "true"].includes(readHead.value(main, "inactive"))
+    )
+      return "INVOICE_MISMATCH";
+    const columns = [
+      column("main", FIELDS.detailMain),
+      column("billId", FIELDS.detailBill),
+      column("amount", FIELDS.detailAmount),
+    ];
+    const read = reader(columns);
+    const details = rows(
+      DETAIL,
+      [[FIELDS.detailMain, "anyof", request.invoiceRecordId], "AND", ["isinactive", "is", "F"]],
+      columns,
+      MAX_BILLS,
+    ).filter((row) => read.value(row, "main") === request.invoiceRecordId);
+    const amounts = new Map(
+      details.map((row) => [read.value(row, "billId"), cents(read.value(row, "amount"))]),
+    );
+    const matches =
+      details.length === request.bills.length &&
+      amounts.size === request.bills.length &&
+      request.bills.every((line) => amounts.get(line.billId) === cents(line.amount));
+    return matches ? "" : "DETAIL_MISMATCH";
+  }
+
+  function repair(request, trace) {
+    trace.stage = "invoice_check";
+    const mismatch = checkInvoiceRecord(request);
+    if (mismatch) return { status: "REJECTED", written: false, problems: [{ billId: "", code: mismatch }] };
+    trace.stage = "bill_check";
+    const found = findBills(request.bills.map((line) => line.billId));
+    const rejected = [];
+    const plans = {};
+    for (const line of request.bills) {
+      const bill = found.bills.get(line.billId);
+      const problem = (code) => rejected.push({ billId: line.billId, code });
+      if (!bill) {
+        problem("BILL_NOT_FOUND");
+        continue;
+      }
+      if (bill.vendorId !== request.vendorId) problem("VENDOR_MISMATCH");
+      if (bill.purchaseOrderId !== line.purchaseOrderId) problem("ORDER_MISMATCH");
+      if (found.voided.has(line.billId)) problem("VOIDED");
+      const before = cents(line.expectedBefore);
+      const after = before + cents(line.amount);
+      const linked = linkedIds(bill.invoices).includes(request.invoiceRecordId);
+      if (bill.received === after) plans[line.billId] = { after, done: linked };
+      else if (bill.received === before) {
+        if (bill.approvalStatus !== "2") problem("NOT_APPROVED");
+        if (cents(line.amount) > bill.remaining + bill.applied - bill.received) problem("OVER_AVAILABLE");
+        plans[line.billId] = { after, done: false };
+      } else problem("STALE");
+    }
+    if (rejected.length) return { status: "REJECTED", written: false, problems: rejected };
+    budget(100 + request.bills.length * 30);
+    trace.invoiceId = request.invoiceRecordId;
+    return updateBills(request.bills, found, request.invoiceRecordId, trace, plans);
   }
 
   function post(input) {
@@ -351,7 +453,8 @@ define(["N/search", "N/record", "N/runtime", "N/log"], (search, record, runtime,
       trace.requestId = request.requestId;
       trace.vendorId = request.vendorId;
       trace.billIds = request.bills.map((line) => line.billId);
-      const result = apply(request, trace);
+      trace.action = request.action;
+      const result = request.action === "repair" ? repair(request, trace) : apply(request, trace);
       log.audit({
         title: "VENDOR_BILL_WRITEBACK",
         details: JSON.stringify({ ...trace, status: result.status, elapsedMs: Date.now() - started }),
@@ -359,6 +462,7 @@ define(["N/search", "N/record", "N/runtime", "N/log"], (search, record, runtime,
       return {
         ...envelope,
         complete: true,
+        action: request.action,
         requestId: request.requestId,
         ...result,
         completedAt: new Date().toISOString(),

@@ -19,6 +19,20 @@
   color: var(--color-muted);
   line-height: 1.7;
 }
+.matching-batch {
+  display: grid;
+  gap: var(--space-control);
+  min-width: 0;
+}
+.matching-batch__actions {
+  justify-content: flex-end;
+}
+@media (max-width: 760px) {
+  .matching-queue > .ui-card__header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}
 .matching-facts {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));

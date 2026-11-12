@@ -22,6 +22,30 @@
   padding-bottom: 14px;
   border-bottom: 1px solid var(--color-border);
 }
+/* 查询栏：条件与操作按钮保持一行，条件按剩余宽度等比收缩；宽度不足时（窄屏）再换行 */
+.invoice-list__panel .ui-filter-bar .ui-field {
+  flex: 1 1 90px;
+}
+.invoice-list__panel .ui-filter-bar .ui-field:has(select) {
+  flex-basis: 95px;
+}
+/* 日期框需容纳“yyyy/mm/日”与日历图标 */
+.invoice-list__panel .ui-filter-bar .ui-field:has(input[type="date"]) {
+  flex-basis: 130px;
+}
+.invoice-list__panel .ui-filter-bar .ui-field :is(input, select) {
+  width: 100%;
+  max-width: none;
+}
+/* 按钮组不被压缩；比卡片还窄时（手机）按钮自身换行 */
+.invoice-list__panel .ui-filter-bar__actions {
+  flex: none;
+  flex-wrap: wrap;
+  max-width: 100%;
+}
+.invoice-list__panel .ui-filter-bar__pending {
+  flex-basis: 100%;
+}
 /* 匹配状态分段：位于查询栏下方，附说明概况卡不随它变化 */
 .invoice-list__match {
   display: flex;

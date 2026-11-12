@@ -51,7 +51,8 @@ class OrderTarget(StrictModel):
 class ConfirmPlan(RevisionBody):
     requestId: UUID = Field(strict=False)
     confirmScope: Literal[True]
-    evidence: str = Field(min_length=5, max_length=1000)
+    # 公司与账单归属核实依据：选填、不限最少字数（2026-11-10 用户确认），只限制最大长度
+    evidence: str = Field(default="", max_length=1000)
     # allocations 保留一个版本兼容旧客户端；两种请求均须满足整单约束。
     allocations: list[TargetLine] | None = Field(default=None, min_length=1, max_length=500)
     orders: list[OrderTarget] | None = Field(default=None, min_length=1, max_length=500)

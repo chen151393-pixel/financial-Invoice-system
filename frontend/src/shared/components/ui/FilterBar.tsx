@@ -38,21 +38,11 @@ export function FilterBar({
   );
 }
 
-/** 条件字段：默认显示中文标签；hideLabel 仅视觉隐藏，保留读屏名称。 */
-export function Field({
-  label,
-  children,
-  grow,
-  hideLabel = false,
-}: {
-  label: string;
-  children: ReactNode;
-  grow?: boolean;
-  hideLabel?: boolean;
-}) {
+/** 条件字段：始终在上方显示中文标签（2026-11-09 起全站查询栏统一，不再隐藏标签）。 */
+export function Field({ label, children, grow }: { label: string; children: ReactNode; grow?: boolean }) {
   return (
     <label className={grow ? "ui-field ui-field--grow" : "ui-field"}>
-      <span className={hideLabel ? "ui-sr-only" : undefined}>{label}</span>
+      <span>{label}</span>
       {children}
     </label>
   );

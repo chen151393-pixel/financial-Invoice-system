@@ -7,7 +7,7 @@ from uuid import uuid4
 
 import pytest
 from backend.core.errors import ApiError
-from backend.modules.invoice.entity import headers, versions
+from backend.modules.invoice.entity import headers, items, versions
 from backend.modules.sync.dao import lemon_plan_dao, lemon_run_dao, sync_run_dao
 from backend.modules.sync.dto.lemon_batch_dto import RetryBatch, SavePlan, SubmitBatch
 from backend.modules.sync.dto.lemon_invoice_dto import PullLemonInvoices
@@ -17,6 +17,7 @@ from backend.modules.sync.service.lemon_batch_service import LemonBatchService
 from backend.modules.sync.service.lemon_job_service import LemonJobService
 from backend.modules.sync.service.lemon_plan_service import LemonPlanService
 from backend.modules.sync.service.lemon_worker import LemonWorker
+from backend.tests.sync.lemon_detail_fixtures import full_invoice
 from backend.tests.sync.test_lemon_invoices import OWNER, count, make_services
 from sqlalchemy import text
 
@@ -252,6 +253,42 @@ def test_configuration_secrets_not_exposed(world):
     result = world.plans.save(OWNER, plan())
     assert "bindingKey" not in str(result) and "13800000001" not in str(result)
     assert result["submit"]["allowed"]
+
+
+@pytest.mark.parametrize("scheduled", [False, True])
+def test_free_background_and_schedule_enrich_selected_business_types(world, scheduled):
+    raw = full_invoice()
+    world.upstream.rows = [
+        {key: value for key, value in raw.items() if key != "Detail"},
+        {
+            **{key: value for key, value in raw.items() if key != "Detail"},
+            "InvoiceId": 2,
+            "Number": "2",
+            "BusinessTypeText": "办公费",
+        },
+    ]
+    calls = []
+
+    def enrich(token, asid, records, selected_ids, *, professional):
+        assert not professional and selected_ids == {1}
+        calls.append(asid)
+        return [{**row, "Detail": raw["Detail"]} if row["InvoiceId"] == 1 else row for row in records]
+
+    world.upstream.invoice_details = enrich
+    if scheduled:
+        world.plans.save(OWNER, plan(lookbackDays=20))
+        now = datetime(2026, 10, 20, 0, 0)
+        with world.engine.begin() as connection:
+            lemon_plan_dao.save(connection, world.worker.scope, {"next_run_at": now})
+        world.plans.tick(OWNER, now)
+        request_id = world.batches.list(OWNER)["items"][0]["requestId"]
+    else:
+        body = request()
+        world.batches.submit(OWNER, body)
+        request_id = body.requestId
+    result = drain(world, request_id)
+    assert result["phase"] == "completed" and set(calls) == {"7", "8"}
+    assert count(world.engine, headers) == count(world.engine, items) == 2
 
 
 def test_stale_consumer_cannot_repeat_discovery_or_finished_job(world):

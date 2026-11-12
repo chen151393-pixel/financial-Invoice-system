@@ -156,7 +156,9 @@ def test_failure_retains_snapshot_and_retries_after_restart(review, ns, engine, 
 
 def test_changed_tolerance_rebuilds_and_hides_old_precheck(review, ns, engine):
     save(
-        ns, engine, bundle([purchase()], [customs("870", original="10.75", declared="10.65", currency="CNY")])
+        ns,
+        engine,
+        bundle([purchase()], [customs("870", original="12.1475", declared="10.65", currency="CNY")]),
     )
     CalculationService(review).rebuild()
     assert review.browse(query()).groups[0].autoReview.eligible
@@ -196,9 +198,83 @@ def test_v6_purchase_snapshot_is_hidden_then_rebuilt_with_customs_prices(review,
     assert fresh.calculationStatus == "ready" and not fresh.marginAlert
     assert fresh.contentSha256 == payload["contentSha256"]
     line = fresh.customsLines[0]
-    assert line.margin == "0.00%" and line.originalUnitPriceCny == line.declaredUnitPriceCny == "10.65"
+    assert (
+        line.margin == "11.50%"
+        and line.originalUnitPriceCny == "9.424779"
+        and line.declaredUnitPriceCny == "10.65"
+    )
     assert "combinedPurchaseUnitPrice" not in line.model_dump()
     assert rows(engine, "SELECT id FROM review_records") == []
+
+
+def test_v9_snapshot_rebuilds_purchase_price_without_changing_review_basis(review, ns, engine):
+    order = purchase()
+    for _, row in order[2]:
+        row.update(
+            custrecord_swc_subpo_item_bgqty=Decimal("17687.33"),
+            custrecord_swc_subpo_item_amountwithtax=Decimal("242310.6"),
+        )
+    save(ns, engine, bundle([order], [customs("870")]))
+    calculations = CalculationService(review)
+    calculations.rebuild()
+    snapshot = rows(engine, "SELECT payload FROM review_declaration_snapshots")[0]
+    payload = json.loads(snapshot["payload"])
+    for line in payload["customsLines"]:
+        for child in line["purchaseLines"]:
+            child["price"] = "23.45"
+    with engine.begin() as connection:
+        connection.execute(
+            text("UPDATE review_declaration_snapshots SET payload=:p"),
+            {"p": json.dumps(payload)},
+        )
+        connection.execute(text("UPDATE review_calculation_jobs SET calculation_key='review-v9:cny=0.10'"))
+    calculations.initialize()
+    CalculationWorker(calculations).run_once()
+    fresh = review.browse(query()).groups[0]
+    assert fresh.calculationStatus == "ready"
+    assert fresh.contentSha256 == payload["contentSha256"]
+    assert all(child.price == "13.70" for line in fresh.customsLines for child in line.purchaseLines)
+    assert rows(engine, "SELECT id FROM review_records") == []
+
+
+def test_v12_tax_inclusive_snapshot_rebuilds_margin_counts_and_keeps_approval(review, ns, engine):
+    save(ns, engine, bundle([purchase()], [customs("870", original="113", declared="100", currency="CNY")]))
+    calculations = CalculationService(review)
+    calculations.rebuild()
+    initial = review.browse(query()).groups[0]
+    review.approve(int(initial.id), ApproveRequest(contentSha256=initial.contentSha256), "user:admin")
+    CalculationWorker(calculations).run_once()
+    before = rows(engine, "SELECT * FROM review_records")
+    frozen = rows(engine, "SELECT * FROM review_lines")
+    snapshot = rows(engine, "SELECT payload FROM review_declaration_snapshots")[0]
+    payload = json.loads(snapshot["payload"])
+    payload["marginAlert"] = True
+    for line in payload["customsLines"]:
+        line.update(margin="-13.00%", marginStatus="negative", originalUnitPriceCny="113")
+    with engine.begin() as connection:
+        connection.execute(
+            text("UPDATE review_declaration_snapshots SET payload=:p,margin_alert=1"),
+            {"p": json.dumps(payload)},
+        )
+        connection.execute(text("UPDATE review_calculation_jobs SET calculation_key='review-v12:cny=0.10'"))
+    stale = review.browse(query())
+    assert stale.groups[0].calculationStatus == "pending"
+    assert stale.groups[0].customsLines[0].originalUnitPriceCny == ""
+    assert stale.counts["marginAlert"] == stale.counts["autoApprovable"] == 0
+    calculations.initialize()
+    CalculationWorker(calculations).run_once()
+    refreshed = review.browse(query())
+    fresh = refreshed.groups[0]
+    assert fresh.calculationStatus == "ready" and fresh.review.status == "approved"
+    assert fresh.contentSha256 == initial.contentSha256 and not fresh.marginAlert
+    assert refreshed.counts["marginAlert"] == 0
+    for line in fresh.customsLines:
+        assert line.originalPrice == "113"
+        assert line.originalUnitPriceCny == line.declaredUnitPriceCny == "100"
+        assert line.margin == "0.00%" and line.marginStatus == "ok" and line.marginNote == ""
+    assert review.browse(query(status="margin_alert")).total == 0
+    assert rows(engine, "SELECT * FROM review_records") == before
+    assert rows(engine, "SELECT * FROM review_lines") == frozen
 
 
 def test_approval_enqueues_and_does_not_wait_for_account_rebuild(review, ns, engine):
@@ -214,7 +290,7 @@ def test_approval_enqueues_and_does_not_wait_for_account_rebuild(review, ns, eng
     assert page.total == 1 and page.counts["approvedThisMonth"] == 1
 
 
-def test_v7_negative_snapshot_rebuilds_as_quantity_mismatch(review, ns, engine):
+def test_v13_unavailable_snapshot_rebuilds_as_quantity_mismatch(review, ns, engine):
     order = purchase()
     for _, row in order[2]:
         row["custrecord_swc_subpo_item_bgqty"] = Decimal("9")
@@ -224,21 +300,25 @@ def test_v7_negative_snapshot_rebuilds_as_quantity_mismatch(review, ns, engine):
     snapshot = rows(engine, "SELECT id,payload FROM review_declaration_snapshots")[0]
     payload = json.loads(snapshot["payload"])
     for line in payload["customsLines"]:
-        line.update(margin="-100.00%", marginStatus="negative", marginNote="报关单价低于报关行单价")
+        line.update(
+            margin="", marginStatus="unavailable", marginNote="数量不一致（报关行 10，子采购报关合计 9）"
+        )
+    payload["quantityMismatch"] = False
     with engine.begin() as connection:
         connection.execute(
-            text("UPDATE review_declaration_snapshots SET payload=:p,margin_alert=1"),
+            text("UPDATE review_declaration_snapshots SET payload=:p,margin_alert=0"),
             {"p": json.dumps(payload)},
         )
-        connection.execute(text("UPDATE review_calculation_jobs SET calculation_key='review-v7:cny=0.10'"))
+        connection.execute(text("UPDATE review_calculation_jobs SET calculation_key='review-v13:cny=0.10'"))
     assert review.browse(query()).counts["marginAlert"] == 0
     calculations.initialize()
     CalculationWorker(calculations).run_once()
     fresh = review.browse(query()).groups[0]
     assert fresh.calculationStatus == "ready" and not fresh.marginAlert and not fresh.autoReview.eligible
+    assert fresh.quantityMismatch and not fresh.unitMismatch
     assert fresh.contentSha256 == payload["contentSha256"]
     for line in fresh.customsLines:
-        assert line.marginStatus == "unavailable" and line.margin == ""
+        assert line.marginStatus == "quantity_mismatch" and line.margin == ""
         assert line.marginNote == "数量不一致（报关行 10，子采购报关合计 9）"
     assert review.browse(query(status="margin_alert")).total == 0
     assert rows(engine, "SELECT id FROM review_records") == []
@@ -302,8 +382,8 @@ def test_v8_unmatched_prefix_snapshot_rebuilds_without_resync(review, ns, engine
     fresh = review.browse(query()).groups[0]
     assert fresh.calculationStatus == "ready" and fresh.contentSha256 == payload["contentSha256"]
     for line in fresh.customsLines:
-        assert line.marginStatus == "ok" and line.margin == "0.00%" and line.marginNote == ""
-        assert line.originalUnitPriceCny == line.declaredUnitPriceCny == "10.65"
+        assert line.marginStatus == "ok" and line.margin == "11.50%" and line.marginNote == ""
+        assert line.originalUnitPriceCny == "9.424779" and line.declaredUnitPriceCny == "10.65"
     assert rows(engine, "SELECT id FROM review_records") == []
 
 
@@ -383,7 +463,13 @@ def test_split_bulk_search_uses_snapshot_fields_and_filtered_counts(review, ns, 
     assert review.browse(query(recordNo="SUB-201")).total == 0
     assert review.browse(query(purchaseOrderNo="清洗液")).total == 0
     assert review.browse(query(supplierName="不存在")).total == 0
-    for field in ("supplierName", "recordNo", "purchaseOrderNo"):
+    # 真实报关单号（夹具为 REAL + CD 编号数字），与 CD 号是不同字段
+    real = review.browse(query(declarationNo="不存在，REAL871"))
+    assert real.total == 1 and real.groups[0].recordNumber == "CD871"
+    assert review.browse(query(declarationNo="REAL870;REAL871")).total == 2
+    assert review.browse(query(declarationNo="CD871")).total == 0
+    assert review.browse(query(declarationNo="REAL870", recordNo="871")).total == 0
+    for field in ("supplierName", "recordNo", "declarationNo", "purchaseOrderNo"):
         assert review.browse(query(**{field: "%"})).total == 0
     assert review.browse(query(recordNo="，；\n ")).total == 2
 

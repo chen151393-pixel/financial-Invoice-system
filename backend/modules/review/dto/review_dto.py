@@ -14,11 +14,13 @@ class DeclarationListQuery(StrictModel):
     createdTo: date | None = Field(default=None, strict=False)
     supplierName: SearchText = ""
     recordNo: SearchText = ""
+    # 真实海关报关单号（NS custrecord_swc_realno），与 CD 编号不同；多条用逗号分隔，部分匹配
+    declarationNo: SearchText = ""
     purchaseOrderNo: SearchText = ""
     keyword: str = Field(default="", max_length=120)
     account: str = Field(default="", max_length=80, pattern=r"^[a-zA-Z0-9_-]*$")
-    # margin_alert：待审核且申报幅度异常；auto：待审核且满足可自动审核条件
-    status: Literal["all", "pending", "approved", "margin_alert", "auto"] = "all"
+    # margin_alert：实际单价超容差；unit_mismatch：原始/报关单位不同；两类独立筛选待审核单据
+    status: Literal["all", "pending", "approved", "margin_alert", "unit_mismatch", "auto"] = "all"
     supplierId: str = Field(default="", max_length=20, pattern=r"^([1-9][0-9]*)?$")
     page: int = Field(default=1, ge=1, le=100000)
     pageSize: int = Field(default=20, ge=1, le=50)

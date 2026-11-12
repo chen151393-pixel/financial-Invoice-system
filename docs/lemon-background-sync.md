@@ -53,6 +53,6 @@ Controller：`backend/modules/sync/controller/lemon_batch_controller.py`。Servi
 
 先按 [部署文档](docker-deploy.md)备份目标数据库，执行 `npm.cmd run db:upgrade` 升至最新迁移（含 `0025_sync_merge_lemon_jobs`），构建前端并重启后端。Docker 使用既有部署流程重新构建/重建容器。保留单 API worker 的现有会话约束；数据库消费者互斥不代表登录会话已支持多进程。
 
-迁移和重启不会自动启用新计划。管理员登录后检查绑定及覆盖范围，先提交小日期范围检查真实结果，再保存并启用每日计划。后台依赖服务进程持续运行；附件、默认版商品明细、NS 定时任务不在本次实现内。
+迁移和重启不会自动启用新计划。管理员登录后检查绑定及覆盖范围，先提交小日期范围检查真实结果，再保存并启用每日计划。后台依赖服务进程持续运行；2026-11-10 起免费版商品明细纳入共用拉取流程，附件尚未接入。NS 定时任务见 sync 模块说明。
 
 验证入口：`npm.cmd run test:api`、`npm.cmd run lint:api`、前端 build/lint/typecheck/test:web、`npm.cmd run check:architecture`。新增 `test_lemon_background*.py` 覆盖持久队列、隔离、去重、分片、失败重试、未知保护和调度；MySQL 专项通过 `BUSINESS_MIGRATION_TEST_SERVER_URL` 指向专用测试实例，禁止使用生产建库连接。前端 `sync-background.test.mjs` 覆盖表单、计划、禁用原因与幂等请求。

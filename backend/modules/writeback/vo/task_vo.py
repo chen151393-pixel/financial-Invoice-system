@@ -7,8 +7,9 @@ from backend.core.errors import ApiError
 from ..policy.list_policy import GROUP_STATES
 from ..policy.order_policy import require_whole_orders
 from ..policy.registration_policy import require_clear_registration
+from ..policy.repair_policy import repair_allowed
 from ..policy.state_policy import WRITTEN_STATES, stuck
-from .order_vo import orders, parent_orders, plan_view
+from .order_vo import candidates_view, orders, parent_orders, plan_view, preview_view
 
 LABELS = {
     "queued": "待匹配账单",
@@ -70,16 +71,17 @@ def iso(value):
     return value.isoformat() if value else None
 
 
-def request_view(request):
+def request_view(task, request, names=None):
     if not request:
         return None
     return {
         "requestId": request["request_id"],
         "state": request["state"],
         "invoice": request["payload"]["invoice"],
-        "preview": request["preview"],
+        "preview": preview_view(task, request["preview"]),
         "needsConfirmation": request["needs_confirmation"],
         "confirmedBy": request["confirmed_by"],
+        "confirmedByName": (names or {}).get(request["confirmed_by"], request["confirmed_by"] or ""),
         "confirmedAt": iso(request["confirmed_at"]),
         "nsRecordId": request["ns_record_id"],
         "sentAt": iso(request["sent_at"]),
@@ -87,7 +89,9 @@ def request_view(request):
     }
 
 
-def detail(task, plan, request, audit, busy, gate, stamp):
+def detail(task, plan, request, audit, busy, gate, stamp, names=None):
+    """names：操作者标识 → 显示名称（identity 门面），缺省时原样显示标识。"""
+    names = names or {}
     snapshot = task["snapshot"]
     rows = []
     for row in snapshot["allocations"]:
@@ -102,6 +106,7 @@ def detail(task, plan, request, audit, busy, gate, stamp):
             }
         )
     halted = stuck(task, request, stamp)
+    repair = repair_allowed(task, request, gate)
     capability = writeback(task, gate)
     plan_issue = ""
     if plan and task["state"] in ("ready", "needs_preview"):
@@ -117,13 +122,14 @@ def detail(task, plan, request, audit, busy, gate, stamp):
         "allocations": rows,
         "orders": orders(task),
         "invoice": snapshot["invoice"],
-        "candidates": task["candidates"],
-        "plan": plan_view(task, plan),
-        "request": request_view(request),
+        "candidates": candidates_view(task),
+        "plan": plan_view(task, plan, names),
+        "request": request_view(task, request, names),
         "audit": [
             {
                 "action": a["action"],
                 "actor": a["actor"],
+                "actorName": names.get(a["actor"], a["actor"]),
                 "detail": a["detail"],
                 "at": a["created_at"].isoformat(),
             }
@@ -134,8 +140,11 @@ def detail(task, plan, request, audit, busy, gate, stamp):
             "confirm": task["state"] == "needs_confirmation" and not busy,
             "confirmPreview": task["state"] == "needs_preview" and not busy and not plan_issue,
             "execute": capability["allowed"] and not busy,
+            # 账单补写：部分写入且已建发票记录；不满足时附原因，页面按需展示
+            "repair": repair[0] and not busy,
             "resolve": task["state"] in ("unknown", "partial") or halted,
             "markNotWritten": task["state"] == "unknown" or halted,
         },
+        "repair": {"allowed": repair[0] and not busy, "reason": repair[1]},
         "querying": busy,
     }

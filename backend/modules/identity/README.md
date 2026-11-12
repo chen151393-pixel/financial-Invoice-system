@@ -33,6 +33,10 @@
 | `PUT /api/identity/departments/{id}/roles` | `{roles}`：部门默认角色，下级部门成员继承                               |
 | `PUT /api/identity/users/{id}/roles`       | `{roles, customRoles}`：个人角色；`customRoles` 为是时只按个人角色      |
 
+### 对外只读门面 `public.py`（2026-11-10）
+
+`actor_names(connection, actors)`：把操作者标识转为显示名称。`user:fs:<user_id>` 取本地飞书人员副本姓名（含已停用人员，历史记录仍可显示），`system` 显示“系统”，其他或查不到的原样返回。调用方在自己的事务连接中只读调用，目前由 writeback 处理记录与方案确认人使用。
+
 ## 关键规则
 
 - **人员以飞书为准**：本地只保存副本，不能新增人员或修改姓名、部门。只有同步范围内、在职、未冻结、有角色且管理员已启用的人才能登录。新导入默认待授权；同步失败时不停用任何人员，同步成功也不覆盖手工启用开关。
@@ -102,3 +106,7 @@
 `service/role_page_service.py` 在 identity 模块锁下重新校验权限和版本、持久化并追加审计；`service/user_access_preview.py` 与成员保存复用相同计算。角色修改、成员修改下一次请求即生效；前端在路由变化、窗口重新聚焦和收到 403 时重新读取会话，不自动重放操作。
 
 部署须先执行 `npm.cmd run db:upgrade`，再一起更新前后端并重启。迁移 `0041_identity_role_pages` 只新增 identity 表，不修改原有人员或角色；已有页面配置时拒绝降级丢弃授权。测试使用隔离数据，不替代真实飞书登录、NS 写入或生产部署验收。并发专项见 `backend/tests/identity/test_role_pages_mysql.py`；未提供专用 MySQL 测试连接时跳过。
+
+合并进项发票批量重新匹配后，`POST /api/matching/proposals/generate` 按“进项发票／发票比对”任一页面授权放行；无页面授权仍返回 403，不能借此访问整单确认等仅限比对页的接口。
+
+来源本地关联修复 `POST /api/source/relations/rebuild` 归入数据同步页面授权；采购报关联查页面仅提供查询，不因查看来源而取得重建关联入口。

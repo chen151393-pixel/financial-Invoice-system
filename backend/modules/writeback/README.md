@@ -23,7 +23,7 @@
 
 任务与审核快照按 `(invoice_id, fingerprint)` 去重。确认、人工分配、批量确认、原子替换的最后一步发出整票事件；取消、发票换版、采购依据变化使旧任务失效。写库失败会回滚整笔审核。使用现有数据库账本锁和唯一约束串行化本地变更。
 
-唯一候选不等于归属明确：仅非历史任务、精确子采购关联唯一、真实 `subsidiary:*` 公司映射且全部校验通过时自动冻结方案。`classification:*`、空子采购关联、多候选、历史扫描均需人工确认实际子公司与账单归属，并保存证据。明确关联其他子采购的账单不能人工覆盖。查询结果不预留额度；即使 ready，也不能写入 NS。
+唯一候选不等于归属明确：仅非历史任务、真实 `subsidiary:*` 公司映射、每张子采购单的账单归属唯一且全部校验通过时自动冻结方案，依据写入方案证据。归属唯一指：账单精确关联该子采购单且只有一张；或账单未填子采购单（NS 2026-04 起新账单均未填写），但母单只有这一张账单，且本地来源中该母单只有一张有效子采购单（`source.public.parent_sub_order_counts`，含未进入本票的子单），此时直接对应。母单有多张账单或多张子采购单、本地子单数未知、`classification:*`、多候选、历史扫描均需人工确认实际子公司与账单归属，并保存证据。明确关联其他子采购的账单不能人工覆盖。查询结果不预留额度；即使 ready，也不能写入 NS。
 
 确认需当前 `revision`、UUID `requestId`、`confirmScope: true`、5–1000 字依据和完整 `orders: [{subPurchaseOrderId, billId}]`；前端不提交金额，由后端审核快照汇总。兼容的 `allocations` 请求也须满足整单不拆分、逐明细金额不变且覆盖完整的约束。相同请求与身份重复提交返回原处理后的当前状态，正文或身份不同返回 409。重新查询清除当前方案指针并增加版本；旧方案与审计仍保留。
 
@@ -34,6 +34,7 @@
 - 写入前检查写入开关、写入脚本配置和供应商白名单（`WRITEBACK_VENDOR_ALLOWLIST`，空为全部不允许，`*` 为全部允许），并对全部账单取持久锁；账单被其他请求占用时返回 409。
 - NS 调用在事务外。请求未发出（连接失败、401/403、开关关闭）回到“待写入 NS”并释放锁；发出后超时、非 2xx、非 JSON 或返回无法核对，一律为“结果不明”，保留锁。
 - `APPLIED` 为“NS 已登记”；`CONFLICT`（同号发票已登记）为“NS 已有同号登记”；`REJECTED` 及确认未写入的错误为“待处理”，均释放锁。`PARTIAL` 为“部分写入，待核实”，保留锁。
+- “部分写入”可点“补写账单”（`service/repair_service.py`、`policy/repair_policy.py`，2026-11-10）：用原请求正文与 `requestId` 加 `action: "repair"` 和已建发票记录 ID 调用写入脚本，只补写账单累计与关联发票，不新建记录；NS 先核对发票记录、明细与账单写前累计。全部补齐转“NS 已登记”并释放锁；仍未补齐、复核不通过或旧脚本拒绝时保持“部分写入”并保留锁；结果不明转“结果不明”。同样受写入开关与白名单控制，详情返回 `repair: {allowed, reason}`。
 - “结果不明”“部分写入”以及执行中超过 10 分钟的任务只能人工核实：标记“NS 已完整登记”，或（仅结果不明）“NS 没有任何写入”后回到待写入。没有直接重发入口。
 - 已发出或已写入的任务（执行中、部分写入、结果不明、已登记）不因审核变化转为失效，也不能重新查询；审核变化只记入原因，提示人工核对 NS。启动时不清除执行中状态或账单锁。
 
@@ -52,11 +53,12 @@
 | 接口 | 作用 |
 | --- | --- |
 | `GET /api/writeback/tasks?keyword=&state=&page=1&pageSize=20` | 后端筛选分页，返回 items/total/pages |
-| `GET /api/writeback/tasks/{id}` | 任务、审核分配、完整候选、当前方案、最近 100 条审计、允许动作 |
+| `GET /api/writeback/tasks/{id}` | 任务、审核分配、完整候选、当前方案、最近 100 条审计、允许动作。候选账单附 `purchaseOrderNo`（NS 查询结果的母单号）、`subPurchaseOrderNo`、`subsidiaryName`（优先取 NS 账单查询返回的子公司名称，旧结果才用审核快照中 `subsidiary:*` 采购公司的名称）；`audit[].actorName`、`plan.confirmedByName`、`request.confirmedByName` 为操作者显示名称（飞书人员姓名，`system` 显示“系统”，查不到时为原标识），回写预览附 `purchaseOrderNo`，方案订单附 `billNumber`；取不到时为空串，均为展示字段，不改存储的查询结果与预览 |
 | `POST /api/writeback/tasks/{id}/refresh` | `{ "revision": 1 }`，只读重查候选；旧方案版本失效 |
-| `POST /api/writeback/tasks/{id}/confirm` | 确认并持久保存不可变方案与写入请求，不执行写入 |
+| `POST /api/writeback/tasks/{id}/confirm` | 确认并持久保存不可变方案与写入请求，不执行写入。`evidence`（公司与账单归属核实依据）选填、最多 1000 字（2026-11-10 起不再要求至少 5 字）；人工核实勾选仍须在页面确认 |
 | `POST /api/writeback/tasks/{id}/preview/confirm` | `{ "revision": 1, "confirmScope": true }`，确认累计与明细不一致的回写预览 |
 | `POST /api/writeback/tasks/{id}/execute` | `{ "revision": 1 }`，立即写入 NS；后端重新检查状态、开关、白名单和账单锁 |
+| `POST /api/writeback/tasks/{id}/repair` | `{ "revision" }`，部分写入时补写账单累计与关联发票，不新建 NS 发票记录 |
 | `POST /api/writeback/tasks/{id}/resolve` | `{ "revision", "outcome": "applied" 或 "not_written", "evidence", "nsRecordId" }`，人工核实结论 |
 | `GET /api/writeback/invoices/{id}` | 整票 ready/reason 及当前任务摘要 |
 | `POST /api/writeback/invoices/{id}/recheck` | 同一规则重新检查，补入历史任务 |

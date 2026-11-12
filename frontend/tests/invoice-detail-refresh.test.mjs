@@ -5,7 +5,7 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { createServer } from "vite";
 
-let server, api, View, Table, Filters, Drawer;
+let server, api, View, Table, Filters, Drawer, Generate;
 before(async () => {
   server = await createServer({
     configFile: fileURLToPath(new URL("../vite.config.ts", import.meta.url)),
@@ -23,6 +23,9 @@ before(async () => {
   ));
   ({ InvoiceDetailDrawer: Drawer } = await server.ssrLoadModule(
     "/src/modules/invoice/components/InvoiceDetailDrawer.tsx",
+  ));
+  ({ GenerateSelected: Generate } = await server.ssrLoadModule(
+    "/src/modules/invoice/components/GenerateSelected.tsx",
   ));
 });
 after(async () => {
@@ -93,6 +96,7 @@ test("展示真实空明细原因及完整计数", () => {
   assert.match(render({ error: "读取失败" }), /role="alert"/);
 });
 test("列表提供行选择及单张补拉，后端禁用原因可见", () => {
+  // 勾选不受补拉权限限制（批量重新匹配共用），补拉按钮按后端原因禁用
   const html = renderToStaticMarkup(
     createElement(Table, {
       rows: [{ id: "1", number: "26001", importedAt: "2026-10-19T00:00:00Z" }],
@@ -104,9 +108,40 @@ test("列表提供行选择及单张补拉，后端禁用原因可见", () => {
     }),
   );
   assert.match(html, /选择发票26001/);
-  assert.match(html, /选择本页可补拉发票/);
+  assert.match(html, /选择本页发票/);
+  assert.doesNotMatch(html, /<input[^>]*aria-label="选择发票26001"[^>]*disabled/);
   assert.match(html, /当前账套与发票原账套不一致/);
   assert.match(html, /disabled=""[^>]*>重新拉取商品明细/);
+});
+
+test("勾选含不可补拉发票时仍可补拉其余发票，并说明可补拉张数", () => {
+  const html = render({
+    selected: ["1", "2"],
+    actions: { 1: { allowed: true, reason: "" }, 2: { allowed: false, reason: "账套不一致" } },
+  });
+  assert.match(html, /已选 2 张，其中可补拉 1 张/);
+  assert.doesNotMatch(html, /disabled=""[^>]*>重新拉取商品明细/);
+});
+
+test("批量重新匹配显示勾选张数，未勾选时禁用", () => {
+  const props = { disabled: false, onDone() {}, onError() {} };
+  const none = renderToStaticMarkup(createElement(Generate, { ...props, ids: [] }));
+  assert.match(none, /disabled=""[^>]*>批量重新匹配（已选 0 张）/);
+  const two = renderToStaticMarkup(createElement(Generate, { ...props, ids: ["1", "2"] }));
+  assert.match(two, /批量重新匹配（已选 2 张）/);
+  assert.doesNotMatch(two, /disabled=""/);
+});
+
+test("批量重新匹配只提交勾选的发票 ID，复用比对页重新生成接口", async (t) => {
+  const calls = [];
+  t.mock.method(globalThis, "fetch", async (url, options) => {
+    calls.push({ url, options });
+    return Response.json({ created: 3 });
+  });
+  const matching = await server.ssrLoadModule("/src/modules/matching/api/index.ts");
+  assert.deepEqual(await matching.generateProposals(["7", "9"]), { created: 3 });
+  assert.equal(calls[0].url, "/api/matching/proposals/generate");
+  assert.deepEqual(JSON.parse(calls[0].options.body), { invoiceIds: ["7", "9"] });
 });
 
 test("票面状态筛选常驻查询栏，折叠日期筛选时仍可选择", () => {

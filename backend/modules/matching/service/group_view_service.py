@@ -11,13 +11,12 @@ from backend.modules.task.public import open_lines
 from ..dao import allocation_dao
 from ..dto.matching_dto import ConfirmBody
 from ..policy import allocation_policy as rules
-from ..policy.comparison_policy import HIGH
 from ..policy.group_comparison_policy import compare_group
 from ..policy.order_group_policy import ONE_INVOICE, order_share, short_lines, taken
 from ..policy.pending_order_policy import REGENERATE, whole_order
 from ..public import ClosedLine, LinesClosedByDifference
 from ..vo.matching_vo import Capability
-from . import approval_service
+from . import approval_service, taken_proposal_service
 from .group_comparison_view import comparison_view
 
 SHORT_REASON = "发票少于子采购单，差额按差异结束"
@@ -115,14 +114,14 @@ def _rows(connection, invoice_id, key):
     return sorted(rows, key=lambda row: row["id"])
 
 
-def approve_rows(service, connection, rows, body, actor):
+def approve_rows(service, connection, rows, body, actor, *, batch=False):
     """在调用方事务内整组逐条通过；需说明而未填写或任一条不能通过时抛错，由事务整体回滚。"""
     if any(not whole_order(row) for row in rows):
         raise ApiError(409, REGENERATE)
     invoice_id = int(body.invoiceId)
     invoice = read_invoices(connection, [invoice_id])[0]
     lines, _ = service.queries._context(connection, rows)
-    _, reasons, block = evaluate(invoice, read_invoice_paper(connection, invoice_id), rows, lines)
+    compared, reasons, block = evaluate(invoice, read_invoice_paper(connection, invoice_id), rows, lines)
     if block:
         raise ApiError(409, block)
     tasks = open_lines(connection, sorted({row["purchase_line_id"] for row in rows}))
@@ -130,6 +129,13 @@ def approve_rows(service, connection, rows, body, actor):
         raise ApiError(409, ONE_INVOICE)
     short = short_lines(rows)
     reasons = list(dict.fromkeys([*reasons, *([SHORT_REASON] if short else [])]))
+    if batch and (
+        any(row["confidence"] != Decimal(100) for row in rows)
+        or not compared
+        or any(confidence != Decimal(100) for _, confidence, _ in compared.values())
+        or reasons
+    ):
+        raise ApiError(409, "仅置信度为 100% 且无需异常说明的建议可批量审核，请进入详情核对")
     note = body.note.strip()
     if reasons and not note:
         raise ApiError(400, "请填写审核说明：" + "、".join(reasons))
@@ -149,6 +155,10 @@ def approve_rows(service, connection, rows, body, actor):
             now,
             grouped=True,
         )
+    # 一张子采购单只由一张发票开具：其他发票上占用这些明细的待审核建议同一事务内失效
+    taken_proposal_service.retire_after_confirm(
+        connection, invoice_id, sorted({row["purchase_line_id"] for row in rows}), now
+    )
     if short:
         # 一张子采购单只由一张发票开具：发票少的明细在同一事务内按差异结束，不再等待其他发票。
         service.events.publish(
@@ -183,9 +193,7 @@ def confirm(service, key, body, actor, *, batch=False):
             return invoice_id  # 同一操作重复提交，返回原结果
         if any(row["status"] != "proposed" for row in rows):
             raise ApiError(409, "整单建议已部分处理或失效，请刷新后核对")
-        if batch and any(row["confidence"] is None or row["confidence"] < HIGH for row in rows):
-            raise ApiError(409, "整单建议置信度未达到高档，请在详情页审核")
-        approve_rows(service, connection, rows, body, actor)
+        approve_rows(service, connection, rows, body, actor, batch=batch)
         return invoice_id
 
     return service._run(action, actor)

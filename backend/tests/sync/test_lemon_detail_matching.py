@@ -1,4 +1,4 @@
-"""真实服务链路：专业版协议 → 补全 → 建议 → 人工确认 → 收齐、版本复核和撤销。"""
+"""两版协议 → 补全 → 建议 → 人工确认 → 收齐、版本复核和撤销，使用隔离数据。"""
 
 from copy import deepcopy
 from dataclasses import replace
@@ -7,7 +7,8 @@ import httpx
 import pytest
 from backend.core.config import load_settings
 from backend.core.errors import ApiError
-from backend.integrations.lemon.professional_invoice_details import LemonProfessionalInvoiceDetails
+from backend.integrations.lemon.free_accounts import LemonFreeAccounts
+from backend.integrations.lemon.invoice_details import LemonInvoiceDetails
 from backend.integrations.lemon.professional_invoices import LemonProfessionalInvoices
 from backend.modules.invoice.entity import headers, items, versions
 from backend.modules.invoice.public import InvoicesImported
@@ -38,8 +39,8 @@ def flow_settings(env):
     )
 
 
-@pytest.fixture
-def flow(engine, env, world):
+@pytest.fixture(params=["professional", "free"])
+def flow(engine, env, world, request):
     accounts, service, upstream, events = make_services(engine, flow_settings(env))
     raw = full_invoice(
         Amount="106.64",
@@ -83,15 +84,27 @@ def flow(engine, env, world):
             if state["fail"]:
                 return httpx.Response(503)
             return httpx.Response(200, json={"state": 1000, "data": {"invoiceData": state["raw"]["Detail"]}})
+        if request.url.host == "japi.ningmengyun.com":
+            assert request.url.path.endswith("TopInfoV2")
+            return httpx.Response(
+                200, json={"state": 1000, "data": {"accountList": [{**PRO_ROW, "asname": "采购公司A"}]}}
+            )
         # 账套名称即采购公司：购买方取自账套名称后与子采购的采购公司一致
         return reply(request, rows=[{**PRO_ROW, "asname": "采购公司A"}])
 
     protocol = adapter(handler)
-    upstream.professional_accounts = protocol.query
-    upstream.professional_invoices = LemonProfessionalInvoices(protocol).query
-    upstream.invoice_details = lambda token, asid, records, selected_ids, professional: (
-        LemonProfessionalInvoiceDetails(protocol).enrich(token, asid, records, selected_ids)
-    )
+    if request.param == "professional":
+        upstream.professional_accounts = protocol.query
+        upstream.professional_invoices = LemonProfessionalInvoices(protocol).query
+    else:
+        protocol = LemonFreeAccounts(protocol.settings, protocol.session_factory)
+        upstream.allowed = [{"asid": "21", "name": "采购公司A"}]
+        upstream.invoices = lambda *args: [
+            {key: value for key, value in state["raw"].items() if key != "Detail"}
+        ]
+    upstream.invoice_details = lambda token, asid, records, selected_ids, professional: LemonInvoiceDetails(
+        protocol
+    ).enrich(token, asid, records, selected_ids)
     accounts.select(OWNER, "21")
     return state, service, events
 

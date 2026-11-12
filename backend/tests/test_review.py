@@ -103,6 +103,7 @@ def test_list_states_counts_and_purchase_basis(service, seeded, engine):
         "changed": 0,
         "approvedThisMonth": 0,
         "marginAlert": 0,
+        "unitMismatch": 0,
         "autoApprovable": 1,
         "customs": 2,
         "purchase": 2,
@@ -120,7 +121,8 @@ def test_list_states_counts_and_purchase_basis(service, seeded, engine):
         "个",
         "100.5",
     )  # 本夹具采购与报关数量相同，异单位换算见专项回归
-    assert "采购单价直接取来源含税单价" in line.note
+    assert "单价 = 含税金额 / 报关数量" in line.note
+    assert line.price == "10.05"
     assert pending.salesOrders == "SO1"  # 同一销售单在多个报关行出现，只在单头展示一次
     assert pending.company == "采购公司A"
     assert pending.customsLines[0].originPlace == "深圳"
@@ -138,7 +140,7 @@ def test_negative_margin_is_alerted_and_not_auto_approvable(service, ns, engine)
     assert result.counts["marginAlert"] == 1 and result.counts["autoApprovable"] == 0
     item = result.groups[0]
     assert item.marginAlert and not item.autoReview.eligible
-    assert "报关行单价高于人民币申报单价且超出容差" in item.autoReview.reasons
+    assert "不含税采购单价高于人民币申报单价且超出容差" in item.autoReview.reasons
     assert [g.recordNumber for g in service.browse(query(status="margin_alert")).groups] == ["CD870"]
 
 

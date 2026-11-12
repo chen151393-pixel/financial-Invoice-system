@@ -5,6 +5,7 @@ from uuid import uuid4
 
 from backend.core.errors import ApiError
 from backend.core.write_lock import transaction
+from backend.modules.identity.public import actor_names
 from backend.modules.matching.public import read_writeback_snapshot, writeback_invoice_ids
 
 from ..dao import audit_dao, plan_dao, request_dao, task_dao
@@ -56,7 +57,14 @@ class TaskService:
             plan = plan_dao.get(connection, task["current_plan_id"]) if task["current_plan_id"] else None
             request = request_dao.by_plan(connection, plan["id"]) if plan else None
             busy = bool(task["lease_until"] and task["lease_until"] > now())
-            return detail(task, plan, request, audit_dao.recent(connection, task_id), busy, self.gate, now())
+            audit = audit_dao.recent(connection, task_id)
+            # 操作者显示为飞书人员姓名；原始标识仍保留在记录中
+            names = actor_names(
+                connection,
+                [row["actor"] for row in audit]
+                + [(plan or {}).get("body", {}).get("confirmedBy"), (request or {}).get("confirmed_by")],
+            )
+            return detail(task, plan, request, audit, busy, self.gate, now(), names)
 
     def invoice(self, invoice_id):
         with self.engine.connect() as connection:
@@ -104,8 +112,6 @@ class TaskService:
                         or (task["lease_until"] and task["lease_until"] > now())
                     ):
                         raise ApiError(409, "任务或候选版本已变化，请刷新后确认")
-                    if len(body.evidence.strip()) < 5:
-                        raise ApiError(422, "请填写实际公司与账单归属的核实依据")
                     selected = (
                         expand_orders(task, [t.model_dump() for t in body.orders])
                         if body.orders is not None

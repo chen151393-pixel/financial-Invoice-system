@@ -18,11 +18,13 @@ from .service.directory_service import SourceDirectory, china_day_range, declara
 from .service.pl_comparison_service import PlScriptService
 from .service.purchase_context import line_declarations, purchase_lines, supplier_line_ids
 from .service.workbench_reader import workbench_declarations, workbench_purchases
-from .service.writeback_context import writeback_context
+from .service.writeback_context import parent_sub_order_counts, writeback_context
 
 __all__ = [
     "purchase_order_lines",
     "writeback_context",
+    # 回写自动对应账单（writeback）：NS 母单内部 ID → 本地有效子采购单张数
+    "parent_sub_order_counts",
     # 报关单准入（已出库）：有真实报关单号且有关联子采购单
     "admission_issues",
     "admission_reason",

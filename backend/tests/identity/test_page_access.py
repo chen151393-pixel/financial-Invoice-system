@@ -81,11 +81,22 @@ def test_live_revoke_session_pages_without_relogin_and_admin_is_fixed(system, co
     assert user.get("/api/invoices/stats").status_code == 200
     assert user.get("/api/matching/invoice-totals").status_code == 200
     assert user.post("/api/matching/invoices/query", json={}, headers=headers).status_code == 200
+    # 进项发票的批量重新匹配复用 matching 接口；只授权进项页也须能调用。
+    generated = user.post(
+        "/api/matching/proposals/generate", json={"invoiceIds": ["999999"]}, headers=headers
+    )
+    assert generated.status_code == 200 and generated.json() == {"created": 0}
     assert user.post("/api/matching/orders/confirm", json={}, headers=headers).status_code == 403
     assert user.get("/api/identity/role-pages").status_code == 403
     assert grant(user, headers, "finance", ["access"], 1).status_code == 403
     grant(admin, headers, "finance", [], 1)
     assert user.get("/api/session").json()["user"]["pages"] == []
+    assert (
+        user.post(
+            "/api/matching/proposals/generate", json={"invoiceIds": ["999999"]}, headers=headers
+        ).status_code
+        == 403
+    )
     assert admin.get("/api/session").json()["user"]["pages"] == list(PAGE_CODES)
     assert not context.ns.writes
 
@@ -276,6 +287,24 @@ def test_all_protected_routes_have_mapping_and_no_page_cannot_call_them(system, 
             assert response.status_code == 403, (method, path, response.text)
             checked += 1
     assert checked > 100
+    assert not context.ns.writes
+
+
+def test_source_relation_rebuild_requires_sync_page(system, context):
+    app, admin, feishu, headers = system
+    assert grant(admin, headers, "finance", ["sync"]).status_code == 200
+    user, _, _ = feishu_login(app, context.settings, feishu, "u-wang")
+    response = user.post(
+        "/api/source/relations/rebuild", json={"recordNo": "MISSING-TEST-ONLY"}, headers=headers
+    )
+    assert response.status_code == 200 and response.json() == {"results": []}
+    assert grant(admin, headers, "finance", ["pl"], 1).status_code == 200
+    assert (
+        user.post(
+            "/api/source/relations/rebuild", json={"recordNo": "MISSING-TEST-ONLY"}, headers=headers
+        ).status_code
+        == 403
+    )
     assert not context.ns.writes
 
 

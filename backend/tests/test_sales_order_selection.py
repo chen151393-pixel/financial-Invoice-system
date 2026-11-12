@@ -58,8 +58,11 @@ def test_no_candidates_or_wrong_number_never_supplies_a_rate():
     assert pick_sales_order("NO-MATCH", [FIRST, SECOND]) == (None, "未匹配到对应销售单")
 
 
-@pytest.mark.parametrize("sale", [FIRST, SECOND])
-def test_each_customs_line_uses_only_its_own_matching_sales_rate(sale):
+@pytest.mark.parametrize(
+    "sale,declared_cny,net_cny",
+    [(FIRST, "609.2286", "539.140354"), (SECOND, "611.0364", "540.740177")],
+)
+def test_each_customs_line_uses_only_its_own_matching_sales_rate(sale, declared_cny, net_cny):
     customs = {
         "sales_order_no": f"销售订单 #{sale['order_no']}",
         "currency": "USD",
@@ -75,8 +78,9 @@ def test_each_customs_line_uses_only_its_own_matching_sales_rate(sale):
     orders = {10: {"sales_order_id": 1}, 11: {"sales_order_id": 2}}
     sales = {1: FIRST, 2: SECOND}
     result = declared_margin(customs, children, orders, sales)
-    assert result["status"] == "ok" and result["margin"] == Decimal("0.00")
-    assert result["original"] == result["declared"] == Decimal("90.39") * sale["exchange_rate"]
+    assert result["status"] == "ok" and result["margin"] == Decimal("11.50")
+    assert result["declared"] == Decimal(declared_cny)
+    assert result["original"].quantize(Decimal("0.000001")) == Decimal(net_cny)
     # 目标销售单缺汇率时，即使另一张有值也不能借用。
     sales[sale["id"]] = {**sale, "exchange_rate": None}
     missing = declared_margin(customs, children, orders, sales)

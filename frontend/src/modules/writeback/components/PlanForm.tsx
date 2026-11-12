@@ -1,5 +1,6 @@
 import { useRef, useState } from "react";
 import { Button, Card, CardContent, CardHeader, Field } from "../../../shared/components/ui";
+import { subsidiaryLabel } from "../bill-labels";
 import type { ConfirmBody, TaskDetail } from "../types";
 
 export function PlanForm({
@@ -63,7 +64,7 @@ export function PlanForm({
                       .filter((bill) => row.eligibleBillIds.includes(bill.billId))
                       .map((bill) => (
                         <option key={bill.billId} value={bill.billId}>
-                          {bill.billNumber} · 子公司 {bill.subsidiaryId}
+                          {bill.billNumber} · {subsidiaryLabel(bill.subsidiaryName)}
                         </option>
                       ))}
                   </select>
@@ -73,14 +74,12 @@ export function PlanForm({
                 </Field>
               </div>
             ))}
-            <Field label="公司与账单归属核实依据">
+            <Field label="公司与账单归属核实依据（选填）">
               <textarea
-                required
-                minLength={5}
                 maxLength={1000}
                 rows={3}
                 value={evidence}
-                placeholder="填写已核实的实际 NS 采购子公司、账单与子采购的归属及凭据"
+                placeholder="可填写已核实的实际 NS 采购子公司、账单与子采购的归属及凭据"
                 onChange={(e) => {
                   requestId.current = "";
                   setEvidence(e.target.value);

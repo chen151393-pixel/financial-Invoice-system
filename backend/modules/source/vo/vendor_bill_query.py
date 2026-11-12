@@ -38,6 +38,8 @@ class NsBill(StrictModel):
     purchaseOrderId: NsId
     subPurchaseOrderId: str = Field(pattern=r"^(?:[1-9][0-9]{0,19})?$")
     subsidiaryId: NsId
+    # NS 子公司显示名称；RESTlet 旧版本不返回时为空，先部署后端再更新 RESTlet
+    subsidiaryName: str = Field(default="", max_length=200)
     currencyId: NsId
     currencyName: str = Field(max_length=100)
     approvalStatus: Literal["", "1", "2", "3"]
@@ -59,6 +61,8 @@ class PurchaseBills(StrictModel):
     number: str = Field(min_length=1, max_length=100)
     vendorId: NsId
     subsidiaryId: NsId
+    # NS 子公司显示名称；RESTlet 旧版本不返回时为空，先部署后端再更新 RESTlet
+    subsidiaryName: str = Field(default="", max_length=200)
     currencyId: NsId
     currencyName: str = Field(max_length=100)
     status: Literal["FOUND", "NO_BILLS", "VENDOR_MISMATCH"]

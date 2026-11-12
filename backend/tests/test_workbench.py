@@ -3,6 +3,7 @@
 from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 
+import pytest
 from backend.app import create_app
 from backend.core.config import load_settings
 from backend.modules.matching.dto.workbench_dto import WorkbenchQuery
@@ -28,6 +29,18 @@ from fastapi.testclient import TestClient
 from sqlalchemy import text
 
 
+@pytest.fixture
+def october_clock(monkeypatch):
+    # 这三项业务链用例的来源和发票夹具属于 2026 年 9／10 月，固定报表时钟避免跨月失效。
+    class OctoberDateTime(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            instant = cls(2026, 10, 19, 12, tzinfo=UTC)
+            return instant.astimezone(tz) if tz is not None else instant.replace(tzinfo=None)
+
+    monkeypatch.setattr("backend.modules.matching.service.workbench_service.datetime", OctoberDateTime)
+
+
 def read(engine, **values):
     return WorkbenchService(engine).read(WorkbenchQuery(**values))
 
@@ -49,7 +62,7 @@ def test_empty_auth_validation_and_export(engine, env):
         assert [k.key for k in result.kpis] == ["expected", "received", "outstanding", "review", "notify"]
 
 
-def test_review_to_task_to_receipt_and_version_review(engine, ns, world):
+def test_review_to_task_to_receipt_and_version_review(engine, ns, world, october_clock):
     save(ns, engine, bundle([purchase()], [customs("870")]))
     save(ns, engine, bundle([], [customs("880")]))  # 未出库：无子采购单，拉取时跳过
     initial = read(engine)
@@ -157,7 +170,7 @@ def test_monthly_receipts_by_declaration_creation_month_cny_only():
     assert no_tasks["received"] == "40" and no_tasks["percent"] is None
 
 
-def test_expected_uses_source_creation_date_and_reports_missing_dates(engine, world, reviewed):
+def test_expected_uses_source_creation_date_and_reports_missing_dates(engine, world, reviewed, october_clock):
     with engine.begin() as connection:
         connection.execute(text("UPDATE task_tasks SET created_at = '2026-04-01 00:00:00'"))
         connection.execute(
@@ -188,7 +201,7 @@ def test_expected_uses_source_creation_date_and_reports_missing_dates(engine, wo
 
 
 def test_expected_includes_pending_orders_and_deduplicates_without_using_task_or_line_totals(
-    engine, ns, world
+    engine, ns, world, october_clock
 ):
     save(ns, engine, bundle([purchase()], [customs("870")]))
     save(ns, engine, bundle([purchase("201", "871")], [customs("871")]))

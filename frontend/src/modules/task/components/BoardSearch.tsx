@@ -65,7 +65,7 @@ export function BoardSearch({
         </>
       }
     >
-      <Field label="供应商" grow hideLabel>
+      <Field label="供应商" grow>
         <input
           type="search"
           name="supplierName"
@@ -74,7 +74,7 @@ export function BoardSearch({
           onChange={(event) => setDraft({ ...draft, supplierName: event.target.value })}
         />
       </Field>
-      <Field label="CD 号" hideLabel>
+      <Field label="CD 号">
         <input
           type="search"
           name="recordNo"
@@ -83,7 +83,7 @@ export function BoardSearch({
           onChange={(event) => setDraft({ ...draft, recordNo: event.target.value })}
         />
       </Field>
-      <Field label="子采购单号" hideLabel>
+      <Field label="子采购单号">
         <input
           type="search"
           name="purchaseOrderNo"

@@ -1,6 +1,6 @@
 """回写候选查询所需的来源身份，只访问 source 表。"""
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 
 from ..entity import companies, parent_orders, purchase_order_lines, purchase_orders, suppliers
 
@@ -51,3 +51,17 @@ def by_lines(connection, line_ids):
         .order_by(line.id)
     )
     return {r["line_id"]: dict(r) for r in connection.execute(query).mappings()} if line_ids else {}
+
+
+def sub_order_counts(connection, parent_ids):
+    """按 NS 母单内部 ID 统计本地有效子采购单张数，含未进入本票的子采购单。"""
+    if not parent_ids:
+        return {}
+    order, parent = purchase_orders.c, parent_orders.c
+    query = (
+        select(parent.ns_internal_id, func.count(order.id))
+        .select_from(purchase_orders.join(parent_orders, order.parent_order_id == parent.id))
+        .where(parent.ns_internal_id.in_(parent_ids), order.is_active.is_(True))
+        .group_by(parent.ns_internal_id)
+    )
+    return {str(ns_id): count for ns_id, count in connection.execute(query)}

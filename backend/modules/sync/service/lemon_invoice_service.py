@@ -90,8 +90,11 @@ class LemonInvoiceService:
         if chosen is None:
             raise ApiError(403, "当前账号已无该账套访问权限，本次未保存")
         professional = chosen.get("edition") == "professional"
-        if targets is not None and not professional:
-            raise ApiError(409, "当前账套已不是专业版，不能补拉原专业版发票")
+        if targets is not None:
+            namespace = account_namespace(self.accounts.binding.settings.lemon_host, body.asid, professional)
+            source = "lemon_professional" if professional else "lemon_open2"
+            if any(row["source"] != source or row["lemon_account"] != namespace for row in targets):
+                raise ApiError(409, "当前账套版本或来源已变化，不能补拉原发票")
         reader = self.client.professional_invoices if professional else self.client.invoices
         records = selected_records(reader(token, body.asid, body.startDate, body.endDate), targets)
         selected_ids = (

@@ -48,6 +48,10 @@ export interface Bill {
   purchaseOrderId: string;
   subPurchaseOrderId: string;
   subsidiaryId: string;
+  // 后端按审核快照与查询结果补的业务名称；取不到时为空串，页面不展示内部 ID
+  purchaseOrderNo: string;
+  subPurchaseOrderNo: string;
+  subsidiaryName: string;
   currency: string;
   availableInvoiceAmount: string;
   issues: string[];
@@ -73,9 +77,11 @@ export interface TargetLine {
 }
 export interface Plan {
   allocations: TargetLine[];
-  orders: (OrderTarget & { orderNo: string; amount: string })[];
+  orders: (OrderTarget & { orderNo: string; billNumber: string; amount: string })[];
   evidence: string;
   confirmedBy: string;
+  // 确认人的飞书人员姓名，由后端按操作者标识查得；查不到时为原标识
+  confirmedByName?: string;
   confirmedAt: string;
 }
 export interface TaskDetail extends TaskSummary {
@@ -97,16 +103,27 @@ export interface TaskDetail extends TaskSummary {
     confirm: boolean;
     confirmPreview: boolean;
     execute: boolean;
+    // 账单补写：部分写入且已建 NS 发票记录、写入开关与白名单满足时可用
+    repair?: boolean;
     resolve: boolean;
     markNotWritten: boolean;
   };
+  repair?: { allowed: boolean; reason: string };
   querying: boolean;
-  audit: { action: string; actor: string; detail: { reason?: string; evidence?: string }; at: string }[];
+  // actorName：操作者的飞书人员姓名（system 为“系统”）；查不到时为原标识
+  audit: {
+    action: string;
+    actor: string;
+    actorName?: string;
+    detail: { reason?: string; evidence?: string };
+    at: string;
+  }[];
 }
 export interface PreviewLine {
   billId: string;
   billNumber: string;
   purchaseOrderId: string;
+  purchaseOrderNo: string;
   before: string;
   amount: string;
   after: string;
@@ -122,6 +139,7 @@ export interface WriteRequest {
   preview: PreviewLine[];
   needsConfirmation: boolean;
   confirmedBy: string | null;
+  confirmedByName?: string;
   confirmedAt: string | null;
   nsRecordId: string | null;
   sentAt: string | null;

@@ -5,10 +5,12 @@ import type { ManualOrderBody, ManualOrderCandidates } from "../types/manual-ord
 import type { OrderCandidates, OrderConfirmBody } from "../types/order-matching";
 import type {
   ConfirmBody,
+  InvoiceBatchResult,
   InvoiceMatchFilters,
   InvoiceMatchList,
   InvoiceMatching,
   InvoiceQueue,
+  InvoiceQueueRow,
   QueueQuery,
 } from "../types/matching";
 
@@ -113,6 +115,15 @@ export const confirmBatch = (ids: string[]) =>
     "POST",
     { ids },
   );
+export const confirmInvoiceBatch = (rows: InvoiceQueueRow[], note: string) =>
+  http<InvoiceBatchResult>("/matching/invoice-queue/confirm-batch", "POST", {
+    items: rows.map((row) => ({
+      invoiceId: row.invoice.id,
+      invoiceVersionId: row.invoice.versionId,
+      allocationIds: row.batchIds,
+    })),
+    note,
+  });
 export const generateProposals = (invoiceIds: string[]) =>
   http<{ created: number }>("/matching/proposals/generate", "POST", { invoiceIds });
 

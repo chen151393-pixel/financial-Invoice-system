@@ -31,7 +31,7 @@ def test_merged_price_uses_total_amount_over_total_quantity_and_keeps_members():
         line("2", quantity="8", purchaseQuantity="8", amount="160", price="20", model="A3"),
     )
     (merged,) = group_purchase_lines([first, second])
-    assert (merged["quantity"], merged["amount"], merged["price"]) == ("10", "180", "18")
+    assert (merged["quantity"], merged["amount"], merged["price"]) == ("10", "180", "18.00")
     assert merged["members"] == [first, second]
     assert merged["model"] == "A4、A3"
     assert first["amount"] == "20" and second["amount"] == "160"
@@ -58,3 +58,19 @@ def test_amounts_remain_decimal_and_missing_values_are_not_partial_totals():
         [line("1", quantity="0", purchaseQuantity="0"), line("2", quantity="0", purchaseQuantity="0")]
     )
     assert zero["price"] == "" and "无法计算" in zero["note"]
+
+
+def test_screenshot_merged_price_uses_display_quantity_instead_of_purchase_quantity():
+    (merged,) = group_purchase_lines(
+        [
+            line("1", quantity="10000", purchaseQuantity="6000", amount="136990"),
+            line("2", quantity="7687.33", purchaseQuantity="4333", amount="105320.6"),
+        ]
+    )
+    assert (merged["amount"], merged["quantity"], merged["price"]) == ("242310.6", "17687.33", "13.70")
+
+
+@pytest.mark.parametrize("quantity", ["", "0", "-1"])
+def test_missing_or_nonpositive_member_quantity_does_not_produce_partial_price(quantity):
+    (merged,) = group_purchase_lines([line("1"), line("2", quantity=quantity)])
+    assert merged["price"] == "" and "无法计算" in merged["note"]

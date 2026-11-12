@@ -18,6 +18,14 @@ def by_user_id(connection, user_id):
     return dict(row) if row else None
 
 
+def names_by_user_ids(connection, user_ids):
+    """{飞书 user_id: 姓名}；含已停用人员，供历史操作记录显示姓名。"""
+    if not user_ids:
+        return {}
+    query = select(users.c.user_id, users.c.name).where(users.c.user_id.in_(sorted(set(user_ids))))
+    return {row.user_id: row.name for row in connection.execute(query)}
+
+
 def all_users(connection):
     query = select(users).order_by(users.c.active.desc(), users.c.name, users.c.id)
     return [dict(row) for row in connection.execute(query).mappings()]

@@ -14,6 +14,37 @@ from fastapi.testclient import TestClient
 
 
 @pytest.mark.parametrize(
+    "gross,declared,net,margin,status",
+    [
+        ("113", "100", "100", "0.00", "ok"),
+        ("101.7", "100", "90", "10.00", "ok"),
+        ("124.3", "100", "110", "-10.00", "negative"),
+        ("113.113", "100", "100.1", "-0.10", "ok"),
+        ("113.11300001", "100", None, "-0.10", "negative"),
+    ],
+)
+def test_margin_removes_fixed_purchase_tax_before_comparison(gross, declared, net, margin, status):
+    source = {
+        "unit_price": Decimal(gross),
+        "declared_unit_price": Decimal(declared),
+        "declared_quantity": Decimal("1"),
+        "declared_unit": "个",
+        "currency": "CNY",
+        "sales_order_no": "SO1",
+    }
+    child = {"purchase_order_id": 1, "declared_unit": "个", "declared_quantity": Decimal("1")}
+    result = declared_margin(source, [child], {1: {}}, {})
+    assert result["status"] == status and str(result["margin"]) == margin
+    if net is not None:
+        assert result["original"] == Decimal(net)
+    # 超过容差不足一微元也不能因为展示舍入而放行；来源含税价始终保留。
+    else:
+        assert result["original"] > Decimal("100.1")
+    assert result["declared"] == Decimal(declared)
+    assert source["unit_price"] == Decimal(gross)
+
+
+@pytest.mark.parametrize(
     "difference,status",
     [
         ("-0.1", "ok"),
@@ -31,7 +62,7 @@ def test_unit_price_tolerance_boundary(difference, status):
             "declared_unit": "片",
             "declared_quantity": Decimal("60"),
             "declared_unit_price": Decimal("237.8695"),
-            "unit_price": Decimal("237.8695") + difference,
+            "unit_price": (Decimal("237.8695") + difference) * Decimal("1.13"),
             "currency": "CNY",
             "sales_order_no": "SO1",
         },
@@ -67,7 +98,7 @@ def test_default_and_zero_tolerance_config():
 
 def test_same_exchange_rate_applies_to_both_prices_only_for_cny_tolerance():
     customs_row = {
-        "unit_price": Decimal("2.06"),
+        "unit_price": Decimal("2.3278"),
         "declared_unit_price": Decimal("2"),
         "currency": "USD",
         "sales_order_no": "SO1",
@@ -86,7 +117,7 @@ def test_same_exchange_rate_applies_to_both_prices_only_for_cny_tolerance():
 
 @pytest.mark.parametrize("tolerance,alert", [("0.10", False), ("0.05", True), ("0", True)])
 def test_configured_tolerance_reaches_api_counts_and_filters(context, ns, engine, tolerance, alert):
-    # 同一报关行单价 10.75 元、报关单价 10.65 元，差额恰好 0.10 元。
+    # 同一报关行含税采购单价 12.1475 元，除以 1.13 为 10.75 元、报关单价 10.65 元，差额恰好 0.10 元。
     order = purchase(amounts=("107.50", "20.00"))
     for _, record in order[2]:
         record["custrecord_swc_subpo_item_bgunit"] = "个"
@@ -94,7 +125,7 @@ def test_configured_tolerance_reaches_api_counts_and_filters(context, ns, engine
     save(
         ns,
         engine,
-        bundle([order], [customs_prices("870", original="10.75", declared="10.65", currency="CNY")]),
+        bundle([order], [customs_prices("870", original="12.1475", declared="10.65", currency="CNY")]),
     )
     context.settings.review_unit_price_tolerance_cny = load_settings(
         {"REVIEW_UNIT_PRICE_TOLERANCE_CNY": tolerance}

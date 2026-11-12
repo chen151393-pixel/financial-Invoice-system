@@ -45,7 +45,7 @@
 ## 进项发票列表定向补拉（2026-10-19）
 
 - `POST /api/sync/lemon/invoices/detail-actions`：请求 `{invoiceIds: ["1"]}`，返回逐票 `{invoiceId, allowed, reason}` 和最近同步记录。只读校验绑定、当前账套、来源渠道及执行中请求。
-- `POST /api/sync/lemon/invoices/refresh-details`：请求 `{invoiceIds: ["1", "2"], requestId: "UUID"}`。单次 1–100 张且 ID 不重复；仅支持专业版 API 原票。服务端读取日期、业务类型和原来源 ID，用户无需再填写日期。所选票日期跨度最多 366 天，范围内来源列表仍遵循 2000 张上限。
+- `POST /api/sync/lemon/invoices/refresh-details`：请求 `{invoiceIds: ["1", "2"], requestId: "UUID"}`。单次 1–100 张且 ID 不重复；支持专业版与免费版 API 原票。服务端读取日期、业务类型和原来源 ID，用户无需再填写日期。所选票日期跨度最多 366 天，范围内来源列表仍遵循 2000 张上限。
 - 响应沿用 `LemonRun`；`GET /api/sync/lemon/runs/{request_id}` 查询原结果。请求编号和选中 ID 持久保存在原同步记录，同编号换范围返回 409。网络结果未知时只查原请求，不自动重发。
 
 `service/lemon_detail_refresh_service.py` 通过 invoice 门面读取来源与版本，复用 `LemonInvoiceService` 的事务外拉取、持久请求、事件保存及匹配流程。只读取所选票的商品明细，不保存同日期范围的其他发票；任一票不存在、原账套不符、上游未返回所选票、拉取期间版本改变或明细校验失败，整批不保存。返回 `detailIssues/detailIssueCount` 解释未补齐原因。
@@ -158,7 +158,7 @@ test_sync_pull.py 覆盖三类映射、身份、参数、金额精度、空结�
 
 2026-10-29 免费版并存：`LemonAccountService.authorized_accounts()` 同时查询专业版与免费版（open2 `GetAccountSets`）并合并，任一版本失败整体报错，两版同号明确拒绝；open2 拉票识别合计行、按 `Count` 核对分页并规范千分位价税合计。拉票事件 `LemonInvoicesFetched` 新增 `account_name`（复核到的账套名称），供 invoice 填写购买方。无迁移、接口字段不变。方案与真实只读核实见[免费版接入方案](../../../docs/lemon-free-edition-plan.md)；测试：`tests/sync/test_lemon_protocol.py`、`test_lemon_account_services.py`、`test_lemon_buyer.py`。
 
-新入口为 `/api/sync/lemon/invoices/configuration`、`/accounts/query`、`/account`、`/invoices/pull-save`、`/runs/{requestId}`（后四项同属 `/api/sync/lemon` 前缀）。请求、响应、限制见[完整协议](../../../docs/lemon-invoice-sync-plan.md)。`/accounts/query` 每项另返回 `edition`（`professional`／`free`）、`editionLabel` 与 `content`（专业版“票头 + 商品明细”，免费版“仅票头”），规则在 `policy/lemon_detail_policy.py`，页面只展示（2026-10-30）。API 按管理员身份隔离；日期必填且最多 366 天，所有分页完成才整批入库；同请求返回原结果，运行中拒绝切账套及新请求，重启不重置状态。
+新入口为 `/api/sync/lemon/invoices/configuration`、`/accounts/query`、`/account`、`/invoices/pull-save`、`/runs/{requestId}`（后四项同属 `/api/sync/lemon` 前缀）。请求、响应、限制见[完整协议](../../../docs/lemon-invoice-sync-plan.md)。`/accounts/query` 每项另返回 `edition`（`professional`／`free`）、`editionLabel` 与 `content`（两版均为“票头 + 商品明细”），规则在 `policy/lemon_detail_policy.py`，页面只展示（2026-10-30）。API 按管理员身份隔离；日期必填且最多 366 天，所有分页完成才整批入库；同请求返回原结果，运行中拒绝切账套及新请求，重启不重置状态。
 
 跨模块保存通过 `public.py` 的 `LemonInvoicesFetched` 事件，invoice 通过 `LemonInvoicesStored` 回执，同事务更新票据与已完成统计。事件只在 `app.py` 订阅；不通过 DAO 写其他模块。测试位于 `backend/tests/sync/test_lemon_{protocol,invoices,mysql}.py`；真实上游未联调。
 
@@ -179,7 +179,7 @@ API 拉票支持 `businessTypes` 文本多选，默认“采购固定资产、�
 
 ## 专业版商品明细补全（2026-10-19）
 
-分页完成后，sync 通过 invoice 公开规则 `lemon_detail_ids` 取得所选类型的发票 ID，在事务外调用 `professional_invoice_details.py` 读取详情。重新建立独立只读会话并复核所选账套上下文，单票最多一万行，明细阶段总读取限时 120 秒，超时或任一详情读取失败整批不保存。默认版继续保留票头 pending；不猜测未验证接口。
+分页完成后，sync 通过 invoice 公开规则 `lemon_detail_ids` 取得所选类型的发票 ID，在事务外调用 `invoice_details.py` 读取详情。重新建立独立只读会话并复核所选账套上下文，单票最多一万行，明细阶段总读取限时 120 秒，超时或任一详情读取失败整批不保存。2026-11-10 起免费版通过独立网页会话读取明细；两版共用解析与入库校验。
 
 入库复用原 LemonInvoicesFetched → invoice 版本/匹配事件 → LemonInvoicesStored 事务。响应新增 `result.completeDetails`；`pendingDetails` 包含待补齐与身份待核实，统计来自保存后的状态。恢复规则不变，同一请求只查询原结果；用户重新补全须创建新请求，不能复用旧请求编号。详情失败阶段日志不输出票据、Token 或加密上下文。
 
