@@ -7,6 +7,7 @@ from backend.app import create_app
 from backend.modules.task.dto.task_dto import TaskBoardQuery
 from backend.modules.task.service.task_board_service import TaskBoardService
 from backend.tests.documents_ready import complete_documents
+from backend.tests.review_helpers import approve_customs
 from backend.tests.test_source_storage import bundle, customs, purchase, save
 from backend.tests.test_task import USER, FakeWecom, approve, draft, prepare_all, record
 from backend.tests.test_task import app_services as app_services
@@ -181,6 +182,7 @@ def test_http_board_route(context, ns, engine, route):
             json={"username": "admin", "password": context.settings.admin_password},
         )
         item = client.post("/api/review/declarations/query", json={}, headers=headers).json()["groups"][0]
+        approve_customs(app.state.review_calculations.review, int(item["id"]))
         client.post(
             f"/api/review/declarations/{item['id']}/approve",
             json={"contentSha256": item["contentSha256"]},

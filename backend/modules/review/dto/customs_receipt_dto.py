@@ -43,3 +43,20 @@ class CustomsRematchRequest(StrictModel):
         if any(value < 1 for value in self.ids) or len(set(self.ids)) != len(self.ids):
             raise ValueError("回执 ID 须为不重复的正整数")
         return self
+
+
+class CustomsApproveItem(StrictModel):
+    id: int = Field(ge=1)
+    token: str = Field(pattern=r"^[a-f0-9]{64}$")
+
+
+class CustomsApproveRequest(StrictModel):
+    items: list[CustomsApproveItem] = Field(min_length=1, max_length=50)
+    method: Literal["auto", "manual"] = "manual"
+    note: str = Field(default="", max_length=300)
+
+    @model_validator(mode="after")
+    def unique_ids(self):
+        if len({item.id for item in self.items}) != len(self.items):
+            raise ValueError("回执 ID 不能重复")
+        return self

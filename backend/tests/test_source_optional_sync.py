@@ -10,6 +10,7 @@ from backend.modules.review.dto.review_dto import ApproveRequest, DeclarationLis
 from backend.modules.source.public import DeclarationService
 from backend.modules.source.service.storage_service import StorageService
 from backend.tests.review_helpers import MaterializedReviewService as ReviewService
+from backend.tests.review_helpers import approve_customs
 from backend.tests.test_source_optional_trace import success, unavailable
 from backend.tests.test_source_storage import (
     ACCOUNT,
@@ -118,6 +119,7 @@ def test_base_save_review_and_task_generation_continue(source, engine, mode, kin
     assert len(detail["orders"]) == 1 and len(detail["purchase_lines"]) == 2
     review = ReviewService(engine, DeclarationService(engine), events)
     group = review.browse(DeclarationListQuery()).groups[0]
+    approve_customs(review, int(group.id))
     review.approve(int(group.id), ApproveRequest(contentSha256=group.contentSha256), "user:admin")
     assert len(rows(engine, "SELECT id FROM task_tasks")) == 1
     tasks = rows(engine, "SELECT expected_amount, expected_quantity FROM task_lines ORDER BY id")

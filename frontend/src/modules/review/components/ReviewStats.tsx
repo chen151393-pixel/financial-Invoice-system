@@ -21,7 +21,7 @@ export function ReviewStats({
         tone={counts.pending > 0 ? "warning" : "neutral"}
         label="待审核报关单"
         value={`${counts.pending} 张`}
-        note={counts.changed > 0 ? `其中 ${counts.changed} 张来源变化需重审` : "审核通过后生成开票任务"}
+        note={counts.changed > 0 ? `其中 ${counts.changed} 张来源变化需重审` : "海关与财务均通过后生成开票任务"}
         selected={value === "pending"}
         onSelect={() => onSelect("pending")}
       />

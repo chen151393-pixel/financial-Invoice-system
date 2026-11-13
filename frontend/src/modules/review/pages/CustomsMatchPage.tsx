@@ -1,6 +1,5 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import {
-  Alert,
   Button,
   Card,
   CardFooter,
@@ -11,12 +10,20 @@ import {
   Segmented,
   Skeleton,
 } from "../../../shared/components/ui";
+import { CustomsApproveDialog } from "../components/CustomsApproveDialog";
 import { CustomsImportDialog } from "../components/CustomsImportDialog";
 import { CustomsReceiptRow } from "../components/CustomsReceiptRow";
 import { CustomsSearchForm, EMPTY_CUSTOMS_SEARCH } from "../components/CustomsSearchForm";
 import { CustomsStats } from "../components/CustomsStats";
-import { queryCustomsReceipts, rematchCustomsReceipts } from "../customs-api";
-import type { CustomsCounts, CustomsFilter, CustomsReceiptList, CustomsReceiptQuery } from "../customs-types";
+import { ReviewListToolbar } from "../components/ReviewListToolbar";
+import { queryCustomsReceipts } from "../customs-api";
+import type {
+  CustomsCounts,
+  CustomsFilter,
+  CustomsReceipt,
+  CustomsReceiptList,
+  CustomsReceiptQuery,
+} from "../customs-types";
 import "../components/review.css";
 import "../components/customs-match.css";
 
@@ -37,8 +44,10 @@ const TITLES: Record<CustomsFilter, string> = {
   different: "报关单匹配 · 有差异",
   ns_missing: "报关单匹配 · 未找到 NS 报关单",
 };
+const COLUMN_WIDTHS = [20, 9, 5, 12, 20, 15, 10, 9];
+const BATCH_WIDTHS = [3, 20, 9, 5, 12, 17, 15, 10, 9];
 
-/** 海关报关单比对：导入海关回执，按真实报关单号与 NS 报关单比对明细，并保存回执中的境外收货人。 */
+/** 海关审核沿用财务核对的查询、列表工具栏、批量选择和行操作布局。 */
 export function CustomsMatchPage() {
   const [query, setQuery] = useState<CustomsReceiptQuery>({
     ...EMPTY_CUSTOMS_SEARCH,
@@ -47,25 +56,23 @@ export function CustomsMatchPage() {
     pageSize: 20,
   });
   const [state, setState] = useState<ListState>({ kind: "loading" });
-  // 最近一次成功的计数：重新查询时保留，概况卡与状态切换不闪烁
   const [counts, setCounts] = useState<CustomsCounts | null>(null);
   const [refresh, setRefresh] = useState(0);
   const [expanded, setExpanded] = useState<number[]>([]);
   const [importing, setImporting] = useState(false);
-  const [rematching, setRematching] = useState(false);
-  const [notice, setNotice] = useState<{ tone: "success" | "danger"; text: string } | null>(null);
-  const rematchLock = useRef(false);
+  const [batch, setBatch] = useState(false);
+  const [selection, setSelection] = useState<number[]>([]);
+  const [approval, setApproval] = useState<CustomsReceipt[] | null>(null);
 
   useEffect(() => {
-    // 条件快速切换时取消旧请求，旧响应不覆盖新结果
     const controller = new AbortController();
     async function load() {
       setState({ kind: "loading" });
+      setSelection([]);
       try {
         const result = await queryCustomsReceipts(query, controller.signal);
         setState({ kind: "ready", result });
         setCounts(result.counts);
-        // 默认展开有差异的报关单，便于直接查看
         setExpanded(result.items.filter((item) => item.status === "different").map((item) => item.id));
       } catch (error) {
         if (error instanceof Error && error.name === "AbortError") return;
@@ -76,33 +83,12 @@ export function CustomsMatchPage() {
     return () => controller.abort();
   }, [query, refresh]);
 
-  async function rematch(ids: number[]) {
-    if (rematchLock.current) return;
-    rematchLock.current = true;
-    setRematching(true);
-    setNotice(null);
-    try {
-      const result = await rematchCustomsReceipts(ids);
-      setNotice({ tone: "success", text: `已按当前 NS 报关单重新匹配 ${result.rematched} 张海关回执` });
-    } catch (error) {
-      setNotice({
-        tone: "danger",
-        text: error instanceof Error ? error.message : "重新匹配失败，请稍后重试",
-      });
-    } finally {
-      rematchLock.current = false;
-      setRematching(false);
-      setRefresh((value) => value + 1);
-    }
-  }
-
-  // 打开导入时清除上一次重新匹配的提示，避免与导入结果混淆
-  const openImport = () => {
-    setNotice(null);
-    setImporting(true);
-  };
-  const busy = state.kind === "loading" || rematching;
+  const busy = state.kind === "loading" || !!approval;
+  const items = state.kind === "ready" ? state.result.items : [];
+  const selectable = items.filter((item) => item.approval.allowed);
+  const chosen = selectable.filter((item) => selection.includes(item.id));
   const setStatus = (status: CustomsFilter) => setQuery((current) => ({ ...current, status, page: 1 }));
+  const reload = () => setRefresh((value) => value + 1);
   return (
     <div className="fr-page cm-page">
       {counts && <CustomsStats counts={counts} value={query.status} onSelect={setStatus} />}
@@ -122,10 +108,7 @@ export function CustomsMatchPage() {
                 }))}
                 onChange={setStatus}
               />
-              <Button disabled={busy || !counts?.receipts} onClick={() => void rematch([])}>
-                {rematching ? "匹配中…" : "全部重新匹配"}
-              </Button>
-              <Button variant="primary" disabled={rematching} onClick={openImport}>
+              <Button variant="primary" disabled={busy} onClick={() => setImporting(true)}>
                 导入海关回执
               </Button>
             </div>
@@ -136,60 +119,127 @@ export function CustomsMatchPage() {
           initial={EMPTY_CUSTOMS_SEARCH}
           onSearch={(criteria) => setQuery((current) => ({ ...current, ...criteria, page: 1 }))}
         />
-        <details className="cm-rules">
-          <summary>比对口径</summary>
-          <ol>
-            <li>以海关“出口报关单号”对应 NS 报关单的真实报关单号（不是 CD 号）。</li>
-            <li>
-              同一报关单内按“海关商品名称 + 成交单位”归组，合计成交数量后与 NS 报关行数量精确比较；NS
-              一行可对应海关多项（拆行），多行也可对应一项（合并）。
-            </li>
-            <li>单位按海关“成交单位”与 NS 报关单位比较；法定单位与法定数量只展示，不参与判定。</li>
-            <li>
-              境外收货人只来自海关回执（NS
-              报关单没有该字段），不参与比对；报关单号匹配后随报关单保存，未匹配的回执找到 NS 报关单后再关联。
-            </li>
-          </ol>
-        </details>
-        <div role="status" aria-live="polite" className="cm-notice">
-          {notice && <Alert tone={notice.tone}>{notice.text}</Alert>}
+        <div className="fr-preview">
+          {state.kind === "ready" && (
+            <ReviewListToolbar
+              summary={
+                <>
+                  本页 {items.length} 张海关回执
+                  {batch && (
+                    <>
+                      {" "}
+                      · 已勾选 <b>{chosen.length}</b> 张（本页可审核 {selectable.length} 张）
+                    </>
+                  )}
+                </>
+              }
+            >
+              <Button
+                variant="ghost"
+                size="sm"
+                disabled={busy}
+                onClick={() => setExpanded(items.map((item) => item.id))}
+              >
+                全部展开
+              </Button>
+              <Button variant="ghost" size="sm" disabled={busy} onClick={() => setExpanded([])}>
+                全部收起
+              </Button>
+              <Button size="sm" disabled={busy} onClick={reload}>
+                刷新列表
+              </Button>
+              {batch ? (
+                <>
+                  <Button
+                    size="sm"
+                    disabled={busy}
+                    onClick={() => {
+                      setBatch(false);
+                      setSelection([]);
+                    }}
+                  >
+                    取消批量
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="primary"
+                    disabled={busy || !chosen.length}
+                    onClick={() => setApproval(chosen)}
+                  >
+                    确认审核通过（{chosen.length}）
+                  </Button>
+                </>
+              ) : (
+                <Button
+                  size="sm"
+                  variant="primary"
+                  disabled={busy || !selectable.length}
+                  title={!selectable.length ? "本页没有可审核的海关回执" : undefined}
+                  onClick={() => {
+                    setBatch(true);
+                    setSelection([]);
+                  }}
+                >
+                  批量审核通过
+                </Button>
+              )}
+            </ReviewListToolbar>
+          )}
+          <ReceiptList
+            state={state}
+            busy={busy}
+            expanded={expanded}
+            onToggle={(id) =>
+              setExpanded((current) =>
+                current.includes(id) ? current.filter((value) => value !== id) : [...current, id],
+              )
+            }
+            onRetry={reload}
+            onImport={() => setImporting(true)}
+            batch={batch}
+            selection={selection}
+            onSelect={(id, checked) =>
+              setSelection((current) =>
+                checked ? [...current, id] : current.filter((value) => value !== id),
+              )
+            }
+            onSelectAll={(checked) => setSelection(checked ? selectable.map((item) => item.id) : [])}
+            onApprove={(item) => setApproval([item])}
+          />
+          {state.kind === "ready" && state.result.total > 0 && (
+            <CardFooter>
+              <Pagination
+                label="海关回执分页"
+                unit="张"
+                total={state.result.total}
+                page={state.result.page}
+                pageCount={state.result.pages}
+                pageSize={state.result.pageSize}
+                pageSizes={[10, 20, 50]}
+                disabled={busy}
+                onPageChange={(page) => setQuery((current) => ({ ...current, page }))}
+                onPageSizeChange={(pageSize) => setQuery((current) => ({ ...current, page: 1, pageSize }))}
+              />
+            </CardFooter>
+          )}
         </div>
-        <ReceiptList
-          state={state}
-          busy={busy}
-          expanded={expanded}
-          onToggle={(id) =>
-            setExpanded((current) =>
-              current.includes(id) ? current.filter((v) => v !== id) : [...current, id],
-            )
-          }
-          onRematch={(id) => void rematch([id])}
-          onRetry={() => setRefresh((value) => value + 1)}
-          onImport={openImport}
-        />
-        {state.kind === "ready" && state.result.total > 0 && (
-          <CardFooter>
-            <Pagination
-              label="海关回执分页"
-              unit="张"
-              total={state.result.total}
-              page={state.result.page}
-              pageCount={state.result.pages}
-              pageSize={state.result.pageSize}
-              pageSizes={[10, 20, 50]}
-              disabled={busy}
-              onPageChange={(page) => setQuery((current) => ({ ...current, page }))}
-              onPageSizeChange={(pageSize) => setQuery((current) => ({ ...current, page: 1, pageSize }))}
-            />
-          </CardFooter>
-        )}
       </Card>
       {importing && (
         <CustomsImportDialog
           onClose={(changed) => {
             setImporting(false);
-            if (changed) setRefresh((value) => value + 1);
+            if (changed) reload();
           }}
+        />
+      )}
+      {approval && (
+        <CustomsApproveDialog
+          items={approval}
+          onChanged={() => {
+            setSelection([]);
+            reload();
+          }}
+          onClose={() => setApproval(null)}
         />
       )}
     </div>
@@ -201,17 +251,25 @@ function ReceiptList({
   busy,
   expanded,
   onToggle,
-  onRematch,
   onRetry,
   onImport,
+  batch,
+  selection,
+  onSelect,
+  onSelectAll,
+  onApprove,
 }: {
   state: ListState;
   busy: boolean;
   expanded: number[];
   onToggle: (id: number) => void;
-  onRematch: (id: number) => void;
   onRetry: () => void;
   onImport: () => void;
+  batch: boolean;
+  selection: number[];
+  onSelect: (id: number, checked: boolean) => void;
+  onSelectAll: (checked: boolean) => void;
+  onApprove: (item: CustomsReceipt) => void;
 }) {
   if (state.kind === "loading") return <Skeleton label="正在读取海关回执与比对结果" />;
   if (state.kind === "error")
@@ -237,6 +295,8 @@ function ReceiptList({
     ) : (
       <EmptyState title="没有符合条件的海关回执" description="请调整查询条件或比对结果筛选。" />
     );
+  const selectable = result.items.filter((item) => item.approval.allowed);
+  const allChosen = selectable.length > 0 && selectable.every((item) => selection.includes(item.id));
   return (
     <div
       className="fr-declaration-scroll"
@@ -245,19 +305,28 @@ function ReceiptList({
       // eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex -- 原生宽表区域需支持键盘聚焦及横向滚动。
       tabIndex={0}
     >
-      <table className="fr-declaration-table cm-table">
+      <table className="fr-declaration-table">
         <caption className="fr-sr-only">海关回执主行，展开查看 NS 报关行与海关项的明细比对</caption>
         <colgroup>
-          <col style={{ width: "19%" }} />
-          <col style={{ width: "9%" }} />
-          <col style={{ width: "6%" }} />
-          <col style={{ width: "13%" }} />
-          <col style={{ width: "22%" }} />
-          <col style={{ width: "21%" }} />
-          <col style={{ width: "10%" }} />
+          {(batch ? BATCH_WIDTHS : COLUMN_WIDTHS).map((width, index) => (
+            <col key={index} style={{ width: `${width}%` }} />
+          ))}
         </colgroup>
         <thead>
           <tr>
+            {batch && (
+              <th scope="col" className="fr-check-cell">
+                {selectable.length > 0 && (
+                  <input
+                    type="checkbox"
+                    checked={allChosen}
+                    aria-label="选择当前页全部可审核的海关回执"
+                    disabled={busy}
+                    onChange={(event) => onSelectAll(event.target.checked)}
+                  />
+                )}
+              </th>
+            )}
             <th scope="col" className="fr-toggle-heading">
               出口报关单号
             </th>
@@ -266,6 +335,7 @@ function ReceiptList({
             <th scope="col">明细行</th>
             <th scope="col">境外收货人（海关回执）</th>
             <th scope="col">明细比对</th>
+            <th scope="col">海关审核</th>
             <th scope="col" className="fr-declaration-action">
               操作
             </th>
@@ -278,7 +348,10 @@ function ReceiptList({
             open={expanded.includes(receipt.id)}
             busy={busy}
             onToggle={() => onToggle(receipt.id)}
-            onRematch={() => onRematch(receipt.id)}
+            batch={batch}
+            selected={selection.includes(receipt.id)}
+            onSelect={(checked) => onSelect(receipt.id, checked)}
+            onApprove={() => onApprove(receipt)}
           />
         ))}
       </table>

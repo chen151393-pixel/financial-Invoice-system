@@ -18,6 +18,7 @@ from backend.modules.task.service.progress_service import refresh_tasks
 from backend.modules.task.service.signed_contract_service import SignedContractService
 from backend.tests.invoice_files import invoice
 from backend.tests.matching_helpers import confirm_groups
+from backend.tests.review_helpers import approve_customs
 from backend.tests.test_matching import FLUID, INK, import_invoices, invoice_id, proposals
 from backend.tests.test_matching import world as world  # 共用夹具
 from backend.tests.test_source_storage import bundle, customs, purchase, rows, save
@@ -230,6 +231,7 @@ def test_http_upload_and_retry_routes(context, ns, engine, tmp_path):
         assert login.status_code == 200
         assert client.post(path, json={"files": []}, headers=headers).status_code == 400
         item = client.post("/api/review/declarations/query", json={}, headers=headers).json()["groups"][0]
+        approve_customs(app.state.review_calculations.review, int(item["id"]))
         client.post(
             f"/api/review/declarations/{item['id']}/approve",
             json={"contentSha256": item["contentSha256"]},

@@ -37,7 +37,7 @@ export function CustomsStats({
         tone={counts.different > 0 ? "warning" : "neutral"}
         label="数量或单位不一致"
         value={`${counts.different} 张`}
-        note="在 NS 修正后重新匹配"
+        note="在 NS 修正并同步后核对"
         selected={value === "different"}
         onSelect={() => onSelect("different")}
       />

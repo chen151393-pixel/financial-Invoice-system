@@ -14,6 +14,7 @@ from backend.modules.source.public import DeclarationService, SourceDirectory, u
 from backend.modules.source.service.pl_comparison_service import PlScriptService
 from backend.modules.task.service.task_service import TaskService
 from backend.tests.review_helpers import MaterializedReviewService as ReviewService
+from backend.tests.review_helpers import approve_customs
 from backend.tests.test_pl_script import result as script_result
 from backend.tests.test_source_storage import bundle, customs, purchase, rows, save
 from backend.tests.test_source_storage import engine as engine
@@ -99,6 +100,7 @@ def test_review_task_matching_display_preserves_evidence(engine, ns, dictionary)
     purchase_views = group.unlinkedLines + [p for c in group.customsLines for p in c.purchaseLines]
     assert all(line.unit == "幅" and "台" in line.note for line in purchase_views)
     digest = group.contentSha256
+    approve_customs(review, int(group.id))
     review.approve(int(group.id), ApproveRequest(contentSha256=digest), "user:admin")
     frozen = rows(engine, "SELECT unit,quantity,amount FROM review_lines")
     assert all(line["unit"] == "1" for line in frozen)

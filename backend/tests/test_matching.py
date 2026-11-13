@@ -31,6 +31,7 @@ from backend.modules.source.public import SourceDirectory
 from backend.modules.task.service.task_service import TaskService
 from backend.tests.documents_ready import complete_documents
 from backend.tests.invoice_files import invoice, workbook
+from backend.tests.review_helpers import approve_customs
 from backend.tests.test_source_storage import bundle, customs, purchase, rows, save
 from backend.tests.test_source_storage import engine as engine  # 共用夹具
 from backend.tests.test_source_storage import ns as ns  # 共用夹具
@@ -261,7 +262,7 @@ def test_unresolved_currency_and_red_offset_block(ns, engine, world):
     target = invoice_id(engine, "26000000000000008005")
     # 子采购币种待核实的整单不会被建议，人工关联同样被拒绝
     assert proposals(world, target) == []
-    with pytest.raises(ApiError, match="币种待核实"):
+    with pytest.raises(ApiError, match="没有有效任务行"):
         manual(world, engine, target, 0, amount="100.50")
     import_invoices(
         world, [invoice("26000000000000008006", [INK, FLUID], remark="SUB-200", status="已红冲")], "r.xlsx"
@@ -358,6 +359,7 @@ def test_http_matching_routes(context, ns, engine):
         )
         assert login.status_code == 200
         item = client.post("/api/review/declarations/query", json={}, headers=headers).json()["groups"][0]
+        approve_customs(app.state.review_calculations.review, int(item["id"]))
         client.post(
             f"/api/review/declarations/{item['id']}/approve",
             json={"contentSha256": item["contentSha256"]},

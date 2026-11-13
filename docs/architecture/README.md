@@ -38,8 +38,8 @@
 ```text
 [定时] NS 报关单 + 子采购（自动关联） ──→ source
                                           │
-                     财务：review 核对并审核通过（不调整金额）
-                                          │  发布事件「审核通过」
+                     review：财务核对与海关回执审核均通过（不调整金额）
+                                          │  发布事件「双审核放行」
                                           ▼
               task 生成开票任务：每条子采购行 = 一条任务行（应开数量、应开金额）
                    采购：备合同 → 按供应商企微群通知开票 → 等待开票
@@ -98,7 +98,7 @@
   matching → source、review、invoice、task
 
 事件：
-  review   发布「审核通过 ReviewApproved」        → task 订阅：生成任务和任务行
+  review   发布「双审核放行 InvoiceReady」       → task 订阅：生成任务和任务行
   matching 发布「分配变化 AllocationChanged」     → task 订阅：更新已收数量金额和任务状态
   source   发布「来源变化 SourceChanged」         → review 订阅：标记需重新审核
   invoice  发布「发票变化 InvoiceChanged」        → matching 订阅：过期建议失效、已确认分配复核
@@ -108,7 +108,7 @@
 - 禁止循环读取依赖。`task` 不读取 `matching`，收票进度只通过事件更新。
 - 事件契约（数据类）定义在发布方的 `public.py` 中；订阅关系只在 `app.py` 中登记。
 - 事件在发布方的事务中同步执行；任何订阅方失败，整个事务回滚。订阅方不能调用外部系统。
-- 已接入 `InvoiceChanging` 的写前锁定和全部失效/承接事件。`ReviewApproved` 先生成任务后由 matching 重算，订阅顺序固定在 `create_events()`；契约和锁规范见数据库设计第 10.7 节。
+- 已接入 `InvoiceChanging` 的写前锁定和全部失效/承接事件。`InvoiceReady` 在双审核通过后先生成任务，再由 matching 重算，订阅顺序固定在 `create_events()`；契约和锁规范见数据库设计第 10.7 节。
 
 ## 4. 数据模型
 

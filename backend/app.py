@@ -54,12 +54,14 @@ from .modules.matching.service.task_proposal_service import on_review_approved a
 from .modules.matching.service.workbench_service import WorkbenchService
 from .modules.review.controller.customs_receipt_controller import create_router as customs_receipt_router
 from .modules.review.controller.review_controller import create_router as review_router
-from .modules.review.public import PurchaseBasisInvalidated, ReviewApproved
+from .modules.review.public import InvoiceReady, PurchaseBasisInvalidated, ReviewApproved
 from .modules.review.service.calculation_service import CalculationService, request_calculation
 from .modules.review.service.calculation_worker import CalculationWorker
+from .modules.review.service.customs_approval_service import CustomsApprovalService
 from .modules.review.service.customs_receipt_service import CustomsReceiptService
 from .modules.review.service.purchase_basis_service import on_source_changed
 from .modules.review.service.review_service import ReviewService
+from .modules.review.service.task_release_service import on_finance_approved
 from .modules.source.controller.pl_comparison_controller import create_router as source_pl_router
 from .modules.source.controller.relation_rebuild_controller import create_router as source_relation_router
 from .modules.source.controller.vendor_bill_controller import create_router as vendor_bill_router
@@ -250,9 +252,11 @@ def create_events(*, writeback_queue_enabled=True):
     events.subscribe(InvoiceMatchingChanged, partial(on_matching_changed, enabled=writeback_queue_enabled))
     events.subscribe(SourceChanged, partial(on_source_changed, events=events))
     events.subscribe(PurchaseBasisInvalidated, partial(ledger_service.on_basis_invalidated, events=events))
-    events.subscribe(ReviewApproved, on_review_approved)
+    events.subscribe(InvoiceReady, on_review_approved)
     events.subscribe(ReviewApproved, partial(ledger_service.on_review_approved, events=events))
-    events.subscribe(ReviewApproved, on_task_review_approved)
+    events.subscribe(InvoiceReady, partial(ledger_service.on_review_approved, events=events))
+    events.subscribe(InvoiceReady, on_task_review_approved)
+    events.subscribe(ReviewApproved, partial(on_finance_approved, events=events))
     events.subscribe(SourceChanged, request_calculation)
     events.subscribe(ReviewApproved, request_calculation)
     events.subscribe(InvoiceChanging, ledger_service.on_invoice_changing)
@@ -287,7 +291,9 @@ def _register_business(app, settings, ns, contract_ns, wecom, engine, lemon_invo
     app.state.review_calculations = CalculationService(review)
     app.state.review_calculation_worker = CalculationWorker(app.state.review_calculations)
     app.include_router(review_router(review))
-    app.include_router(customs_receipt_router(CustomsReceiptService(engine)))
+    app.include_router(
+        customs_receipt_router(CustomsReceiptService(engine), CustomsApprovalService(engine, events))
+    )
     directory = SourceDirectory(engine)
     app.include_router(
         external_group_router(

@@ -6,13 +6,13 @@
 
 供应商和单号经 `SourceDirectory.search_task_filters` 只读门面获取完整匹配 ID，避免旧关键词的 500 条截断。旧 `keyword`、`supplierId` 继续兼容；`/api/tasks/board/query` 保留一版本，复用相同 DTO、身份校验与 Service，旧调用方升级后移除。下文旧路径描述保留兼容入口语义。
 
-架构 v2 第 4c 步新建。财务审核通过后按 供应商 × 采购公司 × 币种 生成开票任务，跟进合同归档、供应商通知与收票进度。表结构见[数据库设计](../../../docs/architecture/database.md)第 4.3、6 节。
+架构 v2 第 4c 步新建。海关与财务审核均通过后按 供应商 × 采购公司 × 币种 生成开票任务，跟进合同归档、供应商通知与收票进度。表结构见[数据库设计](../../../docs/architecture/database.md)第 4.3、6 节。
 
 4d 补强已接入全局依据、任务后继与差异结束。包括已完成任务在内，依据变化时整体替代并按台账重算；兼容分配承接，口径不兼容保留待复核占用。
 
 ## 职责
 
-- 订阅 `ReviewApproved`：在审核事务中生成任务与任务行（应开值从审核行复制），重新审核时替代旧任务。供应商档案关闭通知的供应商不生成任务（2026-10-23）。
+- 订阅 `InvoiceReady`：在审核事务中生成任务与任务行（应开值从审核行复制），重新审核时替代旧任务。供应商档案关闭通知的供应商不生成任务（2026-10-23）。
 - 任务生成及账本更新后，matching 的同事务订阅方自动重评相关已有发票并生成待审核整单建议（2026-10-30）；无需到发票页手动重新生成。仅生成建议，不自动收票；匹配规则与验证见 [matching 说明](../matching/README.md#任务生成后自动匹配已有发票2026-10-30)。
 - 合同：审核事务中登记持久归档作业，事务提交后后台从 NS 下载子采购合同并保存到共享盘，数据库只记录路径与 SHA-256。
 - 通知：保存通知版本、登记人工发送，以及企微群发预览、提交、回执和未知结果核实。
@@ -77,10 +77,10 @@ documents_pending → notify_pending → awaiting_invoice → partially_received
 ## 公开接口与依赖
 
 - `public.py`：`open_lines(connection, purchase_line_ids=None, lock=False)`——有效任务行（应开、已收、单位）及所属任务（供应商、采购公司、币种、报关单）；`lock=True` 时按"任务 → 任务行"顺序加锁，供 matching 审核分配使用。
-- 订阅：`ReviewApproved`（生成任务）、`AllocationChanged`（收票进度），均在 `app.py` 中登记。
+- 订阅：`InvoiceReady`（双审核后生成任务）、`AllocationChanged`（收票进度），均在 `app.py` 中登记。
 - 读取：`source.public.SourceDirectory`（供应商、采购公司、子采购单号、行品名、供应商分页）。通过 `review.public.current_bases` 核对当前依据；任务生成仍只经审核事件取得冻结值。
 - 外部适配：`SubpoContractSource`（NS 合同）、`integrations/contract_archive.py`、`integrations/wecom.py`。
-- 订阅关系在 `app.py` 中登记：`events.subscribe(ReviewApproved, on_review_approved)`。
+- 订阅关系在 `app.py` 中登记：`events.subscribe(InvoiceReady, on_review_approved)`。
 
 ## 验证
 

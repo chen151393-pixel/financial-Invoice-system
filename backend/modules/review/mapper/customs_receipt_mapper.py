@@ -52,7 +52,7 @@ def _joined(rows, key):
     return "、".join(dict.fromkeys(row[key] for row in rows if row[key]))
 
 
-def receipt(head, rows):
+def receipt(head, rows, approval):
     result = head["match_result"] or {}
     items = {row["item_no"]: item(row) for row in rows}
     groups = [
@@ -99,6 +99,7 @@ def receipt(head, rows):
         fileName=head["file_name"],
         revision=head["revision"],
         groups=groups,
+        approval=approval,
     )
 
 

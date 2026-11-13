@@ -17,7 +17,8 @@
 flowchart LR
   NS[NS 来源] --> S[source 保存]
   S -->|SourceChanged| R[review 标记依据失效]
-  R -->|ReviewApproved| T[task 生成后继]
+  R --> C[海关当前版本也审核通过]
+  C -->|InvoiceReady| T[task 生成后继]
   R -->|ReviewApproved / PurchaseBasisInvalidated| M[matching 台账]
   E[Excel 文件] --> I[invoice 版本]
   L[柠檬云专业版票头及商品明细] --> SY[sync 事务外读取]
@@ -26,7 +27,7 @@ flowchart LR
   M -->|AllocationChanged 绝对合计| T
 ```
 
-订阅顺序显式登记在 `backend/app.py:create_events`，审核先生成任务再重算；所有订阅复用发布方事务，任一步失败整体回滚。跨模块读经 `public.py`，不读写对方私有 DAO。
+订阅顺序显式登记在 `backend/app.py:create_events`，双审核放行先生成任务再重算；所有订阅复用发布方事务，任一步失败整体回滚。跨模块读经 `public.py`，不读写对方私有 DAO。
 
 采购依据冻结主体、币种、数量、单位、金额和原始引用。多张报关单引用同一采购行时复用依据与任务额度；来源关键内容变化则待复核，重审后生成后继任务，包括已经完成的任务。兼容旧分配可以承接，收票数额来自台账，不复制旧任务缓存。
 

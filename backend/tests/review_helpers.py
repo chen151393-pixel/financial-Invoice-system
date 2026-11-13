@@ -4,6 +4,44 @@ from backend.modules.review.service.calculation_service import CalculationServic
 from backend.modules.review.service.review_service import ReviewService
 
 
+def approve_customs(review, declaration_id):
+    """下游任务用例先完成真实海关导入和人工审核；门槛本身由双审核专项验证。"""
+    from backend.modules.review.dto.customs_receipt_dto import CustomsApproveRequest, CustomsReceiptQuery
+    from backend.modules.review.service.customs_approval_service import CustomsApprovalService
+    from backend.modules.review.service.customs_receipt_service import CustomsReceiptService
+    from backend.modules.source.public import declarations_by_number
+    from backend.tests.test_customs_receipts import _import, row
+
+    content = review.declarations.detail(declaration_id)
+    number = content["declaration"]["declaration_no"]
+    with review.engine.connect() as connection:
+        source = declarations_by_number(connection, [number])[number][0]
+    service = CustomsReceiptService(review.engine)
+    _import(
+        service,
+        [
+            row(
+                number,
+                str(i).zfill(2),
+                line["name"] or "待核对品名",
+                line["unit"] or "待核对单位",
+                line["quantity"] or 1,
+            )
+            for i, line in enumerate(source["lines"], 1)
+        ],
+    )
+    item = service.browse(CustomsReceiptQuery(declarationNo=number)).items[0]
+    result = CustomsApprovalService(review.engine, review.events).approve_batch(
+        CustomsApproveRequest(
+            items=[{"id": item.id, "token": item.approval.token}],
+            method="manual",
+            note="隔离测试已人工核实海关口径",
+        ),
+        "user:admin",
+    )
+    assert result.approved and not result.skipped
+
+
 class MaterializedReviewService(ReviewService):
     def browse(self, query):
         CalculationService(self).rebuild()

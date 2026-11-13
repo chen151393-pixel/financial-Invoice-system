@@ -31,6 +31,11 @@ records = Table(
     Column("approved_at", TIMESTAMP, comment="审核通过时间，UTC", nullable=False),
     Column("note", String(300), comment="人工备注或登记说明，具体长度见类型"),
     Column(
+        "customs_approval_id",
+        ID,
+        comment="双审核放行采用的海关审核 ID；空表示尚未放行，只设置一次",
+    ),
+    Column(
         "active_declaration_id",
         ID,
         Computed("CASE WHEN status = 'active' THEN customs_declaration_id END", persisted=True),

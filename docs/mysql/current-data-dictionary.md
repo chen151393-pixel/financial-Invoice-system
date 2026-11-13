@@ -1954,6 +1954,35 @@ NS 来源按批后台保存记录与结果，不保存令牌。
 - 唯一约束 `uq_review_customs_receipt_line`：`(receipt_id, revision, item_no)`。
 
 
+## 海关审核与双审核放行（0044，2026-11-13）
+
+### review_customs_approvals｜海关审核不可变版本
+
+| 字段 | 类型 | 可空 | 说明 |
+| --- | --- | --- | --- |
+| id | BIGINT | 否 | 本地自增主键 |
+| receipt_id | BIGINT | 否 | 海关回执 ID，本模块外键 |
+| receipt_revision | INTEGER | 否 | 审核时回执版本 |
+| receipt_sha256 | CHAR(64) | 否 | 审核时回执内容摘要 |
+| customs_declaration_id | BIGINT | 否 | source 报关单 ID，跨模块不建外键 |
+| source_sha256 | CHAR(64) | 否 | 审核时 NS 来源摘要 |
+| method | VARCHAR(20) | 否 | auto 自动审核；manual 人工审核 |
+| approved_by | VARCHAR(190) | 否 | 审核人认证身份 |
+| approved_at | DATETIME(6) | 否 | 审核通过时间，UTC |
+| note | VARCHAR(300) | 是 | 人工审核说明，差异单必填 |
+| created_at / updated_at | DATETIME(6) | 否 | 本地创建与更新时间，UTC |
+
+唯一约束 `(receipt_id, receipt_revision, customs_declaration_id, source_sha256)`；旧审核不覆盖、不删除。
+
+### review_records 新增放行依据字段
+
+| 字段 | 类型 | 可空 | 说明 |
+| --- | --- | --- | --- |
+| customs_approval_id | BIGINT UNSIGNED | 是 | 双审核放行采用的海关审核 ID，逻辑指向 review_customs_approvals.id；空表示尚未放行，只设置一次 |
+
+放行依据与最后一项审核、任务生成、匹配重算在同一账本事务中提交；新增一张审核表和上述一个可空字段，不回填历史任务。
+
+
 ## 供应商人员关联与归属（0043，2026-11-13）
 
 仅新增一张历史表；任务负责人快照及交接记录复用既有 `task_events.details.owner`，不新增表或字段。

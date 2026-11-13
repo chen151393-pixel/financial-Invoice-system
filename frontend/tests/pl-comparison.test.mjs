@@ -322,7 +322,7 @@ test("批量审核窗口说明范围仅为当前页已选，并逐张展示跳�
     skipped: [{ id: "102", recordNumber: "", reason: "报关单来源已变化，请刷新后重新核对再审核" }],
   };
   const done = renderToStaticMarkup(createElement(BatchApproveDialog, { ...props, result }));
-  assert.match(done, /1 张已审核通过并生成开票任务，1 张未通过/);
+  assert.match(done, /1 张已通过财务审核；海关审核也通过后自动生成开票任务，1 张未通过/);
   assert.match(done, /CDTEST002[\s\S]*来源已变化/);
   assert.doesNotMatch(done, /审核通过 2 张/);
 });
@@ -770,4 +770,132 @@ test("采购单价缺失时保留原因，不显示低价异常或旧幅度", ()
   const html = customs(item);
   assert.match(html, /采购单价缺失，无法计算申报幅度/);
   assert.doesNotMatch(html, /单价异常|报关单价低于不含税采购单价|fr-margin--negative/);
+});
+
+test("海关审核只提交当前页选择的版本令牌、方式与人工说明", async () => {
+  const { approveCustomsReceipts } = await server.ssrLoadModule("/src/modules/review/customs-api.ts");
+  const original = globalThis.fetch;
+  const calls = [];
+  globalThis.fetch = async (url, init) => {
+    calls.push({ url, body: JSON.parse(init.body) });
+    return new Response(
+      JSON.stringify({ approved: [{ id: 17, declarationNo: "REAL17", reason: "" }], skipped: [] }),
+    );
+  };
+  try {
+    const result = await approveCustomsReceipts(
+      [{ id: 17, approval: { token: "a".repeat(64) }, status: "different" }],
+      "已核实差异",
+    );
+    assert.equal(result.approved.length, 1);
+    assert.deepEqual(calls, [
+      {
+        url: "/api/review/customs-receipts/approve-batch",
+        body: {
+          items: [{ id: 17, token: "a".repeat(64) }],
+          method: "manual",
+          note: "已核实差异",
+        },
+      },
+    ]);
+  } finally {
+    globalThis.fetch = original;
+  }
+});
+
+test("海关人工审核确认明确当前页范围与双审核开票门槛", async () => {
+  const { CustomsApproveDialog } = await server.ssrLoadModule(
+    "/src/modules/review/components/CustomsApproveDialog.tsx",
+  );
+  const html = renderToStaticMarkup(
+    createElement(CustomsApproveDialog, {
+      items: [{ id: 17, declarationNo: "REAL17", statusLabel: "拆行一致" }],
+      onClose() {},
+      onChanged() {},
+    }),
+  );
+  assert.match(html, /当前页选定的 1 张回执/);
+  assert.match(html, /海关与财务两项当前版本均审核通过后/);
+  assert.match(html, /人工审核说明/);
+  assert.doesNotMatch(html, /自动审核当前页|自动审核只通过/);
+  assert.match(html, /确认审核通过/);
+  assert.match(html, /REAL17/);
+});
+
+test("海关审核行复用财务勾选与主按钮样式，移除重新匹配操作", async () => {
+  const { CustomsReceiptRow } = await server.ssrLoadModule(
+    "/src/modules/review/components/CustomsReceiptRow.tsx",
+  );
+  const receipt = {
+    id: 17,
+    declarationNo: "TEST-17",
+    exportDate: "2026-11-13",
+    taxType: "征税",
+    customsDoc: "存在",
+    usageFlag: "未使用",
+    nsLineCount: 1,
+    itemCount: 1,
+    nsRecordNo: "CDTEST17",
+    consignee: { state: "empty", label: "回执未提供", value: "", note: "" },
+    status: "matched",
+    statusLabel: "一致",
+    statusNote: "",
+    groups: [],
+    approval: { approved: false, label: "待审核", allowed: true, autoAllowed: true, reason: "" },
+  };
+  const props = {
+    receipt,
+    open: false,
+    busy: false,
+    batch: true,
+    selected: true,
+    onToggle() {},
+    onSelect() {},
+    onApprove() {},
+  };
+  const html = renderToStaticMarkup(createElement(CustomsReceiptRow, props));
+  assert.match(html, /fr-declaration-row is-checked/);
+  assert.match(html, /class="fr-check-cell"/);
+  assert.match(html, /type="checkbox"[^>]*checked/);
+  assert.match(html, /ui-button--primary/);
+  assert.match(html, /aria-label="审核通过：TEST-17"/);
+  assert.doesNotMatch(html, /重新匹配|选本页/);
+  const blocked = renderToStaticMarkup(
+    createElement(CustomsReceiptRow, {
+      ...props,
+      selected: false,
+      receipt: {
+        ...receipt,
+        approval: {
+          ...receipt.approval,
+          allowed: false,
+          autoAllowed: false,
+          reason: "须先唯一匹配到 NS 报关单",
+        },
+      },
+    }),
+  );
+  assert.doesNotMatch(blocked, /type="checkbox"/);
+  assert.match(blocked, /须先唯一匹配到 NS 报关单/);
+  assert.match(blocked, /<button[^>]*disabled[^>]*aria-label="审核通过：TEST-17"/);
+});
+
+test("海关人工审核说明独立成行，输入框关联标签与说明", async () => {
+  const { CustomsApproveDialog } = await server.ssrLoadModule(
+    "/src/modules/review/components/CustomsApproveDialog.tsx",
+  );
+  const html = renderToStaticMarkup(
+    createElement(CustomsApproveDialog, {
+      items: [{ id: 17, declarationNo: "TEST-17", status: "matched", statusLabel: "一致" }],
+      onClose() {},
+      onChanged() {},
+    }),
+  );
+  assert.match(html, /cm-approve__note/);
+  assert.match(html, /<label for="[^"]+">人工审核说明<\/label>/);
+  assert.match(html, /差异单必填，其余选填/);
+  assert.match(html, /<textarea[^>]*aria-describedby="[^"]+"[^>]*rows="3"/);
+  assert.match(html, /maxlength="300"/i);
+  assert.match(html, /cm-approve__footer/);
+  assert.match(html, /data-tone="success"/);
 });

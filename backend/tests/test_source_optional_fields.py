@@ -12,6 +12,7 @@ from backend.modules.source.policy.ns_config import parse_config
 from backend.modules.source.public import DeclarationService
 from backend.modules.source.service.storage_service import StorageService
 from backend.tests.review_helpers import MaterializedReviewService as ReviewService
+from backend.tests.review_helpers import approve_customs
 from backend.tests.test_source_optional_sync import source as source
 from backend.tests.test_source_storage import declaration, rows
 from backend.tests.test_source_storage import engine as engine
@@ -35,6 +36,7 @@ def test_missing_customs_model_keeps_full_save_review_and_task_chain(source, eng
     assert "custrecord_swc_huge" not in json.loads(original)["lines"][0]["record"]
     review = ReviewService(engine, DeclarationService(engine), events)
     group = review.browse(DeclarationListQuery()).groups[0]
+    approve_customs(review, int(group.id))
     review.approve(int(group.id), ApproveRequest(contentSha256=group.contentSha256), "user:admin")
     amounts = rows(engine, "SELECT expected_amount FROM task_lines ORDER BY id")
     assert [Decimal(str(row["expected_amount"])) for row in amounts] == [Decimal("100.50"), Decimal("20")]

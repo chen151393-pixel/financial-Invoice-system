@@ -13,6 +13,7 @@ from backend.modules.source.public import DeclarationService
 from backend.modules.source.service.parent_reference_service import verify_missing_parents
 from backend.modules.source.service.storage_service import StorageService
 from backend.tests.review_helpers import MaterializedReviewService as ReviewService
+from backend.tests.review_helpers import approve_customs
 from backend.tests.test_source_optional_sync import source as source
 from backend.tests.test_source_storage import engine as engine
 from backend.tests.test_source_storage import ns as ns
@@ -70,6 +71,7 @@ def test_verified_empty_parent_preserves_amount_and_manual_currency_workflow(sou
     assert PARENT_FIELD not in raw["record"] and raw["parentReferenceCheck"]["state"] == "empty"
     review = ReviewService(engine, DeclarationService(engine), events)
     group = review.browse(DeclarationListQuery()).groups[0]
+    approve_customs(review, int(group.id))
     review.approve(
         int(group.id),
         ApproveRequest(
@@ -105,12 +107,14 @@ def test_verified_no_parent_keeps_existing_unresolved_review_workflow(source, en
     StorageService(ns, engine, events).sync_page("customs-declarations", lambda: page)
     review = ReviewService(engine, DeclarationService(engine), events)
     group = review.browse(DeclarationListQuery()).groups[0]
+    approve_customs(review, int(group.id))
     review.approve(int(group.id), ApproveRequest(contentSha256=group.contentSha256), "user:admin")
     tasks = rows(engine, "SELECT currency FROM task_tasks")
-    assert len(tasks) == 1 and tasks[0]["currency"] is None
+    assert tasks == []  # 币种待核实的财务状态仍为待审核，双审核门槛不能放行。
+    assert review.browse(DeclarationListQuery()).groups[0].review.status == "pending"
     assert [
         Decimal(str(line["expected_amount"]))
-        for line in rows(engine, "SELECT expected_amount FROM task_lines ORDER BY id")
+        for line in rows(engine, "SELECT amount AS expected_amount FROM review_lines ORDER BY id")
     ] == [Decimal("100.50"), Decimal("20")]
 
 

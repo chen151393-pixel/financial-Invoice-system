@@ -57,6 +57,18 @@ class Consignee(StrictModel):
     note: str
 
 
+class CustomsApproval(StrictModel):
+    token: str
+    approved: bool
+    label: str
+    allowed: bool
+    autoAllowed: bool
+    reason: str
+    approvedBy: str = ""
+    approvedAt: str = ""
+    note: str = ""
+
+
 class CustomsReceipt(StrictModel):
     id: int
     declarationNo: str
@@ -76,6 +88,18 @@ class CustomsReceipt(StrictModel):
     fileName: str
     revision: int
     groups: list[CompareGroup]
+    approval: CustomsApproval
+
+
+class CustomsApproveOutcome(StrictModel):
+    id: int
+    declarationNo: str = ""
+    reason: str = ""
+
+
+class CustomsApproveResult(StrictModel):
+    approved: list[CustomsApproveOutcome]
+    skipped: list[CustomsApproveOutcome]
 
 
 class CustomsCounts(StrictModel):

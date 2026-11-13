@@ -26,6 +26,14 @@ LINE_FIELDS = (
 )
 
 
+def head(connection, receipt_id, *, lock=False):
+    query = select(receipts).where(receipts.c.id == receipt_id)
+    if lock:
+        query = query.with_for_update()
+    row = connection.execute(query).mappings().first()
+    return dict(row) if row else None
+
+
 def heads_by_numbers(connection, numbers, *, lock=False):
     if not numbers:
         return {}

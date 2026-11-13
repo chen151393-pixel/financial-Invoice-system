@@ -45,7 +45,7 @@ export function BatchApproveDialog({
         {result ? (
           <>
             <p className="fr-status-note" role="status">
-              {result.approved.length} 张已审核通过并生成开票任务
+              {result.approved.length} 张已通过财务审核；海关审核也通过后自动生成开票任务
               {result.skipped.length ? `，${result.skipped.length} 张未通过` : ""}。
             </p>
             {result.skipped.length > 0 && (

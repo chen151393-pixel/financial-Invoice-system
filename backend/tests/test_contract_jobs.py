@@ -6,6 +6,7 @@ import pytest
 from backend.core.errors import ApiError
 from backend.modules.review.public import ReviewApproved
 from backend.modules.task.service.contract_worker import ContractWorker
+from backend.tests.review_helpers import approve_customs
 from backend.tests.test_source_storage import bundle, customs, purchase, rows, save
 from backend.tests.test_source_storage import engine as engine
 from backend.tests.test_source_storage import ns as ns
@@ -186,6 +187,7 @@ def test_application_lifecycle_consumes_queue(context, ns, engine, tmp_path, mon
             == 200
         )
         item = client.post("/api/review/declarations/query", headers=headers, json={}).json()["groups"][0]
+        approve_customs(app.state.review_calculations.review, int(item["id"]))
         response = client.post(
             f"/api/review/declarations/{item['id']}/approve",
             headers=headers,

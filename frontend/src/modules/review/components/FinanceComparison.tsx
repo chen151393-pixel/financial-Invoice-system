@@ -3,6 +3,7 @@ import { Button, EmptyState, ErrorState, Skeleton } from "../../../shared/compon
 import type { ComparisonGroup, ComparisonState, PurchaseLine } from "../types";
 import { DeclarationRow } from "./DeclarationRow";
 import { PurchaseDialog } from "./PurchaseDialog";
+import { ReviewListToolbar } from "./ReviewListToolbar";
 import "./review.css";
 
 // 主行列宽（不含勾选列）；批量模式在最前加 3% 的勾选列，从销售单号列让出
@@ -58,59 +59,56 @@ export function FinanceComparison({
   }
   return (
     <div className="fr-preview">
-      <div className="fr-results">
-        <p>
-          {result.counts.shown} 张报关单 · {result.counts.customs} 条报关行 · {result.counts.purchase}{" "}
-          条子采购行
-          {batch && (
-            <>
-              {" "}
-              · 已勾选 <b>{chosen.length}</b> 张（本页可审核 {selectable.length} 张）
-            </>
-          )}
-        </p>
-        <div className="fr-results__actions" role="group" aria-label="列表操作">
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => setExpanded(result.groups.map((group) => group.id))}
-          >
-            全部展开
-          </Button>
-          <Button variant="ghost" size="sm" onClick={() => setExpanded([])}>
-            全部收起
-          </Button>
-          <Button size="sm" disabled={busy} onClick={onRetry}>
-            刷新列表
-          </Button>
-          {onBatchApprove &&
-            (batch ? (
+      <ReviewListToolbar
+        summary={
+          <>
+            {result.counts.shown} 张报关单 · {result.counts.customs} 条报关行 · {result.counts.purchase}{" "}
+            条子采购行
+            {batch && (
               <>
-                <Button size="sm" disabled={busy} onClick={exitBatch}>
-                  取消批量
-                </Button>
-                <Button
-                  size="sm"
-                  variant="primary"
-                  disabled={busy || chosen.length === 0}
-                  onClick={() => onBatchApprove(chosen)}
-                >
-                  确认审核通过（{chosen.length}）
-                </Button>
+                {" "}
+                · 已勾选 <b>{chosen.length}</b> 张（本页可审核 {selectable.length} 张）
               </>
-            ) : (
+            )}
+          </>
+        }
+      >
+        <Button variant="ghost" size="sm" onClick={() => setExpanded(result.groups.map((group) => group.id))}>
+          全部展开
+        </Button>
+        <Button variant="ghost" size="sm" onClick={() => setExpanded([])}>
+          全部收起
+        </Button>
+        <Button size="sm" disabled={busy} onClick={onRetry}>
+          刷新列表
+        </Button>
+        {onBatchApprove &&
+          (batch ? (
+            <>
+              <Button size="sm" disabled={busy} onClick={exitBatch}>
+                取消批量
+              </Button>
               <Button
                 size="sm"
                 variant="primary"
-                disabled={busy || selectable.length === 0}
-                title={selectable.length === 0 ? "本页没有可审核的报关单" : undefined}
-                onClick={() => setBatch(true)}
+                disabled={busy || chosen.length === 0}
+                onClick={() => onBatchApprove(chosen)}
               >
-                批量审核通过
+                确认审核通过（{chosen.length}）
               </Button>
-            ))}
-        </div>
-      </div>
+            </>
+          ) : (
+            <Button
+              size="sm"
+              variant="primary"
+              disabled={busy || selectable.length === 0}
+              title={selectable.length === 0 ? "本页没有可审核的报关单" : undefined}
+              onClick={() => setBatch(true)}
+            >
+              批量审核通过
+            </Button>
+          ))}
+      </ReviewListToolbar>
       {!result.groups.length ? (
         <EmptyState title="没有符合条件的报关单" description="请调整查询条件或审核状态。" />
       ) : (

@@ -3,7 +3,7 @@
 > 本文件由 `npm.cmd run db:map` 根据迁移链离线 MySQL DDL、实体定义和字段字典生成，请勿手工修改；迁移或实体变化后重新生成，`backend/tests/test_schema_map.py` 会检查是否过期。
 > “修改”含加列、改列、索引与中文备注；数据回填仅在线执行，不在离线 DDL 中体现。
 
-当前最新迁移：`0043_task_supplier_owners`；共 43 个迁移、67 张实体表。
+当前最新迁移：`0044_review_dual_approval`；共 44 个迁移、68 张实体表。
 
 ## 1. 按模块查表
 
@@ -28,12 +28,13 @@
 | 表 | 中文说明 | 新建 | 后续修改 | 字段字典 |
 | --- | --- | --- | --- | --- |
 | `review_calculation_jobs` | 财务后台计算队列，按账套合并请求并持久重试 | `0032` | — | [查看](current-data-dictionary.md#review_calculation_jobs) |
+| `review_customs_approvals` | 海关审核不可变版本 | `0044` | — | [查看](current-data-dictionary.md#review_customs_approvals海关审核不可变版本) |
 | `review_customs_receipt_lines` | 海关回执报关明细，按版本保留 | `0042` | — | [查看](current-data-dictionary.md#review_customs_receipt_lines) |
 | `review_customs_receipts` | 海关回执报关单头与比对结果 | `0042` | — | [查看](current-data-dictionary.md#review_customs_receipts) |
 | `review_declaration_snapshots` | 财务报关单查询快照，后台计算后原子更新，列表只读取本表 | `0032` | — | [查看](current-data-dictionary.md#review_declaration_snapshots) |
 | `review_lines` | 审核冻结的子采购行范围，不可修改 | `0001` | `0006`、`0011` | [查看](current-data-dictionary.md#review_lines) |
 | `review_purchase_bases` | 全局开票依据版本 | `0006` | `0011` | [查看](current-data-dictionary.md#review_purchase_bases) |
-| `review_records` | 审核记录：一次审核通过一行，不可修改，全部行即审核历史 | `0001` | `0011` | [查看](current-data-dictionary.md#review_records) |
+| `review_records` | 审核记录：一次审核通过一行，不可修改，全部行即审核历史 | `0001` | `0011`、`0044` | [查看](current-data-dictionary.md#review_records) |
 | `review_snapshot_suppliers` | 财务查询快照的供应商筛选投影 | `0032` | — | [查看](current-data-dictionary.md#review_snapshot_suppliers) |
 
 ### task
@@ -163,3 +164,4 @@
 | [`0041_identity_role_pages`](../../backend/migrations/versions/0041_identity_role_pages.py) | `identity_role_pages` | — | identity：角色页面范围；已有人员和角色绑定不变。有配置时拒绝降级丢弃授权。 |
 | [`0042_review_customs_receipts`](../../backend/migrations/versions/0042_review_customs_receipts.py) | `review_customs_receipt_lines`、`review_customs_receipts` | — | review：海关回执（按出口报关单号保存海关明细、境外收货人与 NS 比对结果）。 |
 | [`0043_task_supplier_owners`](../../backend/migrations/versions/0043_task_supplier_owners.py) | `task_supplier_owners` | — | 供应商人员分工：仅新增一张九字段历史表，任务归属复用 task_events。 |
+| [`0044_review_dual_approval`](../../backend/migrations/versions/0044_review_dual_approval.py) | `review_customs_approvals` | `review_records` | 海关审核记录与财务审核放行依据：新增一张表、一个可空字段。 |

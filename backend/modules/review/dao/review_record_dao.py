@@ -48,3 +48,13 @@ def history(connection, declaration_id):
         .order_by(records.c.revision.desc())
     )
     return [dict(row) for row in connection.execute(query).mappings()]
+
+
+def release(connection, review_id, approval_id, now):
+    """只首次写入放行依据；用例已持账本锁和审核行锁。"""
+    result = connection.execute(
+        update(records)
+        .where(records.c.id == review_id, records.c.customs_approval_id.is_(None))
+        .values(customs_approval_id=approval_id, updated_at=now)
+    )
+    return result.rowcount == 1

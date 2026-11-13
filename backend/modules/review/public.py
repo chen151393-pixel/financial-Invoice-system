@@ -39,10 +39,15 @@ class ReviewApproved:
     lines: tuple[ApprovedLine, ...]
 
 
-__all__ = ["ApprovedLine", "ReviewApproved"]
+__all__ = ["ApprovedLine", "ReviewApproved", "InvoiceReady", "PurchaseBasisInvalidated"]
 
 
 @dataclass(frozen=True)
 class PurchaseBasisInvalidated:
     purchase_line_ids: tuple[int, ...]
     reason: str
+
+
+@dataclass(frozen=True)
+class InvoiceReady(ReviewApproved):
+    """海关与财务两项当前版本均已审核，允许生成开票任务。"""

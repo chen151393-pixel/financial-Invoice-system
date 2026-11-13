@@ -40,6 +40,7 @@ TABLES = {
     "review_snapshot_suppliers",
     "review_customs_receipts",
     "review_customs_receipt_lines",
+    "review_customs_approvals",
     "review_purchase_bases",
     "invoice_versions",
     "review_lines",
@@ -327,6 +328,7 @@ def test_downgrade_refuses_to_erase_version_evidence(tmp_path):
                 "identity_role_pages",
                 "review_customs_receipts",
                 "review_customs_receipt_lines",
+                "review_customs_approvals",
             }
             assert evidence_tables <= set(inspect(connection).get_table_names())
             assert connection.execute(text("SELECT id FROM invoice_lines")).scalar_one() == 77

@@ -140,7 +140,7 @@ def _create(connection, event, key, lines, now, predecessors):
             "task_id": task_id,
             "from_status": None,
             "to_status": "documents_pending",
-            "reason": f"财务审核通过（{event.record_no or '报关单'} 第 {event.revision} 版）",
+            "reason": f"海关及财务审核通过（{event.record_no or '报关单'} 第 {event.revision} 版）",
             "actor": event.approved_by,
             "details": {"owner": task_owner_dao.snapshot(owner)},
         },

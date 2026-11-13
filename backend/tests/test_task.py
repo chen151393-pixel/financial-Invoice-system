@@ -23,6 +23,7 @@ from backend.modules.task.service.supplier_group_service import SupplierGroupSer
 from backend.modules.task.service.task_generation_service import on_review_approved
 from backend.modules.task.service.task_service import TaskService
 from backend.tests.review_helpers import MaterializedReviewService as ReviewService
+from backend.tests.review_helpers import approve_customs
 from backend.tests.test_source_storage import bundle, customs, purchase, rows, save
 from backend.tests.test_source_storage import engine as engine  # 共用夹具
 from backend.tests.test_source_storage import ns as ns  # 共用夹具
@@ -104,6 +105,7 @@ def app_services(engine, tmp_path):
 def approve(services, record_no, note=""):
     result = services["review"].browse(DeclarationListQuery())
     item = next(group for group in result.groups if group.recordNumber == record_no)
+    approve_customs(services["review"], int(item.id))
     services["review"].approve(
         int(item.id), ApproveRequest(contentSha256=item.contentSha256, note=note), USER
     )
@@ -345,6 +347,7 @@ def test_http_task_routes(context, ns, engine, tmp_path):
         )
         assert login.status_code == 200
         item = client.post("/api/review/declarations/query", json={}, headers=headers).json()["groups"][0]
+        approve_customs(app.state.review_calculations.review, int(item["id"]))
         approved = client.post(
             f"/api/review/declarations/{item['id']}/approve",
             json={"contentSha256": item["contentSha256"]},

@@ -77,6 +77,22 @@ export interface CustomsReceipt {
   fileName: string;
   revision: number;
   groups: CustomsCompareGroup[];
+  approval: {
+    token: string;
+    approved: boolean;
+    label: string;
+    allowed: boolean;
+    autoAllowed: boolean;
+    reason: string;
+    approvedBy: string;
+    approvedAt: string;
+    note: string;
+  };
+}
+
+export interface CustomsApproveResult {
+  approved: { id: number; declarationNo: string; reason: string }[];
+  skipped: { id: number; declarationNo: string; reason: string }[];
 }
 
 export interface CustomsCounts {

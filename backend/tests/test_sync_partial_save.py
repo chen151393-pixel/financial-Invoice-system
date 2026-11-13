@@ -8,6 +8,7 @@ from backend.core.errors import ApiError
 from backend.modules.source.service.storage_service import StorageService
 from backend.modules.sync.dto.source_dto import PullRequest
 from backend.modules.sync.pull_service import PullService
+from backend.tests.review_helpers import approve_customs
 from backend.tests.test_source_storage import engine as engine
 from backend.tests.test_source_storage import ns as ns
 from backend.tests.test_source_storage import rows
@@ -255,6 +256,7 @@ def test_saved_group_can_be_reviewed_and_generate_tasks(batch, engine):
     assert result["batch"]["counts"]["saved"] == 1
     review = ReviewService(engine, DeclarationService(engine), events)
     group = review.browse(DeclarationListQuery()).groups[0]
+    approve_customs(review, int(group.id))
     review.approve(int(group.id), ApproveRequest(contentSha256=group.contentSha256), "user:admin")
     amounts = rows(engine, "SELECT expected_amount FROM task_lines ORDER BY id")
     assert [Decimal(str(row["expected_amount"])) for row in amounts] == [Decimal("100.50"), Decimal("20")]

@@ -14,7 +14,7 @@
 - 整单审核：财务人工确认，不调整金额；来源变化后要求重新审核，历史审核保留。
 - 批量审核（2026-10-22）：一次最多 50 张（一页），逐张走与单张相同的锁内复核和事务，被拒绝的逐张返回原因。
 - 冻结开票口径：子采购行的采购数量、采购单位、含税金额（来源缺失时为空）。
-- 发布 `ReviewApproved`：订阅方 task 模块（第 4c 步接入）在同一事务中生成开票任务；订阅方失败时整个审核回滚。
+- 财务通过发布 `ReviewApproved`；两项当前版本均通过后发布 `InvoiceReady`，task 在同一事务中生成开票任务；订阅方失败时最后一项审核及放行一起回滚。
 
 ## 目录
 
@@ -62,7 +62,7 @@
 ## 4e 切换
 
 - 旧 `reconciliation` 审核实现与接口已删除，数据库旧表仍保留。
-- 自第 4c 步起，`app.py` 登记 task 模块订阅 `ReviewApproved`，审核通过即生成开票任务。review 不读取 task，响应中不返回任务数。
+- `app.py` 登记 task 模块订阅 `InvoiceReady`，海关与财务均审核通过才生成开票任务。review 不读取 task，响应中不返回任务数。
 - 旧模块历史审核不迁移；既有 v2 审核按迁移保留冻结值并补记依据，证据不可还原时待复核。
 
 ## 验证
@@ -207,7 +207,7 @@ npm.cmd run dev:api
 | controller | `customs_receipt_controller.py` | `POST /api/review/customs-receipts/import`、`/query`、`/rematch` |
 | service | `customs_receipt_reader.py` | 读取 .xlsx / .xls / .csv 为原始文本行（限 4MB、6000 行，拒绝公式与错误值） |
 | | `customs_receipt_parser.py` | 表头别名识别（标题行可在前 10 行内）、逐行校验、按报关单号分组、内容摘要 |
-| | `customs_receipt_service.py` | 导入（解析在事务外，保存/换版与比对在 review 模块写锁事务内）、列表、重新匹配（每批 200 张短事务） |
+| | `customs_receipt_service.py` | 导入（解析在事务外，保存/换版与比对在账本锁事务内）、列表、重新匹配（每批 200 张短事务） |
 | policy | `customs_match_policy.py` | 比对规则（纯函数） |
 | dao / entity | `customs_receipt_dao.py`、`customs_receipt.py` | 两张表的读写与定义 |
 | dto / vo / mapper | `customs_receipt_dto.py`、`customs_receipt_vo.py`、`customs_receipt_mapper.py` | 请求、响应与行 → VO 转换 |
@@ -234,3 +234,14 @@ npm.cmd run dev:api
 ### 验证
 
 `backend/tests/test_customs_receipts.py`：比对规则（拆行、合并、单位/数量不一致、单边缺失、重号）、文件解析（xlsx 与带标题行的 GBK CSV、各类拒绝）、导入换版、列表筛选计数与重新匹配。MySQL 变体需提供 `BUSINESS_MIGRATION_TEST_SERVER_URL`，未配置时跳过。
+
+
+## 海关审核与双审核开票门槛（2026-11-13，迁移 0044）
+
+- 新增 `POST /api/review/customs-receipts/approve-batch`：`items` 为 1–50 个不重复的 `{id, token}`，`method` 为 `auto` 或 `manual`，`note` 最多 300 字。返回 `approved` / `skipped` 逐张结果及跳过原因；每张独立事务，数据库故障停止后续，部分已成功的保留。
+- 列表每张新增 `approval`：`token`、`approved`、`label`、`allowed`、`autoAllowed`、`reason`、`approvedBy`、`approvedAt`、`note`。服务端按当前 NS 来源重新核对可操作性；比对状态筛选与概况仍基于最近导入/重新匹配保存的结果，来源修改后可使用“全部重新匹配”更新统计。
+- 自动审核按钮处理当前页尚未审核且品名、单位、数量一致的回执，包含拆行/合并一致。人工单张或批量审核允许已唯一匹配的差异单，但必须填写说明。未找到或重号的 NS 单据不可审核。操作者来自认证身份，服务身份只读。
+- 提交在账本锁内重新比对，并核对回执版本、内容摘要、NS 身份与当前来源摘要。旧页面拒绝；重复提交同版本幂等。回执换版或来源变化后旧审核保留，当前版本重新待审核。
+- `ReviewApproved` 继续表示财务通过并驱动快照计算、依据失效/承接；`task_release_service.py` 核实当前财务审核和海关审核，发布 `InvoiceReady`。task 先生成任务，matching 再重算台账及建议，全部复用最后一项审核的事务。两项先后不限；财务因币种待核实仍为待审核时不放行任务。
+- `review_customs_approvals` 保存不可变审核版本、方式、说明及身份；放行依据直接保存在 `review_records.customs_approval_id`，空表示尚未放行，每个财务审核版本只设置一次。迁移只新增这张审核表和财务审核的一个可空字段，不回填旧任务、不删除任何业务数据；已生成任务保留，后续新任务与后继任务使用双审核门槛。
+- 部署先运行 `npm.cmd run db:upgrade` 至 `0044_review_dual_approval` 再重启服务；不自动批准既有一致回执。测试见 `test_customs_approval.py`，MySQL 并发用例仅在提供隔离测试建库连接时执行。

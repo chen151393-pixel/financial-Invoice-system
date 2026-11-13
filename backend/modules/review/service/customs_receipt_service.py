@@ -1,6 +1,6 @@
 """海关回执用例：导入（解析 → 保存/换版 → 比对）、列表查询与重新匹配。
 
-文件解析在事务外完成；写入只涉及 review 自己的回执表，使用 review 模块写锁，不进入开票账本事件链。
+文件解析在事务外完成；写入只涉及 review 自己的回执表，与海关审核共用账本锁，防止导入换版与双审核放行交错。
 NS 报关单经 source 公开门面在同一连接中只读获取。
 """
 
@@ -24,6 +24,7 @@ from ..vo.customs_receipt_vo import (
     ImportedDeclaration,
     RematchResult,
 )
+from .customs_approval_service import approval_view
 from .customs_receipt_parser import parse
 
 STATUS_FILTERS = {
@@ -64,7 +65,7 @@ class CustomsReceiptService:
         parsed = parse(body.filename, body.content)
         now = _now()
         try:
-            with write_lock.transaction(self.engine, "review") as connection:
+            with write_lock.transaction(self.engine) as connection:
                 outcomes = self._save(connection, parsed["declarations"], body.filename, owner, now)
         except SQLAlchemyError:
             raise ApiError(503, "海关回执保存失败，请检查业务数据库及迁移状态") from None
@@ -148,10 +149,20 @@ class CustomsReceiptService:
                     query.pageSize,
                 )
                 lines = dao.current_lines(connection, [head["id"] for head in heads])
+                views = []
+                for head in heads:
+                    view, ns_id, _, status, result = approval_view(connection, head, lines[head["id"]])
+                    current = {
+                        **head,
+                        "ns_declaration_id": ns_id,
+                        "match_status": status,
+                        "match_result": result,
+                    }
+                    views.append(receipt(current, lines[head["id"]], view))
         except SQLAlchemyError:
             raise ApiError(503, "海关回执读取失败，请检查业务数据库及迁移状态") from None
         return CustomsReceiptList(
-            items=[receipt(head, lines[head["id"]]) for head in heads],
+            items=views,
             counts=CustomsCounts(
                 receipts=sum(counts.values()),
                 items=items,
@@ -176,10 +187,10 @@ class CustomsReceiptService:
                 targets = dao.ids(connection, body.ids or None)
             if body.ids and len(targets) != len(body.ids):
                 raise ApiError(404, "部分海关回执不存在，请刷新列表")
-            # 分批短事务，避免全部重新匹配长时间持有模块写锁
+            # 分批短事务，避免全部重新匹配长时间占用账本锁。
             for start in range(0, len(targets), REMATCH_BATCH):
                 batch = [row["id"] for row in targets[start : start + REMATCH_BATCH]]
-                with write_lock.transaction(self.engine, "review") as connection:
+                with write_lock.transaction(self.engine) as connection:
                     self._rematch_batch(connection, batch, _now())
         except SQLAlchemyError:
             raise ApiError(503, "重新匹配失败，请检查业务数据库及迁移状态") from None
