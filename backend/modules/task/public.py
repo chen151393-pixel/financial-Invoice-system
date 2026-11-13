@@ -16,9 +16,28 @@ from .policy.board_policy import NODE_LABELS, NODES
 from .policy.stage_policy import STAGE_LABELS, STAGES, declaration_stage, task_stage
 from .service.task_line_reader import active_line_ids as active_line_ids
 from .service.task_line_reader import open_lines
+from .service.task_line_reader import related_line_ids as related_line_ids
 from .service.workbench_reader import unbound_notify_suppliers, workbench_tasks
 
+
+def owner_at_time(connection, task_id, occurred_at):
+    """任务在业务事实发生时的负责人快照；occurred_at 为 UTC 无时区时间。
+
+    无归属或交接前历史未知时 member_id 为空，不能以供应商当前人员倒填 KPI。
+    本接口仅提供归属事实，不定义 KPI 指标、权重或评分。
+    """
+    from .dao.task_owner_dao import at_time
+
+    row = at_time(connection, task_id, occurred_at)
+    return (
+        {key: row[key] for key in ("member_id", "member_name", "owner_version_id", "effective_at")}
+        if row
+        else None
+    )
+
+
 __all__ = [
+    "owner_at_time",
     "open_lines",
     "workbench_tasks",
     "unbound_notify_suppliers",
@@ -29,5 +48,3 @@ __all__ = [
     "NODES",
     "NODE_LABELS",
 ]
-
-from .service.task_line_reader import related_line_ids as related_line_ids

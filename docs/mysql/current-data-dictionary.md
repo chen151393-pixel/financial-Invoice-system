@@ -1952,3 +1952,22 @@ NS 来源按批后台保存记录与结果，不保存令牌。
 | updated_at | DATETIME | 否 | 本地记录最后更新时间，UTC；由 DAO 更新 |
 
 - 唯一约束 `uq_review_customs_receipt_line`：`(receipt_id, revision, item_no)`。
+
+
+## 供应商人员关联与归属（0043，2026-11-13）
+
+仅新增一张历史表；任务负责人快照及交接记录复用既有 `task_events.details.owner`，不新增表或字段。
+
+### task_supplier_owners｜供应商与采购抬头的人员分工历史
+
+| 字段 | 类型 | 可空 | 说明 |
+| --- | --- | --- | --- |
+| id | BIGINT UNSIGNED | 否 | 记录主键，同时用于并发版本校验 |
+| supplier_id | BIGINT UNSIGNED | 否 | source 供应商本地主键，跨模块不建外键 |
+| company_id | BIGINT UNSIGNED | 否 | source 采购公司本地主键，跨模块不建外键 |
+| member_id | BIGINT UNSIGNED | 否 | identity 人员本地主键，跨模块不建外键 |
+| member_name | VARCHAR(200) | 否 | 人员姓名快照，保留历史显示 |
+| effective_date | DATE | 否 | 人员分工生效日期，北京时间；同日取较新记录 |
+| reason | VARCHAR(300) | 否 | 新增或调整原因 |
+| actor | VARCHAR(200) | 否 | 来自认证身份的操作者 |
+| created_at | DATETIME(6) | 否 | 记录保存时间，UTC；历史只追加 |

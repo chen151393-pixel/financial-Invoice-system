@@ -8,11 +8,14 @@ from ..dao import (
     contract_job_dao,
     declaration_document_dao,
     event_dao,
+    supplier_owner_dao,
     supplier_setting_dao,
     task_dao,
     task_line_dao,
+    task_owner_dao,
 )
 from ..policy.task_policy import group_key
+from .supplier_owner_reader import china_today
 from .task_status_service import change_status
 
 
@@ -130,6 +133,7 @@ def _create(connection, event, key, lines, now, predecessors):
         ],
         now,
     )
+    owner = supplier_owner_dao.effective(connection, first.supplier_id, first.company_id, china_today(now))
     event_dao.append(
         connection,
         {
@@ -138,6 +142,7 @@ def _create(connection, event, key, lines, now, predecessors):
             "to_status": "documents_pending",
             "reason": f"财务审核通过（{event.record_no or '报关单'} 第 {event.revision} 版）",
             "actor": event.approved_by,
+            "details": {"owner": task_owner_dao.snapshot(owner)},
         },
         now,
     )

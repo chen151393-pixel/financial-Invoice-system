@@ -5,9 +5,9 @@ from sqlalchemy import func, insert, select
 from ..entity import events, tasks
 
 
-def append(connection, values, now):
+def append(connection, values, now, *, occurred_at=None):
     return connection.execute(
-        insert(events).values(occurred_at=now, created_at=now, updated_at=now, **values)
+        insert(events).values(occurred_at=occurred_at or now, created_at=now, updated_at=now, **values)
     ).inserted_primary_key[0]
 
 

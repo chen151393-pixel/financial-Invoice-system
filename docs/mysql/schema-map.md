@@ -3,7 +3,7 @@
 > 本文件由 `npm.cmd run db:map` 根据迁移链离线 MySQL DDL、实体定义和字段字典生成，请勿手工修改；迁移或实体变化后重新生成，`backend/tests/test_schema_map.py` 会检查是否过期。
 > “修改”含加列、改列、索引与中文备注；数据回填仅在线执行，不在离线 DDL 中体现。
 
-当前最新迁移：`0042_review_customs_receipts`；共 42 个迁移、66 张实体表。
+当前最新迁移：`0043_task_supplier_owners`；共 43 个迁移、67 张实体表。
 
 ## 1. 按模块查表
 
@@ -53,6 +53,7 @@
 | `task_signed_contracts` | 回签合同上传记录，按子采购单一份，不保存文件正文 | `0028` | — | [查看](current-data-dictionary.md#task_signed_contracts) |
 | `task_signed_upload_jobs` | 回签合同上传及后台归档队列，仅保存元数据，文件另存持久暂存目录 | `0030` | — | [查看](current-data-dictionary.md#task_signed_upload_jobs回签合同上传队列) |
 | `task_supplier_groups` | 供应商默认企微群 | `0001` | `0012` | [查看](current-data-dictionary.md#task_supplier_groups) |
+| `task_supplier_owners` | 供应商与采购抬头的人员分工历史；不另建当前关系、版本或任务归属表 | `0043` | — | [查看](current-data-dictionary.md#task_supplier_owners供应商与采购抬头的人员分工历史) |
 | `task_supplier_settings` | 供应商档案人工设置：是否开启供应商通知 | `0026` | — | [查看](current-data-dictionary.md#task_supplier_settings) |
 | `task_tasks` | 开票任务：审核通过后按 供应商 × 采购公司 × 币种 分组 | `0001` | `0003`、`0007`、`0012`、`0028` | [查看](current-data-dictionary.md#task_tasks) |
 | `task_wecom_directories` | 企微群目录同步状态与持久队列，每个凭证范围一条 | `0039` | — | [查看](current-data-dictionary.md#task_wecom_directories企微群目录同步) |
@@ -161,3 +162,4 @@
 | [`0040_sync_ns_plans`](../../backend/migrations/versions/0040_sync_ns_plans.py) | `sync_ns_plans` | `sync_ns_runs`、`sync_runs` | sync：NS 来源定时同步计划；批次复用 sync_runs，分页执行记录复用 sync_ns_runs 并指向所属批次。 |
 | [`0041_identity_role_pages`](../../backend/migrations/versions/0041_identity_role_pages.py) | `identity_role_pages` | — | identity：角色页面范围；已有人员和角色绑定不变。有配置时拒绝降级丢弃授权。 |
 | [`0042_review_customs_receipts`](../../backend/migrations/versions/0042_review_customs_receipts.py) | `review_customs_receipt_lines`、`review_customs_receipts` | — | review：海关回执（按出口报关单号保存海关明细、境外收货人与 NS 比对结果）。 |
+| [`0043_task_supplier_owners`](../../backend/migrations/versions/0043_task_supplier_owners.py) | `task_supplier_owners` | — | 供应商人员分工：仅新增一张九字段历史表，任务归属复用 task_events。 |

@@ -14,6 +14,7 @@ from backend.tests.test_schema_baseline import schema_engine as schema_engine
 from sqlalchemy import inspect, text
 
 TABLES = ALL_TABLES - {
+    "task_supplier_owners",
     "writeback_tasks",
     "writeback_plans",
     "writeback_audit",

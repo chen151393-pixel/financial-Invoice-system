@@ -9,6 +9,7 @@ export const paths = {
   tasks: "/tasks",
   taskWorkflowDemo: "/tasks/workflow-demo",
   supplierGroups: "/suppliers",
+  supplierOwners: "/suppliers/owners",
   externalGroups: "/suppliers/external-groups",
   invoices: "/invoices",
   matching: "/matching",

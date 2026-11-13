@@ -1165,3 +1165,9 @@ API 发票默认版使用 `source=lemon_open2`、`lemon_account=open2:` 加 `SHA
 - `review_customs_receipt_lines`：海关明细（项号、海关商品名称、成交单位与数量、法定单位与数量、成交总价等），按 `(receipt_id, revision, item_no)` 唯一；内容变化的重新导入新增一版，旧版本保留不删除。
 - 境外收货人只来自海关回执，NS 报关单没有该字段；报关单号匹配后即随报关单保存，未匹配的回执找到 NS 报关单后再关联。比对规则见 review 模块 `policy/customs_match_policy.py` 与[模块说明](../../backend/modules/review/README.md#海关回执与报关单比对2026-11-12)。
 - 写入只涉及 review 自己的两张表，使用 review 模块写锁，不进入开票账本事件链；NS 报关单经 source 门面 `declarations_by_number` 只读获取。字段见[字段字典](../mysql/current-data-dictionary.md#review_customs_receipts)。迁移仅在回执表为空时允许降级，已有数据时拒绝，避免丢失境外收货人。
+
+## 供应商人员归属扩展（2026-11-13）
+
+迁移 `0043_task_supplier_owners` 归属 task 模块，仅新增 `task_supplier_owners` 一表九字段：id、supplier_id、company_id、member_id、member_name、effective_date、reason、actor、created_at。每次人员调整追加一行，当前归属取已到生效日期的最新记录；同日取较大 ID。关联内最新 ID 同时作为并发校验值，不另存 revision、当前关系或 updated_at。跨 source/identity 仅存本地 ID，不建跨模块外键。
+
+任务生成时在既有创建事件的 `details.owner` 保存人员 ID、姓名及分工记录 ID；显式交接仅向既有 `task_events` 追加 `owner_transferred` 事件，不再增加任务归属表。按业务发生时间读取人员事件即可追溯当时归属。旧任务无人员事件时明确未知，不按当前关系倒填；已完成任务不参与交接。未来生效日按北京时间解释。此扩展不定义 KPI 指标或分数，人员历史已有数据时禁止自动降级删除。

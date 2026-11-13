@@ -36,6 +36,17 @@ def grant(admin, headers, role, pages, revision=0):
     )
 
 
+def test_supplier_owner_routes_follow_supplier_page_permission(system, context):
+    app, admin, feishu, headers = system
+    user, _, _ = feishu_login(app, context.settings, feishu, "u-wang")
+    assert grant(admin, headers, "finance", ["supplier-profiles"]).status_code == 200
+    assert user.get("/api/task/supplier-owners/options").status_code == 200
+    assert user.post("/api/task/supplier-owners/query", json={}, headers=headers).status_code == 200
+    assert grant(admin, headers, "finance", ["invoice-followup"], 1).status_code == 200
+    assert user.get("/api/task/supplier-owners/options").status_code == 403
+    assert user.post("/api/task/supplier-owners/query", json={}, headers=headers).status_code == 403
+
+
 def member(admin, name="王财务"):
     return next(row for row in admin.get("/api/identity/access").json()["users"] if row["name"] == name)
 

@@ -6,6 +6,14 @@ from .policy.login_policy import feishu_user_id
 SYSTEM_ACTORS = {"system": "系统"}
 
 
+def assignment_members(connection):
+    """本地已导入的飞书成员目录，供业务负责人选择；不以平台登录启用状态决定业务分工。"""
+    return [
+        {"id": str(row["id"]), "name": row["name"], "active": row["active"]}
+        for row in user_dao.all_users(connection)
+    ]
+
+
 def actor_names(connection, actors):
     """{操作者标识: 显示名称}。
 

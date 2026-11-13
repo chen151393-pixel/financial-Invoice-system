@@ -274,3 +274,25 @@ MySQL 命名锁保证多实例单消费者，并对同一任务的同一子采�
 旧 `/api/tasks/supplier-groups/profiles/query` 和 `keyword` 保留一个版本兼容旧前端；正式前端已切换新路径，旧调用方升级后删除该别名。其余群维护接口不变。
 
 供应商档案 `profiles/query.status` 新增 `bound`（任意群绑定，含停用绑定）与 `notify_off`（供应商通知关闭，与群绑定是否启用无关），用于概况卡筛选；与名称、群名、群主条件取交集，先筛选再分页。原 all/enabled/disabled/unbound 保留，概况 counts 不随筛选变化。无需数据库迁移。
+
+## 供应商人员关联与历史归属（2026-11-13）
+
+入口 `/suppliers/owners`，复用供应商档案页面权限 `supplier-profiles`，不额外限定系统管理员。服务身份维持只读。主键为供应商本地 ID × 采购公司本地 ID；两个 ID 已包含 NS 来源身份，不能跨账套关联，也不按名称猜测身份。同一供应商不同抬头可以由不同人员负责，币种不影响这项分工。
+
+| 接口（前缀 `/api/task/supplier-owners`） | 中文说明 |
+| --- | --- |
+| `GET /options` | source 有效供应商、已出现在子采购中的有效采购抬头、identity 已导入的当前成员及北京时间日期；选择负责人不要求对方已启用平台登录 |
+| `POST /query` | `supplierName/companyId/memberId/status/page/pageSize`；status 为 all/assigned/unassigned/scheduled，搜索、合并来源组合与已有配置、过滤及分页均由后端完成，单页最多 50 条 |
+| `GET /{supplierId}/{companyId}/history` | 全部保存版本，含姓名快照、生效日期、操作者、原因和 UTC 保存时间 |
+| `POST /preview` | `{items:[{supplierId,companyId,revision}],memberId,effectiveDate,reason,transferOpenTasks}`，一次最多 100 条，返回变更关系数、未完成任务数、交接能力及 `previewToken` |
+| `POST /save` | 预览参数加 `previewToken`；同一账本短事务内重新校验版本、成员及任务状态，整批成功或整批回滚，返回实际 saved/transferredTasks |
+
+仅新增 `task_supplier_owners` 一张九字段历史表：id、supplier_id、company_id、member_id、member_name、effective_date、reason、actor、created_at。每次变更只追加一行，不另建当前关系与版本表，不保存重复的 revision 和 updated_at；接口 revision 使用该组合最新记录 ID 进行并发校验。生效日期按北京时间解释，未来版本到期后新任务自动采用，无须定时修改历史。相同生效日以最新版本为准；补录旧日期只影响后续生成任务的选择，不倒填历史业务。列表分开显示当前人员与待生效安排。
+
+任务归属复用既有 `task_events`：创建事件的 `details.owner` 保存生成时的人员快照，显式交接追加 `owner_transferred` 事件，同样保存人员 ID、姓名及分工记录 ID，occurred_at 为实际 UTC 生效时间。新任务无配置时也保存空归属，防止日后误用供应商当前人员归算。默认仅调整新业务；勾选交接才追加未完成任务的人员时间线与 `owner_transferred` 事件，已完成或已被替代的任务不交接。未来日期或早于当前有效版本日期的调整不能提前交接现有任务，预览返回原因；实际交接时再操作。旧任务首次交接前无人员事件时返回未知，不猜测交接前人员，也不额外补写未知记录。
+
+只读门面 `owner_at_time(connection, task_id, occurred_at)` 返回业务发生时的人员快照，时间参数统一为 UTC 无时区时间；未归属时为空。后续 KPI 应按各指标约定的业务发生时点读取归属，并按采购单/依据等业务身份避免任务换版重复计数。本次仅建设人员归属事实，不实现 KPI 分数、权重或采购额统计。
+
+部署先执行迁移 `0043_task_supplier_owners`，只新增上述历史表；手动脚本见 `backend/migrations/manual/0043_task_supplier_owners.sql`，不得与自动迁移重复执行。不自动更新既有人事或业务归属；已有归属数据时禁止直接降级删除。实现按 controller/dto/vo、关联 DAO、任务归属 DAO、reader/service 分层，跨模块只通过 source/identity 只读门面。
+
+验证：`test_supplier_owners.py` 覆盖日期、历史、整批回滚、预览冲突、新任务快照与显式交接；`test_supplier_owners_mysql.py` 使用专用随机 MySQL 库验证同一预览并发保存。未提供 `BUSINESS_MIGRATION_TEST_SERVER_URL` 时跳过 MySQL 专项，不将 SQLite 结果视为 MySQL 并发验收。

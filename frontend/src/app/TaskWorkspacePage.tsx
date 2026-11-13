@@ -1,6 +1,7 @@
 import { Link, useMatch, useParams } from "react-router";
 import { ExternalGroupsPage } from "../modules/task/pages/ExternalGroupsPage";
 import { SupplierGroupsPage } from "../modules/task/pages/SupplierGroupsPage";
+import { SupplierOwnersPage } from "../modules/task/pages/SupplierOwnersPage";
 import { TaskBoardPage } from "../modules/task/pages/TaskBoardPage";
 import { TaskDetailPage } from "../modules/task/pages/TaskDetailPage";
 import { AppFrame } from "./WorkspaceFrame";
@@ -10,7 +11,8 @@ import { useViewNavigate } from "./useViewNavigate";
 
 export default function TaskWorkspacePage() {
   const externalPage = useMatch(paths.externalGroups) !== null;
-  const groupsPage = useMatch(paths.supplierGroups) !== null || externalPage;
+  const ownerPage = useMatch(paths.supplierOwners) !== null;
+  const groupsPage = useMatch(paths.supplierGroups) !== null || externalPage || ownerPage;
   const { taskId } = useParams();
   const navigateView = useViewNavigate();
   return (
@@ -37,14 +39,18 @@ export default function TaskWorkspacePage() {
       description={
         externalPage
           ? "导入企业微信外部群名单，并把群关联到供应商"
-          : groupsPage
-            ? "维护供应商的企微开票群与通知开关；关闭通知的供应商审核后不生成开票任务"
-            : taskId
-              ? "按任务当前节点处理合同归档、通知供应商、收票与补资料"
-              : "按任务当前节点跟进合同归档、通知供应商、收票与补资料，等待最久的任务排在最前"
+          : ownerPage
+            ? "按供应商与采购抬头维护负责人，保留人员变更与业务归属"
+            : groupsPage
+              ? "维护供应商的企微开票群与通知开关；关闭通知的供应商审核后不生成开票任务"
+              : taskId
+                ? "按任务当前节点处理合同归档、通知供应商、收票与补资料"
+                : "按任务当前节点跟进合同归档、通知供应商、收票与补资料，等待最久的任务排在最前"
       }
     >
-      {externalPage ? (
+      {ownerPage ? (
+        <SupplierOwnersPage />
+      ) : externalPage ? (
         <ExternalGroupsPage />
       ) : groupsPage ? (
         <SupplierGroupsPage />

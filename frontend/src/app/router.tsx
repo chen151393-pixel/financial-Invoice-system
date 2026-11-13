@@ -62,6 +62,10 @@ export const router = createBrowserRouter([
           },
           { path: legacyPaths.finance, element: <Navigate to={paths.review} replace /> },
           { path: paths.tasks, element: page("invoice-followup", "开票跟进", <TaskWorkspacePage />) },
+          {
+            path: paths.supplierOwners,
+            element: page("supplier-profiles", "供应商人员关联", <TaskWorkspacePage />),
+          },
           { path: legacyPaths.taskBoard, element: <TaskBoardRedirect /> },
           {
             path: paths.taskWorkflowDemo,

@@ -3,6 +3,7 @@
 from dataclasses import dataclass
 
 from .dao.purchase_order_dao import lines as purchase_order_lines
+from .dao.supplier_owner_directory_dao import directory as supplier_owner_directory
 from .dao.unit_dictionary_dao import unit_names
 from .policy.admission_policy import admission_issues, admission_reason
 from .policy.declared_price_policy import (
@@ -22,6 +23,7 @@ from .service.workbench_reader import workbench_declarations, workbench_purchase
 from .service.writeback_context import parent_sub_order_counts, writeback_context
 
 __all__ = [
+    "supplier_owner_directory",
     "purchase_order_lines",
     "writeback_context",
     # 回写自动对应账单（writeback）：NS 母单内部 ID → 本地有效子采购单张数

@@ -6,6 +6,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { MemoryRouter } from "react-router";
 import { createServer } from "vite";
 let server, api, Table, Picker, DirectoryStatus, navigation, paths, Search, pollDirectory;
+let OwnerTable, OwnerEditor, SupplierTabs, ownerApi;
 before(async () => {
   server = await createServer({
     configFile: fileURLToPath(new URL("../vite.config.ts", import.meta.url)),
@@ -31,9 +32,111 @@ before(async () => {
     "/src/modules/task/components/pollWecomDirectory.ts",
   ));
   paths = await server.ssrLoadModule("/src/app/paths.ts");
+  ({ SupplierOwnerTable: OwnerTable } = await server.ssrLoadModule(
+    "/src/modules/task/components/SupplierOwnerTable.tsx",
+  ));
+  ({ SupplierOwnerEditor: OwnerEditor } = await server.ssrLoadModule(
+    "/src/modules/task/components/SupplierOwnerEditor.tsx",
+  ));
+  ({ SupplierTabs } = await server.ssrLoadModule("/src/modules/task/components/SupplierTabs.tsx"));
+  ownerApi = await server.ssrLoadModule("/src/modules/task/api/supplier-owner.ts");
 });
 after(async () => {
   await server?.close();
+});
+
+const ownerRow = {
+  supplierId: 1,
+  companyId: 2,
+  revision: 3,
+  supplierName: "示例供应商",
+  account: "prod",
+  nsInternalId: "77",
+  companyName: "采购抬头甲",
+  current: { id: "8", memberId: "5", memberName: "王萍", effectiveDate: "2026-11-01", revision: 3 },
+  scheduled: [{ id: "9", memberName: "范宇洁", effectiveDate: "2026-12-01" }],
+  status: "assigned",
+};
+
+test("供应商人员关联使用独立路由并复用供应商页签", () => {
+  assert.equal(paths.paths.supplierOwners, "/suppliers/owners");
+  const html = renderToStaticMarkup(
+    createElement(MemoryRouter, null, createElement(SupplierTabs, { value: "owners" })),
+  );
+  assert.match(html, /aria-pressed="true">人员关联/);
+  assert.match(html, /供应商档案/);
+});
+
+test("人员关联表分别显示当前归属和未来安排，并保留同供应商不同抬头", () => {
+  const html = renderToStaticMarkup(
+    createElement(OwnerTable, {
+      items: [
+        ownerRow,
+        {
+          ...ownerRow,
+          companyId: 3,
+          companyName: "采购抬头乙",
+          current: null,
+          scheduled: [],
+          status: "unassigned",
+        },
+      ],
+      selected: ["1:2"],
+      disabled: false,
+      onSelect() {},
+      onEdit() {},
+      onHistory() {},
+    }),
+  );
+  for (const value of ["采购抬头甲", "采购抬头乙", "王萍", "2026-12-01", "范宇洁", "待分配", "历史"])
+    assert.ok(html.includes(value));
+  assert.equal((html.match(/checked=""/g) || []).length, 1);
+  assert.match(html, /可横向滚动/);
+});
+
+test("人员维护表单默认保留旧任务归属，必须先预览，不伪装保存成功", () => {
+  const html = renderToStaticMarkup(
+    createElement(OwnerEditor, {
+      items: [ownerRow],
+      options: {
+        suppliers: [{ id: 1, name: "示例供应商", account: "prod" }],
+        companies: [{ id: 2, name: "采购抬头甲", account: "prod" }],
+        members: [{ id: 5, name: "王萍", account: "" }],
+        today: "2026-11-13",
+      },
+      onClose() {},
+      onSaved() {},
+      onBusy() {},
+    }),
+  );
+  assert.match(html, /预览变更/);
+  assert.match(html, /生效日期/);
+  assert.match(html, /历史归属保留/);
+  assert.match(html, /同时交接这些关系下的未完成任务/);
+  assert.doesNotMatch(html, /确认保存|checked=""|保存成功/);
+});
+
+test("人员关联保存绑定后端预览、版本和交接选择，冲突保留后端错误", async (t) => {
+  const requests = [];
+  const mock = t.mock.method(globalThis, "fetch", async (url, options) => {
+    requests.push({ url, body: JSON.parse(options.body) });
+    return Response.json({ saved: 1, transferredTasks: 0 });
+  });
+  const body = {
+    items: [{ supplierId: 1, companyId: 2, revision: 3 }],
+    memberId: 5,
+    effectiveDate: "2026-11-13",
+    reason: "人员交接",
+    transferOpenTasks: false,
+  };
+  await ownerApi.previewOwnerChange(body);
+  await ownerApi.saveOwnerChange(body, "a".repeat(64));
+  assert.equal(requests[0].url, "/api/task/supplier-owners/preview");
+  assert.deepEqual(requests[1].body, { ...body, previewToken: "a".repeat(64) });
+  mock.mock.mockImplementation(async () =>
+    Response.json({ error: "预览后人员或任务已变化" }, { status: 409 }),
+  );
+  await assert.rejects(ownerApi.saveOwnerChange(body, "a".repeat(64)), /预览后人员或任务已变化/);
 });
 
 test("供应商查询拆分三个独立输入并保留批量值，上方显示标签", () => {

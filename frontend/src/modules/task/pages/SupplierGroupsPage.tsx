@@ -16,6 +16,7 @@ import { InvoicingSpeedCard } from "../components/InvoicingSpeedCard";
 import { SupplierGroupEditor } from "../components/SupplierGroupEditor";
 import { SupplierProfileSearch } from "../components/SupplierProfileSearch";
 import { SupplierProfilesTable } from "../components/SupplierProfilesTable";
+import { SupplierTabs } from "../components/SupplierTabs";
 import { useSupplierProfiles } from "../hooks/useSupplierProfiles";
 import type { SupplierProfile, SupplierProfileList } from "../types/supplier-group";
 import "./task.css";
@@ -62,6 +63,7 @@ export function SupplierGroupsPage() {
   }
   return (
     <div className="it-page sg-page">
+      <SupplierTabs value="profiles" />
       {feedback && (
         <p ref={feedbackElement} tabIndex={-1} role="status" className="sg-feedback">
           {feedback}

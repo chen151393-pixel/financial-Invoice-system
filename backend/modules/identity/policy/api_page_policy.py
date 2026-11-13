@@ -17,6 +17,7 @@ SHARED = {
     ("POST", "/api/writeback/invoices/{invoice_id}/recheck"): ("match", "writeback"),
 }
 PREFIXES = (
+    ("/api/task/supplier-owners", ("supplier-profiles",)),
     ("/api/identity", ("access",)),
     ("/api/matching/workbench", ("workbench",)),
     ("/api/tasks/supplier-groups", ("supplier-profiles",)),
