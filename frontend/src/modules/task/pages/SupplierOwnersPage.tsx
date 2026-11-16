@@ -14,6 +14,7 @@ import {
 import { SupplierOwnerEditor } from "../components/SupplierOwnerEditor";
 import { SupplierOwnerHistory } from "../components/SupplierOwnerHistory";
 import { SupplierOwnerSearch } from "../components/SupplierOwnerSearch";
+import { SupplierOwnerStats } from "../components/SupplierOwnerStats";
 import { SupplierOwnerTable, ownerKey } from "../components/SupplierOwnerTable";
 import { SupplierTabs } from "../components/SupplierTabs";
 import { useSupplierOwners } from "../hooks/useSupplierOwners";
@@ -21,7 +22,7 @@ import type { OwnerItem, OwnerQuery } from "../types/supplier-owner";
 import "./supplier-owners.css";
 
 export function SupplierOwnersPage() {
-  const { state, query, search, reload } = useSupplierOwners();
+  const { state, query, counts, search, reload } = useSupplierOwners();
   const [selected, setSelected] = useState<string[]>([]);
   const [editor, setEditor] = useState<{ key: number; items: OwnerItem[] } | null>({ key: 0, items: [] });
   const [history, setHistory] = useState<OwnerItem | null>(null);
@@ -47,6 +48,7 @@ export function SupplierOwnersPage() {
   return (
     <div className="supplier-owners">
       <SupplierTabs value="owners" />
+      {counts && <SupplierOwnerStats counts={counts} query={query} disabled={busy} onSearch={change} />}
       {feedback && <Alert tone="success">{feedback}</Alert>}
       {state.kind === "loading" && <Skeleton label="正在读取供应商人员关联" />}
       {state.kind === "error" && (

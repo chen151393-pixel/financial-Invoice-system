@@ -117,6 +117,8 @@
 
 `/suppliers/owners` 与供应商档案共用 `SupplierTabs` 页签及 `supplier-profiles` 页面权限。`SupplierOwnersPage` 组合组件库的列表、查询栏、右侧编辑卡与历史弹窗；宽表仅在表内横向滚动，窄屏编辑区放到列表下方。
 
+顶部复用供应商档案的 `StatGrid` 与 `StatCard`，显示全部关系、未分配人员、已分配人员、已绑定开票群、未绑定开票群。点击卡片回到第一页，保留已提交的供应商、抬头及负责人条件；人员状态与群绑定状态可叠加，再点已选状态可取消。“全部关系”重置两类状态，查询栏“清空”重置所有条件。卡片展示后端全量组合计数，表中“开票群”列展示绑定情况。
+
 `api/supplier-owner.ts` 调用 `/api/task/supplier-owners` 的 options/query/history/preview/save；`useSupplierOwners` 处理查询取消及加载、空、失败状态，`useOwnerChange` 管理预览与保存，修改草稿即废弃旧预览，失败保留输入并要求重新预览，不自动重试写入。
 
 支持新增、逐条维护、本页多选批量更换、后端生效日期与未完成任务交接预览。默认保留既有任务归属；当前人员与未来安排分别展示。人员与公司选择来自接口，前端不计算归属时间线或 KPI。后端规则、迁移及历史边界见[task 模块说明](../../../../backend/modules/task/README.md#供应商人员关联与历史归属2026-11-13)。

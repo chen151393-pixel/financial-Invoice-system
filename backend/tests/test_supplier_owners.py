@@ -10,7 +10,7 @@ from backend.core.errors import ApiError
 from backend.manage import SCHEMA_INI, _config
 from backend.modules.identity.dao import user_dao
 from backend.modules.review.public import ApprovedLine, ReviewApproved
-from backend.modules.task.dao import supplier_owner_dao, task_dao, task_owner_dao
+from backend.modules.task.dao import supplier_group_dao, supplier_owner_dao, task_dao, task_owner_dao
 from backend.modules.task.dto.supplier_owner_dto import OwnerChange, OwnerQuery, OwnerSave
 from backend.modules.task.entity import supplier_owners
 from backend.modules.task.public import owner_at_time
@@ -102,6 +102,43 @@ def test_pair_specific_assignment_and_source_pair_options(setup):
     assert service.browse(OwnerQuery(supplierName="不存在")).total == 0
     page = service.browse(OwnerQuery(page=2, pageSize=1))
     assert page.total == 2 and len(page.items) == 1 and page.pages == 2
+
+
+def test_overview_counts_and_combined_filters_before_pagination(setup, engine, ns):
+    service, rows = setup
+    other = purchase("202")
+    other[1]["custrecord_swc_subpo_vendor"] = {"id": "88", "refName": "另一个供应商"}
+    save(ns, engine, bundle([other], [customs("870")]))
+    with engine.begin() as connection:
+        supplier_group_dao.insert_group(
+            connection,
+            {
+                "supplier_id": rows[0].supplierId,
+                "group_name": "测试开票群",
+                "chat_id": "owners-test-group",
+                "owner_name": "群主",
+                "owner_userid": "group-owner",
+                "enabled": False,
+                "updated_by": ACTOR,
+            },
+            datetime.now(UTC).replace(tzinfo=None),
+        )
+    persist(service, change([rows[0]]))
+    persist(service, change([rows[1]], member=2, day=china_today() + timedelta(days=1)))
+
+    bound = service.browse(OwnerQuery(groupStatus="bound", page=2, pageSize=1))
+    assert bound.counts.model_dump() == {"all": 3, "assigned": 1, "unassigned": 1, "bound": 2, "unbound": 1}
+    assert bound.total == bound.pages == 2
+    assert len(bound.items) == 1 and bound.items[0].groupBound
+
+    assigned = service.browse(OwnerQuery(groupStatus="bound", status="assigned", memberId=1))
+    assert assigned.total == 1 and assigned.items[0].companyId == rows[0].companyId
+    assert assigned.counts == bound.counts
+    assert service.browse(OwnerQuery(groupStatus="bound", status="scheduled")).total == 1
+    assert service.browse(OwnerQuery(groupStatus="bound", status="unassigned")).total == 0
+    assert service.browse(OwnerQuery(groupStatus="bound", memberId=2)).total == 0
+    unbound = service.browse(OwnerQuery(groupStatus="unbound", status="unassigned"))
+    assert unbound.total == 1 and not unbound.items[0].groupBound
 
 
 def test_single_table_http_preview_save_and_history(context, engine, setup):

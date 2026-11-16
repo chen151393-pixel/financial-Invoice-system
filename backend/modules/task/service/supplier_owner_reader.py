@@ -7,8 +7,8 @@ from backend.core.search_terms import search_terms
 from backend.modules.identity.public import assignment_members
 from backend.modules.source.public import supplier_owner_directory
 
-from ..dao import supplier_owner_dao
-from ..vo.supplier_owner_vo import OwnerHistory, OwnerItem, OwnerList, OwnerOptions, OwnerVersion
+from ..dao import supplier_group_dao, supplier_owner_dao
+from ..vo.supplier_owner_vo import OwnerCounts, OwnerHistory, OwnerItem, OwnerList, OwnerOptions, OwnerVersion
 
 
 def china_today(now=None):
@@ -59,18 +59,16 @@ def browse(connection, query):
         (r["supplier_id"], r["company_id"]): r for r in supplier_owner_dao.associations(connection)
     }
     pairs = {(r["supplier_id"], r["company_id"]) for r in directory["pairs"]} | set(associations)
+    bound_suppliers = set(supplier_group_dao.supplier_ids(connection))
     versions = {}
     for row in supplier_owner_dao.records(connection):
         versions.setdefault((row["supplier_id"], row["company_id"]), []).append(row)
     today, items = china_today(), []
     terms = [term.casefold() for term in search_terms(query.supplierName)]
+    counts = OwnerCounts()
     for supplier_id, company_id in pairs:
         supplier, company = suppliers.get(supplier_id), companies.get(company_id)
         if supplier is None or company is None:
-            continue
-        if terms and not any(term in supplier["name"].casefold() for term in terms):
-            continue
-        if query.companyId is not None and company_id != query.companyId:
             continue
         association = associations.get((supplier_id, company_id))
         history = versions.get((supplier_id, company_id), [])
@@ -78,13 +76,24 @@ def browse(connection, query):
         current = applicable[-1] if applicable else None
         # 同一天后追加的版本替代该日旧计划；所有原版本仍保留在历史中。
         scheduled = {r["effective_date"]: r for r in history if r["effective_date"] > today}
+        status = "assigned" if current else "scheduled" if scheduled else "unassigned"
+        group_bound = supplier_id in bound_suppliers
+        counts.all += 1
+        counts.assigned += status == "assigned"
+        counts.unassigned += status == "unassigned"
+        counts.bound += group_bound
+        counts.unbound += not group_bound
+        if terms and not any(term in supplier["name"].casefold() for term in terms):
+            continue
+        if query.companyId is not None and company_id != query.companyId:
+            continue
         if query.memberId is not None and (current is None or current["member_id"] != query.memberId):
             continue
-        if query.status == "assigned" and current is None:
-            continue
-        if query.status == "unassigned" and (current is not None or scheduled):
-            continue
         if query.status == "scheduled" and not scheduled:
+            continue
+        if query.status in ("assigned", "unassigned") and query.status != status:
+            continue
+        if query.groupStatus != "all" and (query.groupStatus == "bound") != group_bound:
             continue
         items.append(
             OwnerItem(
@@ -95,9 +104,10 @@ def browse(connection, query):
                 companyId=company_id,
                 companyName=company["name"],
                 revision=association["revision"] if association else 0,
+                groupBound=group_bound,
                 current=version_item(current) if current else None,
                 scheduled=[version_item(r) for r in scheduled.values()],
-                status="assigned" if current else "scheduled" if scheduled else "unassigned",
+                status=status,
             )
         )
     items.sort(key=lambda item: (item.supplierName, item.companyName, item.supplierId, item.companyId))
@@ -110,6 +120,7 @@ def browse(connection, query):
         pageSize=query.pageSize,
         pages=max(1, (total + query.pageSize - 1) // query.pageSize),
         today=today.isoformat(),
+        counts=counts,
     )
 
 

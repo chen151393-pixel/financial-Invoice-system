@@ -58,10 +58,11 @@ export function SupplierOwnerTable({
         </>
       ),
     },
-    { key: "company", header: "采购抬头", render: (r) => r.companyName },
+    { key: "company", header: "采购抬头", width: "136px", render: (r) => r.companyName },
     {
       key: "member",
       header: "负责人",
+      width: "116px",
       render: (r) => (
         <>
           {r.current?.memberName || "待分配"}
@@ -73,10 +74,11 @@ export function SupplierOwnerTable({
         </>
       ),
     },
-    { key: "date", header: "生效日期", render: (r) => r.current?.effectiveDate || "—" },
+    { key: "date", header: "生效日期", width: "106px", render: (r) => r.current?.effectiveDate || "—" },
     {
       key: "status",
-      header: "状态",
+      header: "关联状态",
+      width: "94px",
       render: (r) => (
         <Badge tone={r.current ? "success" : "warning"}>
           {r.current ? "已关联" : r.scheduled.length ? "待生效" : "未关联"}
@@ -84,8 +86,17 @@ export function SupplierOwnerTable({
       ),
     },
     {
+      key: "group",
+      header: "开票群",
+      width: "90px",
+      render: (r) => (
+        <Badge tone={r.groupBound ? "success" : "warning"}>{r.groupBound ? "已绑定" : "未绑定"}</Badge>
+      ),
+    },
+    {
       key: "actions",
       header: "操作",
+      width: "120px",
       render: (r) => (
         <div className="supplier-owner-actions">
           <Button size="sm" disabled={disabled} onClick={() => onEdit(r)}>
@@ -104,7 +115,7 @@ export function SupplierOwnerTable({
       columns={columns}
       rows={items}
       rowKey={ownerKey}
-      minWidth={960}
+      minWidth={860}
       density="compact"
     />
   );

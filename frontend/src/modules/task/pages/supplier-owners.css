@@ -1,6 +1,6 @@
 .supplier-owners {
   display: grid;
-  gap: var(--space-layout);
+  gap: var(--space-control);
   min-width: 0;
 }
 .supplier-owner-layout {
@@ -164,6 +164,22 @@
   }
 }
 @media (max-width: 700px) {
+  .supplier-owners > .ui-stat-grid {
+    grid-template-columns: repeat(auto-fit, minmax(min(140px, 100%), 1fr));
+  }
+  .supplier-owners > .ui-stat-grid .ui-stat {
+    gap: var(--space-small);
+    padding: var(--space-control) var(--space-small);
+  }
+  .supplier-owners > .ui-stat-grid .ui-stat__glyph {
+    width: 28px;
+    height: 28px;
+    border-radius: var(--radius-control);
+    font-size: 13px;
+  }
+  .supplier-owners > .ui-stat-grid .ui-stat__label {
+    white-space: normal;
+  }
   .supplier-owners .ui-filter-bar .ui-field {
     flex: 1 1 100%;
     width: 100%;

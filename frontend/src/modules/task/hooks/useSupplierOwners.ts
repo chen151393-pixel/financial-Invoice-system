@@ -1,12 +1,13 @@
 import { useEffect, useState } from "react";
 import { getOwnerOptions, queryOwners } from "../api/supplier-owner";
-import type { OwnerList, OwnerOptions, OwnerQuery } from "../types/supplier-owner";
+import type { OwnerCounts, OwnerList, OwnerOptions, OwnerQuery } from "../types/supplier-owner";
 
 export const initialOwnerQuery: OwnerQuery = {
   supplierName: "",
   companyId: null,
   memberId: null,
   status: "all",
+  groupStatus: "all",
   page: 1,
   pageSize: 20,
 };
@@ -19,12 +20,15 @@ export function useSupplierOwners() {
   const [query, setQuery] = useState(initialOwnerQuery);
   const [refresh, setRefresh] = useState(0);
   const [state, setState] = useState<State>({ kind: "loading" });
+  const [counts, setCounts] = useState<OwnerCounts | null>(null);
   useEffect(() => {
     const controller = new AbortController();
     let active = true;
     void Promise.all([queryOwners(query, controller.signal), getOwnerOptions(controller.signal)])
       .then(([data, options]) => {
-        if (active) setState({ kind: "ready", data, options });
+        if (!active) return;
+        setCounts(data.counts);
+        setState({ kind: "ready", data, options });
       })
       .catch((error: unknown) => {
         if (active)
@@ -43,5 +47,5 @@ export function useSupplierOwners() {
     setState({ kind: "loading" });
     setRefresh((value) => value + 1);
   }
-  return { state, query, search, reload };
+  return { state, query, counts, search, reload };
 }

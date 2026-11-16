@@ -18,6 +18,7 @@ export interface OwnerItem extends OwnerPair {
   nsInternalId: string;
   account: string;
   companyName: string;
+  groupBound: boolean;
   current: OwnerVersion | null;
   scheduled: OwnerVersion[];
   status: string;
@@ -38,6 +39,7 @@ export interface OwnerQuery {
   companyId: number | null;
   memberId: number | null;
   status: "all" | "assigned" | "unassigned" | "scheduled";
+  groupStatus: "all" | "bound" | "unbound";
   page: number;
   pageSize: number;
 }
@@ -48,6 +50,14 @@ export interface OwnerList {
   pageSize: number;
   pages: number;
   today: string;
+  counts: OwnerCounts;
+}
+export interface OwnerCounts {
+  all: number;
+  assigned: number;
+  unassigned: number;
+  bound: number;
+  unbound: number;
 }
 export interface OwnerChange {
   items: OwnerPair[];

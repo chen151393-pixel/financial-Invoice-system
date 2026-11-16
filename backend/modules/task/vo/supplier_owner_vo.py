@@ -24,9 +24,18 @@ class OwnerItem(StrictModel):
     companyId: int
     companyName: str
     revision: int
+    groupBound: bool
     current: OwnerVersion | None = None
     scheduled: list[OwnerVersion] = Field(default_factory=list)
     status: str
+
+
+class OwnerCounts(StrictModel):
+    all: int = 0
+    assigned: int = 0
+    unassigned: int = 0
+    bound: int = 0
+    unbound: int = 0
 
 
 class OwnerList(StrictModel):
@@ -36,6 +45,7 @@ class OwnerList(StrictModel):
     pageSize: int
     pages: int
     today: str
+    counts: OwnerCounts
 
 
 class OwnerOption(StrictModel):

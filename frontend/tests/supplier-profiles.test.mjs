@@ -6,7 +6,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { MemoryRouter } from "react-router";
 import { createServer } from "vite";
 let server, api, Table, Picker, DirectoryStatus, navigation, paths, Search, pollDirectory;
-let OwnerTable, OwnerEditor, SupplierTabs, ownerApi;
+let OwnerTable, OwnerEditor, OwnerStats, SupplierTabs, ownerApi;
 before(async () => {
   server = await createServer({
     configFile: fileURLToPath(new URL("../vite.config.ts", import.meta.url)),
@@ -38,6 +38,9 @@ before(async () => {
   ({ SupplierOwnerEditor: OwnerEditor } = await server.ssrLoadModule(
     "/src/modules/task/components/SupplierOwnerEditor.tsx",
   ));
+  ({ SupplierOwnerStats: OwnerStats } = await server.ssrLoadModule(
+    "/src/modules/task/components/SupplierOwnerStats.tsx",
+  ));
   ({ SupplierTabs } = await server.ssrLoadModule("/src/modules/task/components/SupplierTabs.tsx"));
   ownerApi = await server.ssrLoadModule("/src/modules/task/api/supplier-owner.ts");
 });
@@ -53,6 +56,7 @@ const ownerRow = {
   account: "prod",
   nsInternalId: "77",
   companyName: "采购抬头甲",
+  groupBound: true,
   current: { id: "8", memberId: "5", memberName: "王萍", effectiveDate: "2026-11-01", revision: 3 },
   scheduled: [{ id: "9", memberName: "范宇洁", effectiveDate: "2026-12-01" }],
   status: "assigned",
@@ -76,6 +80,7 @@ test("人员关联表分别显示当前归属和未来安排，并保留同供�
           ...ownerRow,
           companyId: 3,
           companyName: "采购抬头乙",
+          groupBound: false,
           current: null,
           scheduled: [],
           status: "unassigned",
@@ -92,6 +97,39 @@ test("人员关联表分别显示当前归属和未来安排，并保留同供�
     assert.ok(html.includes(value));
   assert.equal((html.match(/checked=""/g) || []).length, 1);
   assert.match(html, /可横向滚动/);
+  assert.match(html, /已绑定/);
+  assert.match(html, /未绑定/);
+});
+
+test("人员关联卡片保留负责人条件，组合或取消状态时回到第一页", () => {
+  const query = {
+    supplierName: "示例",
+    companyId: 2,
+    memberId: 5,
+    status: "assigned",
+    groupStatus: "all",
+    page: 2,
+    pageSize: 10,
+  };
+  const submissions = [];
+  const props = {
+    counts: { all: 48, assigned: 12, unassigned: 36, bound: 8, unbound: 40 },
+    query,
+    onSearch: (next) => submissions.push(next),
+  };
+  const html = renderToStaticMarkup(createElement(OwnerStats, props));
+  assert.equal((html.match(/aria-pressed="true"/g) || []).length, 1);
+  assert.match(html, /48 条/);
+
+  const getCard = (data, label) =>
+    OwnerStats(data).props.children.find((card) => card.props.label === label).props;
+  getCard(props, "已绑定开票群").onSelect();
+  const bound = { ...query, page: 1, groupStatus: "bound" };
+  assert.deepEqual(submissions[0], bound);
+  getCard({ ...props, query: bound }, "已分配人员").onSelect();
+  assert.deepEqual(submissions[1], { ...bound, status: "all" });
+  getCard({ ...props, query: bound }, "全部关系").onSelect();
+  assert.deepEqual(submissions[2], { ...bound, status: "all", groupStatus: "all" });
 });
 
 test("人员维护表单默认保留旧任务归属，必须先预览，不伪装保存成功", () => {

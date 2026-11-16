@@ -15,6 +15,7 @@ export function StatCard({
   tone = "neutral",
   compact,
   selected,
+  disabled,
   onSelect,
 }: {
   glyph: string;
@@ -25,6 +26,7 @@ export function StatCard({
   compact?: boolean;
   // 作为筛选入口时使用：渲染为按钮并以 aria-pressed 表示选中
   selected?: boolean;
+  disabled?: boolean;
   onSelect?: () => void;
 }) {
   const className = compact ? "ui-stat ui-stat--compact" : "ui-stat";
@@ -61,7 +63,13 @@ export function StatCard({
     </>
   );
   return onSelect ? (
-    <button type="button" className={className} aria-pressed={Boolean(selected)} onClick={onSelect}>
+    <button
+      type="button"
+      className={className}
+      aria-pressed={Boolean(selected)}
+      disabled={disabled}
+      onClick={onSelect}
+    >
       {body}
     </button>
   ) : (

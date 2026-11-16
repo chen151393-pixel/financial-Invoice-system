@@ -282,7 +282,7 @@ MySQL 命名锁保证多实例单消费者，并对同一任务的同一子采�
 | 接口（前缀 `/api/task/supplier-owners`） | 中文说明 |
 | --- | --- |
 | `GET /options` | source 有效供应商、已出现在子采购中的有效采购抬头、identity 已导入的当前成员及北京时间日期；选择负责人不要求对方已启用平台登录 |
-| `POST /query` | `supplierName/companyId/memberId/status/page/pageSize`；status 为 all/assigned/unassigned/scheduled，搜索、合并来源组合与已有配置、过滤及分页均由后端完成，单页最多 50 条 |
+| `POST /query` | `supplierName/companyId/memberId/status/groupStatus/page/pageSize`；status 为 all/assigned/unassigned/scheduled，groupStatus 为 all/bound/unbound。条件取交集并先筛选再分页，单页最多 50 条。行返回 `groupBound`，概况 `counts` 按供应商与采购抬头组合计数，不随筛选或分页变化。已停用的群绑定仍属于已绑定；仅有未来安排的关系归入待生效。 |
 | `GET /{supplierId}/{companyId}/history` | 全部保存版本，含姓名快照、生效日期、操作者、原因和 UTC 保存时间 |
 | `POST /preview` | `{items:[{supplierId,companyId,revision}],memberId,effectiveDate,reason,transferOpenTasks}`，一次最多 100 条，返回变更关系数、未完成任务数、交接能力及 `previewToken` |
 | `POST /save` | 预览参数加 `previewToken`；同一账本短事务内重新校验版本、成员及任务状态，整批成功或整批回滚，返回实际 saved/transferredTasks |

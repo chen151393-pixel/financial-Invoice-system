@@ -14,6 +14,7 @@ class OwnerQuery(StrictModel):
     companyId: int | None = Field(default=None, ge=1)
     memberId: int | None = Field(default=None, ge=1)
     status: Literal["all", "assigned", "unassigned", "scheduled"] = "all"
+    groupStatus: Literal["all", "bound", "unbound"] = "all"
     page: int = Field(default=1, ge=1, le=100000)
     pageSize: int = Field(default=20, ge=1, le=50)
 
