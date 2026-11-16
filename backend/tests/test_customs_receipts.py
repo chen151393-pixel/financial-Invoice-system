@@ -155,6 +155,49 @@ def test_declaration_level_statuses():
     assert compare(missing_qty, items)[0] == "different"
 
 
+def test_total_mismatch_only_marks_one_to_one_same_currency_pairs():
+    ns = {**ns_line(1, "相纸", 10, "千克"), "currency": "USD", "amount": Decimal("0")}
+    customs = {**item("01", "相纸", 10, "千克"), "currency": "usd", "deal_total": Decimal("0.000001")}
+    matched = compare_lines([ns], [customs])[0]
+    assert matched["status"] == "matched" and matched["totalMismatch"]
+    assert matched["nsLines"][0]["total"] == "0.00"
+    assert compare_lines([ns], [{**customs, "currency": "EUR"}])[0]["totalMismatch"] is None
+    assert compare_lines([ns], [{**customs, "deal_total": None}])[0]["totalMismatch"] is None
+    split = compare_lines(
+        [ns],
+        [{**customs, "deal_quantity": Decimal(5)}, {**customs, "item_no": "02", "deal_quantity": Decimal(5)}],
+    )[0]
+    assert split["status"] == "split" and split["totalMismatch"] is None
+
+
+def test_same_name_and_unit_pairs_unique_quantities_before_checking_total_price():
+    ns_rows = [
+        {**ns_line(1, "相纸", "44.5", "千克"), "currency": "USD", "amount": Decimal("269.05")},
+        {**ns_line(2, "相纸", "4315.8", "千克"), "currency": "USD", "amount": Decimal("6324.11")},
+    ]
+    items = [
+        {**item("01", "相纸", "4315.80000", "千克"), "currency": "USD", "deal_total": Decimal("7423.18")},
+        {**item("02", "相纸", "44.50000", "千克"), "currency": "USD", "deal_total": Decimal("769.41")},
+    ]
+    status, _, result = compare([{"id": 9, "record_no": "CD1", "lines": ns_rows}], items)
+    groups = result["groups"]
+    assert status == "matched" and [g["status"] for g in groups] == ["matched", "matched"]
+    assert [(g["nsLines"][0]["id"], g["items"], g["totalMismatch"]) for g in groups] == [
+        (2, ["01"], True),
+        (1, ["02"], True),
+    ]
+
+
+def test_duplicate_quantities_remain_grouped_after_unique_pairs():
+    ns_rows = [ns_line(i, "相纸", quantity, "千克") for i, quantity in enumerate([10, 20, 10], 1)]
+    items = [item(str(i), "相纸", quantity, "千克") for i, quantity in enumerate([10, 20, 10], 1)]
+
+    groups = compare_lines(ns_rows, items)
+    assert [g["status"] for g in groups] == ["split", "matched"]
+    assert [g["items"] for g in groups] == [["1", "3"], ["2"]]
+    assert groups[0]["totalMismatch"] is None
+
+
 # ---------- 文件解析 ----------
 
 
@@ -233,7 +276,7 @@ def test_import_matches_ns_declaration_and_saves_consignee(schema_engine, ns):
         [
             row("REAL870", "01", "墨水", "个", 6, "ACME LTD"),
             row("REAL870", "02", "墨水", "个", 4, "ACME LTD"),
-            row("REAL870", "03", "清洗液", "个", 10, "ACME LTD"),
+            row("REAL870", "03", "清洗液", "个", 10, "ACME LTD", total=15),
             row("REAL999", "01", "相纸", "千克", 1, "OTHER CO"),
         ],
     )
@@ -250,6 +293,7 @@ def test_import_matches_ns_declaration_and_saves_consignee(schema_engine, ns):
     assert [g.status for g in receipt.groups] == ["split", "matched"]
     assert [i.itemNo for i in receipt.groups[0].items] == ["01", "02"]
     assert receipt.groups[0].nsLines[0].quantity == "10" and receipt.groups[0].nsLines[0].unit == "个"
+    assert receipt.totalComparison == "partial"
 
     only_missing = service.browse(CustomsReceiptQuery(status="ns_missing"))
     assert [r.declarationNo for r in only_missing.items] == ["REAL999"]
@@ -275,6 +319,39 @@ def test_reimport_replaces_changed_content_and_keeps_unchanged(schema_engine, ns
     assert receipt.revision == 2 and receipt.itemCount == 2
     assert [g.status for g in receipt.groups] == ["quantity_mismatch", "unit_mismatch"]
     assert receipt.consignee.state == "empty"
+
+
+def test_browse_displays_ns_declaration_amounts_and_flags_the_different_row(schema_engine, ns):
+    declaration = customs("870")
+    values = [Decimal("4801.71"), Decimal("5416.26")]
+    for (_, line), value in zip(declaration[2], values, strict=True):
+        line["custrecord_swc_grossamount"] = value
+        line["custrecord_swc_currency"] = "US Dollar"
+    save(ns, schema_engine, bundle([purchase()], [declaration]))
+    service = CustomsReceiptService(schema_engine)
+    _import(
+        service,
+        [
+            row("REAL870", "01", "墨水", "个", 10, total="4801.71"),
+            row("REAL870", "02", "清洗液", "个", 10, total="5416.25"),
+        ],
+    )
+    result = service.browse(CustomsReceiptQuery()).items[0]
+    assert [(g.nsLines[0].currency, g.nsLines[0].total) for g in result.groups] == [
+        ("USD", "4801.71"),
+        ("USD", "5416.26"),
+    ]
+    assert [g.totalMismatch for g in result.groups] == [False, True]
+    assert result.totalComparison == "different"
+    assert result.approval.autoAllowed
+    _import(
+        service,
+        [
+            row("REAL870", "01", "墨水", "个", 10, total="4801.71"),
+            row("REAL870", "02", "清洗液", "个", 10, total="5416.26"),
+        ],
+    )
+    assert service.browse(CustomsReceiptQuery()).items[0].totalComparison == "matched"
 
 
 def test_rematch_picks_up_ns_declaration_synced_later(schema_engine, ns):

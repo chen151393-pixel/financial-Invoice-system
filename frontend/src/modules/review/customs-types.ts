@@ -38,6 +38,8 @@ export interface CustomsNsLine {
   specification: string;
   quantity: string;
   unit: string;
+  currency: string;
+  total: string;
 }
 
 export interface CustomsCompareGroup {
@@ -48,6 +50,7 @@ export interface CustomsCompareGroup {
   consistent: boolean;
   nsLines: CustomsNsLine[];
   items: CustomsItem[];
+  totalMismatch: boolean | null;
 }
 
 // saved：已随 NS 报关单保存；empty：回执未提供；pending：待匹配到 NS 报关单后关联
@@ -72,6 +75,7 @@ export interface CustomsReceipt {
   status: CustomsMatchStatus;
   statusLabel: string;
   statusNote: string;
+  totalComparison: "matched" | "different" | "partial" | "not_compared";
   matchedAt: string;
   importedAt: string;
   fileName: string;

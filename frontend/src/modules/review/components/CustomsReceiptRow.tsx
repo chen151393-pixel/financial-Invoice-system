@@ -16,6 +16,12 @@ const CONSIGNEE_TONE: Record<CustomsReceipt["consignee"]["state"], Tone> = {
   empty: "neutral",
   pending: "info",
 };
+const TOTAL_COMPARISON: Record<CustomsReceipt["totalComparison"], { tone: Tone; label: string }> = {
+  matched: { tone: "success", label: "总价一致" },
+  different: { tone: "warning", label: "总价不一致" },
+  partial: { tone: "neutral", label: "部分总价未比对" },
+  not_compared: { tone: "neutral", label: "总价未比对" },
+};
 
 const time = (value: string) =>
   value ? new Date(value).toLocaleString("zh-CN", { timeZone: "Asia/Shanghai", hour12: false }) : "—";
@@ -41,6 +47,7 @@ export function CustomsReceiptRow({
   onApprove: () => void;
 }) {
   const needsAction = STATUS_TONE[receipt.status] === "warning";
+  const total = receipt.nsLineCount === null ? undefined : TOTAL_COMPARISON[receipt.totalComparison];
   const detailId = `customs-receipt-${receipt.id}`;
   return (
     <tbody>
@@ -94,7 +101,14 @@ export function CustomsReceiptRow({
           <small>{receipt.consignee.note}</small>
         </td>
         <td>
-          <Badge tone={STATUS_TONE[receipt.status]}>{receipt.statusLabel}</Badge>
+          <span className="fr-status-badges">
+            <Badge tone={STATUS_TONE[receipt.status]}>
+              {receipt.totalComparison === "different" && receipt.status === "matched"
+                ? "数量一致"
+                : receipt.statusLabel}
+            </Badge>
+            {total && <Badge tone={total.tone}>{total.label}</Badge>}
+          </span>
           {receipt.statusNote && <small>{receipt.statusNote}</small>}
         </td>
         <td>

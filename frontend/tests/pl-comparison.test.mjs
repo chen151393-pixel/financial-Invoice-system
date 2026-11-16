@@ -772,6 +772,32 @@ test("采购单价缺失时保留原因，不显示低价异常或旧幅度", ()
   assert.doesNotMatch(html, /单价异常|报关单价低于不含税采购单价|fr-margin--negative/);
 });
 
+test("海关明细同时显示 NS 报关行总价和回执成交总价，差异时标注", async () => {
+  const { CustomsCompareTable } = await server.ssrLoadModule(
+    "/src/modules/review/components/CustomsCompareTable.tsx",
+  );
+  const group = {
+    status: "matched",
+    label: "一致",
+    consistent: true,
+    note: "数量 3189 千克",
+    nsLines: [{ id: 2, name: "相纸", currency: "USD", total: "5416.26" }],
+    items: [{ itemNo: "02", name: "相纸", currency: "USD", total: "5416.25" }],
+  };
+  const render = (totalMismatch) =>
+    renderToStaticMarkup(
+      createElement(CustomsCompareTable, {
+        declarationNo: "REAL870",
+        groups: [{ ...group, totalMismatch }],
+      }),
+    );
+  assert.match(render(true), /USD 5416\.26/);
+  assert.match(render(true), /USD 5416\.25/);
+  assert.match(render(true), /总价不一致/);
+  assert.doesNotMatch(render(false), /总价不一致/);
+  assert.doesNotMatch(render(false), /数量 3189 千克/);
+});
+
 test("海关审核只提交当前页选择的版本令牌、方式与人工说明", async () => {
   const { approveCustomsReceipts } = await server.ssrLoadModule("/src/modules/review/customs-api.ts");
   const original = globalThis.fetch;
@@ -840,6 +866,7 @@ test("海关审核行复用财务勾选与主按钮样式，移除重新匹配�
     status: "matched",
     statusLabel: "一致",
     statusNote: "",
+    totalComparison: "matched",
     groups: [],
     approval: { approved: false, label: "待审核", allowed: true, autoAllowed: true, reason: "" },
   };
@@ -854,6 +881,13 @@ test("海关审核行复用财务勾选与主按钮样式，移除重新匹配�
     onApprove() {},
   };
   const html = renderToStaticMarkup(createElement(CustomsReceiptRow, props));
+  assert.match(html, /总价一致/);
+  assert.match(
+    renderToStaticMarkup(
+      createElement(CustomsReceiptRow, { ...props, receipt: { ...receipt, totalComparison: "different" } }),
+    ),
+    /总价不一致/,
+  );
   assert.match(html, /fr-declaration-row is-checked/);
   assert.match(html, /class="fr-check-cell"/);
   assert.match(html, /type="checkbox"[^>]*checked/);

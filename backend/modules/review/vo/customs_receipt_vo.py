@@ -37,6 +37,8 @@ class NsLine(StrictModel):
     specification: str
     quantity: str
     unit: str
+    currency: str = ""
+    total: str = ""
 
 
 class CompareGroup(StrictModel):
@@ -47,6 +49,7 @@ class CompareGroup(StrictModel):
     consistent: bool
     nsLines: list[NsLine]
     items: list[CustomsItem]
+    totalMismatch: bool | None = None
 
 
 class Consignee(StrictModel):
@@ -83,6 +86,7 @@ class CustomsReceipt(StrictModel):
     status: MatchStatus
     statusLabel: str
     statusNote: str
+    totalComparison: Literal["matched", "different", "partial", "not_compared"]
     matchedAt: str
     importedAt: str
     fileName: str

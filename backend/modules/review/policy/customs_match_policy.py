@@ -1,13 +1,14 @@
 """海关回执与 NS 报关单的明细比对规则（纯函数）。
 
 1. 以出口报关单号对应 NS 报关单的真实报关单号；同号多张有效报关单时不比对明细。
-2. 同一报关单内，海关项与 NS 报关行各自按“规范化品名 + 规范化单位”归组并合计数量；
-   NS 一行可对应海关多项（拆行），NS 多行也可对应海关一项（合并），合计相等即一致。
+2. 同一报关单内，先按“规范化品名 + 规范化单位”归组，再按两侧唯一且相等的数量逐行配对。
+   剩余行保留原有拆行、合并比对，比较数量合计。
 3. 单位：海关取成交单位，NS 取报关单位（单位字典显示名）；法定单位只展示。
 4. 品名相同但单位不同的剩余组配对为“单位不一致”；其余为单边缺失。
 5. 数量按十进制精确比较，不设容差；差异需在 NS 修正后重新匹配。
 """
 
+from collections import defaultdict
 from decimal import Decimal
 
 from backend.core.names import normalize_name
@@ -41,6 +42,14 @@ def text(value):
     )
 
 
+def amount_text(value):
+    """总价展示至少两位小数，保留来源中的有效精度。"""
+    if value is None:
+        return ""
+    integer, _, fraction = text(value).partition(".")
+    return f"{integer}.{fraction.ljust(2, '0')}"
+
+
 def _total(values):
     return sum((Decimal(v) for v in values if v is not None), Decimal(0))
 
@@ -62,6 +71,8 @@ def _ns_view(line):
         "specification": line["specification"],
         "quantity": text(line["quantity"]),
         "unit": line["unit"],
+        "currency": line.get("currency") or "",
+        "total": amount_text(line.get("amount")),
     }
 
 
@@ -72,7 +83,27 @@ def _group(status, ns_lines, items, note):
         "note": note,
         "nsLines": [_ns_view(line) for line in ns_lines],
         "items": [item["item_no"] for item in items],
+        "totalMismatch": _total_mismatch(ns_lines, items)
+        if status in {"matched", "quantity_mismatch"}
+        else None,
     }
+
+
+def _total_mismatch(ns_lines, items):
+    if len(ns_lines) != 1 or len(items) != 1:
+        return None
+    line, item = ns_lines[0], items[0]
+    ns_amount, customs_amount = line.get("amount"), item.get("deal_total")
+    currency = (line.get("currency") or "").strip().upper()
+    comparable = (
+        len(currency) == 3
+        and currency.isascii()
+        and currency.isalpha()
+        and currency == (item.get("currency") or "").strip().upper()
+        and ns_amount is not None
+        and customs_amount is not None
+    )
+    return Decimal(ns_amount) != Decimal(customs_amount) if comparable else None
 
 
 def _paired(ns_lines, items):
@@ -110,6 +141,42 @@ def _units(rows, key):
     return "、".join(dict.fromkeys(row[key] or "未提供" for row in rows))
 
 
+def _by_quantity(rows, key):
+    groups = defaultdict(list)
+    for row in rows:
+        if row[key] is not None:
+            groups[Decimal(row[key])].append(row)
+    return groups
+
+
+def _match_quantities(ns_lines, items):
+    """只有相同数量在两侧各出现一次，才能据此定位具体报关行。"""
+    if len(ns_lines) == 1 or len(items) == 1:
+        return [_paired(ns_lines, items)]
+    ns_quantities = _by_quantity(ns_lines, "quantity")
+    item_quantities = _by_quantity(items, "deal_quantity")
+    pairs = [
+        (ns_quantities[qty], same_qty)
+        for qty, same_qty in item_quantities.items()
+        if len(same_qty) == 1 and qty in ns_quantities and len(ns_quantities[qty]) == 1
+    ]
+    if not pairs:
+        return [_paired(ns_lines, items)]
+
+    ns_ids = {lines[0]["id"] for lines, _ in pairs}
+    item_numbers = {lines[0]["item_no"] for _, lines in pairs}
+    ns_remaining = [line for line in ns_lines if line["id"] not in ns_ids]
+    items_remaining = [item for item in items if item["item_no"] not in item_numbers]
+    # 若扣除相同数量后余项只在一侧，保留完整组以展示拆分数量或原有数量差异。
+    if bool(ns_remaining) != bool(items_remaining):
+        return [_paired(ns_lines, items)]
+
+    matches = [_paired(lines, matched_items) for lines, matched_items in pairs]
+    if ns_remaining:
+        matches.append(_paired(ns_remaining, items_remaining))
+    return matches
+
+
 def compare_lines(ns_lines, items):
     """返回比对分组列表；顺序按海关项号，NS 独有行排在最后。"""
     ns_groups = _groups(ns_lines, "name", "unit")
@@ -117,7 +184,7 @@ def compare_lines(ns_lines, items):
     results = []
     for key in list(customs_groups):
         if key in ns_groups:
-            results.append(_paired(ns_groups.pop(key), customs_groups.pop(key)))
+            results.extend(_match_quantities(ns_groups.pop(key), customs_groups.pop(key)))
     # 剩余同品名不同单位：配对为单位不一致
     leftover_ns = {}
     for (name, _), rows in ns_groups.items():

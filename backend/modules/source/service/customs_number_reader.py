@@ -1,9 +1,10 @@
 """按真实报关单号读取 NS 报关单及报关行（review 海关回执比对经 public 使用）。
 
-只返回报关口径：报关品名、规格、报关数量、报关单位（按单位字典显示名称）；不判断是否一致。
+只返回报关口径：报关品名、规格、数量、单位、行金额及币种。
 """
 
 from ..dao import customs_declaration_dao, unit_dictionary_dao
+from ..policy.currency_policy import currency_code
 from ..policy.unit_policy import unit_label
 
 # 单次 IN 查询的单号数量上限，避免超长 SQL
@@ -30,6 +31,8 @@ def declarations_by_number(connection, numbers):
                 "specification": line["specification"] or "",
                 "quantity": line["declared_quantity"],
                 "unit": unit_label(line["declared_unit"], names).strip(),
+                "amount": line["amount"],
+                "currency": currency_code({"currencyname": line["currency"]}) or line["currency"] or "",
             }
             for line in customs_declaration_dao.lines(connection, head["id"])
         ]

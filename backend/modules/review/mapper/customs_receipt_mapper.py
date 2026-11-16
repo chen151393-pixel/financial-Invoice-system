@@ -3,7 +3,7 @@
 from datetime import UTC
 from decimal import Decimal
 
-from ..policy.customs_match_policy import CONSISTENT, STATUS_LABELS, text
+from ..policy.customs_match_policy import CONSISTENT, STATUS_LABELS, amount_text, text
 from ..vo.customs_receipt_vo import CompareGroup, Consignee, CustomsItem, CustomsReceipt, NsLine
 
 
@@ -27,7 +27,7 @@ def item(row):
         quantity=text(row["deal_quantity"]),
         unit=row["deal_unit"],
         currency=row["currency"] or "",
-        total=_amount(row["deal_total"]),
+        total=amount_text(row["deal_total"]),
         usdFob=_amount(row["usd_fob"]),
         legalQuantity=text(row["legal_quantity"]),
         legalUnit=row["legal_unit"] or "",
@@ -63,6 +63,7 @@ def receipt(head, rows, approval):
             consistent=group["status"] in CONSISTENT,
             nsLines=[NsLine(**line) for line in group["nsLines"]],
             items=[items[number] for number in group["items"] if number in items],
+            totalMismatch=group.get("totalMismatch"),
         )
         for group in result.get("groups", [])
     ]
@@ -94,6 +95,7 @@ def receipt(head, rows, approval):
         status=status,
         statusLabel=STATUS_LABELS[status],
         statusNote=_status_note(status, result, groups),
+        totalComparison=_total_comparison(groups),
         matchedAt=_iso(head["matched_at"]),
         importedAt=_iso(head["imported_at"]),
         fileName=head["file_name"],
@@ -101,6 +103,15 @@ def receipt(head, rows, approval):
         groups=groups,
         approval=approval,
     )
+
+
+def _total_comparison(groups):
+    comparisons = {group.totalMismatch for group in groups}
+    if True in comparisons:
+        return "different"
+    if comparisons == {False}:
+        return "matched"
+    return "partial" if False in comparisons else "not_compared"
 
 
 def _status_note(status, result, groups):

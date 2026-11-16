@@ -93,9 +93,11 @@ export function CustomsCompareTable({
       key: "total",
       header: "成交总价",
       align: "right",
-      width: "120px",
-      render: (row) =>
-        row.kind === "customs" && row.item.total ? `${row.item.currency} ${row.item.total}`.trim() : "—",
+      width: "128px",
+      render: (row) => {
+        const { total, currency } = row.kind === "ns" ? row.line : row.item;
+        return total ? `${currency || ""} ${total}`.trim() : "—";
+      },
     },
     {
       key: "result",
@@ -104,8 +106,11 @@ export function CustomsCompareTable({
       render: (row) =>
         row.first ? (
           <span className="cm-result">
-            <Badge tone={row.group.consistent ? "success" : "warning"}>{row.group.label}</Badge>
-            <span>{row.group.note}</span>
+            <Badge tone={row.group.consistent ? "success" : "warning"}>
+              {row.group.totalMismatch && row.group.status === "matched" ? "数量一致" : row.group.label}
+            </Badge>
+            {row.group.totalMismatch && <Badge tone="warning">总价不一致</Badge>}
+            {row.group.status !== "matched" && <span>{row.group.note}</span>}
           </span>
         ) : (
           <span className="cm-muted">同组</span>
