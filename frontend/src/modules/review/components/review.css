@@ -225,6 +225,27 @@
   white-space: nowrap;
   font-size: 12px;
 }
+.fr-next-action {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 4px;
+}
+.fr-invoice-progress strong {
+  font-weight: 600;
+}
+.fr-progress-detail {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-small);
+  padding: var(--space-small) var(--space-control);
+}
+.fr-progress-detail p {
+  margin: 0;
+  color: var(--color-muted);
+  font-size: 12px;
+}
 .fr-dialog {
   border: 0;
   border-radius: var(--radius-panel);

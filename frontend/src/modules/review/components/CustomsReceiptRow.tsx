@@ -1,5 +1,7 @@
 import { Alert, Badge, Button, type Tone } from "../../../shared/components/ui";
+import type { ReviewLinks } from "../approval-progress";
 import type { CustomsMatchStatus, CustomsReceipt } from "../customs-types";
+import { ApprovalProgressCells, ApprovalProgressDetail } from "./ApprovalProgressCells";
 import { CustomsCompareTable } from "./CustomsCompareTable";
 import { FinanceIcon } from "./FinanceIcon";
 
@@ -36,6 +38,7 @@ export function CustomsReceiptRow({
   selected,
   onSelect,
   onApprove,
+  links,
 }: {
   receipt: CustomsReceipt;
   open: boolean;
@@ -45,6 +48,7 @@ export function CustomsReceiptRow({
   selected: boolean;
   onSelect: (checked: boolean) => void;
   onApprove: () => void;
+  links?: ReviewLinks;
 }) {
   const needsAction = STATUS_TONE[receipt.status] === "warning";
   const total = receipt.nsLineCount === null ? undefined : TOTAL_COMPARISON[receipt.totalComparison];
@@ -87,10 +91,12 @@ export function CustomsReceiptRow({
             </span>
           </button>
         </th>
-        <td className="fr-declaration-number">{receipt.exportDate || "未提供"}</td>
-        <td>{receipt.taxType || "—"}</td>
-        <td className="fr-declaration-number">
-          NS {receipt.nsLineCount ?? "—"} 行 / 海关 {receipt.itemCount} 项
+        <td>
+          {receipt.exportDate || "未提供"}
+          {receipt.taxType && ` · ${receipt.taxType}`}
+          <small>
+            NS {receipt.nsLineCount ?? "—"} 行 / 海关 {receipt.itemCount} 项
+          </small>
           {receipt.nsRecordNo && <small>NS 记录 {receipt.nsRecordNo}</small>}
         </td>
         <td>
@@ -111,32 +117,51 @@ export function CustomsReceiptRow({
           </span>
           {receipt.statusNote && <small>{receipt.statusNote}</small>}
         </td>
-        <td>
-          <span className="fr-status-badges">
-            <Badge tone={receipt.approval.approved ? "success" : "warning"}>{receipt.approval.label}</Badge>
-            {receipt.approval.autoAllowed && <Badge tone="info">可自动审核</Badge>}
-          </span>
-          {!receipt.approval.approved && receipt.approval.reason && <small>{receipt.approval.reason}</small>}
-          {receipt.approval.approved && <small>{time(receipt.approval.approvedAt)}</small>}
-        </td>
-        <td className="fr-declaration-action">
-          {!receipt.approval.approved && (
-            <Button
-              variant="primary"
-              disabled={busy || !receipt.approval.allowed}
-              title={receipt.approval.reason}
-              aria-label={`审核通过：${receipt.declarationNo}`}
-              onClick={onApprove}
-            >
-              审核通过
-            </Button>
-          )}
-        </td>
+        <ApprovalProgressCells
+          page="customs"
+          progress={receipt.approvalProgress}
+          declarationNo={receipt.declarationNo}
+          links={links}
+          canReview={!busy && receipt.approval.allowed}
+          onReview={onApprove}
+          onDetails={onToggle}
+          expanded={open}
+          customsFallback={
+            <span className="fr-status-badges">
+              <Badge tone={receipt.approval.approved ? "success" : "warning"}>{receipt.approval.label}</Badge>
+              {receipt.approval.autoAllowed && <Badge tone="info">可自动审核</Badge>}
+            </span>
+          }
+          localAction={
+            !receipt.approval.approved &&
+            (!receipt.approvalProgress || receipt.approval.allowed) && (
+              <Button
+                size="sm"
+                variant={receipt.approvalProgress ? "secondary" : "primary"}
+                disabled={busy || !receipt.approval.allowed}
+                title={receipt.approval.reason}
+                aria-label={`审核通过：${receipt.declarationNo}`}
+                onClick={onApprove}
+              >
+                {receipt.approvalProgress ? "审核海关回执" : "审核通过"}
+              </Button>
+            )
+          }
+        />
       </tr>
       <tr id={detailId} className="fr-declaration-detail" hidden={!open}>
         <td colSpan={batch ? 9 : 8}>
           {open && (
             <div className="cm-detail">
+              <ApprovalProgressDetail
+                progress={receipt.approvalProgress}
+                links={links}
+                page="customs"
+                declarationNo={receipt.declarationNo}
+              />
+              {receipt.status === "different" && receipt.approval.allowed && (
+                <Alert tone="warning">审核本张回执时需填写差异说明。</Alert>
+              )}
               {(receipt.status === "ns_missing" || receipt.status === "ns_duplicate") && (
                 <Alert tone="warning">
                   {receipt.statusNote}。NS 同步或修正后刷新列表核对；回执及境外收货人已保留，匹配后自动关联。

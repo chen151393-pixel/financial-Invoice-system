@@ -11,17 +11,24 @@ from ..policy.unit_policy import unit_label
 _CHUNK = 500
 
 
+def declaration_refs_by_number(connection, numbers):
+    """批量读取有效报关单头，保留重号与当前来源摘要。"""
+    wanted = sorted({str(number).strip() for number in numbers if str(number or "").strip()})
+    result = {}
+    for start in range(0, len(wanted), _CHUNK):
+        for head in customs_declaration_dao.active_by_numbers(connection, wanted[start : start + _CHUNK]):
+            result.setdefault(head["declaration_no"], []).append(head)
+    return result
+
+
 def declarations_by_number(connection, numbers):
     """返回 {真实报关单号: [报关单, ...]}；未找到的单号不出现在结果中。"""
-    wanted = sorted({str(number).strip() for number in numbers if str(number or "").strip()})
-    heads = []
-    for start in range(0, len(wanted), _CHUNK):
-        heads.extend(customs_declaration_dao.active_by_numbers(connection, wanted[start : start + _CHUNK]))
-    if not heads:
+    refs = declaration_refs_by_number(connection, numbers)
+    if not refs:
         return {}
     names = unit_dictionary_dao.unit_names(connection)
     result = {}
-    for head in heads:
+    for head in (head for group in refs.values() for head in group):
         lines = [
             {
                 "id": line["id"],

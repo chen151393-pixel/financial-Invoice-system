@@ -18,6 +18,7 @@ class CustomsImportRequest(StrictModel):
 class CustomsReceiptQuery(StrictModel):
     # 出口报关单号，多条用逗号、分号或换行分隔，部分匹配
     declarationNo: SearchText = ""
+    exactDeclarationNo: str = Field(default="", max_length=120)
     name: str = Field(default="", max_length=120)
     consignee: str = Field(default="", max_length=120)
     exportFrom: date | None = Field(default=None, strict=False)

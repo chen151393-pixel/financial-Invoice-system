@@ -20,3 +20,10 @@ def insert_lines(connection, review_id, rows, now):
 def by_review(connection, review_id):
     query = select(lines).where(lines.c.review_id == review_id).order_by(lines.c.id)
     return [dict(row) for row in connection.execute(query).mappings()]
+
+
+def by_reviews(connection, review_ids):
+    if not review_ids:
+        return []
+    query = select(lines).where(lines.c.review_id.in_(review_ids))
+    return [dict(row) for row in connection.execute(query).mappings()]

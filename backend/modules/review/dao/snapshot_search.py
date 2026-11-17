@@ -28,7 +28,9 @@ def conditions(query, dialect):
     if query.recordNo:
         record = text_field("$.recordNumber", dialect)
         result.append(or_(*(record.contains(term, autoescape=True) for term in search_terms(query.recordNo))))
-    if query.declarationNo:
+    if query.exactDeclarationNo:
+        result.append(text_field("$.declaration", dialect) == query.exactDeclarationNo)
+    elif query.declarationNo:
         result.append(
             or_(
                 *(

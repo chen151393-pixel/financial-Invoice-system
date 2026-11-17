@@ -27,9 +27,12 @@ from .review_query_service import ReviewQueryService
 
 
 class ReviewService:
-    def __init__(self, engine, declarations, events, tolerance=DEFAULT_UNIT_PRICE_TOLERANCE_CNY):
+    def __init__(
+        self, engine, declarations, events, tolerance=DEFAULT_UNIT_PRICE_TOLERANCE_CNY, *, task_reader=None
+    ):
         self.engine, self.declarations, self.events = engine, declarations, events
         self.tolerance = tolerance
+        self.task_reader = task_reader
 
     def _actives(self, declaration_ids):
         try:
@@ -52,7 +55,7 @@ class ReviewService:
         return state, changed, admission_reason(issues)
 
     def browse(self, query):
-        return ReviewQueryService(self.engine, self.tolerance).browse(query)
+        return ReviewQueryService(self.engine, self.tolerance, self.task_reader).browse(query)
 
     def _declarations(self, declaration_ids, states, actives):
         """按 ID 组装报关单页面数据（同一连接读取开票依据与单位名称）；来源缺失的跳过。"""

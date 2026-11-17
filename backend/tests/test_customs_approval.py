@@ -1,18 +1,22 @@
 """双审核门槛、版本、权限、异常人工确认、幂等、回滚与可选 MySQL 并发。"""
 
 from concurrent.futures import ThreadPoolExecutor
+from datetime import UTC, datetime
 from threading import Barrier
 
 import pytest
 from backend.app import create_events
 from backend.core.errors import ApiError
 from backend.modules.review.dto.customs_receipt_dto import CustomsApproveRequest, CustomsReceiptQuery
-from backend.modules.review.dto.review_dto import ApproveRequest
+from backend.modules.review.dto.review_dto import ApproveRequest, DeclarationListQuery
 from backend.modules.review.public import InvoiceReady
+from backend.modules.review.service.calculation_service import CalculationService
 from backend.modules.review.service.customs_approval_service import CustomsApprovalService
 from backend.modules.review.service.customs_receipt_service import CustomsReceiptService
 from backend.modules.review.service.review_service import ReviewService
 from backend.modules.source.public import DeclarationService
+from backend.modules.task.dao.supplier_setting_dao import insert_setting
+from backend.modules.task.public import review_task_outcomes
 from backend.tests.test_customs_receipts import _import, row
 from backend.tests.test_schema_baseline import schema_engine as schema_engine
 from backend.tests.test_source_storage import bundle, customs, purchase, rows, save
@@ -26,7 +30,7 @@ def world(schema_engine, ns):
     engine = schema_engine
     events = create_events()
     save(ns, engine, bundle([purchase()], [customs("870")]))
-    receipts = CustomsReceiptService(engine)
+    receipts = CustomsReceiptService(engine, task_reader=review_task_outcomes)
     _import(
         receipts,
         [
@@ -35,7 +39,8 @@ def world(schema_engine, ns):
             row("REAL870", "03", "清洗液", "个", 10),
         ],
     )
-    return engine, events, receipts, ReviewService(engine, DeclarationService(engine), events)
+    review = ReviewService(engine, DeclarationService(engine), events, task_reader=review_task_outcomes)
+    return engine, events, receipts, review
 
 
 def body(receipt, method="auto", note=""):
@@ -54,6 +59,18 @@ def finance(world):
     review.approve(declaration["id"], ApproveRequest(contentSha256=declaration["content_sha256"]), USER)
 
 
+def progress_on_both_pages(world):
+    review = world[3]
+    CalculationService(review).rebuild()
+    groups = review.browse(DeclarationListQuery(exactDeclarationNo="REAL870")).groups
+    receipts = world[2].browse(CustomsReceiptQuery(exactDeclarationNo="REAL870")).items
+    assert len(groups) == len(receipts) == 1
+    progress = groups[0].approvalProgress
+    assert progress is not None and progress.linked
+    assert progress == receipts[0].approvalProgress
+    return progress
+
+
 def approve(world, request):
     return CustomsApprovalService(world[0], world[1]).approve_batch(request, USER)
 
@@ -64,14 +81,42 @@ def test_both_orders_release_once_and_audit(world, first):
     actions = {"finance": lambda: finance(world), "customs": lambda: approve(world, request)}
     actions[first]()
     assert rows(world[0], "SELECT * FROM task_tasks") == []
+    pending = progress_on_both_pages(world)
+    assert pending.status == ("waiting_customs" if first == "finance" else "waiting_finance")
+    assert pending.taskIds == []
     actions["customs" if first == "finance" else "finance"]()
     assert len(rows(world[0], "SELECT * FROM task_tasks")) == 1
     assert len(rows(world[0], "SELECT * FROM task_lines")) == 2
+    released = progress_on_both_pages(world)
+    assert released.status == "created"
+    assert released.finance.status == released.customs.status == "approved"
+    assert released.taskIds == [str(rows(world[0], "SELECT id FROM task_tasks")[0]["id"])]
     assert len(approve(world, request).approved) == 1
     finance(world)
     assert len(rows(world[0], "SELECT * FROM review_records WHERE customs_approval_id IS NOT NULL")) == 1
     assert len(rows(world[0], "SELECT * FROM review_customs_approvals")) == 1
     assert current(world).approval.label == "自动审核通过"
+
+
+def test_progress_explains_current_supplier_settings_when_no_task_exists(world):
+    supplier = rows(world[0], "SELECT id FROM source_suppliers")[0]
+    with world[0].begin() as connection:
+        insert_setting(connection, supplier["id"], False, USER, datetime.now(UTC).replace(tzinfo=None))
+    finance(world)
+    approve(world, body(current(world)))
+    progress = progress_on_both_pages(world)
+    assert progress.finance.status == progress.customs.status == "approved"
+    assert progress.status == "no_task" and progress.taskIds == []
+    assert "供应商当前已关闭通知" in progress.reason
+
+
+def test_exact_cross_page_queries_do_not_match_similar_numbers(world):
+    review = world[3]
+    CalculationService(review).rebuild()
+    assert review.browse(DeclarationListQuery(declarationNo="REAL87")).total == 1
+    assert review.browse(DeclarationListQuery(exactDeclarationNo="REAL87")).total == 0
+    assert world[2].browse(CustomsReceiptQuery(declarationNo="REAL87")).total == 1
+    assert world[2].browse(CustomsReceiptQuery(exactDeclarationNo="REAL87")).total == 0
 
 
 def test_auto_rejects_differences_manual_requires_note(world):
@@ -89,6 +134,7 @@ def test_stale_source_and_reimport_invalidate_approval(world, ns):
     approve(world, body(original))
     save(ns, world[0], bundle([purchase(amounts=("130", "20"))], [customs("870", "2026-09-03T10:00:00Z")]))
     assert not current(world).approval.approved
+    assert current(world).approvalProgress.customs.status == "changed"
     assert "已变化" in approve(world, body(original)).skipped[0].reason
     finance(world)
     assert rows(world[0], "SELECT * FROM task_tasks") == []

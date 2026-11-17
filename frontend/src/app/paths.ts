@@ -41,6 +41,10 @@ function withQuery(path: string, filters: Record<string, string>) {
   return query.size ? `${path}?${query}` : path;
 }
 export const reviewListPath = (filters: { status?: string }) => withQuery(paths.review, filters);
+export const financeDeclarationPath = (exactDeclarationNo: string) =>
+  withQuery(paths.review, { exactDeclarationNo });
+export const customsDeclarationPath = (exactDeclarationNo: string, importing = false) =>
+  withQuery(paths.reviewCustoms, { exactDeclarationNo, importReceipt: importing ? "1" : "" });
 export const taskListPath = (filters: {
   stage?: string;
   // 开票跟进节点（documents / notification / invoices / comparison / completion / done）

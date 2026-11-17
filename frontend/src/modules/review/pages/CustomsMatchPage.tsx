@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useSearchParams } from "react-router";
 import {
   Button,
   Card,
@@ -17,6 +18,7 @@ import { CustomsSearchForm, EMPTY_CUSTOMS_SEARCH } from "../components/CustomsSe
 import { CustomsStats } from "../components/CustomsStats";
 import { ReviewListToolbar } from "../components/ReviewListToolbar";
 import { queryCustomsReceipts } from "../customs-api";
+import type { ReviewLinks } from "../approval-progress";
 import type {
   CustomsCounts,
   CustomsFilter,
@@ -39,18 +41,22 @@ const FILTERS: readonly { value: CustomsFilter; label: string; count: (c: Custom
   { value: "ns_missing", label: "未找到 NS", count: (c) => c.nsMissing },
 ];
 const TITLES: Record<CustomsFilter, string> = {
-  all: "报关单匹配",
-  matched: "报关单匹配 · 一致",
-  different: "报关单匹配 · 有差异",
-  ns_missing: "报关单匹配 · 未找到 NS 报关单",
+  all: "海关回执列表",
+  matched: "海关回执 · 一致",
+  different: "海关回执 · 有差异",
+  ns_missing: "海关回执 · 未找到 NS 报关单",
 };
-const COLUMN_WIDTHS = [20, 9, 5, 12, 20, 15, 10, 9];
-const BATCH_WIDTHS = [3, 20, 9, 5, 12, 17, 15, 10, 9];
+const COLUMN_WIDTHS = [16, 12, 15, 14, 8, 8, 15, 12];
+const BATCH_WIDTHS = [3, 16, 11, 14, 13, 8, 8, 15, 12];
 
 /** 海关审核沿用财务核对的查询、列表工具栏、批量选择和行操作布局。 */
-export function CustomsMatchPage() {
+export function CustomsMatchPage({ links }: { links?: ReviewLinks }) {
+  const [searchParams] = useSearchParams();
+  const exactDeclarationNo = searchParams.get("exactDeclarationNo") || "";
   const [query, setQuery] = useState<CustomsReceiptQuery>({
     ...EMPTY_CUSTOMS_SEARCH,
+    declarationNo: exactDeclarationNo,
+    exactDeclarationNo,
     status: "all",
     page: 1,
     pageSize: 20,
@@ -59,7 +65,7 @@ export function CustomsMatchPage() {
   const [counts, setCounts] = useState<CustomsCounts | null>(null);
   const [refresh, setRefresh] = useState(0);
   const [expanded, setExpanded] = useState<number[]>([]);
-  const [importing, setImporting] = useState(false);
+  const [importing, setImporting] = useState(searchParams.get("importReceipt") === "1");
   const [batch, setBatch] = useState(false);
   const [selection, setSelection] = useState<number[]>([]);
   const [approval, setApproval] = useState<CustomsReceipt[] | null>(null);
@@ -73,7 +79,11 @@ export function CustomsMatchPage() {
         const result = await queryCustomsReceipts(query, controller.signal);
         setState({ kind: "ready", result });
         setCounts(result.counts);
-        setExpanded(result.items.filter((item) => item.status === "different").map((item) => item.id));
+        setExpanded(
+          result.items
+            .filter((item) => query.exactDeclarationNo || item.status === "different")
+            .map((item) => item.id),
+        );
       } catch (error) {
         if (error instanceof Error && error.name === "AbortError") return;
         setState({ kind: "error", message: error instanceof Error ? error.message : "加载失败，请稍后重试" });
@@ -116,8 +126,16 @@ export function CustomsMatchPage() {
         />
         <CustomsSearchForm
           busy={busy}
-          initial={EMPTY_CUSTOMS_SEARCH}
-          onSearch={(criteria) => setQuery((current) => ({ ...current, ...criteria, page: 1 }))}
+          initial={{ ...EMPTY_CUSTOMS_SEARCH, declarationNo: exactDeclarationNo }}
+          onSearch={(criteria) =>
+            setQuery((current) => ({
+              ...current,
+              ...criteria,
+              page: 1,
+              exactDeclarationNo:
+                criteria.declarationNo === current.exactDeclarationNo ? current.exactDeclarationNo : "",
+            }))
+          }
         />
         <div className="fr-preview">
           {state.kind === "ready" && (
@@ -186,6 +204,7 @@ export function CustomsMatchPage() {
             </ReviewListToolbar>
           )}
           <ReceiptList
+            links={links}
             state={state}
             busy={busy}
             expanded={expanded}
@@ -226,6 +245,7 @@ export function CustomsMatchPage() {
       </Card>
       {importing && (
         <CustomsImportDialog
+          declarationNo={query.exactDeclarationNo}
           onClose={(changed) => {
             setImporting(false);
             if (changed) reload();
@@ -247,6 +267,7 @@ export function CustomsMatchPage() {
 }
 
 function ReceiptList({
+  links,
   state,
   busy,
   expanded,
@@ -259,6 +280,7 @@ function ReceiptList({
   onSelectAll,
   onApprove,
 }: {
+  links?: ReviewLinks;
   state: ListState;
   busy: boolean;
   expanded: number[];
@@ -330,14 +352,14 @@ function ReceiptList({
             <th scope="col" className="fr-toggle-heading">
               出口报关单号
             </th>
-            <th scope="col">出口日期</th>
-            <th scope="col">征免</th>
-            <th scope="col">明细行</th>
+            <th scope="col">回执信息</th>
             <th scope="col">境外收货人（海关回执）</th>
             <th scope="col">明细比对</th>
+            <th scope="col">财务审核</th>
             <th scope="col">海关审核</th>
+            <th scope="col">开票进度</th>
             <th scope="col" className="fr-declaration-action">
-              操作
+              下一步
             </th>
           </tr>
         </thead>
@@ -345,6 +367,7 @@ function ReceiptList({
           <CustomsReceiptRow
             key={receipt.id}
             receipt={receipt}
+            links={links}
             open={expanded.includes(receipt.id)}
             busy={busy}
             onToggle={() => onToggle(receipt.id)}

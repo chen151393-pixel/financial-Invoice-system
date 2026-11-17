@@ -103,6 +103,7 @@ from .modules.task.controller.signed_upload_controller import create_router as s
 from .modules.task.controller.supplier_group_controller import create_router as task_group_router
 from .modules.task.controller.supplier_owner_controller import create_router as supplier_owner_router
 from .modules.task.controller.task_controller import create_router as task_router
+from .modules.task.public import review_task_outcomes
 from .modules.task.service.closure_service import ClosureService, on_lines_closed_by_difference
 from .modules.task.service.contract_worker import ContractWorker
 from .modules.task.service.declaration_document_service import DeclarationDocumentService
@@ -287,12 +288,21 @@ def _register_business(app, settings, ns, contract_ns, wecom, engine, lemon_invo
     app.state.source_relation_worker = RelationRebuildWorker(relation_rebuild)
     app.include_router(source_relation_router(relation_rebuild))
     declarations = DeclarationService(engine)
-    review = ReviewService(engine, declarations, events, settings.review_unit_price_tolerance_cny)
+    review = ReviewService(
+        engine,
+        declarations,
+        events,
+        settings.review_unit_price_tolerance_cny,
+        task_reader=review_task_outcomes,
+    )
     app.state.review_calculations = CalculationService(review)
     app.state.review_calculation_worker = CalculationWorker(app.state.review_calculations)
     app.include_router(review_router(review))
     app.include_router(
-        customs_receipt_router(CustomsReceiptService(engine), CustomsApprovalService(engine, events))
+        customs_receipt_router(
+            CustomsReceiptService(engine, task_reader=review_task_outcomes),
+            CustomsApprovalService(engine, events),
+        )
     )
     directory = SourceDirectory(engine)
     app.include_router(

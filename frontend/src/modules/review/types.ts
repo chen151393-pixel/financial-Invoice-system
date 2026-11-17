@@ -1,3 +1,5 @@
+import type { ApprovalProgress } from "./approval-progress";
+
 // 与后端 /api/review 的响应一致；金额、数量为十进制字符串，前端不重算。
 // unshipped：未出库。自 2026-10-23 起拉取时即跳过，列表不再返回；保留类型以显示后端兜底拒绝。
 export type ReviewStatus = "pending" | "approved" | "unshipped";
@@ -55,6 +57,7 @@ export interface CustomsLine extends UnitPriceMargin {
   purchaseLines: PurchaseLine[];
 }
 export interface ComparisonGroup {
+  approvalProgress?: ApprovalProgress | null;
   purchaseOrderNumbers?: string[];
   currencyEvidenceSummary?: string[];
   currencyChecks: {
@@ -123,6 +126,7 @@ export interface ComparisonResult {
 }
 // 上线只同步 NS 正式环境，不再按 NS 账套筛选（后端参数保留为可选，不传即不限）
 export interface DeclarationListQuery {
+  exactDeclarationNo?: string;
   createdFrom?: string;
   createdTo?: string;
   supplierName?: string;

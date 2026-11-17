@@ -21,3 +21,10 @@ def approve(connection, values, now):
     return connection.execute(
         insert(customs_approvals).values(**values, approved_at=now, created_at=now, updated_at=now)
     ).inserted_primary_key[0]
+
+
+def for_receipts(connection, receipt_ids):
+    if not receipt_ids:
+        return []
+    query = select(customs_approvals).where(customs_approvals.c.receipt_id.in_(receipt_ids))
+    return list(connection.execute(query).mappings())

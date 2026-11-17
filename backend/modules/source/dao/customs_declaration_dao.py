@@ -224,6 +224,7 @@ def active_by_numbers(connection, numbers):
             customs_declarations.c.record_no,
             customs_declarations.c.declaration_no,
             customs_declarations.c.declaration_date,
+            customs_declarations.c.content_sha256,
         )
         .where(
             customs_declarations.c.declaration_no.in_(numbers),

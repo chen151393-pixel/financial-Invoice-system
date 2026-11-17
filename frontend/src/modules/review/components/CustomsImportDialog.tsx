@@ -28,7 +28,13 @@ const CONSIGNEE_TONE: Record<ImportedDeclaration["consignee"]["state"], Tone> = 
  * 导入海关回执：逐个文件上传原文件，展示后端返回的列识别与逐张报关单结果。
  * 一个文件内任一行有误时后端整份拒绝，其余文件照常处理；关闭后由页面重新读取列表。
  */
-export function CustomsImportDialog({ onClose }: { onClose: (changed: boolean) => void }) {
+export function CustomsImportDialog({
+  onClose,
+  declarationNo,
+}: {
+  onClose: (changed: boolean) => void;
+  declarationNo?: string;
+}) {
   const [files, setFiles] = useState<File[]>([]);
   const [outcomes, setOutcomes] = useState<FileOutcome[]>([]);
   const [busy, setBusy] = useState(false);
@@ -61,6 +67,7 @@ export function CustomsImportDialog({ onClose }: { onClose: (changed: boolean) =
   return (
     <Dialog title="导入海关回执" busy={busy} className="cm-import" onClose={() => onClose(changed.current)}>
       <div className="cm-import__body">
+        {declarationNo && <Alert>请上传包含报关单号 {declarationNo} 的海关回执。</Alert>}
         <p className="cm-muted">
           上传单一窗口导出的报关单明细，系统按出口报关单号匹配 NS 报关单并比对明细；境外收货人随回执保存。
           同一报关单号再次导入时，内容变化则以新回执替换旧明细。

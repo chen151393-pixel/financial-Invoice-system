@@ -246,3 +246,9 @@ npm.cmd run dev:api
 - `ReviewApproved` 继续表示财务通过并驱动快照计算、依据失效/承接；`task_release_service.py` 核实当前财务审核和海关审核，发布 `InvoiceReady`。task 先生成任务，matching 再重算台账及建议，全部复用最后一项审核的事务。两项先后不限；财务因币种待核实仍为待审核时不放行任务。
 - `review_customs_approvals` 保存不可变审核版本、方式、说明及身份；放行依据直接保存在 `review_records.customs_approval_id`，空表示尚未放行，每个财务审核版本只设置一次。迁移只新增这张审核表和财务审核的一个可空字段，不回填旧任务、不删除任何业务数据；已生成任务保留，后续新任务与后继任务使用双审核门槛。
 - 部署先运行 `npm.cmd run db:upgrade` 至 `0044_review_dual_approval` 再重启服务；不自动批准既有一致回执。测试见 `test_customs_approval.py`，MySQL 并发用例仅在提供隔离测试建库连接时执行。
+
+### 双审进度与跨页定位
+
+- `POST /api/review/declarations/query` 和 `POST /api/review/customs-receipts/query` 接受可选 `exactDeclarationNo`。该参数精确匹配真实出口报关单号，优先于支持部分匹配的 `declarationNo`，其余查询、统计及分页仍由后端处理。
+- 两个列表的每行均返回 `approvalProgress`，包含 `finance`、`customs`、`status`、`label`、`reason`、`nextStep`、`linked` 和 `taskIds`。双审分别核对当前 NS 摘要、回执版本及冻结开票依据。出现重号、缺回执或来源变化时返回对应原因；`linked` 表示当前真实报关单号与回执可以唯一关联。
+- 已放行时经 task 只读门面查询和冻结依据匹配的有效任务，包括同依据沿用的既有任务。没有有效任务时返回当前可核实的原因，例如未关联任务的供应商当前已关闭通知。任务查询由应用装配，避免 review 与 task 互相导入。本次无需新增迁移。

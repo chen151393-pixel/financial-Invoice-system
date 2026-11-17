@@ -100,7 +100,9 @@ def ids(connection, receipt_ids=None, *, lock=False):
 
 def _conditions(filters):
     conditions = []
-    if filters.get("numbers"):
+    if filters.get("exact_number"):
+        conditions.append(receipts.c.declaration_no == filters["exact_number"])
+    elif filters.get("numbers"):
         conditions.append(
             or_(*(receipts.c.declaration_no.contains(n, autoescape=True) for n in filters["numbers"]))
         )

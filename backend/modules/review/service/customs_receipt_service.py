@@ -24,6 +24,7 @@ from ..vo.customs_receipt_vo import (
     ImportedDeclaration,
     RematchResult,
 )
+from .approval_progress_reader import read_progress
 from .customs_approval_service import approval_view
 from .customs_receipt_parser import parse
 
@@ -52,8 +53,9 @@ def _match_values(ns_by_number, number, items, now):
 
 
 class CustomsReceiptService:
-    def __init__(self, engine):
+    def __init__(self, engine, *, task_reader=None):
         self.engine = engine
+        self.task_reader = task_reader
 
     def _require_engine(self):
         if self.engine is None:
@@ -131,6 +133,7 @@ class CustomsReceiptService:
     def browse(self, query):
         self._require_engine()
         filters = {
+            "exact_number": query.exactDeclarationNo,
             "numbers": search_terms(query.declarationNo),
             "name": query.name.strip(),
             "consignee": query.consignee.strip(),
@@ -139,6 +142,9 @@ class CustomsReceiptService:
         }
         try:
             with self.engine.connect() as connection:
+                # 审核、回执和任务必须来自同一读视图。
+                if connection.dialect.name == "mysql":
+                    connection = connection.execution_options(isolation_level="REPEATABLE READ")
                 counts = dao.status_counts(connection, filters)
                 items = dao.item_count(connection, filters)
                 total, heads = dao.page(
@@ -149,6 +155,11 @@ class CustomsReceiptService:
                     query.pageSize,
                 )
                 lines = dao.current_lines(connection, [head["id"] for head in heads])
+                progress = read_progress(
+                    connection,
+                    {head["id"]: (head["declaration_no"], None) for head in heads},
+                    self.task_reader,
+                )
                 views = []
                 for head in heads:
                     view, ns_id, _, status, result = approval_view(connection, head, lines[head["id"]])
@@ -158,7 +169,9 @@ class CustomsReceiptService:
                         "match_status": status,
                         "match_result": result,
                     }
-                    views.append(receipt(current, lines[head["id"]], view))
+                    item = receipt(current, lines[head["id"]], view)
+                    item.approvalProgress = progress[head["id"]]
+                    views.append(item)
         except SQLAlchemyError:
             raise ApiError(503, "海关回执读取失败，请检查业务数据库及迁移状态") from None
         return CustomsReceiptList(

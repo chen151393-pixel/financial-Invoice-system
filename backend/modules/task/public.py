@@ -14,6 +14,7 @@ from .policy.board_policy import NODE_LABELS, NODES
 
 # 业务状态（只读汇总）：任务状态 → 业务状态；报关单取当前任务中最慢的阶段
 from .policy.stage_policy import STAGE_LABELS, STAGES, declaration_stage, task_stage
+from .service.review_task_reader import review_task_outcomes as review_task_outcomes
 from .service.task_line_reader import active_line_ids as active_line_ids
 from .service.task_line_reader import open_lines
 from .service.task_line_reader import related_line_ids as related_line_ids

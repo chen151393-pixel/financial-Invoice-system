@@ -1,5 +1,7 @@
 import { Badge, Button, type Tone } from "../../../shared/components/ui";
+import type { ReviewLinks } from "../approval-progress";
 import type { ComparisonGroup, PurchaseLine } from "../types";
+import { ApprovalProgressCells, ApprovalProgressDetail } from "./ApprovalProgressCells";
 import { CustomsRows } from "./CustomsRows";
 import { FinanceIcon } from "./FinanceIcon";
 
@@ -16,6 +18,7 @@ export function DeclarationRow({
   onCheck,
   onReview,
   onSelectLine,
+  links,
 }: {
   group: ComparisonGroup;
   open: boolean;
@@ -26,6 +29,7 @@ export function DeclarationRow({
   onCheck: (checked: boolean) => void;
   onReview: () => void;
   onSelectLine: (line: PurchaseLine) => void;
+  links?: ReviewLinks;
 }) {
   const { review } = group;
   const approved = review.status === "approved";
@@ -65,19 +69,14 @@ export function DeclarationRow({
         </th>
         <td className="fr-declaration-number">{group.declaration || "未填写"}</td>
         <td>
-          {group.pl || "未提供"}
+          {group.company || "未提供"}
+          {group.pl && <small>PL 单号：{group.pl}</small>}
+          {group.salesOrders && <small>销售单号：{group.salesOrders}</small>}
           {group.account && <small>NS {group.account}</small>}
         </td>
-        <td>{group.company || "未提供"}</td>
-        <td>{group.salesOrders || "未提供"}</td>
         <td>
           {group.customsCount} 条报关行<small>{group.purchaseCount} 条子采购行</small>
-        </td>
-        <td>
           <span className="fr-status-badges">
-            <span title={review.reason}>
-              <Badge tone={STATUS_TONE[review.status] ?? "neutral"}>{review.label}</Badge>
-            </span>
             {/* 按后端分类分别展示；同单不同明细的问题可以并存。 */}
             {group.marginAlert && <Badge tone="danger">申报幅度异常</Badge>}
             {group.unitMismatch && <Badge tone="warning">单位不一致</Badge>}
@@ -89,23 +88,41 @@ export function DeclarationRow({
             )}
           </span>
         </td>
-        <td className="fr-declaration-action">
-          <Button
-            variant={approved ? "secondary" : "primary"}
-            disabled={!review.allowed && !approved}
-            title={review.reason}
-            aria-label={`${approved ? "查看审核记录" : "审核通过"}：${group.recordNumber}`}
-            onClick={onReview}
-          >
-            {approved ? "查看记录" : "审核通过"}
-          </Button>
-        </td>
+        <ApprovalProgressCells
+          progress={group.approvalProgress}
+          declarationNo={group.declaration}
+          page="finance"
+          links={links}
+          financeFallback={<Badge tone={STATUS_TONE[review.status] ?? "neutral"}>{review.label}</Badge>}
+          canReview={!approved && review.allowed}
+          onReview={onReview}
+          onDetails={onToggle}
+          expanded={open}
+          localAction={
+            <Button
+              size="sm"
+              variant={approved || group.approvalProgress ? "secondary" : "primary"}
+              disabled={!review.allowed && !approved}
+              title={review.reason}
+              aria-label={`${approved ? "查看审核记录" : "审核通过"}：${group.recordNumber}`}
+              onClick={onReview}
+            >
+              {approved ? "查看记录" : "审核通过"}
+            </Button>
+          }
+        />
       </tr>
       <tr id={`declaration-${group.id}`} className="fr-declaration-detail" hidden={!open}>
         <td colSpan={checkable ? 9 : 8}>
           {open && (
             <>
               {review.reason && <p className="fr-review-reason">{review.reason}</p>}
+              <ApprovalProgressDetail
+                progress={group.approvalProgress}
+                links={links}
+                page="finance"
+                declarationNo={group.declaration}
+              />
               <CustomsRows group={group} selectLine={onSelectLine} />
             </>
           )}

@@ -1,14 +1,14 @@
 import { useState, type ReactNode } from "react";
 import { Button, EmptyState, ErrorState, Skeleton } from "../../../shared/components/ui";
+import type { ReviewLinks } from "../approval-progress";
 import type { ComparisonGroup, ComparisonState, PurchaseLine } from "../types";
 import { DeclarationRow } from "./DeclarationRow";
 import { PurchaseDialog } from "./PurchaseDialog";
 import { ReviewListToolbar } from "./ReviewListToolbar";
 import "./review.css";
 
-// 主行列宽（不含勾选列）；批量模式在最前加 3% 的勾选列，从销售单号列让出
-const COLUMN_WIDTHS = [13, 16, 11, 14, 15, 10, 9, 12];
-const BATCH_WIDTHS = [3, 13, 16, 11, 14, 12, 10, 9, 12];
+const COLUMN_WIDTHS = [12, 15, 17, 13, 8, 9, 14, 12];
+const BATCH_WIDTHS = [3, 12, 15, 15, 12, 8, 9, 14, 12];
 
 /**
  * 报关单列表：工具条（汇总、展开收起、刷新、批量审核）+ 主行表格。
@@ -21,6 +21,8 @@ export function FinanceComparison({
   onBatchApprove,
   onRetry,
   pagination,
+  links,
+  initialExpanded,
 }: {
   state: ComparisonState;
   busy: boolean;
@@ -28,8 +30,10 @@ export function FinanceComparison({
   onBatchApprove?: (groups: ComparisonGroup[]) => void;
   onRetry: () => void;
   pagination?: ReactNode;
+  links?: ReviewLinks;
+  initialExpanded?: string[];
 }) {
-  const [expanded, setExpanded] = useState<string[]>([]);
+  const [expanded, setExpanded] = useState<string[]>(initialExpanded ?? []);
   const [batch, setBatch] = useState(false);
   const [checked, setChecked] = useState<string[]>([]);
   const [selected, setSelected] = useState<PurchaseLine | null>(null);
@@ -147,13 +151,13 @@ export function FinanceComparison({
                   主报关单（NS 编号）
                 </th>
                 <th scope="col">真实报关单号</th>
-                <th scope="col">PL 单号</th>
-                <th scope="col">申报抬头</th>
-                <th scope="col">销售单号</th>
+                <th scope="col">申报抬头 / 关联信息</th>
                 <th scope="col">关联明细</th>
-                <th scope="col">审核状态</th>
+                <th scope="col">财务审核</th>
+                <th scope="col">海关审核</th>
+                <th scope="col">开票进度</th>
                 <th scope="col" className="fr-declaration-action">
-                  操作
+                  下一步
                 </th>
               </tr>
             </thead>
@@ -163,6 +167,7 @@ export function FinanceComparison({
                 <DeclarationRow
                   key={group.id}
                   group={group}
+                  links={links}
                   open={open}
                   checked={checked.includes(group.id)}
                   checkable={batch}

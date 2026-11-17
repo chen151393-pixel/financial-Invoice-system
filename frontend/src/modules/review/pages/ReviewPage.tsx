@@ -4,6 +4,7 @@ import { useSearchParams } from "react-router";
 import { Card, CardFooter, CardHeader, Pagination, Segmented } from "../../../shared/components/ui";
 import { openLocalSession } from "../../identity/api";
 import { approveDeclaration, approveDeclarations, queryDeclarations } from "../api";
+import type { ReviewLinks } from "../approval-progress";
 import { BatchApproveDialog } from "../components/BatchApproveDialog";
 import { FinanceSearchForm } from "../components/FinanceSearchForm";
 import { FinanceComparison } from "../components/FinanceComparison";
@@ -26,15 +27,17 @@ const FILTER_LABELS: Record<(typeof FILTERS)[number], string> = {
   approved: "审核通过",
 };
 
-export function ReviewPage() {
+export function ReviewPage({ links }: { links?: ReviewLinks }) {
   const [searchParams] = useSearchParams();
+  const exactDeclarationNo = searchParams.get("exactDeclarationNo") || "";
   const [state, setState] = useState<ComparisonState>({ kind: "loading" });
   const [query, setQuery] = useState<DeclarationListQuery>({
     keyword: "",
     supplierId: "",
     supplierName: searchParams.get("supplierName") || "",
     recordNo: searchParams.get("recordNo") || searchParams.get("keyword") || "",
-    declarationNo: searchParams.get("declarationNo") || "",
+    declarationNo: exactDeclarationNo || searchParams.get("declarationNo") || "",
+    exactDeclarationNo,
     purchaseOrderNo: searchParams.get("purchaseOrderNo") || "",
     createdFrom: searchParams.get("createdFrom") || "",
     createdTo: searchParams.get("createdTo") || "",
@@ -160,12 +163,26 @@ export function ReviewPage() {
           }}
           busy={busy}
           onSearch={(criteria) => {
-            setQuery((current) => ({ ...current, ...criteria, keyword: "", supplierId: "", page: 1 }));
+            setQuery((current) => ({
+              ...current,
+              ...criteria,
+              keyword: "",
+              supplierId: "",
+              page: 1,
+              exactDeclarationNo:
+                criteria.declarationNo === current.exactDeclarationNo ? current.exactDeclarationNo : "",
+            }));
           }}
         />
         <FinanceComparison
           key={state.kind === "ready" ? `ready-${loads}` : state.kind}
           state={state}
+          links={links}
+          initialExpanded={
+            query.exactDeclarationNo && state.kind === "ready"
+              ? state.result.groups.map((group) => group.id)
+              : undefined
+          }
           busy={busy}
           onReview={(group) => {
             setApprovalError("");
@@ -200,6 +217,7 @@ export function ReviewPage() {
         <ReviewDialog
           key={`${review.id}-${review.contentSha256}`}
           group={review}
+          links={links}
           busy={submitting}
           error={approvalError}
           onClose={() => {

@@ -9,6 +9,15 @@ from .snapshot_search import conditions as search_conditions
 from .snapshot_search import margin_status_matches
 
 
+def approval_payloads(connection, declaration_ids):
+    if not declaration_ids:
+        return {}
+    query = select(
+        snapshots.c.customs_declaration_id, func.json_extract(snapshots.c.payload, "$.review")
+    ).where(snapshots.c.customs_declaration_id.in_(declaration_ids))
+    return dict(connection.execute(query).all())
+
+
 def replace_account(connection, account, rows, supplier_rows):
     # 只替换可重建的查询投影，审核记录、冻结依据和来源数据保持不变。
     connection.execute(delete(suppliers).where(suppliers.c.ns_account == account))

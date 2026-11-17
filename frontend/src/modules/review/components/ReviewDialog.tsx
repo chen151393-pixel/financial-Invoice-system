@@ -1,10 +1,10 @@
 import { CurrencyEvidenceForm } from "./CurrencyEvidenceForm";
-import { Link } from "react-router";
-import { paths } from "../../../app/paths";
 import { useState } from "react";
 import { Button } from "../../../shared/components/ui";
+import type { ReviewLinks } from "../approval-progress";
 import { useDialog } from "../hooks/useDialog";
 import type { ComparisonGroup, CurrencyEvidence } from "../types";
+import { ApprovalProgressDetail } from "./ApprovalProgressCells";
 
 export function ReviewDialog({
   group,
@@ -12,12 +12,14 @@ export function ReviewDialog({
   error,
   onClose,
   onApprove,
+  links,
 }: {
   group: ComparisonGroup;
   busy: boolean;
   error: string;
   onClose: () => void;
   onApprove: (note: string, evidence: CurrencyEvidence[]) => void;
+  links?: ReviewLinks;
 }) {
   const ref = useDialog();
   const [note, setNote] = useState("");
@@ -58,13 +60,21 @@ export function ReviewDialog({
         <p className="fr-dialog__hint">
           {approved
             ? "该报关单审核结果已保存。"
-            : "请核对本张报关单及关联子采购明细。通过后保存整单审核记录，冻结子采购的开票数量、单位和含税金额，海关审核也通过后自动生成开票任务；数据变化时需刷新后重新审核。"}
+            : "请核对本张报关单及关联子采购明细。财务通过后会冻结开票数量、单位和含税金额。两项审核均通过后，系统处理开票任务。"}
         </p>
-        {approved && (
-          <p className="fr-dialog__hint" role="status">
-            海关审核也通过后，系统按供应商、采购公司和币种生成开票任务。
-            <Link to={paths.tasks}>前往开票跟进查看</Link>
-          </p>
+        {approved && group.approvalProgress && (
+          <>
+            <p className="fr-dialog__hint" role="status">
+              开票进度：{group.approvalProgress.label}
+              {group.approvalProgress.reason && `。${group.approvalProgress.reason}`}
+            </p>
+            <ApprovalProgressDetail
+              progress={group.approvalProgress}
+              links={links}
+              page="finance"
+              declarationNo={group.declaration}
+            />
+          </>
         )}
         <div className="fr-scope-heading">
           <strong>本次审核范围</strong>

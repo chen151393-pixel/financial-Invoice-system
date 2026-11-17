@@ -199,7 +199,41 @@ test("默认只展示报关单头，PL及公司同一行且审核按钮位于最
   assert.match(html, /申报抬头/);
   assert.match(html, /aria-label="审核通过：CDTEST001"/);
   assert.match(html, /aria-expanded="false"/);
-  assert.doesNotMatch(html, /SUB-TEST|fr-customs-table|财务审核/);
+  assert.doesNotMatch(html, /SUB-TEST|fr-customs-table/);
+});
+
+test("财务主行展示后端双审和阻塞原因，有对页权限才定位至同一单号", async () => {
+  const { customsDeclarationPath } = await server.ssrLoadModule("/src/app/paths.ts");
+  const state = createPlComparisonState();
+  const item = state.result.groups[0];
+  item.declaration = "REAL&870";
+  item.review = { ...item.review, status: "approved", allowed: false };
+  item.approvalProgress = {
+    finance: { status: "approved", label: "已通过", reason: "" },
+    customs: { status: "changed", label: "需重审", reason: "海关回执已换版" },
+    status: "waiting_customs",
+    label: "等待海关审核",
+    reason: "海关回执已换版",
+    nextStep: "customs",
+    linked: true,
+    taskIds: [],
+  };
+  const props = { state, onRetry() {}, onReview() {} };
+  const html = renderToStaticMarkup(
+    inRouter(
+      createElement(PlComparison, {
+        ...props,
+        links: { customs: customsDeclarationPath },
+      }),
+    ),
+  );
+  assert.match(html, /财务审核.*海关审核.*开票进度.*下一步/);
+  assert.match(html, /等待海关审核.*海关回执已换版/);
+  assert.match(html, /href="\/review\/customs\?exactDeclarationNo=REAL%26870"[^>]*>去海关审核/);
+  assert.doesNotMatch(
+    renderToStaticMarkup(inRouter(createElement(PlComparison, props))),
+    /href="\/review\/customs/,
+  );
 });
 
 test("主行按后端结果区分单位、数量和实际申报幅度异常", () => {
@@ -322,7 +356,7 @@ test("批量审核窗口说明范围仅为当前页已选，并逐张展示跳�
     skipped: [{ id: "102", recordNumber: "", reason: "报关单来源已变化，请刷新后重新核对再审核" }],
   };
   const done = renderToStaticMarkup(createElement(BatchApproveDialog, { ...props, result }));
-  assert.match(done, /1 张已通过财务审核；海关审核也通过后自动生成开票任务，1 张未通过/);
+  assert.match(done, /1 张已通过财务审核，1 张未通过。\s*关闭后可在列表查看各单的开票进度/);
   assert.match(done, /CDTEST002[\s\S]*来源已变化/);
   assert.doesNotMatch(done, /审核通过 2 张/);
 });

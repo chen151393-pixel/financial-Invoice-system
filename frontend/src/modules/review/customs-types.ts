@@ -1,3 +1,5 @@
+import type { ApprovalProgress } from "./approval-progress";
+
 // 与后端 /api/review/customs-receipts 的响应一致；数量、金额为十进制字符串，前端不重算。
 export type CustomsMatchStatus = "matched" | "split_matched" | "different" | "ns_missing" | "ns_duplicate";
 // matched 含拆行一致；ns_missing 含 NS 报关单重号（后端合并筛选）
@@ -62,6 +64,7 @@ export interface CustomsConsignee {
 }
 
 export interface CustomsReceipt {
+  approvalProgress?: ApprovalProgress | null;
   id: number;
   declarationNo: string;
   exportDate: string;
@@ -126,6 +129,7 @@ export interface CustomsSearch {
 }
 
 export interface CustomsReceiptQuery extends CustomsSearch {
+  exactDeclarationNo?: string;
   status: CustomsFilter;
   page: number;
   pageSize: number;

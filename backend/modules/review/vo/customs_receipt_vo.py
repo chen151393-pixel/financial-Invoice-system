@@ -4,6 +4,8 @@ from typing import Literal
 
 from backend.core.dto import StrictModel
 
+from .approval_progress_vo import ApprovalProgress
+
 MatchStatus = Literal["matched", "split_matched", "different", "ns_missing", "ns_duplicate"]
 GroupStatus = Literal[
     "matched", "split", "merged", "quantity_mismatch", "unit_mismatch", "missing_in_ns", "missing_in_customs"
@@ -93,6 +95,7 @@ class CustomsReceipt(StrictModel):
     revision: int
     groups: list[CompareGroup]
     approval: CustomsApproval
+    approvalProgress: ApprovalProgress | None = None
 
 
 class CustomsApproveOutcome(StrictModel):

@@ -62,7 +62,7 @@ def test_sync_only_queues_and_restart_computes_existing_rows(review, ns, engine,
     assert calculations.pending() == []
 
 
-def test_list_uses_only_four_review_queries_with_sql_pagination(review, ns, engine, monkeypatch):
+def test_list_paginates_before_batching_live_approval_progress(review, ns, engine, monkeypatch):
     seed(ns, engine)
     save(ns, engine, bundle([purchase("201", "871")], [customs("871")]))
     CalculationService(review).rebuild()
@@ -81,13 +81,20 @@ def test_list_uses_only_four_review_queries_with_sql_pagination(review, ns, engi
     event.listen(engine, "before_cursor_execute", capture)
     try:
         page = review.browse(query(page=2, pageSize=1))
+        page_statements = statements.copy()
+        statements.clear()
+        wide_page = review.browse(query(pageSize=2))
     finally:
         event.remove(engine, "before_cursor_execute", capture)
     assert page.total == 2 and page.pages == 2
     assert [g.recordNumber for g in page.groups] == ["CD870"]
-    assert len(statements) == 4
-    assert not any(re.search(r"(?:FROM|JOIN) source_", s) or "raw_records" in s for s in statements)
-    assert any("LIMIT" in s and "OFFSET" in s for s in statements)
+    assert len(wide_page.groups) == 2
+    # 同样的业务状态下，扩大页容量不会逐行增加查询；来源只读单头。
+    assert len(page_statements) == len(statements) == 7
+    source_reads = [s for s in statements if re.search(r"(?:FROM|JOIN) source_", s)]
+    assert len(source_reads) == 1 and "FROM source_customs_declarations" in source_reads[0]
+    assert "WHERE source_customs_declarations.declaration_no IN" in source_reads[0]
+    assert any("LIMIT" in s and "OFFSET" in s for s in page_statements)
     supplier = page.suppliers[0].id
     assert review.browse(query(supplierId=supplier, keyword="SUB-201")).total == 1
     assert review.browse(query(keyword="清洗液")).total == 2

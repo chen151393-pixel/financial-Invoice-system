@@ -44,7 +44,7 @@ export function CustomsApproveDialog({
       <div className="cm-approve__body">
         <p className="cm-approve__hint">
           本次仅处理当前页选定的 {items.length}{" "}
-          张回执。海关与财务两项当前版本均审核通过后，系统自动生成开票任务。
+          张回执。海关与财务两项当前版本均审核通过后，系统处理开票任务。各单结果可在列表查看。
         </p>
         {!result && (
           <DataTable

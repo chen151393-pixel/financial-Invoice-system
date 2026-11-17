@@ -6,6 +6,8 @@ from pydantic import AliasChoices, Field
 
 from backend.core.dto import StrictModel
 
+from .approval_progress_vo import ApprovalProgress
+
 
 class UnitPriceMargin(StrictModel):
     """按单价计算的幅度；人民币单价保留换算精度，前端不重算。"""
@@ -119,6 +121,7 @@ class Declaration(StrictModel):
     unlinkedLines: list[PurchaseGroup]
     warnings: list[str]
     review: ReviewState
+    approvalProgress: ApprovalProgress | None = None
 
 
 class SupplierOption(StrictModel):

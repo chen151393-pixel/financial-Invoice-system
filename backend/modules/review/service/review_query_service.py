@@ -11,6 +11,7 @@ from ..dao import declaration_snapshot_dao
 from ..policy.auto_review_policy import margin_flags
 from ..policy.calculation_policy import FAILED_REASON, PENDING_REASON, calculation_key
 from ..vo.review_vo import AutoReview, Declaration, ReviewList, SupplierOption
+from .approval_progress_reader import read_progress
 
 
 def month_start_utc(now):
@@ -21,8 +22,9 @@ def month_start_utc(now):
 
 
 class ReviewQueryService:
-    def __init__(self, engine, tolerance):
+    def __init__(self, engine, tolerance, task_reader=None):
         self.engine, self.key = engine, calculation_key(tolerance)
+        self.task_reader = task_reader
 
     def browse(self, query):
         try:
@@ -39,11 +41,17 @@ class ReviewQueryService:
                     counts, total, page, suppliers, jobs = declaration_snapshot_dao.browse(
                         connection, query, self.key, month_start_utc(datetime.now(UTC)), declaration_ids
                     )
+                    groups = [Declaration.model_validate_json(row["payload"]) for row in page]
+                    progress = read_progress(
+                        connection,
+                        {g.id: (g.declaration, int(g.id)) for g in groups},
+                        self.task_reader,
+                        finance_views={int(g.id): g.review for g in groups},
+                    )
         except SQLAlchemyError:
             raise ApiError(503, "财务计算结果读取失败，请检查数据库及迁移状态") from None
-        groups = []
-        for row in page:
-            group = Declaration.model_validate_json(row["payload"])
+        for group, row in zip(groups, page, strict=True):
+            group.approvalProgress = progress[group.id]
             group.calculatedAt = row["calculated_at"].replace(tzinfo=UTC).isoformat()
             if not row["fresh"]:
                 reason = FAILED_REASON if row["last_error"] else PENDING_REASON
@@ -56,7 +64,9 @@ class ReviewQueryService:
                     line.declaredUnitPriceCny, line.originalUnitPriceCny = "", ""
             # 兼容旧快照中混合的 marginAlert；只归类已有逐行结果，不重算金额。
             flags = margin_flags({"status": line.marginStatus} for line in group.customsLines)
-            groups.append(group.model_copy(update=flags))
+            group.marginAlert = flags["marginAlert"]
+            group.unitMismatch = flags["unitMismatch"]
+            group.quantityMismatch = flags["quantityMismatch"]
         notices = [
             f"账套 {job['ns_account']}：{FAILED_REASON if job['last_error'] else PENDING_REASON}。"
             "当前显示上次完成的单据快照和状态统计；异常及可自动审核计数暂不包含该账套。"
