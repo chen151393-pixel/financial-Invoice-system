@@ -8,6 +8,7 @@ from backend.modules.settlement.dto.contract_dto import GenerateContractsRequest
 from backend.modules.settlement.dto.party_dto import SavePartyRequest, UploadStampRequest
 from backend.modules.settlement.service.bill_service import BillService
 from backend.modules.settlement.service.contract_service import ContractService
+from backend.modules.settlement.service.declaration_files import DeclarationFiles
 from backend.modules.settlement.service.document_reader import DocumentReader
 from backend.modules.settlement.service.document_service import DocumentService
 from backend.modules.settlement.service.document_store import DocumentStore
@@ -64,9 +65,12 @@ class Documents:
     """一组共用同一资料目录的结汇资料服务。"""
 
     def __init__(self, engine, root, ocr=None):
+        # 报关单归档目录（模拟共享盘）；与结汇资料目录分开
+        self.archive = root / "archive"
+        self.archive.mkdir(exist_ok=True)
         # 资料放在独立子目录，不与测试数据库文件混放
         self.store = DocumentStore(root / "documents")
-        self.reader = DocumentReader(lead_days=28)
+        self.reader = DocumentReader(lead_days=28, declaration_files=DeclarationFiles(self.archive))
         self.views = DocumentService(engine, self.reader)
         self.bills = BillService(engine, self.store, self.views, ocr)
         self.contracts = ContractService(engine, self.store, self.reader, self.views)

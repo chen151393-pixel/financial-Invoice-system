@@ -1,14 +1,17 @@
 """结汇资料用例：提单上传与解析 → 合同抬头 → 按模板生成销售合同 → 齐全度校验 → 资料包。"""
 
+import hashlib
 import io
 import zipfile
-from datetime import date
+from datetime import date, datetime
 
 import pytest
 from backend.core.errors import ApiError
 from backend.modules.settlement.dto.bill_dto import UpdateBillRequest, UploadBillRequest
 from backend.modules.settlement.policy.bill_parse_policy import english_date, parse_bill, parse_date
 from backend.modules.settlement.policy.contract_policy import unit_price
+from backend.modules.source.public import declaration_refs_by_number
+from backend.modules.task.dao import declaration_document_dao
 from backend.tests.settlement.documents_support import (
     HK,
     SELLER,
@@ -96,7 +99,13 @@ def test_documents_from_upload_to_package(seeded, tmp_path):
         "2026-10-01",
     )
     assert generated.complete and generated.package.allowed and not contract.stale
-    assert generated.warnings == ["销售合同 YEX260827：卖方未上传印章，合同未盖该方印章"]
+    # 报关单文件未归档只提示，不影响齐全
+    assert generated.warnings[0] == "销售合同 YEX260827：卖方未上传印章，合同未盖该方印章"
+    assert [(f.declarationNo, f.status) for f in generated.declarationFiles] == [
+        ("REAL870", "unregistered"),
+        ("REAL871", "unregistered"),
+    ]
+    assert len(generated.warnings) == 3 and "报关单 REAL870 的文件未登记下载" in generated.warnings[1]
     name, content = documents.contracts.file(batch.id, contract.id)
     text = "".join(page.extract_text() for page in PdfReader(io.BytesIO(content)).pages)
     assert name == "销售合同YEX260827.pdf"
@@ -107,7 +116,7 @@ def test_documents_from_upload_to_package(seeded, tmp_path):
     root = package_name.removesuffix(".zip")
     assert sorted(names) == sorted(
         [
-            f"{root}/YEX260827/销售合同YEX260827.pdf",
+            f"{root}/YEX260827/销售合同（形式发票）YEX260827.pdf",
             f"{root}/YEX260827/提单EGLV142503975412.pdf",
             f"{root}/文件清单.txt",
         ]
@@ -211,3 +220,54 @@ def test_document_routes_bind_path_parameters():
     )
     assert package.headers["content-disposition"].startswith("attachment;")
     assert client.get("/api/settlement/batches/2/contracts/0/file").status_code == 422
+
+
+def test_package_includes_archived_customs_declarations(seeded, tmp_path):
+    """报关单取 task 模块归档到共享盘的原件；未归档、文件被改动时不放入并在清单中注明。"""
+    _, batches = services(seeded)
+    batch = create(batches, ["REAL870", "REAL871"], "985.50", fee="15.00")
+    documents = complete_documents(seeded, tmp_path, batch.id)
+    now = datetime(2026, 11, 1)
+    paths = {}
+    with seeded.begin() as connection:
+        heads = declaration_refs_by_number(connection, ["REAL870", "REAL871"])
+        for number, extension in (("REAL870", ".xls"), ("REAL871", ".pdf")):
+            declaration_id = heads[number][0]["id"]
+            content = f"customs {number}".encode()
+            paths[number] = documents.archive / f"报关单_{number}{extension}"
+            paths[number].write_bytes(content)
+            declaration_document_dao.ensure(connection, declaration_id, "ACC", "CD", "tester", now)
+            row = declaration_document_dao.get(connection, declaration_id, "customs_declaration")
+            file = {
+                "filename": paths[number].name,
+                "sha256": hashlib.sha256(content).hexdigest(),
+                "path": str(paths[number]),
+            }
+            declaration_document_dao.archived(connection, row["id"], [file], "1", now)
+
+    view = documents.views.get(batch.id)
+    assert [(f.declarationNo, f.archived, f.fileNames) for f in view.declarationFiles] == [
+        ("REAL870", True, ["报关单_REAL870.xls"]),
+        ("REAL871", True, ["报关单_REAL871.pdf"]),
+    ]
+    assert view.complete and view.warnings == []
+
+    package_name, package = documents.packages.build(batch.id)
+    archive = zipfile.ZipFile(io.BytesIO(package))
+    root = package_name.removesuffix(".zip")
+    assert archive.read(f"{root}/YEX260827/报关单REAL870.xls") == b"customs REAL870"
+    assert archive.read(f"{root}/YEX260827/报关单REAL871.pdf") == b"customs REAL871"
+
+    # 共享盘上的文件被改动：不放入，清单注明；其余文件照常打包
+    paths["REAL870"].write_bytes(b"changed")
+    archive = zipfile.ZipFile(io.BytesIO(documents.packages.build(batch.id)[1]))
+    listing = archive.read(f"{root}/文件清单.txt").decode()
+    assert f"{root}/YEX260827/报关单REAL870.xls" not in archive.namelist()
+    assert "报关单 REAL870：共享盘上的文件与归档记录不一致，未放入" in listing
+    assert f"{root}/YEX260827/报关单REAL871.pdf" in archive.namelist()
+
+    # 归档路径不在共享盘目录内的记录不读取
+    outside = tmp_path / "outside.pdf"
+    outside.write_bytes(b"x")
+    file = {"filename": "a.pdf", "sha256": hashlib.sha256(b"x").hexdigest(), "path": str(outside)}
+    assert documents.reader.declaration_files.read(file) == (None, "归档路径不在共享盘目录内")

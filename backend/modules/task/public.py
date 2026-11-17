@@ -7,6 +7,9 @@ open_lines(connection, purchase_line_ids=None, lock=False)
 
 unbound_notify_suppliers(connection, tasks)
     待通知供应商节点中、供应商未绑定企微开票群的任务汇总（家数、任务数、前 5 家名称），供工作台提醒。
+
+archived_declaration_files(connection, declaration_ids, doc_type="customs_declaration")
+    报关资料归档现状 {报关单 ID: {status, files}}，供 settlement 把已归档的报关单放入结汇资料包；只读，不触发下载。
 """
 
 # 开票跟进节点（与任务台一致）
@@ -14,6 +17,7 @@ from .policy.board_policy import NODE_LABELS, NODES
 
 # 业务状态（只读汇总）：任务状态 → 业务状态；报关单取当前任务中最慢的阶段
 from .policy.stage_policy import STAGE_LABELS, STAGES, declaration_stage, task_stage
+from .service.declaration_file_reader import archived_declaration_files
 from .service.review_task_reader import review_task_outcomes as review_task_outcomes
 from .service.task_line_reader import active_line_ids as active_line_ids
 from .service.task_line_reader import open_lines
@@ -42,6 +46,7 @@ __all__ = [
     "open_lines",
     "workbench_tasks",
     "unbound_notify_suppliers",
+    "archived_declaration_files",
     "STAGES",
     "STAGE_LABELS",
     "declaration_stage",

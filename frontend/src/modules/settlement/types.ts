@@ -196,6 +196,16 @@ export interface PartyOption {
   hasStamp: boolean;
 }
 
+/** 批次内一张报关单的文件（NS 报关资料归档）现状。 */
+export interface DeclarationFile {
+  declarationNo: string;
+  recordNo: string;
+  status: string;
+  statusLabel: string;
+  archived: boolean;
+  fileNames: string[];
+}
+
 export interface BatchDocuments {
   batchId: number;
   declarationNos: string[];
@@ -214,7 +224,7 @@ export interface BatchDocuments {
   complete: boolean;
   issues: string[];
   warnings: string[];
-  notIncluded: string[];
+  declarationFiles: DeclarationFile[];
   edit: Action;
   generate: Action;
   package: Action;

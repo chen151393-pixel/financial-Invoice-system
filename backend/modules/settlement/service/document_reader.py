@@ -1,4 +1,4 @@
-"""批次资料现状：提单、应有的销售合同、已生成的合同与齐全度。只读，供资料接口、批次状态校验与打包共用。"""
+"""批次资料现状：提单、应有的销售合同（即形式发票）、已生成的合同、报关单文件与齐全度。只读，供资料接口、批次状态校验与打包共用。"""
 
 from backend.core.names import normalize_name
 from backend.modules.review.public import settlement_declaration_lines
@@ -10,11 +10,13 @@ from ..policy.route_policy import HK_TRANSIT
 
 
 class DocumentReader:
-    def __init__(self, *, lead_days=28):
+    def __init__(self, *, lead_days=28, declaration_files=None):
         self.lead_days = lead_days
+        # 报关单文件现状（DeclarationFiles）；未提供时不展示、不打包报关单
+        self.declaration_files = declaration_files
 
     def state(self, connection, batch, items):
-        """返回 {bills, planned, plan_issues, contracts, parties, buyer, issues, warnings, stale}。"""
+        """返回 {bills, planned, plan_issues, contracts, parties, buyer, declaration_files, issues, warnings, stale}。"""
         bills = bill_dao.active(connection, batch["id"])
         lines = settlement_declaration_lines(connection, [item["declaration_no"] for item in items])
         planned, plan_issues = plan(batch, items, lines, bills, lead_days=self.lead_days)
@@ -22,6 +24,9 @@ class DocumentReader:
         buyer = party_dao.by_key(connection, normalize_name(batch["consignee"]))
         parties = party_dao.by_ids(connection, {row["seller_party_id"] for row in contracts})
         result = checklist(items, bills, planned, plan_issues, contracts, parties, buyer)
+        files = self.declaration_files.state(connection, items) if self.declaration_files else []
+        # 报关单文件未归档只提示，不阻止确认资料已出
+        result["warnings"] = result["warnings"] + [row["note"] for row in files if row["note"]]
         return {
             "bills": bills,
             "planned": planned,
@@ -29,6 +34,7 @@ class DocumentReader:
             "contracts": contracts,
             "parties": parties,
             "buyer": buyer,
+            "declaration_files": files,
             **result,
         }
 

@@ -10,9 +10,6 @@ from ..vo.batch_vo import Action
 from ..vo.document_vo import BatchDocuments, ContractDefaults
 from .contract_pdf import template
 
-# NS 报关资料下载目前只提供 xls，转 PDF 与并入资料包尚未实现
-NOT_INCLUDED = ["报关单（NS 报关资料）", "形式发票（NS 报关资料）"]
-
 
 def _action(reason):
     return Action(allowed=not reason, reason=reason)
@@ -89,7 +86,7 @@ class DocumentService:
             complete=not state["issues"],
             issues=state["issues"],
             warnings=state["warnings"],
-            notIncluded=NOT_INCLUDED,
+            declarationFiles=[mapper.declaration_file(row) for row in state["declaration_files"]],
             edit=_action(editable),
             generate=_action(generate),
             package=_action(package),

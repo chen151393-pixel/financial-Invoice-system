@@ -1,6 +1,7 @@
 """结汇资料齐全度（纯函数）：提单覆盖每张报关单且字段完整，每个出口合同号都有当前有效的销售合同。
 
-报关单与形式发票由 NS 报关资料下载提供，暂未纳入本检查与资料包（见模块 README）。
+销售合同即形式发票，由平台按报关单（海关回执）生成。报关单文件取自 NS 报关资料归档，
+未归档只作提示、不计入缺项（见 service/declaration_files.py）。
 """
 
 from .bill_parse_policy import missing_fields

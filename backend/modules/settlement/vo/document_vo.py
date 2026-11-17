@@ -58,6 +58,15 @@ class ContractDefaults(StrictModel):
     paymentTermsEn: str
 
 
+class DeclarationFile(StrictModel):
+    declarationNo: str
+    recordNo: str
+    status: str
+    statusLabel: str
+    archived: bool
+    fileNames: list[str]
+
+
 class BatchDocuments(StrictModel):
     batchId: int
     declarationNos: list[str]
@@ -71,8 +80,8 @@ class BatchDocuments(StrictModel):
     complete: bool
     issues: list[str]
     warnings: list[str]
-    # 未纳入资料包、需另行准备的资料
-    notIncluded: list[str]
+    # 批次内各报关单文件（NS 报关资料归档）的现状；未归档只提示
+    declarationFiles: list[DeclarationFile]
     edit: Action
     generate: Action
     package: Action

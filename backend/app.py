@@ -70,6 +70,7 @@ from .modules.settlement.service.bill_ocr import BillOcr as SettlementBillOcr
 from .modules.settlement.service.bill_service import BillService as SettlementBillService
 from .modules.settlement.service.candidate_service import CandidateService as SettlementCandidateService
 from .modules.settlement.service.contract_service import ContractService as SettlementContractService
+from .modules.settlement.service.declaration_files import DeclarationFiles as SettlementDeclarationFiles
 from .modules.settlement.service.document_reader import DocumentReader as SettlementDocumentReader
 from .modules.settlement.service.document_service import DocumentService as SettlementDocumentService
 from .modules.settlement.service.document_store import DocumentStore as SettlementDocumentStore
@@ -328,7 +329,10 @@ def _register_business(app, settings, ns, contract_ns, wecom, engine, lemon_invo
     settlement_candidates = SettlementCandidateService(
         engine, hk_consignees=settings.settlement_hk_consignees, fee_alert=settings.settlement_fee_alert
     )
-    settlement_reader = SettlementDocumentReader(lead_days=settings.settlement_contract_lead_days)
+    settlement_reader = SettlementDocumentReader(
+        lead_days=settings.settlement_contract_lead_days,
+        declaration_files=SettlementDeclarationFiles(settings.subpo_archive_root),
+    )
     app.include_router(
         settlement_router(
             settlement_candidates,

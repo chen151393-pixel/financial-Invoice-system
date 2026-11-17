@@ -11,7 +11,7 @@ import {
 } from "../../../shared/components/ui";
 import { money } from "../../../shared/format/money";
 import { generateContracts, getDocuments, removeBill, updateBill, uploadBill } from "../api";
-import type { BatchDocuments as Documents, Bill, Contract, PlannedContract } from "../types";
+import type { BatchDocuments as Documents, Bill, Contract, DeclarationFile, PlannedContract } from "../types";
 import { BillEditForm } from "./BillEditForm";
 import { ContractGenerateForm } from "./ContractGenerateForm";
 
@@ -37,7 +37,7 @@ function contractRows(documents: Documents): ContractRow[] {
   return rows;
 }
 
-/** 香港中转批次的结汇资料：提单、销售合同、资料包。齐全度、缺项与能否操作全部来自后端。 */
+/** 香港中转批次的结汇资料：提单、销售合同（形式发票）、报关单、资料包。齐全度、缺项与能否操作全部来自后端。 */
 export function BatchDocuments({ batchId, onChanged }: { batchId: number; onChanged: () => void }) {
   const [state, setState] = useState<State>({ kind: "loading" });
   const [busy, setBusy] = useState(false);
@@ -166,6 +166,32 @@ export function BatchDocuments({ batchId, onChanged }: { batchId: number; onChan
         ),
     },
   ];
+  const declarationColumns: Column<DeclarationFile>[] = [
+    {
+      key: "number",
+      header: "报关单",
+      render: (row) => (
+        <div className="settlement-cell">
+          {row.declarationNo}
+          {row.recordNo && <span>{row.recordNo}</span>}
+        </div>
+      ),
+    },
+    {
+      key: "files",
+      header: "文件",
+      render: (row) => (row.fileNames.length ? row.fileNames.join("、") : "—"),
+    },
+    {
+      key: "state",
+      header: "状态",
+      render: (row) => (
+        <Badge tone={row.archived ? "success" : "warning"}>
+          {row.archived ? "已归档，随资料包" : `${row.statusLabel}，资料包暂不含`}
+        </Badge>
+      ),
+    },
+  ];
   const contractColumns: Column<ContractRow>[] = [
     {
       key: "no",
@@ -231,7 +257,6 @@ export function BatchDocuments({ batchId, onChanged }: { batchId: number; onChan
             ))}
           </ul>
         )}
-        <span>未纳入资料包、需另行准备：{documents.notIncluded.join("、")}。</span>
         {!editable && <span> {documents.edit.reason}。</span>}
       </Alert>
 
@@ -287,7 +312,7 @@ export function BatchDocuments({ batchId, onChanged }: { batchId: number; onChan
       )}
 
       <SectionTitle
-        title="销售合同"
+        title="销售合同（形式发票）"
         count={`${documents.contracts.length} / ${documents.planned.length}`}
         actions={
           editable && (
@@ -307,12 +332,24 @@ export function BatchDocuments({ batchId, onChanged }: { batchId: number; onChan
         <p className="settlement-form__hint">暂不能生成：{documents.generate.reason}</p>
       )}
       <DataTable
-        label="销售合同"
+        label="销售合同（形式发票）"
         columns={contractColumns}
         rows={contractRows(documents)}
         rowKey={(row) => row.contractNo}
         density="compact"
         minWidth={640}
+      />
+      <SectionTitle title="报关单" count={documents.declarationFiles.length} />
+      <p className="settlement-form__hint">
+        取“开票跟进”从 NS 下载并归档的报关单原件；未归档时请到对应开票任务的详情中下载。
+      </p>
+      <DataTable
+        label="报关单文件"
+        columns={declarationColumns}
+        rows={documents.declarationFiles}
+        rowKey={(row) => row.declarationNo}
+        density="compact"
+        minWidth={560}
       />
       {generating && (
         <ContractGenerateForm

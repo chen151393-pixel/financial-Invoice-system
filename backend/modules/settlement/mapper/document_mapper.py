@@ -1,7 +1,7 @@
 """批次资料行 → VO 的纯转换。"""
 
 from ..policy.bill_parse_policy import missing_fields
-from ..vo.document_vo import Bill, Contract, PartyOption, PlannedContract
+from ..vo.document_vo import Bill, Contract, DeclarationFile, PartyOption, PlannedContract
 from ..vo.party_vo import Party
 from .batch_mapper import amount, stamp, text
 
@@ -72,4 +72,15 @@ def party(row):
         stampUrl=f"{BASE}/parties/{row['id']}/stamp" if row["stamp_file_id"] else "",
         updatedBy=row["updated_by"],
         updatedAt=stamp(row["updated_at"]),
+    )
+
+
+def declaration_file(row):
+    return DeclarationFile(
+        declarationNo=row["declaration_no"],
+        recordNo=row["record_no"],
+        status=row["status"],
+        statusLabel=row["label"],
+        archived=row["status"] == "archived",
+        fileNames=[file["filename"] for file in row["files"]],
     )
