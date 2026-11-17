@@ -11,7 +11,7 @@ from backend.modules.review.dto.customs_receipt_dto import (
     CustomsReceiptQuery,
     CustomsRematchRequest,
 )
-from backend.modules.review.policy.customs_match_policy import compare, compare_lines
+from backend.modules.review.policy.customs_match_policy import auto_review, compare, compare_lines
 from backend.modules.review.service.customs_receipt_parser import parse
 from backend.modules.review.service.customs_receipt_service import CustomsReceiptService
 from backend.tests.test_schema_baseline import schema_engine as schema_engine
@@ -114,6 +114,8 @@ def test_one_ns_line_split_into_customs_items_matches_on_total():
         [item("01", "相纸", "4315.8", "千克"), item("02", "相纸", "44.5", "千克")],
     )
     assert (status, ns_id) == ("split_matched", 9)
+    # 拆行、合并不是一对一行，不能自动审核
+    assert auto_review(status, {})[0] is False and "拆行或合并" in auto_review(status, {})[1]
 
 
 def test_merged_quantity_and_unit_differences_and_missing_rows():
@@ -159,10 +161,12 @@ def test_total_mismatch_only_marks_one_to_one_same_currency_pairs():
     ns = {**ns_line(1, "相纸", 10, "千克"), "currency": "USD", "amount": Decimal("0")}
     customs = {**item("01", "相纸", 10, "千克"), "currency": "usd", "deal_total": Decimal("0.000001")}
     matched = compare_lines([ns], [customs])[0]
-    assert matched["status"] == "matched" and matched["totalMismatch"]
+    assert matched["status"] == "total_mismatch" and matched["totalMismatch"]
+    assert matched["label"] == "总价不一致" and "NS USD 0.00" in matched["note"]
     assert matched["nsLines"][0]["total"] == "0.00"
-    assert compare_lines([ns], [{**customs, "currency": "EUR"}])[0]["totalMismatch"] is None
-    assert compare_lines([ns], [{**customs, "deal_total": None}])[0]["totalMismatch"] is None
+    for other in ({**customs, "currency": "EUR"}, {**customs, "deal_total": None}):
+        group = compare_lines([ns], [other])[0]
+        assert group["status"] == "matched" and group["totalMismatch"] is None
     split = compare_lines(
         [ns],
         [{**customs, "deal_quantity": Decimal(5)}, {**customs, "item_no": "02", "deal_quantity": Decimal(5)}],
@@ -181,11 +185,37 @@ def test_same_name_and_unit_pairs_unique_quantities_before_checking_total_price(
     ]
     status, _, result = compare([{"id": 9, "record_no": "CD1", "lines": ns_rows}], items)
     groups = result["groups"]
-    assert status == "matched" and [g["status"] for g in groups] == ["matched", "matched"]
+    # 一对一按行比价：数量一致但总价不同，报关单有差异，不能自动审核
+    assert status == "different" and [g["status"] for g in groups] == ["total_mismatch", "total_mismatch"]
+    assert auto_review(status, result)[0] is False
     assert [(g["nsLines"][0]["id"], g["items"], g["totalMismatch"]) for g in groups] == [
         (2, ["01"], True),
         (1, ["02"], True),
     ]
+
+
+def test_auto_review_requires_one_to_one_rows_with_equal_totals():
+    def line(line_id, quantity, amount):
+        return {**ns_line(line_id, "相纸", quantity, "千克"), "currency": "USD", "amount": amount}
+
+    def receipt_item(no, quantity, total):
+        return {**item(no, "相纸", quantity, "千克"), "currency": "USD", "deal_total": total}
+
+    declaration = {"id": 9, "record_no": "CD1", "lines": [line(1, "10", Decimal("100")), line(2, "20", None)]}
+    items = [receipt_item("01", "10", Decimal("100.00")), receipt_item("02", "20", Decimal("200"))]
+    status, _, result = compare([declaration], items)
+    assert status == "matched" and [g["totalMismatch"] for g in result["groups"]] == [False, None]
+    allowed, reason = auto_review(status, result)
+    assert not allowed and "海关项 02 总价未能比对" in reason
+
+    declaration["lines"][1] = line(2, "20", Decimal("200"))
+    status, _, result = compare([declaration], items)
+    assert auto_review(status, result) == (True, "")
+
+    # 行数不一致（NS 2 行合并为海关 1 项）不是一对一，转人工
+    merged = [receipt_item("01", "30", Decimal("300"))]
+    status, _, result = compare([declaration], merged)
+    assert status == "split_matched" and not auto_review(status, result)[0]
 
 
 def test_duplicate_quantities_remain_grouped_after_unique_pairs():
@@ -307,7 +337,11 @@ def test_reimport_replaces_changed_content_and_keeps_unchanged(schema_engine, ns
     engine = schema_engine
     save(ns, engine, bundle([purchase("200", "870")], [customs("870")]))
     service = CustomsReceiptService(engine)
-    rows = [row("REAL870", "01", "墨水", "个", 10), row("REAL870", "02", "清洗液", "个", 10)]
+    # 来源报关行总价 USD 15，与回执一致
+    rows = [
+        row("REAL870", "01", "墨水", "个", 10, total=15),
+        row("REAL870", "02", "清洗液", "个", 10, total=15),
+    ]
     _import(service, rows)
     again = _import(service, rows)
     assert again.unchanged == 1 and again.declarations[0].status == "matched"
@@ -342,8 +376,9 @@ def test_browse_displays_ns_declaration_amounts_and_flags_the_different_row(sche
         ("USD", "5416.26"),
     ]
     assert [g.totalMismatch for g in result.groups] == [False, True]
-    assert result.totalComparison == "different"
-    assert result.approval.autoAllowed
+    assert [g.status for g in result.groups] == ["matched", "total_mismatch"]
+    assert result.totalComparison == "different" and result.status == "different"
+    assert not result.approval.autoAllowed and "有差异" in result.approval.reason
     _import(
         service,
         [
@@ -351,7 +386,8 @@ def test_browse_displays_ns_declaration_amounts_and_flags_the_different_row(sche
             row("REAL870", "02", "清洗液", "个", 10, total="5416.26"),
         ],
     )
-    assert service.browse(CustomsReceiptQuery()).items[0].totalComparison == "matched"
+    fixed = service.browse(CustomsReceiptQuery()).items[0]
+    assert fixed.totalComparison == "matched" and fixed.approval.autoAllowed
 
 
 def test_rematch_picks_up_ns_declaration_synced_later(schema_engine, ns):
@@ -359,7 +395,10 @@ def test_rematch_picks_up_ns_declaration_synced_later(schema_engine, ns):
     service = CustomsReceiptService(engine)
     _import(
         service,
-        [row("REAL870", "01", "墨水", "个", 10, "ACME"), row("REAL870", "02", "清洗液", "个", 10, "ACME")],
+        [
+            row("REAL870", "01", "墨水", "个", 10, "ACME", total=15),
+            row("REAL870", "02", "清洗液", "个", 10, "ACME", total=15),
+        ],
     )
     assert service.browse(CustomsReceiptQuery()).items[0].status == "ns_missing"
     save(ns, engine, bundle([purchase("200", "870")], [customs("870")]))

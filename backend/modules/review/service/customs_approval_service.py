@@ -10,7 +10,7 @@ from backend.core.errors import ApiError
 from backend.modules.source.public import declarations_by_number, digest, snapshot
 
 from ..dao import customs_approval_dao, customs_receipt_dao
-from ..policy.customs_match_policy import compare
+from ..policy.customs_match_policy import AUTO_RULE, auto_review, compare
 from ..vo.customs_receipt_vo import CustomsApproval, CustomsApproveOutcome, CustomsApproveResult
 from .task_release_service import release_if_ready
 
@@ -27,7 +27,8 @@ def approval_view(connection, head, rows):
     active = customs_approval_dao.current(connection, head, declaration_id, source_sha) if content else None
     stable = bool(content and content["declaration"]["content_sha256"] == source_sha)
     allowed = bool(stable and not active)
-    reason = ""
+    auto_ok, manual_reason = auto_review(status, result)
+    reason = manual_reason if allowed and not auto_ok else ""
     if active:
         reason = "当前版本已审核通过"
     elif not content:
@@ -38,7 +39,8 @@ def approval_view(connection, head, rows):
         token=token,
         approved=bool(active),
         allowed=allowed,
-        autoAllowed=allowed and status in {"matched", "split_matched"},
+        # 一对一按行比价：拆行、合并、总价差异或未能比对均不能自动审核
+        autoAllowed=allowed and auto_ok,
         label=("自动审核通过" if active["method"] == "auto" else "人工审核通过") if active else "待审核",
         reason=reason,
         approvedBy=active["approved_by"] if active else "",
@@ -83,9 +85,8 @@ class CustomsApprovalService:
                     if not view.allowed:
                         raise ApiError(409, view.reason)
                     if body.method == "auto" and not view.autoAllowed:
-                        raise ApiError(409, "仅明细一致（含拆行、合并一致）的回执可自动审核")
-                    if status == "different" and not body.note.strip():
-                        raise ApiError(422, "有差异的回执须填写人工审核说明")
+                        raise ApiError(409, f"{AUTO_RULE}：{view.reason}" if view.reason else AUTO_RULE)
+                    # 说明选填；审核人、方式与时间写入不可变审核记录，作为操作审计
                     now = datetime.now(UTC).replace(tzinfo=None)
                     customs_approval_dao.approve(
                         connection,

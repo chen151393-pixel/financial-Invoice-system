@@ -75,12 +75,12 @@ export function CustomsApproveDialog({
         {!result && (
           <div className="cm-approve__note">
             <label htmlFor={noteId}>人工审核说明</label>
-            <p id={`${noteId}-hint`}>差异单必填，其余选填；本次说明应用于全部选中回执。</p>
+            <p id={`${noteId}-hint`}>选填，本次说明应用于全部选中回执；审核人与审核时间由系统自动记录。</p>
             <textarea
               id={noteId}
               aria-describedby={`${noteId}-hint`}
               rows={3}
-              placeholder="填写本次审核说明"
+              placeholder="填写本次审核说明（选填）"
               value={note}
               maxLength={300}
               disabled={busy || !!error}

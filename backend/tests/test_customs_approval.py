@@ -27,12 +27,12 @@ def world(schema_engine, ns):
     events = create_events()
     save(ns, engine, bundle([purchase()], [customs("870")]))
     receipts = CustomsReceiptService(engine)
+    # 与来源报关行一一对应，数量 10 个、总价 USD 15 均一致，可自动审核
     _import(
         receipts,
         [
-            row("REAL870", "01", "墨水", "个", 6),
-            row("REAL870", "02", "墨水", "个", 4),
-            row("REAL870", "03", "清洗液", "个", 10),
+            row("REAL870", "01", "墨水", "个", 10, total=15),
+            row("REAL870", "02", "清洗液", "个", 10, total=15),
         ],
     )
     return engine, events, receipts, ReviewService(engine, DeclarationService(engine), events)
@@ -74,14 +74,51 @@ def test_both_orders_release_once_and_audit(world, first):
     assert current(world).approval.label == "自动审核通过"
 
 
-def test_auto_rejects_differences_manual_requires_note(world):
+def test_auto_rejects_differences_manual_note_optional_and_audited(world):
     _import(world[2], [row("REAL870", "01", "墨水", "个", 9), row("REAL870", "02", "清洗液", "个", 10)])
     item = current(world)
     assert item.approval.allowed and not item.approval.autoAllowed
-    assert "仅明细一致" in approve(world, body(item)).skipped[0].reason
-    assert "填写人工审核说明" in approve(world, body(item, "manual")).skipped[0].reason
-    assert approve(world, body(item, "manual", "已逐项核实差异")).approved
-    assert current(world).approval.note == "已逐项核实差异"
+    assert "仅逐行一一对应" in approve(world, body(item)).skipped[0].reason
+    # 差异单人工审核不强制说明，审核人、方式与时间照常留痕
+    assert approve(world, body(item, "manual")).approved
+    approved = current(world).approval
+    assert (approved.label, approved.approvedBy, approved.note) == ("人工审核通过", USER, "")
+    assert approved.approvedAt
+    audit = rows(world[0], "SELECT method, approved_by, note FROM review_customs_approvals")
+    assert [(r["method"], r["approved_by"], r["note"]) for r in audit] == [("manual", USER, None)]
+
+
+@pytest.mark.parametrize(
+    ("rows_", "reason"),
+    [
+        # 拆行：NS 1 行对应海关 2 项
+        (
+            [
+                row("REAL870", "01", "墨水", "个", 6, total=9),
+                row("REAL870", "02", "墨水", "个", 4, total=6),
+                row("REAL870", "03", "清洗液", "个", 10, total=15),
+            ],
+            "拆行或合并",
+        ),
+        # 数量一致、总价不一致
+        (
+            [
+                row("REAL870", "01", "墨水", "个", 10, total=15),
+                row("REAL870", "02", "清洗液", "个", 10, total=16),
+            ],
+            "有差异",
+        ),
+    ],
+)
+def test_split_rows_and_total_mismatch_go_to_manual_review(world, rows_, reason):
+    _import(world[2], rows_)
+    item = current(world)
+    assert item.approval.allowed and not item.approval.autoAllowed and reason in item.approval.reason
+    skipped = approve(world, body(item)).skipped[0].reason
+    assert "仅逐行一一对应" in skipped and reason in skipped
+    assert approve(world, body(item, "manual", "已人工核实")).approved
+    assert current(world).approval.label == "人工审核通过"
+    assert current(world).approval.note == "已人工核实"
 
 
 def test_stale_source_and_reimport_invalidate_approval(world, ns):
@@ -95,7 +132,10 @@ def test_stale_source_and_reimport_invalidate_approval(world, ns):
     request = body(current(world))
     _import(
         world[2],
-        [row("REAL870", "01", "墨水", "个", 10, "NEW"), row("REAL870", "02", "清洗液", "个", 10, "NEW")],
+        [
+            row("REAL870", "01", "墨水", "个", 10, "NEW", total=15),
+            row("REAL870", "02", "清洗液", "个", 10, "NEW", total=15),
+        ],
     )
     assert "已变化" in approve(world, request).skipped[0].reason
     assert not current(world).approval.approved

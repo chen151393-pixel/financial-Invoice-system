@@ -4,6 +4,8 @@ export type CustomsMatchStatus = "matched" | "split_matched" | "different" | "ns
 export type CustomsFilter = "all" | "matched" | "different" | "ns_missing";
 export type CustomsGroupStatus =
   | "matched"
+  // 一对一行数量一致、总价不同；报关单为有差异，不能自动审核
+  | "total_mismatch"
   | "split"
   | "merged"
   | "quantity_mismatch"

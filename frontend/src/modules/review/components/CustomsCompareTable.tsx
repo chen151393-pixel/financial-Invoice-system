@@ -106,10 +106,10 @@ export function CustomsCompareTable({
       render: (row) =>
         row.first ? (
           <span className="cm-result">
-            <Badge tone={row.group.consistent ? "success" : "warning"}>
-              {row.group.totalMismatch && row.group.status === "matched" ? "数量一致" : row.group.label}
-            </Badge>
-            {row.group.totalMismatch && <Badge tone="warning">总价不一致</Badge>}
+            <Badge tone={row.group.consistent ? "success" : "warning"}>{row.group.label}</Badge>
+            {row.group.totalMismatch && row.group.status !== "total_mismatch" && (
+              <Badge tone="warning">总价不一致</Badge>
+            )}
             {row.group.status !== "matched" && <span>{row.group.note}</span>}
           </span>
         ) : (

@@ -102,11 +102,7 @@ export function CustomsReceiptRow({
         </td>
         <td>
           <span className="fr-status-badges">
-            <Badge tone={STATUS_TONE[receipt.status]}>
-              {receipt.totalComparison === "different" && receipt.status === "matched"
-                ? "数量一致"
-                : receipt.statusLabel}
-            </Badge>
+            <Badge tone={STATUS_TONE[receipt.status]}>{receipt.statusLabel}</Badge>
             {total && <Badge tone={total.tone}>{total.label}</Badge>}
           </span>
           {receipt.statusNote && <small>{receipt.statusNote}</small>}
