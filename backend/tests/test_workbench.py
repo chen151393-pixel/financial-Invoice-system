@@ -90,7 +90,10 @@ def test_review_to_task_to_receipt_and_version_review(engine, ns, world, october
     # 应开归属报关单创建的 9 月，收票归属发票开票的 10 月，不受任务生成日期影响。
     steps = result.funnel.steps
     assert [(step.key, step.count) for step in steps][-1] == ("completed", 1)
-    assert all(step.count == 1 for step in steps) and steps[1].rate == "100.0"
+    # 未登记通知即收票完结：已通知按发送记录为 0，单列"未通知即收票"，后续通过率不受影响
+    assert [step.count for step in steps] == [1, 1, 1, 0, 1, 1] and steps[1].rate == "100.0"
+    assert [(s.key, s.count) for s in steps[3].stuck] == [("notification_skipped", 1)]
+    assert steps[4].rate == "100.0"
     assert result.funnel.completionRate == "100.0" and result.nodes.total == 0
     current = result.monthly[-1]
     assert (Decimal(current.expected), Decimal(current.received), current.percent) == (
@@ -365,6 +368,36 @@ def test_funnel_counts_positions_and_stuck_breakdown():
     assert result["completionRate"] == "42.5"
     empty = funnel(Counter())
     assert empty["completionRate"] is None and all(step["rate"] is None for step in empty["steps"])
+
+
+def test_funnel_notified_counts_send_records_only():
+    from collections import Counter
+
+    from backend.modules.matching.policy.workbench_flow import declaration_positions
+
+    class Everything:
+        def declaration(self, row):
+            return True
+
+    tasks = [
+        {"customs_declaration_id": 1, "node": "done", "notified": False},
+        {"customs_declaration_id": 2, "node": "comparison", "notified": True},
+        {"customs_declaration_id": 2, "node": "done", "notified": False},
+        {"customs_declaration_id": 3, "node": "notification", "notified": False},
+        {"customs_declaration_id": 4, "node": "invoices", "notified": True},
+    ]
+    positions, none = declaration_positions(
+        [{"id": key} for key in (1, 2, 3, 4)], set(), tasks, Everything(), lambda row: True
+    )
+    assert none == 0 and positions["notification_skipped"] == 2
+    steps = funnel(positions)["steps"]
+    assert [step["count"] for step in steps] == [4, 4, 4, 1, 2, 1]
+    assert [(s["key"], s["count"]) for s in steps[3]["stuck"]] == [
+        ("notification", 1),
+        ("notification_skipped", 2),
+    ]
+    assert steps[4]["rate"] == "66.7"  # 相对按位置越过通知的 3 张，而非已通知的 1 张
+    assert funnel(Counter(done=1, notification_skipped=1))["completionRate"] == "100.0"
 
 
 def test_node_distribution_excludes_completed_tasks():

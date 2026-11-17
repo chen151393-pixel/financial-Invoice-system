@@ -39,7 +39,7 @@ import { Card, CardHeader, CardContent, MetricCard, MetricGrid, Badge } from "..
 | `Tabs`                                               | 下划线标签                   | 同一区域的状态筛选或视图切换（全部 / 待审核 / 审核通过），可带计数；放在卡片顶部时由页面去掉自身底线                                         |
 | `Segmented`                                          | 2–7 个互斥选项               | 如近 7 天 / 近 30 天、节点切换，可带计数                                                                                                     |
 | `Progress`                                           | 进度条                       | `width` 为后端 0–100 展示宽度，`text` 为后端实际值文本                                                                                       |
-| `Stepper`                                            | 流程节点                     | 状态由后端判定；`compact` 用于列表行内；传 `onSelect`+`selectedKey` 时节点可点击（详情页切换分区）；读屏附带“已完成/当前节点/未开始”         |
+| `Stepper`                                            | 流程节点                     | 状态由后端判定；`compact` 用于列表行内；传 `onSelect`+`selectedKey` 时节点可点击（详情页切换分区）；`skipped` 为虚线圈“–”；读屏附带“已完成/当前节点/未开始/已跳过”         |
 | `FilterBar` / `Field`                                | 查询条件栏                   | 标签在上；`pending` 提示条件已改未提交；`Field grow` 用于关键字；`embedded` 放在列表卡片标题下方，去掉自身边框                              |
 | `DataTable`                                          | 数据表                       | 列定义 `align: "right"` 用于金额数量；宽表容器内横向滚动；不在前端排序汇总                                                                   |
 | `EmptyState` / `ErrorState` / `Skeleton` / `Alert`   | 请求状态与提示               | 空结果、失败、加载、就近提示各用其一，不混用                                                                                                 |

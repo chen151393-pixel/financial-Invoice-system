@@ -127,6 +127,27 @@ def test_completion_node_lists_missing_documents_then_done(engine, board, app_se
     assert done.total == 1 and done.items[0].currentNode == "done" and not done.items[0].missing
 
 
+def test_receipt_without_notification_advances_by_facts(engine, board, app_services, approved):
+    """已收票但没有通知记录：节点按已发生的收票推进，通知节点显示"未通知即收票"并跳过。"""
+    task_id = approved["id"]
+    prepare_all(app_services, task_id)
+    # 收票由比对分配驱动，此处直接置状态以隔离任务台读取
+    set_status(engine, task_id, "partially_received")
+    result = board.browse(TaskBoardQuery())
+    item = result.items[0]
+    assert item.currentNode == "comparison" and counts(result)["notification"] == 0
+    states = {s.key: (s.state, s.description) for s in item.steps}
+    assert states["notification"] == ("skipped", "未通知即收票")
+    assert states["invoices"][0] == "done" and states["comparison"][0] == "current"
+    assert states["documents"] == ("done", "子采购合同已归档；完结仍缺：报关单、销售合同、发票、回签合同")
+    detail = app_services["tasks"].detail(task_id)
+    assert [(s.key, s.state, s.description) for s in detail.steps] == [
+        (s.key, s.state, s.description) for s in item.steps
+    ]
+    # 通知记录未被补写，统计仍以发送记录为准
+    assert not detail.notification.history
+
+
 def test_source_change_is_flagged_without_blocking_read(ns, engine, board, approved):
     save(ns, engine, bundle([purchase(amounts=("99.00", "20.00"))], [customs("870")]))
     item = board.browse(TaskBoardQuery()).items[0]

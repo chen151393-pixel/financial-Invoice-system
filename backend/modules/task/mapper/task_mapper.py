@@ -141,33 +141,55 @@ def events(rows):
     ]
 
 
-def steps(status, documents_ready, notification_sent, notification_label, completion_reason=""):
-    """六个节点各按自身事实判断是否完成（发票可能先于合同或通知到达）；当前节点为第一个未完成的节点。"""
+CONTRACT = "子采购合同"
+# 被后续事实越过、但自身事实未发生的节点说明
+SKIPPED = {
+    "documents": "子采购合同未归档，完结前需补齐",
+    "notification": "未通知即收票",
+}
+
+
+def documents_description(documents_ready, missing):
+    """资料准备节点只表达子采购合同是否归档；其余完结仍缺的资料一并列出，避免误读为资料已齐。"""
+    if not documents_ready:
+        return "保存子采购合同到共享盘"
+    others = [name for name in missing if name != CONTRACT]
+    return f"子采购合同已归档；完结仍缺：{'、'.join(others)}" if others else "子采购合同已归档"
+
+
+def steps(status, documents_ready, notification_sent, notification_label, completion_reason="", missing=()):
+    """六个节点各按自身事实判断是否完成（发票可能先于合同或通知到达）。
+
+    进度按已发生的业务事实推进：当前节点为最后一个已完成节点之后的第一个未完成节点；
+    其前未发生的节点标为 skipped（如已收票但没有通知记录 → 通知节点"未通知即收票"），
+    不改变通知记录本身，真实通知统计仍按发送记录计算。
+    """
     received = status in ("partially_received", "documents_incomplete", "completed")
     invoiced = status in ("documents_incomplete", "completed")
     completed = status == "completed"
     # 节点标识与详情页分区、采购任务台的节点筛选一致
     nodes = [
         ("review", "财务审核", "审核已通过", True),
-        (
-            "documents",
-            "资料准备",
-            "原件已备齐" if documents_ready else "保存子采购合同到共享盘",
-            documents_ready,
-        ),
+        ("documents", "资料准备", documents_description(documents_ready, missing), documents_ready),
         ("notification", "通知供应商", notification_label, notification_sent),
         ("invoices", "等待收票", "已收到发票" if received else "等待供应商开票", received),
         ("comparison", "发票比对", "全部任务行已结束" if invoiced else "收票后在发票比对页审核", invoiced),
         ("completion", "完成", "已完成" if completed else completion_reason or "尚未完成", completed),
     ]
+    reached = max(index for index, node in enumerate(nodes) if node[3])
     live = status not in ("superseded", "completed")
-    current = next((index for index, node in enumerate(nodes) if not node[3]), None) if live else None
-    return [
-        TaskStep(
-            key=key,
-            label=label,
-            description=description,
-            state="done" if done else "current" if index == current else "waiting",
-        )
-        for index, (key, label, description, done) in enumerate(nodes)
-    ]
+    current = (
+        next((index for index in range(reached + 1, len(nodes)) if not nodes[index][3]), None)
+        if live
+        else None
+    )
+    result = []
+    for index, (key, label, description, done) in enumerate(nodes):
+        if done:
+            state = "done"
+        elif index < reached:
+            state, description = "skipped", SKIPPED.get(key, description)
+        else:
+            state = "current" if index == current else "waiting"
+        result.append(TaskStep(key=key, label=label, description=description, state=state))
+    return result

@@ -217,9 +217,9 @@ npm.cmd run dev:api
 1. 以出口报关单号查找 source 中有效的 NS 报关单：没有为 `ns_missing`，多张同号为 `ns_duplicate`，两者都不比对明细。
 2. 同一报关单内，海关项与 NS 报关行按“规范化品名（`normalize_name`）+ 规范化单位”归组。优先将两侧各只出现一次的相同数量逐行配对，精确比较、不设容差。剩余行继续按数量合计作拆行或合并比对；余额只出现在一侧时，保留整个组进行原有比对。
 3. 单位：海关取成交单位；NS 取报关单位（经单位字典显示名）。法定单位与数量只展示。品名相同但单位不同的剩余组为“单位不一致”，其余为“NS 无对应行”或“海关无对应项”。
-4. 整单状态：全部一致为 `matched`，含拆行或合并为 `split_matched`，任一组不一致为 `different`。
+4. 整单状态：全部一致为 `matched`，含拆行或合并为 `split_matched`，任一组不一致（含一对一行“总价不一致” `total_mismatch`）为 `different`。
 5. 境外收货人：同一报关单内各项须一致（空值不比较），否则整份文件拒绝；匹配到 NS 报关单后状态为“已保存”，回执为空为“回执未提供”，未匹配为“待关联”。
-6. 展开明细显示 NS 报关行原始金额和币种。品名与单位已配对的一对一同币种组按原金额精度比较，`totalMismatch` 为 true（不同）、false（相同）或 null（未比对）。主行 `totalComparison` 反映全部一致、有差异、部分未比对或未比对。拆行、合并逐行展示金额。总价结论为展示字段，审核沿用原有准入条件。
+6. 展开明细显示 NS 报关行原始金额和币种。品名与单位已配对的一对一同币种组按原金额精度比较，`totalMismatch` 为 true（不同）、false（相同）或 null（未比对）。主行 `totalComparison` 反映全部一致、有差异、部分未比对或未比对。拆行、合并逐行展示金额。2026-11-17 起总价参与准入：一对一行数量一致但总价不同，组状态为 `total_mismatch`（“总价不一致”），整单 `different`，见下文“自动审核一对一按行比价”。
 
 ### 导入与换版
 
@@ -241,7 +241,7 @@ npm.cmd run dev:api
 
 - 新增 `POST /api/review/customs-receipts/approve-batch`：`items` 为 1–50 个不重复的 `{id, token}`，`method` 为 `auto` 或 `manual`，`note` 最多 300 字。返回 `approved` / `skipped` 逐张结果及跳过原因；每张独立事务，数据库故障停止后续，部分已成功的保留。
 - 列表每张新增 `approval`：`token`、`approved`、`label`、`allowed`、`autoAllowed`、`reason`、`approvedBy`、`approvedAt`、`note`。服务端按当前 NS 来源重新核对可操作性；比对状态筛选与概况仍基于最近导入/重新匹配保存的结果，来源修改后可使用“全部重新匹配”更新统计。
-- 自动审核按钮处理当前页尚未审核且品名、单位、数量一致的回执，包含拆行/合并一致。人工单张或批量审核允许已唯一匹配的差异单，但必须填写说明。未找到或重号的 NS 单据不可审核。操作者来自认证身份，服务身份只读。
+- 自动审核只放行逐行一一对应、数量一致且每行总价比对一致的回执（2026-11-17 起不再包含拆行/合并一致）。人工单张或批量审核允许已唯一匹配的差异单，说明选填（2026-11-17 起不再强制）；审核人、方式、时间写入审核记录留痕。未找到或重号的 NS 单据不可审核。操作者来自认证身份，服务身份只读。
 - 提交在账本锁内重新比对，并核对回执版本、内容摘要、NS 身份与当前来源摘要。旧页面拒绝；重复提交同版本幂等。回执换版或来源变化后旧审核保留，当前版本重新待审核。
 - `ReviewApproved` 继续表示财务通过并驱动快照计算、依据失效/承接；`task_release_service.py` 核实当前财务审核和海关审核，发布 `InvoiceReady`。task 先生成任务，matching 再重算台账及建议，全部复用最后一项审核的事务。两项先后不限；财务因币种待核实仍为待审核时不放行任务。
 - `review_customs_approvals` 保存不可变审核版本、方式、说明及身份；放行依据直接保存在 `review_records.customs_approval_id`，空表示尚未放行，每个财务审核版本只设置一次。迁移只新增这张审核表和财务审核的一个可空字段，不回填旧任务、不删除任何业务数据；已生成任务保留，后续新任务与后继任务使用双审核门槛。
@@ -252,3 +252,13 @@ npm.cmd run dev:api
 - `POST /api/review/declarations/query` 和 `POST /api/review/customs-receipts/query` 接受可选 `exactDeclarationNo`。该参数精确匹配真实出口报关单号，优先于支持部分匹配的 `declarationNo`，其余查询、统计及分页仍由后端处理。
 - 两个列表的每行均返回 `approvalProgress`，包含 `finance`、`customs`、`status`、`label`、`reason`、`nextStep`、`linked` 和 `taskIds`。双审分别核对当前 NS 摘要、回执版本及冻结开票依据。出现重号、缺回执或来源变化时返回对应原因；`linked` 表示当前真实报关单号与回执可以唯一关联。
 - 已放行时经 task 只读门面查询和冻结依据匹配的有效任务，包括同依据沿用的既有任务。没有有效任务时返回当前可核实的原因，例如未关联任务的供应商当前已关闭通知。任务查询由应用装配，避免 review 与 task 互相导入。本次无需新增迁移。
+
+## 海关比对：自动审核一对一按行比价（2026-11-17）
+
+原规则只按品名、单位、数量判定状态，总价差异只是展示字段，且拆行/合并一致也可自动审核，导致总价不一致的回执仍显示“可自动审核”。现规则（`policy/customs_match_policy.py`）：
+
+- 一对一配对的 NS 报关行与海关项，同币种且两侧金额齐全时按十进制精确比较总价；数量一致、总价不同的组为 `total_mismatch`“总价不一致”，说明列出两侧总价，整单为 `different`（有差异），转人工审核。
+- `auto_review(status, result)` 决定 `approval.autoAllowed`：仅当整单 `matched`（每组都是一对一且数量一致）且每组 `totalMismatch` 均为 false 时可自动审核。NS 报关行与海关项非一一对应（拆行、合并，`split_matched`）、总价有差异、或任一行总价未能比对（币种不同、金额缺失）时转人工核实，原因写入 `approval.reason` 并在列表“审核”列显示；以 `method=auto` 提交时返回 409 及同一原因。
+- 人工审核准入：已唯一匹配且来源摘要就绪即可人工审核；说明选填，含 `different`。每次审核在 `review_customs_approvals` 保存审核人认证身份 `approved_by`、方式 `method`、时间 `approved_at` 与可选说明，列表明细显示“操作人 · 时间 · 说明”，作为审核审计。
+- 列表、提交均按当前 NS 来源实时重比对，已导入回执刷新即按新规则展示。概况卡计数读取导入或重新匹配时保存的状态，部署后执行一次“全部重新匹配”使计数与新规则一致；已审核通过的记录不受影响。
+- 测试：`test_customs_receipts.py::test_auto_review_requires_one_to_one_rows_with_equal_totals`、`test_customs_approval.py::test_split_rows_and_total_mismatch_go_to_manual_review`。

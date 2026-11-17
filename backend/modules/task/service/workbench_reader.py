@@ -6,7 +6,7 @@ from decimal import Decimal
 
 from backend.modules.source.public import purchase_lines
 
-from ..dao import supplier_group_dao, workbench_task_dao
+from ..dao import notification_dao, supplier_group_dao, workbench_task_dao
 from ..policy.board_policy import NODE_LABELS
 from ..policy.followup_policy import amounts
 from ..policy.task_policy import OPEN_STATUSES, STATUS_LABELS, STATUS_REASONS
@@ -49,6 +49,8 @@ def workbench_tasks(connection, now):
     for line in lines:
         grouped[line["task_id"]].append(line)
     facts = board_facts(connection, [task for task in tasks if task["status"] in OPEN_STATUSES])
+    # 真实通知按发送记录判定，不受节点越过（未通知即收票）影响
+    notified = set(notification_dao.latest_sent_by_tasks(connection, [task["id"] for task in tasks]))
     result = []
     for task in tasks:
         own = grouped[task["id"]]
@@ -76,6 +78,7 @@ def workbench_tasks(connection, now):
                 # 开票跟进节点：未完成任务按事实判定，已完成为 done
                 "node": facts[task["id"]]["node"] if task["id"] in facts else "done",
                 "node_label": NODE_LABELS[facts[task["id"]]["node"] if task["id"] in facts else "done"],
+                "notified": task["id"] in notified,
             }
         )
     return result

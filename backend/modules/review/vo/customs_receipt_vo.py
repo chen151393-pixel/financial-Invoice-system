@@ -8,7 +8,14 @@ from .approval_progress_vo import ApprovalProgress
 
 MatchStatus = Literal["matched", "split_matched", "different", "ns_missing", "ns_duplicate"]
 GroupStatus = Literal[
-    "matched", "split", "merged", "quantity_mismatch", "unit_mismatch", "missing_in_ns", "missing_in_customs"
+    "matched",
+    "total_mismatch",
+    "split",
+    "merged",
+    "quantity_mismatch",
+    "unit_mismatch",
+    "missing_in_ns",
+    "missing_in_customs",
 ]
 
 

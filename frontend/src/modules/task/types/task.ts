@@ -45,7 +45,8 @@ export interface TaskStep {
   key: TaskStepKey;
   label: string;
   description: string;
-  state: "done" | "current" | "waiting";
+  // skipped：后续事实已发生而本节点未发生（如“未通知即收票”），流程不停留在此
+  state: "done" | "current" | "waiting" | "skipped";
 }
 // 业务状态（按报关单下最慢的任务归类）；空为不限
 export type TaskStage = "" | "notify" | "invoicing" | "documents" | "completed";

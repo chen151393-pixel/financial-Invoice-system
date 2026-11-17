@@ -6,6 +6,10 @@
 3. 单位：海关取成交单位，NS 取报关单位（单位字典显示名）；法定单位只展示。
 4. 品名相同但单位不同的剩余组配对为“单位不一致”；其余为单边缺失。
 5. 数量按十进制精确比较，不设容差；差异需在 NS 修正后重新匹配。
+6. 总价只在一对一行之间比较（同币种、两侧金额齐全），按十进制精确比较；数量一致但总价不同的
+   一对一行判为“总价不一致”，报关单整体为有差异。
+7. 自动审核（auto_review）只放行逐行一一对应、数量一致且每行总价都已比对一致的报关单；
+   拆行、合并或总价未能比对的报关单转人工核实。
 """
 
 from collections import defaultdict
@@ -15,6 +19,7 @@ from backend.core.names import normalize_name
 
 GROUP_LABELS = {
     "matched": "一致",
+    "total_mismatch": "总价不一致",
     "split": "拆行一致",
     "merged": "合并一致",
     "quantity_mismatch": "数量不一致",
@@ -84,7 +89,7 @@ def _group(status, ns_lines, items, note):
         "nsLines": [_ns_view(line) for line in ns_lines],
         "items": [item["item_no"] for item in items],
         "totalMismatch": _total_mismatch(ns_lines, items)
-        if status in {"matched", "quantity_mismatch"}
+        if status in {"matched", "total_mismatch", "quantity_mismatch"}
         else None,
     }
 
@@ -120,6 +125,16 @@ def _paired(ns_lines, items):
             f"NS {text(ns_qty)} {unit}，海关合计 {text(customs_qty)} {unit}",
         )
     if len(ns_lines) == 1 and len(items) == 1:
+        if _total_mismatch(ns_lines, items):
+            line, item = ns_lines[0], items[0]
+            currency = (line.get("currency") or "").strip().upper()
+            return _group(
+                "total_mismatch",
+                ns_lines,
+                items,
+                f"数量 {text(ns_qty)} {unit} 一致；总价 NS {currency} {amount_text(line['amount'])}，"
+                f"海关 {currency} {amount_text(item['deal_total'])}",
+            )
         return _group("matched", ns_lines, items, f"数量 {text(ns_qty)} {unit}")
     if len(ns_lines) == 1:
         return _group(
@@ -201,6 +216,25 @@ def compare_lines(ns_lines, items):
     order = {item["item_no"]: index for index, item in enumerate(items)}
     results.sort(key=lambda group: min((order[i] for i in group["items"]), default=len(order)))
     return results
+
+
+AUTO_RULE = "仅逐行一一对应、数量一致且每行总价比对一致的回执可自动审核"
+
+
+def auto_review(status, result):
+    """返回 (是否可自动审核, 转人工原因)；拆行、合并、总价有差异或未能比对的均须人工核实。"""
+    if status == "split_matched":
+        return False, "NS 报关行与海关项非一一对应（拆行或合并），需人工核实"
+    if status == "different":
+        return False, "明细或总价有差异，需人工核实"
+    if status != "matched":
+        return False, ""
+    unverified = [
+        "、".join(group["items"]) for group in result.get("groups", []) if group["totalMismatch"] is not False
+    ]
+    if unverified:
+        return False, f"海关项 {'、'.join(unverified)} 总价未能比对（币种或金额缺失），需人工核实"
+    return True, ""
 
 
 def compare(ns_declarations, items):

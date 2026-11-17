@@ -47,6 +47,7 @@ def board_facts(connection, rows):
             bool(notice and notice["status"] == "sent"),
             notification_mapper.status_label(notice),
             completion.reason,
+            completion.missing,
         )
         result[row["id"]] = {
             "lines": own[row["id"]],

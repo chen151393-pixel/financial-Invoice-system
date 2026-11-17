@@ -624,7 +624,8 @@ button.ui-metric:focus-visible {
   border-radius: 1px;
   background: var(--color-border);
 }
-.ui-stepper li[data-state="done"]:not(:last-child)::after {
+.ui-stepper li[data-state="done"]:not(:last-child)::after,
+.ui-stepper li[data-state="skipped"]:not(:last-child)::after {
   background: var(--color-primary);
 }
 .ui-stepper__dot {
@@ -649,6 +650,12 @@ button.ui-metric:focus-visible {
   background: var(--color-surface);
   color: var(--color-primary);
   box-shadow: 0 0 0 3px var(--color-primary-soft);
+}
+/* 已跳过：流程已越过但事实未发生，虚线圈弱化显示 */
+.ui-stepper [data-state="skipped"] .ui-stepper__dot {
+  border-style: dashed;
+  border-color: var(--color-muted);
+  color: var(--color-muted);
 }
 .ui-stepper__label {
   color: var(--color-muted);

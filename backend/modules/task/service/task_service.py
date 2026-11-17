@@ -238,6 +238,7 @@ class TaskService:
                 bool(data["notifications"] and data["notifications"][0]["status"] == "sent"),
                 notification.statusLabel,
                 completion.reason,
+                completion.missing,
             ),
             documents=documents,
             declarationDocuments=document_mapper.declaration_documents(
