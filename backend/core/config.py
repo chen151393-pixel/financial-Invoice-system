@@ -68,6 +68,8 @@ class Settings:
     settlement_contract_lead_days: int = 28
     # 销售合同 PDF 嵌入的中文字体（TTF 路径）；为空时使用 PDF 内置 STSong-Light
     settlement_pdf_font: Path | None = None
+    # 提单扫描件识别用的 tesseract 命令；为空或未安装时扫描件由人工填写
+    settlement_ocr_command: str = "tesseract"
     wecom_corp_id: str = field(default="", repr=False)
     wecom_secret: str = field(default="", repr=False)
     wecom_connection_file: Path | None = field(default=None, repr=False)
@@ -305,6 +307,7 @@ def load_settings(source=None):
         settlement_document_root=ROOT / get("SETTLEMENT_DOCUMENT_ROOT", "data/settlement-documents"),
         settlement_contract_lead_days=int(lead_days),
         settlement_pdf_font=(ROOT / get("SETTLEMENT_PDF_FONT")) if get("SETTLEMENT_PDF_FONT") else None,
+        settlement_ocr_command=get("SETTLEMENT_OCR_COMMAND", "tesseract").strip(),
         wecom_corp_id=get("WECOM_CORP_ID"),
         wecom_send_enabled=wecom_send == "true",
         wecom_group_daily_limit=int(wecom_limit),

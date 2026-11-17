@@ -126,12 +126,18 @@ export function BatchDocuments({ batchId, onChanged }: { batchId: number; onChan
     {
       key: "state",
       header: "状态",
-      render: (bill) =>
-        bill.missing.length ? (
-          <Badge tone="warning">待补：{bill.missing.join("、")}</Badge>
-        ) : (
-          <Badge tone="success">信息完整</Badge>
-        ),
+      render: (bill) => (
+        <div className="settlement-cell">
+          {bill.missing.length ? (
+            <Badge tone="warning">待补：{bill.missing.join("、")}</Badge>
+          ) : bill.parseNote ? (
+            <Badge tone="warning">待核对</Badge>
+          ) : (
+            <Badge tone="success">信息完整</Badge>
+          )}
+          {bill.parseNote && <span>{bill.parseNote}</span>}
+        </div>
+      ),
     },
     {
       key: "actions",

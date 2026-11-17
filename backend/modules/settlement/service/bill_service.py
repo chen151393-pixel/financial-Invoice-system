@@ -1,6 +1,6 @@
 """提单用例：上传并解析、人工修改字段、移除、读取文件。
 
-顺序：事务外解码、解析并写文件 → 短事务内重新校验批次状态并登记；登记失败时删除刚写入的文件。
+顺序：事务外解码、解析（无文字层的扫描件走 OCR）并写文件 → 短事务内重新校验批次状态并登记；登记失败时删除刚写入的文件。
 """
 
 import base64
@@ -14,6 +14,7 @@ from backend.core.errors import ApiError
 
 from ..dao import bill_dao
 from ..dto.bill_dto import MAX_BILL_BYTES
+from ..policy.bill_layout_policy import agreed, parse_words
 from ..policy.bill_parse_policy import missing_fields, parse_bill
 from .bill_text import extract_text
 from .document_service import edit_reason, load
@@ -51,18 +52,34 @@ def _numbers(requested, items):
     return sorted(set(requested), key=allowed.index)
 
 
+OCR_NOTE = "扫描件由系统识别，可能有错字，请对照原件核对"
+
+
 class BillService:
-    def __init__(self, engine, store, documents):
-        self.engine, self.store, self.documents = engine, store, documents
+    def __init__(self, engine, store, documents, ocr=None):
+        self.engine, self.store, self.documents, self.ocr = engine, store, documents, ocr
+
+    def _parse(self, content):
+        """返回 (字段, 说明)。有文字层按文字解析；否则按扫描件识别，多次识别一致的字段才采用。"""
+        text = extract_text(content)
+        if text.strip() or self.ocr is None:
+            parsed, scanned = parse_bill(text), False
+        else:
+            readings = self.ocr.readings(content)
+            parsed = agreed([parse_words(words) for words in readings]) if readings else parse_bill("")
+            scanned = bool(readings)
+        missing = missing_fields(parsed)
+        notes = [f"未能自动识别：{'、'.join(missing)}，请人工填写"] if missing else []
+        if scanned and len(missing) < 4:
+            notes.append(OCR_NOTE)
+        return parsed, "；".join(notes) or None
 
     def upload(self, batch_id, body, owner):
         _require_operator(owner)
         content = decode(body.content, MAX_BILL_BYTES, "提单")
         if not content.startswith(b"%PDF-"):
             raise ApiError(422, "提单须为 PDF 文件")
-        parsed = parse_bill(extract_text(content))
-        missing = missing_fields(parsed)
-        note = f"未能自动识别：{'、'.join(missing)}，请人工填写" if missing else None
+        parsed, note = self._parse(content)
         file_id, sha256 = self.store.save(content, "pdf")
         now = _now()
         try:
@@ -113,6 +130,8 @@ class BillService:
                     "on_board_date": body.onBoardDate,
                     "declaration_nos": _numbers(body.declarationNos, items),
                     "confirmed_by": owner,
+                    # 人工保存即视为已核对，清除自动解析留下的提示
+                    "parse_note": None,
                 },
                 _now(),
             )

@@ -202,6 +202,8 @@ docker compose exec app sh -c 'cd /mnt/invoice-contracts && echo t > .probe && l
 
 Dockerfile 默认使用[清华 PyPI 镜像](https://mirrors.tuna.tsinghua.edu.cn/help/pypi/)和 [npmmirror](https://npmmirror.com/)，Python 网络读取超时为 120 秒、连接尝试次数为 10。这些是构建参数，不依赖容器运行时 `.env`；基础镜像继续使用原有 DaoCloud 地址。
 
+运行镜像另通过 apt 安装 `tesseract-ocr` 与英文语言包，供结汇模块识别提单扫描件；Debian 软件源默认使用清华镜像，可用构建参数 `APT_MIRROR` 更换（如 `--build-arg APT_MIRROR=deb.debian.org`）。该层只在 Dockerfile 这一段变化时重建。不需要识别时在 `.env` 把 `SETTLEMENT_OCR_COMMAND` 留空，扫描件字段改由人工填写。此安装步骤尚未在构建服务器上实际构建验证。
+
 构建需要启用 BuildKit（现代 Docker Compose 默认使用）。日常更新直接执行：
 
 ```bash

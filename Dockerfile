@@ -16,6 +16,13 @@ WORKDIR /app
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1
 
+# 结汇提单扫描件识别用 tesseract（仅英文语言包）。构建服务器可用 APT_MIRROR 指定 Debian 软件源。
+ARG APT_MIRROR=mirrors.tuna.tsinghua.edu.cn
+RUN sed -i "s@deb.debian.org@$APT_MIRROR@g" /etc/apt/sources.list.d/debian.sources \
+    && apt-get update \
+    && apt-get install -y --no-install-recommends tesseract-ocr tesseract-ocr-eng \
+    && rm -rf /var/lib/apt/lists/*
+
 COPY backend/requirements.txt /tmp/requirements.txt
 # 构建服务器可按网络情况指定下载源；保持锁定版本与 HTTPS 校验。
 ARG PIP_INDEX_URL=https://pypi.tuna.tsinghua.edu.cn/simple

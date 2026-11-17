@@ -66,6 +66,7 @@ from .modules.settlement.controller import document_controller as settlement_doc
 from .modules.settlement.controller import party_controller as settlement_parties
 from .modules.settlement.controller.batch_controller import create_router as settlement_router
 from .modules.settlement.service.batch_service import BatchService as SettlementBatchService
+from .modules.settlement.service.bill_ocr import BillOcr as SettlementBillOcr
 from .modules.settlement.service.bill_service import BillService as SettlementBillService
 from .modules.settlement.service.candidate_service import CandidateService as SettlementCandidateService
 from .modules.settlement.service.contract_service import ContractService as SettlementContractService
@@ -341,7 +342,9 @@ def _register_business(app, settings, ns, contract_ns, wecom, engine, lemon_invo
     app.include_router(
         settlement_documents.create_router(
             settlement_views,
-            SettlementBillService(engine, settlement_store, settlement_views),
+            SettlementBillService(
+                engine, settlement_store, settlement_views, SettlementBillOcr(settings.settlement_ocr_command)
+            ),
             SettlementContractService(
                 engine,
                 settlement_store,

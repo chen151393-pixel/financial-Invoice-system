@@ -13,7 +13,7 @@ from backend.modules.settlement.service.document_service import DocumentService
 from backend.modules.settlement.service.document_store import DocumentStore
 from backend.modules.settlement.service.package_service import PackageService
 from backend.modules.settlement.service.party_service import PartyService
-from PIL import Image
+from PIL import Image, ImageDraw, ImageFont
 from reportlab.pdfgen import canvas
 
 HK = "HONGKONG VISION DIGITAL PRINTING CO., LIMITED"
@@ -41,6 +41,19 @@ def bill_pdf(lines=BILL_LINES):
     return buffer.getvalue()
 
 
+def scanned_bill_pdf(lines=()):
+    """只有一张整页图像、没有文字层的提单（模拟扫描件）。lines：[(x, y, 文字)]，300dpi A4 像素坐标。"""
+    image = Image.new("RGB", (2480, 3508), "white")
+    draw = ImageDraw.Draw(image)
+    # 彩色底纹：识别前应被去掉
+    draw.rectangle((100, 200, 2380, 900), fill=(205, 235, 215))
+    for x, y, text in lines:
+        draw.text((x, y), text, fill="black", font=ImageFont.load_default(size=30))
+    buffer = io.BytesIO()
+    image.save(buffer, "PDF", resolution=300)
+    return buffer.getvalue()
+
+
 def stamp_png():
     buffer = io.BytesIO()
     Image.new("RGBA", (40, 40), (200, 0, 0, 160)).save(buffer, "PNG")
@@ -50,12 +63,12 @@ def stamp_png():
 class Documents:
     """一组共用同一资料目录的结汇资料服务。"""
 
-    def __init__(self, engine, root):
+    def __init__(self, engine, root, ocr=None):
         # 资料放在独立子目录，不与测试数据库文件混放
         self.store = DocumentStore(root / "documents")
         self.reader = DocumentReader(lead_days=28)
         self.views = DocumentService(engine, self.reader)
-        self.bills = BillService(engine, self.store, self.views)
+        self.bills = BillService(engine, self.store, self.views, ocr)
         self.contracts = ContractService(engine, self.store, self.reader, self.views)
         self.packages = PackageService(engine, self.store, self.reader)
         self.parties = PartyService(engine, self.store)
