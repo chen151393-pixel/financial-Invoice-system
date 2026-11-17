@@ -17,27 +17,41 @@ import {
 import { money } from "../../../shared/format/money";
 import { queryBatches } from "../api";
 import { BatchDetailDialog } from "../components/BatchDetailDialog";
-import { CandidatePanel } from "../components/CandidatePanel";
-import type { BatchList, BatchQuery, BatchSummary, RouteFilter, StatusFilter } from "../types";
+import type { BatchList, BatchQuery, BatchSummary, Route, StatusFilter } from "../types";
 import "../components/settlement.css";
 
 type State = { kind: "loading" } | { kind: "ready"; result: BatchList } | { kind: "error"; message: string };
 
-const ROUTES: readonly { value: RouteFilter; label: string }[] = [
-  { value: "all", label: "全部路径" },
-  { value: "hk_transit", label: "香港中转" },
-  { value: "direct", label: "直接收汇" },
-];
-const STATUSES: readonly { value: StatusFilter; label: string }[] = [
-  { value: "open", label: "未完结" },
-  { value: "collected", label: "已收款" },
-  { value: "documents_ready", label: "资料已出" },
-  { value: "settled", label: "已结汇" },
-  { value: "cancelled", label: "已作废" },
-  { value: "all", label: "全部" },
-];
-const INITIAL: BatchQuery = {
-  route: "all",
+// 直接收汇没有“资料已出”环节，状态筛选按路径给出
+const STATUSES: Record<Route, readonly { value: StatusFilter; label: string }[]> = {
+  hk_transit: [
+    { value: "open", label: "未完结" },
+    { value: "collected", label: "香港已收" },
+    { value: "documents_ready", label: "资料已出" },
+    { value: "settled", label: "已结汇" },
+    { value: "cancelled", label: "已作废" },
+    { value: "all", label: "全部" },
+  ],
+  direct: [
+    { value: "open", label: "未完结" },
+    { value: "settled", label: "已结汇" },
+    { value: "cancelled", label: "已作废" },
+    { value: "all", label: "全部" },
+  ],
+};
+const TITLES: Record<Route, { title: string; description: string; empty: string }> = {
+  hk_transit: {
+    title: "香港中转批次",
+    description: "香港已收 → 资料已出 → 汇回对平后已结汇。",
+    empty: "在“待结汇报关单”勾选香港中转的报关单并登记回款即可建批次。",
+  },
+  direct: {
+    title: "直接收汇批次",
+    description: "到账加手续费等于报关合计即可确认已结汇。",
+    empty: "在“待结汇报关单”勾选直接收汇的报关单并登记回款即可建批次。",
+  },
+};
+const INITIAL: Omit<BatchQuery, "route"> = {
   status: "open",
   consignee: "",
   batchNo: "",
@@ -58,17 +72,14 @@ const COLUMNS: Column<BatchSummary>[] = [
     ),
   },
   {
-    key: "route",
-    header: "路径 / 状态",
+    key: "status",
+    header: "状态",
     render: (row) => (
-      <div className="settlement-badges">
-        <Badge tone={row.route === "hk_transit" ? "info" : "neutral"}>{row.routeLabel}</Badge>
-        <Badge
-          tone={row.status === "settled" ? "success" : row.status === "cancelled" ? "neutral" : "progress"}
-        >
-          {row.statusLabel}
-        </Badge>
-      </div>
+      <Badge
+        tone={row.status === "settled" ? "success" : row.status === "cancelled" ? "neutral" : "progress"}
+      >
+        {row.statusLabel}
+      </Badge>
     ),
   },
   { key: "consignee", header: "境外收货人", render: (row) => row.consignee },
@@ -95,9 +106,10 @@ const COLUMNS: Column<BatchSummary>[] = [
   },
 ];
 
-/** 结汇对账：上方待结汇报关单建批次，下方批次列表跟进资料与汇回。 */
-export function SettlementPage() {
-  const [query, setQuery] = useState<BatchQuery>(INITIAL);
+/** 某一回款路径的结汇批次列表：跟进资料、汇回与结汇确认。 */
+export function SettlementBatchesPage({ route }: { route: Route }) {
+  const [query, setQuery] = useState<BatchQuery>({ ...INITIAL, route });
+  const text = TITLES[route];
   const [state, setState] = useState<State>({ kind: "loading" });
   const [open, setOpen] = useState<number | null>(null);
   const [refresh, setRefresh] = useState(0);
@@ -121,31 +133,17 @@ export function SettlementPage() {
 
   return (
     <div className="settlement-page">
-      <CandidatePanel
-        onCreated={(id) => {
-          reload();
-          setOpen(id);
-        }}
-      />
       <Card>
         <CardHeader
-          title="结汇批次"
-          description="香港中转：香港已收 → 资料已出 → 汇回对平后已结汇；直接收汇：到账对平后已结汇。差额只认手续费。"
+          title={text.title}
+          description={text.description}
           actions={
-            <div className="settlement-badges">
-              <Segmented
-                label="回款路径"
-                value={query.route}
-                options={ROUTES}
-                onChange={(route) => setQuery({ ...query, route, page: 1 })}
-              />
-              <Segmented
-                label="批次状态"
-                value={query.status}
-                options={STATUSES}
-                onChange={(status) => setQuery({ ...query, status, page: 1 })}
-              />
-            </div>
+            <Segmented
+              label="批次状态"
+              value={query.status}
+              options={STATUSES[route]}
+              onChange={(status) => setQuery({ ...query, status, page: 1 })}
+            />
           }
         />
         <CardContent flush>
@@ -160,7 +158,7 @@ export function SettlementPage() {
           {state.kind === "ready" &&
             (state.result.items.length ? (
               <DataTable
-                label="结汇批次"
+                label={text.title}
                 columns={[
                   ...COLUMNS,
                   {
@@ -178,10 +176,7 @@ export function SettlementPage() {
                 minWidth={960}
               />
             ) : (
-              <EmptyState
-                title="没有符合条件的结汇批次"
-                description="在上方勾选报关单并登记回款即可建批次。"
-              />
+              <EmptyState title="没有符合条件的结汇批次" description={text.empty} />
             ))}
         </CardContent>
         {state.kind === "ready" && state.result.total > 0 && (

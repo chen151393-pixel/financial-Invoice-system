@@ -1,5 +1,5 @@
 import type { SidebarGroup } from "../shared/components/Sidebar";
-import type { View } from "./paths";
+import type { SubView, View } from "./paths";
 
 function MenuIcon({ path }: { path: string }) {
   return (
@@ -15,6 +15,13 @@ function MenuIcon({ path }: { path: string }) {
     </svg>
   );
 }
+
+// 结汇对账的子页面：先选报关单登记回款，再按回款路径跟进批次。
+const settlementChildren: readonly { id: SubView; label: string; short: string }[] = [
+  { id: "settlement-declarations", label: "待结汇报关单", short: "待结汇" },
+  { id: "settlement-hk", label: "香港中转批次", short: "香港" },
+  { id: "settlement-direct", label: "直接收汇批次", short: "直收" },
+];
 
 // 所有页面共用的导航，按岗位分组（财务 / 采购 / 系统），不携带模拟业务计数。
 export const navigation: readonly SidebarGroup<View>[] = [
@@ -57,6 +64,7 @@ export const navigation: readonly SidebarGroup<View>[] = [
         id: "settlement",
         label: "结汇对账",
         icon: <MenuIcon path="M3 6h18v12H3z M7 12h.01 M17 12h.01 M12 9a3 3 0 1 0 0 6 3 3 0 0 0 0-6z" />,
+        children: settlementChildren,
       },
     ],
   },

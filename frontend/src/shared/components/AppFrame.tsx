@@ -10,6 +10,8 @@ export function AppFrame<Id extends string>({
   groups,
   activeId,
   onNavigate,
+  activeChildId,
+  onNavigateChild,
   title,
   description,
   meta,
@@ -20,6 +22,9 @@ export function AppFrame<Id extends string>({
   groups: readonly SidebarGroup<Id>[];
   activeId: Id;
   onNavigate: (id: Id) => void;
+  /** 侧栏子页面：当前项与点击回调，均由应用装配层提供 */
+  activeChildId?: string;
+  onNavigateChild?: (id: string) => void;
   title: string;
   description?: ReactNode;
   /** 只读信息，如数据来源；不得放按钮 */
@@ -34,6 +39,8 @@ export function AppFrame<Id extends string>({
         groups={groups}
         activeId={activeId}
         onNavigate={onNavigate}
+        activeChildId={activeChildId}
+        onNavigateChild={onNavigateChild}
         brand={{ mark: "N", title: "发票对账平台", subtitle: "FINANCE HUB" }}
         footer={sessionActions}
       />

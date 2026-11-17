@@ -33,9 +33,9 @@
 | LoadingState / EmptyState / ErrorState | 请求状态的统一呈现 |
 | AmountText | 展示后端金额文本与对齐方式，不计算金额 |
 | Feedback | 成功、失败和处理中反馈，绑定实际响应 |
-| Sidebar（已提取） | 菜单分组、图标、选中态、徽标、品牌及页脚；菜单由调用方传入 |
+| Sidebar（已提取） | 菜单分组、图标、选中态、徽标、品牌及页脚；菜单项可带子页面列表（`children`）；菜单由调用方传入 |
 
-`frontend/src/shared/components/Sidebar.tsx` 与同目录 `sidebar.css` 提供统一侧栏。调用方传 `groups`、`activeId`、`onNavigate`、`brand` 和可选 `footer`，不向组件塞入业务数据查询、角色判断或模拟连接状态。当前由演示入口的八个模块复用，正式 PL 核对页也复用该侧栏。
+`frontend/src/shared/components/Sidebar.tsx` 与同目录 `sidebar.css` 提供统一侧栏。调用方传 `groups`、`activeId`、`onNavigate`、`brand` 和可选 `footer`，不向组件塞入业务数据查询、角色判断或模拟连接状态。菜单项内容较多需要分页面时（2026-11-17，首个为结汇对账），在 `navigation.tsx` 给该项配置 `children`，子页面路径登记在 `paths.ts` 的 `subViewPaths`，页面通过 `activeChildId` 标出当前子页面；子页面沿用所属菜单项的页面权限，窄屏只显示简称。当前由演示入口的八个模块复用，正式 PL 核对页也复用该侧栏。
 
 组件公共参数用清晰的类型声明；避免增加几十个布尔开关把表格、卡片、表单硬塞进一个组件。业务特有的 CandidateList、InvoicePaper 等放回模块。
 

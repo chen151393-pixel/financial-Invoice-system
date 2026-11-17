@@ -6,8 +6,10 @@ export const paths = {
   review: "/review",
   // 海关报关单比对（财务核对下的独立页面）
   reviewCustoms: "/review/customs",
-  // 结汇对账（回款与报关金额核对）
+  // 结汇对账（回款与报关金额核对）：待结汇报关单、香港中转批次、直接收汇批次
   settlement: "/settlement",
+  settlementHk: "/settlement/hk-transit",
+  settlementDirect: "/settlement/direct",
   tasks: "/tasks",
   taskWorkflowDemo: "/tasks/workflow-demo",
   supplierGroups: "/suppliers",
@@ -96,6 +98,19 @@ const viewPaths: Record<View, string> = {
 
 export function viewPath(view: View): string {
   return viewPaths[view];
+}
+
+// 侧栏子页面与路径的对应；子页面沿用所属菜单项的页面权限。
+export type SubView = "settlement-declarations" | "settlement-hk" | "settlement-direct";
+
+const subViewPaths: Record<SubView, string> = {
+  "settlement-declarations": paths.settlement,
+  "settlement-hk": paths.settlementHk,
+  "settlement-direct": paths.settlementDirect,
+};
+
+export function subViewPath(id: string): string | undefined {
+  return Object.hasOwn(subViewPaths, id) ? subViewPaths[id as SubView] : undefined;
 }
 
 export function homePath(pages: readonly string[] = []): string {
