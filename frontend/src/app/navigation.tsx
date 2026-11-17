@@ -53,6 +53,11 @@ export const navigation: readonly SidebarGroup<View>[] = [
         label: "发票比对",
         icon: <MenuIcon path="M4 7h13l-3-3 M20 17H7l3 3" />,
       },
+      {
+        id: "settlement",
+        label: "结汇对账",
+        icon: <MenuIcon path="M3 6h18v12H3z M7 12h.01 M17 12h.01 M12 9a3 3 0 1 0 0 6 3 3 0 0 0 0-6z" />,
+      },
     ],
   },
   {

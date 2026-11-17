@@ -12,6 +12,7 @@ const PlWorkspacePage = lazy(() => import("./PlWorkspacePage"));
 const WorkbenchWorkspacePage = lazy(() => import("./WorkbenchWorkspacePage"));
 const ReviewWorkspacePage = lazy(() => import("./ReviewWorkspacePage"));
 const CustomsMatchWorkspacePage = lazy(() => import("./CustomsMatchWorkspacePage"));
+const SettlementWorkspacePage = lazy(() => import("./SettlementWorkspacePage"));
 const SyncWorkspacePage = lazy(() => import("./SyncWorkspacePage"));
 const SyncBatchWorkspacePage = lazy(() => import("./SyncBatchWorkspacePage"));
 const SyncNsBatchWorkspacePage = lazy(() => import("./SyncNsBatchWorkspacePage"));
@@ -60,6 +61,7 @@ export const router = createBrowserRouter([
             path: paths.reviewCustoms,
             element: page("customs-match", "报关单比对", <CustomsMatchWorkspacePage />),
           },
+          { path: paths.settlement, element: page("settlement", "结汇对账", <SettlementWorkspacePage />) },
           { path: legacyPaths.finance, element: <Navigate to={paths.review} replace /> },
           { path: paths.tasks, element: page("invoice-followup", "开票跟进", <TaskWorkspacePage />) },
           {

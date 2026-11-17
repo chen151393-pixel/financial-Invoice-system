@@ -58,6 +58,10 @@ class Settings:
     service_key: str = field(default="", repr=False)
     business_database_url: str = field(default="", repr=False)
     review_unit_price_tolerance_cny: Decimal = Decimal("0.10")
+    # 结汇：集团香港公司（境外收货人）名单，分号分隔；为空时用 settlement 模块内置名单
+    settlement_hk_consignees: tuple[str, ...] = ()
+    # 结汇：单笔手续费预警上限（与批次币种同单位），超过时提示复核
+    settlement_fee_alert: Decimal = Decimal("50")
     wecom_corp_id: str = field(default="", repr=False)
     wecom_secret: str = field(default="", repr=False)
     wecom_connection_file: Path | None = field(default=None, repr=False)
@@ -116,6 +120,9 @@ def load_settings(source=None):
     review_tolerance = get("REVIEW_UNIT_PRICE_TOLERANCE_CNY", "0.10").strip()
     if not re.fullmatch(r"[0-9]+(?:\.[0-9]{1,2})?", review_tolerance):
         raise ValueError("REVIEW_UNIT_PRICE_TOLERANCE_CNY 须为非负人民币金额，最多两位小数")
+    fee_alert = get("SETTLEMENT_FEE_ALERT", "50").strip()
+    if not re.fullmatch(r"[0-9]+(?:\.[0-9]{1,2})?", fee_alert):
+        raise ValueError("SETTLEMENT_FEE_ALERT 须为非负金额，最多两位小数")
 
     sync_date_format = get("NETSUITE_SYNC_DATE_FORMAT", "YYYY-MM-DD")
     if sync_date_format not in {"YYYY-MM-DD", "M/D/YYYY", "D/M/YYYY"}:
@@ -282,6 +289,10 @@ def load_settings(source=None):
         service_key=get("SERVICE_API_KEY"),
         business_database_url=business_url,
         review_unit_price_tolerance_cny=Decimal(review_tolerance),
+        settlement_hk_consignees=tuple(
+            name.strip() for name in get("SETTLEMENT_HK_CONSIGNEES").split(";") if name.strip()
+        ),
+        settlement_fee_alert=Decimal(fee_alert),
         wecom_corp_id=get("WECOM_CORP_ID"),
         wecom_send_enabled=wecom_send == "true",
         wecom_group_daily_limit=int(wecom_limit),

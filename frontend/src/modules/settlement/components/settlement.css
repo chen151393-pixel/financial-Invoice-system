@@ -1,0 +1,92 @@
+/* 结汇对账页面排布；颜色、间距使用 tokens.css 的设计变量。 */
+.settlement-page {
+  display: grid;
+  gap: var(--space-layout);
+}
+
+.settlement-cell {
+  display: grid;
+  gap: 2px;
+}
+
+.settlement-cell span {
+  color: var(--color-muted);
+  font-size: 12px;
+}
+
+.settlement-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-small);
+  align-items: center;
+}
+
+.settlement-form {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: var(--space-control);
+}
+
+.settlement-form label {
+  display: grid;
+  gap: 4px;
+  font-size: 13px;
+}
+
+.settlement-form__wide,
+.settlement-form__hint,
+.settlement-form__actions,
+.settlement-form > .ui-alert {
+  grid-column: 1 / -1;
+}
+
+.settlement-form__hint {
+  margin: 0;
+  color: var(--color-muted);
+  font-size: 13px;
+}
+
+.settlement-form__actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--space-small);
+}
+
+.settlement-dialog {
+  width: min(960px, calc(100vw - 32px));
+}
+
+.settlement-detail {
+  display: grid;
+  gap: var(--space-control);
+}
+
+.settlement-detail__head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-small);
+  align-items: center;
+}
+
+.settlement-detail__facts {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 4px var(--space-control);
+  margin: 0;
+  font-size: 13px;
+}
+
+.settlement-detail__facts dt {
+  color: var(--color-muted);
+}
+
+.settlement-detail__facts dd {
+  margin: 0;
+}
+
+@media (max-width: 640px) {
+  .settlement-detail__facts {
+    grid-template-columns: 1fr;
+  }
+}

@@ -58,11 +58,13 @@ TABLES = ALL_TABLES - {
     "identity_directory_previews",
     "identity_user_sync_scopes",
     "identity_role_pages",
+    "settlement_batches",
+    "settlement_batch_items",
 }
 COMMENT_HEAD = "0015_sync_comments"
 
 INITIAL_REVISION = "0009_matching_ledger_versions"
-MODULES = ("source", "review", "task", "invoice", "matching", "sync", "writeback", "identity")
+MODULES = ("source", "review", "task", "invoice", "matching", "sync", "writeback", "identity", "settlement")
 
 
 def test_entity_comments_cover_all_columns():

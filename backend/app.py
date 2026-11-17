@@ -62,6 +62,9 @@ from .modules.review.service.customs_receipt_service import CustomsReceiptServic
 from .modules.review.service.purchase_basis_service import on_source_changed
 from .modules.review.service.review_service import ReviewService
 from .modules.review.service.task_release_service import on_finance_approved
+from .modules.settlement.controller.batch_controller import create_router as settlement_router
+from .modules.settlement.service.batch_service import BatchService as SettlementBatchService
+from .modules.settlement.service.candidate_service import CandidateService as SettlementCandidateService
 from .modules.source.controller.pl_comparison_controller import create_router as source_pl_router
 from .modules.source.controller.relation_rebuild_controller import create_router as source_relation_router
 from .modules.source.controller.vendor_bill_controller import create_router as vendor_bill_router
@@ -304,6 +307,15 @@ def _register_business(app, settings, ns, contract_ns, wecom, engine, lemon_invo
         customs_receipt_router(
             CustomsReceiptService(engine, task_reader=review_task_outcomes),
             CustomsApprovalService(engine, events),
+        )
+    )
+    settlement_candidates = SettlementCandidateService(
+        engine, hk_consignees=settings.settlement_hk_consignees, fee_alert=settings.settlement_fee_alert
+    )
+    app.include_router(
+        settlement_router(
+            settlement_candidates,
+            SettlementBatchService(engine, settlement_candidates, fee_alert=settings.settlement_fee_alert),
         )
     )
     directory = SourceDirectory(engine)

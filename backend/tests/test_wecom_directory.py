@@ -237,6 +237,9 @@ def test_directory_migration_can_downgrade_and_upgrade_without_touching_other_ta
         # 0042 在没有海关回执时随之回退
         "review_customs_receipts",
         "review_customs_receipt_lines",
+        # 0045 在没有结汇批次时随之回退
+        "settlement_batches",
+        "settlement_batch_items",
     }
     command.upgrade(config, "head")
     assert set(inspect(engine).get_table_names()) == before

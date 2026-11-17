@@ -21,6 +21,7 @@ MODULES = [
     "backend.modules.matching.entity",
     "backend.modules.sync.entity",
     "backend.modules.identity.entity",
+    "backend.modules.settlement.entity",
 ]
 
 

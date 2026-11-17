@@ -197,6 +197,7 @@ events.subscribe(ReviewApproved, task_services.task.on_review_approved)
   | task | `/api/tasks`（供应商群：`/api/tasks/supplier-groups`） |
   | invoice | `/api/invoices` |
   | matching | `/api/matching` |
+  | settlement | `/api/settlement` |
 
 - 查询用 `GET`，条件复杂时用 `POST /<资源>/query`；动作用 `POST /<资源>/{id}/<动作>`。
 - 只返回 VO；金额、数量是十进制字符串；可执行操作返回 `{ allowed, reason }`。

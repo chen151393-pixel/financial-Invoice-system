@@ -6,6 +6,8 @@ export const paths = {
   review: "/review",
   // 海关报关单比对（财务核对下的独立页面）
   reviewCustoms: "/review/customs",
+  // 结汇对账（回款与报关金额核对）
+  settlement: "/settlement",
   tasks: "/tasks",
   taskWorkflowDemo: "/tasks/workflow-demo",
   supplierGroups: "/suppliers",
@@ -71,6 +73,7 @@ export type View =
   | "pl"
   | "finance"
   | "customs-match"
+  | "settlement"
   | "invoice-followup"
   | "writeback"
   | "supplier-profiles"
@@ -84,6 +87,7 @@ const viewPaths: Record<View, string> = {
   pl: paths.pl,
   finance: paths.review,
   "customs-match": paths.reviewCustoms,
+  settlement: paths.settlement,
   "invoice-followup": paths.tasks,
   writeback: paths.writeback,
   "supplier-profiles": paths.supplierGroups,

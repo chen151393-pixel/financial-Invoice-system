@@ -54,7 +54,7 @@ def member(admin, name="王财务"):
 def test_role_configuration_versions_audit_and_persistence(system, context):
     _, admin, _, headers = system
     overview = admin.get("/api/identity/role-pages").json()
-    assert len(overview["pages"]) == 11
+    assert len(overview["pages"]) == 12
     assert all(page["assignable"] for page in overview["pages"])
     assert overview["roles"][0]["editable"] is False
     saved = grant(admin, headers, "finance", ["finance", "finance"])

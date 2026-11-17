@@ -2000,3 +2000,44 @@ NS 来源按批后台保存记录与结果，不保存令牌。
 | reason | VARCHAR(300) | 否 | 新增或调整原因 |
 | actor | VARCHAR(200) | 否 | 来自认证身份的操作者 |
 | created_at | DATETIME(6) | 否 | 记录保存时间，UTC；历史只追加 |
+
+### settlement_batches｜结汇批次
+
+一笔回款一个批次。香港中转（贸易国为香港）：香港到账建批次 → 资料已出 → 汇回境内对平后已结汇，批次与汇回一一对应；直接收汇（贸易国为真实客户国家）：境内到账（NS 已核销）对平后已结汇。差额只认手续费：到账金额 + 手续费 = 报关合计才通过。
+
+| 字段 | 类型 | 可空 | 说明 |
+| --- | --- | --- | --- |
+| id | BIGINT | 否 | 本地自增主键 |
+| batch_no | VARCHAR(40) | 是 | 批次号 SB+日期-主键，插入后生成；唯一 |
+| request_id | VARCHAR(64) | 否 | 创建请求幂等号；唯一 |
+| route | VARCHAR(20) | 否 | hk_transit 香港中转；direct 直接收汇 |
+| status | VARCHAR(20) | 否 | collected 已收款；documents_ready 资料已出（仅香港中转）；settled 已结汇；cancelled 已作废 |
+| consignee | VARCHAR(500) | 否 | 境外收货人，批次内一致 |
+| currency | VARCHAR(20) | 否 | 币种，批次内一致 |
+| declared_total | DECIMAL(24,6) | 否 | 报关成交总价合计（建批次时冻结） |
+| payer / receiving_account | VARCHAR | 是 | 付款方、收款账户 |
+| received_on / received_amount / received_fee / received_reference | DATE / DECIMAL / DECIMAL / VARCHAR | 否/否/否/是 | 到账日期、到账金额、到账手续费、凭证号 |
+| remitted_on / remitted_amount / remitted_fee / remitted_reference | DATE / DECIMAL / DECIMAL / VARCHAR | 是 | 香港汇回境内的日期、金额、手续费、流水号（仅香港中转） |
+| note | VARCHAR(500) | 是 | 经办说明 |
+| created_by | VARCHAR(190) | 否 | 创建人认证身份 |
+| documents_ready_by / documents_ready_at | VARCHAR(190) / DATETIME(6) | 是 | 确认资料已出的操作人与时间 |
+| settled_by / settled_at | VARCHAR(190) / DATETIME(6) | 是 | 确认已结汇的操作人与时间 |
+| cancelled_by / cancelled_at / cancel_reason | VARCHAR / DATETIME(6) / VARCHAR(300) | 是 | 作废人、时间与原因 |
+| created_at / updated_at | DATETIME(6) | 否 | 本地创建与更新时间，UTC |
+
+### settlement_batch_items｜结汇批次明细
+
+| 字段 | 类型 | 可空 | 说明 |
+| --- | --- | --- | --- |
+| id | BIGINT | 否 | 本地自增主键 |
+| batch_id | BIGINT | 否 | 所属批次，本模块外键 |
+| declaration_no | VARCHAR(150) | 否 | 真实报关单号 |
+| active_declaration_no | VARCHAR(150) | 是 | 有效占用；批次作废后置空。唯一约束保证同一报关单只在一个有效批次中 |
+| record_no | VARCHAR(150) | 是 | NS CD 编号（展示） |
+| receipt_id / receipt_revision | BIGINT / INTEGER | 是 | 海关回执 ID 与版本，跨模块不建外键 |
+| sales_orders | VARCHAR(500) | 是 | 出口合同号 / 销售订单号 |
+| consignee | VARCHAR(500) | 否 | 境外收货人 |
+| export_date | DATE | 是 | 出口日期 |
+| currency | VARCHAR(20) | 否 | 成交币制 |
+| declared_amount | DECIMAL(24,6) | 否 | 建批次时冻结的成交总价合计 |
+| created_at / updated_at | DATETIME(6) | 否 | 本地创建与更新时间，UTC |

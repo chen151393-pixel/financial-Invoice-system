@@ -27,6 +27,7 @@ PREFIXES = (
     ("/api/task", ("invoice-followup",)),
     ("/api/review/customs-receipts", ("customs-match",)),
     ("/api/review", ("finance",)),
+    ("/api/settlement", ("settlement",)),
     ("/api/invoices", ("invoices",)),
     ("/api/matching", ("match",)),
     ("/api/writeback", ("writeback",)),

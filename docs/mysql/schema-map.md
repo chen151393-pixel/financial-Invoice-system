@@ -3,7 +3,7 @@
 > 本文件由 `npm.cmd run db:map` 根据迁移链离线 MySQL DDL、实体定义和字段字典生成，请勿手工修改；迁移或实体变化后重新生成，`backend/tests/test_schema_map.py` 会检查是否过期。
 > “修改”含加列、改列、索引与中文备注；数据回填仅在线执行，不在离线 DDL 中体现。
 
-当前最新迁移：`0044_review_dual_approval`；共 44 个迁移、68 张实体表。
+当前最新迁移：`0045_settlement_batches`；共 45 个迁移、70 张实体表。
 
 ## 1. 按模块查表
 
@@ -117,6 +117,13 @@
 | `writeback_target_locks` | 回写目标账单持久锁 | `0037` | — | [查看](current-data-dictionary.md#writeback_target_locks回写目标账单持久锁) |
 | `writeback_tasks` | 发票回写准备任务，不执行 NS 写操作 | `0036` | — | [查看](current-data-dictionary.md#writeback_tasks发票回写准备任务不执行-ns-写操作) |
 
+### settlement
+
+| 表 | 中文说明 | 新建 | 后续修改 | 字段字典 |
+| --- | --- | --- | --- | --- |
+| `settlement_batch_items` | 结汇批次包含的报关单，金额按建批次时的海关回执冻结 | `0045` | — | [查看](current-data-dictionary.md#settlement_batch_items结汇批次明细) |
+| `settlement_batches` | 结汇批次：一笔回款及其对应的报关单合计、手续费与汇回记录 | `0045` | — | [查看](current-data-dictionary.md#settlement_batches结汇批次) |
+
 ## 2. 按迁移查表
 
 | 迁移 | 新建表 | 修改表 | 说明 |
@@ -165,3 +172,4 @@
 | [`0042_review_customs_receipts`](../../backend/migrations/versions/0042_review_customs_receipts.py) | `review_customs_receipt_lines`、`review_customs_receipts` | — | review：海关回执（按出口报关单号保存海关明细、境外收货人与 NS 比对结果）。 |
 | [`0043_task_supplier_owners`](../../backend/migrations/versions/0043_task_supplier_owners.py) | `task_supplier_owners` | — | 供应商人员分工：仅新增一张九字段历史表，任务归属复用 task_events。 |
 | [`0044_review_dual_approval`](../../backend/migrations/versions/0044_review_dual_approval.py) | `review_customs_approvals` | `review_records` | 海关审核记录与财务审核放行依据：新增一张表、一个可空字段。 |
+| [`0045_settlement_batches`](../../backend/migrations/versions/0045_settlement_batches.py) | `settlement_batch_items`、`settlement_batches` | — | settlement：结汇批次与批次明细（香港中转 / 直接收汇两种回款路径）。 |
