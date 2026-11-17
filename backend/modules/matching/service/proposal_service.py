@@ -98,7 +98,28 @@ def generate(connection, invoice_ids, actor, *, refresh=False):
             and not any(row["status"] == "confirmed" for row in active.get(item["id"], []))
             and (refresh or not active.get(item["id"]))
         ]
-        for group in group_plan_service.plan(connection, invoice, items, task_lines):
+        planned = group_plan_service.plan(connection, invoice, items, task_lines)
+        if refresh:
+            # 重新匹配后不再有建议的发票行，旧待审建议一并失效（例如召回规则调整后备注单号未命中可分配子单）
+            covered = {item_id for group in planned for item_id in group["itemIds"]}
+            for item in items:
+                if item["id"] in covered:
+                    continue
+                for row in active.get(item["id"], []):
+                    if row["status"] != "proposed":
+                        continue
+                    allocation_dao.update_status(
+                        connection,
+                        row["id"],
+                        {
+                            "status": "rejected",
+                            "reviewed_by": actor,
+                            "reviewed_at": now,
+                            "review_note": "重新生成建议：按现行召回规则已无可审核的建议，旧待审建议失效",
+                        },
+                        now,
+                    )
+        for group in planned:
             group_id = str(uuid.uuid4())
             expected = []
             for row in group["rows"]:

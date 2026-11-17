@@ -94,6 +94,10 @@
 
 ## 整票审核队列（2026-10-28）
 
+召回规则（2026-11-17，`service/group_plan_service.py` 的 `recall_orders`）：备注中的可识别单号（子 / 母采购单号，或可分配子单关联的销售订单号）命中可分配子单时，只在命中范围内比对，同供应商的其他子单不再参与；备注写了我方采购单号（`YE-` 开头，`policy/comparison_policy.py` 的 `remark_purchase_numbers`）却没有命中任何可分配子单时不生成建议、不按供应商找替代单（关联单不存在、未审核或已不可分配）；备注没有可识别单号时才按销售方召回，且最高分低于 `SUPPLIER_RECALL_MIN_SCORE`（50）时须销售方与供应商一致才生成建议。重新生成建议（`proposal_service.generate(refresh=True)`）时，按现行规则已无建议的发票行，其旧待审建议置为 rejected。测试：`test_matching_order_priority.py`、`test_matching_after_task.py` 的 `test_regenerate_retires_proposal_when_remark_number_no_longer_matches`。
+
+比对页概况（2026-11-17）：`QueueQuery` 新增 `view: pending | auto`（默认 pending）。`auto` 只列最低置信度为 100% 且 `batch.allowed` 的发票（整单比对中子采购单号占 15 分，100% 即备注已命中单号），`counts.all/high/medium/low` 为当前视图内的置信度分段；`counts.pending`、`counts.auto` 为概况卡张数。票面展示状态不是正常（红字、已被红冲、作废、未知）的发票不再进入审核队列。测试：`test_matching_invoice_queue.py` 的 `test_auto_view_lists_only_batchable_invoices`、`test_abnormal_face_invoices_leave_the_queue`。
+
 新增 `POST /api/matching/invoice-queue/query`，请求沿用 `QueueQuery`：`tier`、`anomaly`、`supplierId`、成对日期 `invoiceFrom/invoiceTo`、`page/pageSize`。响应 `rows` 每张发票一项，包含 `invoice` 票头、`proposalCount`、`purchaseOrders`、最低 `confidence/tier`、`anomalies`、`batch.allowed/reason` 和 `batchIds`；`total/counts/page/pages` 均以发票计数。超出末页回到最后一页，空结果为第 1 页。
 
 供应商与日期先召回发票，再核对该票全部待审核建议；最低置信度分档和异常分类不隐藏同票其他建议。普通查询从 DAO 读取整票分组摘要，Service 筛选、分页后读取本页详细视图；异常筛选因依赖当前来源与审核能力，按每批 100 张完整核对后再分页，不截断单票或返回近似总数，大范围异常查询耗时可能较长。

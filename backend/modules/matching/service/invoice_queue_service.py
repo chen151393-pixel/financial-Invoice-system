@@ -2,7 +2,7 @@
 
 from decimal import Decimal
 
-from backend.modules.invoice.public import read_invoices
+from backend.modules.invoice.public import invoice_display_status, read_invoices
 
 from ..dao import allocation_dao, invoice_queue_dao
 from ..mapper.allocation_mapper import invoice_side
@@ -14,6 +14,15 @@ from .queue_scope import queue_scope
 
 def invoice_queue(connection, query, render_rows, suppliers):
     groups = invoice_queue_dao.grouped(connection, **queue_scope(connection, query))
+    # 红字、已被红冲、作废、未知等票面不参与比对，只在进项发票中查看
+    headers = {
+        invoice["id"]: invoice for invoice in read_invoices(connection, [g["invoice_id"] for g in groups])
+    }
+    groups = [
+        group
+        for group in groups
+        if group["invoice_id"] in headers and invoice_display_status(headers[group["invoice_id"]]) == "normal"
+    ]
 
     def views(batch):
         ids = [group["invoice_id"] for group in batch]
@@ -55,17 +64,35 @@ def invoice_queue(connection, query, render_rows, suppliers):
             )
         return result
 
+    def evaluate(batch):
+        rows = []
+        for start in range(0, len(batch), 100):
+            rows.extend(views(batch[start : start + 100]))
+        return rows
+
+    # 可自动审核通过：只有最低置信度为 100% 的发票才可能满足，逐张核对能否批量审核
+    automatic = [
+        row for row in evaluate([g for g in groups if Decimal(g["confidence"]) == 100]) if row.batch.allowed
+    ]
     # 异常依赖当前来源与审核能力，按整票分批核对后再筛选，不能截断一张发票。
     evaluated = None
-    if query.anomaly != "all":
-        evaluated = []
-        for start in range(0, len(groups), 100):
-            evaluated.extend(views(groups[start : start + 100]))
+    if query.view == "auto":
+        evaluated = automatic
+    elif query.anomaly != "all":
+        evaluated = evaluate(groups)
+    if evaluated is not None and query.anomaly != "all":
         evaluated = [row for row in evaluated if bool(row.anomalies) == (query.anomaly == "abnormal")]
+    if evaluated is not None:
         tier_values = [row.tier for row in evaluated]
     else:
         tier_values = [tier(group["confidence"]) for group in groups]
-    counts = {"all": len(tier_values), **{key: tier_values.count(key) for key in ("high", "medium", "low")}}
+    counts = {
+        "all": len(tier_values),
+        **{key: tier_values.count(key) for key in ("high", "medium", "low")},
+        # 概况卡：全部待审核发票与可自动审核通过张数，不随置信度分段与当前视图变化
+        "pending": len(groups),
+        "auto": len(automatic),
+    }
     selected = [
         row
         for row, value in zip(evaluated if evaluated is not None else groups, tier_values)

@@ -4,20 +4,43 @@ from backend.modules.invoice.public import read_invoice_paper
 from backend.modules.review.public import current_bases
 from backend.modules.source.public import purchase_lines, purchase_order_lines, unit_names
 
-from ..policy.comparison_policy import order_reference, supplier_result
+from ..policy.comparison_policy import order_reference, remark_purchase_numbers, supplier_result
 from ..policy.group_comparison_policy import compare_group
 from ..policy.order_group_policy import fit_all, order_parts, plan_groups, totals
 
+# 按供应商召回（备注无可识别单号）时的最低门槛：销售方与供应商一致，或整单综合分不低于此值
+SUPPLIER_RECALL_MIN_SCORE = 50
+
 
 def recall_orders(invoice, task_contexts):
-    """单号命中及供应商相近的子单共同召回，由综合评分决定默认建议。"""
+    """返回 (子采购单 ID 列表, 召回方式)。
+
+    - remark：备注中的可识别单号（子 / 母采购单号，或可分配子单关联的销售订单号）命中可分配子单，只在命中范围内比对；
+    - missing：备注写了我方采购单号，但没有命中任何可分配子单（未入库、未审核或已不可分配），不按供应商找替代单；
+    - supplier：备注没有可识别单号，按销售方与供应商名称召回，生成建议还须过 SUPPLIER_RECALL_MIN_SCORE 门槛。
+    """
     by_remark, by_supplier = set(), set()
     for line in task_contexts.values():
         if order_reference(invoice["remark"], line):
             by_remark.add(line["purchase_order_id"])
         elif supplier_result(invoice["seller_name"], line["supplier_name"]) in ("match", "partial"):
             by_supplier.add(line["purchase_order_id"])
-    return sorted(by_remark | by_supplier)
+    if by_remark:
+        return sorted(by_remark), "remark"
+    if remark_purchase_numbers(invoice["remark"]):
+        return [], "missing"
+    return sorted(by_supplier), "supplier"
+
+
+def seller_matched(option):
+    """组合内全部发票行的销售方比对均为一致。"""
+    return all(
+        check["result"] == "match"
+        for group in option
+        for checks, _ in group["checks"].values()
+        for check in checks
+        if check["key"] == "seller"
+    )
 
 
 def order_contexts(connection, order_ids, tasks):
@@ -41,7 +64,7 @@ def plan(connection, invoice, items, task_lines):
     """返回 [{"orderIds", "itemIds", "rows": [分配行], "checks": {发票行 ID: (checks, confidence)}}]。"""
     tasks = {row["purchase_line_id"]: row for row in task_lines}
     task_contexts = purchase_lines(connection, list(tasks))
-    order_ids = recall_orders(invoice, task_contexts)
+    order_ids, mode = recall_orders(invoice, task_contexts)
     if not order_ids or not items:
         return []
     grouped, bases = order_contexts(connection, order_ids, tasks)
@@ -101,4 +124,10 @@ def plan(connection, invoice, items, task_lines):
     scores = [min(score for group in option for _, score in group["checks"].values()) for option in options]
     best = max(scores)
     # 同分不能靠数据库顺序决定账务归属，保留人工选择。
-    return options[scores.index(best)] if best > 0 and scores.count(best) == 1 else []
+    if best <= 0 or scores.count(best) != 1:
+        return []
+    chosen = options[scores.index(best)]
+    if mode == "supplier" and best < SUPPLIER_RECALL_MIN_SCORE and not seller_matched(chosen):
+        # 备注无单号时按供应商猜的单，销售方又不一致且分数低，不作为建议（仍可手动关联）
+        return []
+    return chosen

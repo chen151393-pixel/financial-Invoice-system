@@ -35,9 +35,10 @@ def recall(remark, contexts):
 
 
 @pytest.mark.parametrize("remark", ["对应 SUB-200", "采购单 PO-100"])
-def test_order_and_supplier_both_recall_candidates(remark):
+def test_order_reference_limits_candidates_to_hits(remark):
+    # 备注命中可分配子单时只在命中范围内比对，同供应商的其他子单不再参与
     found = recall(remark, [context("SUB-300", "PO-999"), context("SUB-200", "PO-100", supplier="乙公司")])
-    assert found == [200, 300]
+    assert found == ([200], "remark")
 
 
 def test_parent_scope_recalls_all_its_children():
@@ -45,7 +46,7 @@ def test_parent_scope_recalls_all_its_children():
         "母采购单 PO-100",
         [context("SUB-300", "PO-999"), context("SUB-200", "PO-100"), context("SUB-201", "PO-100")],
     )
-    assert found == [200, 201, 300]
+    assert found == ([200, 201], "remark")
 
 
 def test_multiple_order_references_form_candidate_scope():
@@ -53,14 +54,23 @@ def test_multiple_order_references_form_candidate_scope():
         "对应 SUB-200、PO-101",
         [context("SUB-200", "PO-100"), context("SUB-201", "PO-101"), context("SUB-300", "PO-999")],
     )
-    assert found == [200, 201, 300]
+    assert found == ([200, 201], "remark")
 
 
-@pytest.mark.parametrize("remark", ["", "采购单 PO-UNKNOWN"])
-def test_no_order_reference_falls_back_to_supplier(remark):
+@pytest.mark.parametrize("remark", ["", "采购单 PO-UNKNOWN", "请购单号 1604 / US127"])
+def test_no_recognizable_number_falls_back_to_supplier(remark):
     found = recall(remark, [context("SUB-200", "PO-100", supplier="乙公司"), context("SUB-201", "PO-101")])
-    assert found == [201]
-    assert recall(remark, [context("SUB-200", "PO-100", supplier="乙公司")]) == []
+    assert found == ([201], "supplier")
+    assert recall(remark, [context("SUB-200", "PO-100", supplier="乙公司")]) == ([], "supplier")
+
+
+@pytest.mark.parametrize(
+    "remark", ["YE-DQ20260624-Z010；VIG260610-01", "采购单号YE-MQ260701-Y511 销售单号YEW260609-01"]
+)
+def test_unmatched_purchase_number_does_not_fall_back_to_supplier(remark):
+    # 备注写了我方采购单号却没有命中可分配子单：关联单不存在，不按供应商找替代单
+    found = recall(remark, [context("SUB-300", "PO-999"), context("SUB-201", "PO-101")])
+    assert found == ([], "missing")
 
 
 def test_ns_parent_display_prefix_preserves_order_priority():
@@ -68,7 +78,7 @@ def test_ns_parent_display_prefix_preserves_order_priority():
         "YE-DQ20260624-Z010；VIG260610-01",
         [context("SUB-300", "PO-999"), context("SUB-201", "采购订单 #YE-DQ20260624-Z010")],
     )
-    assert found == [201, 300]
+    assert found == ([201], "remark")
 
 
 @pytest.mark.parametrize(

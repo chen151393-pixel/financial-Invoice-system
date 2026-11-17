@@ -190,6 +190,8 @@ export type QueueQuery = {
   invoiceNo: string;
   supplierName: string;
   tier: "all" | "high" | "medium" | "low";
+  // pending：全部待审核；auto：可自动审核通过（置信度 100% 且无需异常说明）
+  view: "pending" | "auto";
   // 只看异常 / 只看正常：异常为需要填写说明或当前不能通过的建议
   anomaly: "all" | "abnormal" | "normal";
   // 供应商与开票日期筛选；空字符串为不限，日期为 YYYY-MM-DD
@@ -209,7 +211,11 @@ export type InvoiceQueueRow = {
   batch: Capability;
   batchIds: string[];
 };
-export type InvoiceQueue = Omit<Queue, "rows"> & { rows: InvoiceQueueRow[] };
+export type InvoiceQueue = Omit<Queue, "rows" | "counts"> & {
+  rows: InvoiceQueueRow[];
+  // all/high/medium/low 为当前视图内的置信度分段；pending/auto 为概况卡张数
+  counts: Record<"all" | "high" | "medium" | "low" | "pending" | "auto", number>;
+};
 
 export type InvoiceBatchResult = {
   approved: { id: string; reason: string }[];
@@ -262,3 +268,14 @@ export type InvoiceMatchList<List> = {
   summaries: MatchingSummary[];
   notice: string;
 };
+
+// 比对页未进入审核队列的发票列表：invoice 门面的分页结构里比对页用到的字段
+export type MatchPageInvoice = {
+  id: string;
+  number: string;
+  date: string | null;
+  seller: string | null;
+  currency: string;
+  gross: string | null;
+};
+export type MatchPageList = { total: number; page: number; pageSize: number; rows: MatchPageInvoice[] };
