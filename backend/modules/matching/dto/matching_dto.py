@@ -107,6 +107,8 @@ class QueueQuery(StrictModel):
     invoiceNo: SearchText = ""
     supplierName: SearchText = ""
     tier: Literal["all", "high", "medium", "low"] = "all"
+    # pending：全部待审核发票；auto：可自动审核通过（置信度 100% 且无需异常说明，可批量审核）
+    view: Literal["pending", "auto"] = "pending"
     # 只看异常 / 只看正常：异常为需要填写说明或当前不能通过的建议
     anomaly: Literal["all", "abnormal", "normal"] = "all"
     # 按子采购单的供应商筛选；按开票日期筛选（须成对填写）

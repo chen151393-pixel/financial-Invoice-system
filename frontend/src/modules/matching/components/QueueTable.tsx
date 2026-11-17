@@ -110,6 +110,7 @@ export function QueueTable({
                   ))}
                 </span>
               )}
+              {row.batch.allowed && <Badge tone="info">可自动审核</Badge>}
               <small>{row.batch.reason}</small>
             </div>
           ),

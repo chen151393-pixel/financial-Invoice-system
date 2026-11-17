@@ -153,6 +153,15 @@ def order_number(value):
     return re.sub(r"^(?:采购订单|销售订单|PURCHASE ORDER|SALES ORDER)\s*#\s*", "", value).strip()
 
 
+# 备注中的我方采购单号：母采购单 YE-LX20260804-P234、子采购单 YE-MQ260827-Y684-1 等
+PURCHASE_NUMBER = re.compile(r"YE-[A-Z]+\d{6,8}-[A-Z]\d{2,4}(?:-\d+)*", re.IGNORECASE)
+
+
+def remark_purchase_numbers(remark):
+    """备注里可识别的我方采购单号（大写、去重、按出现顺序）。"""
+    return list(dict.fromkeys(match.upper() for match in PURCHASE_NUMBER.findall(remark or "")))
+
+
 def order_reference(remark, line):
     """仅认可来源明确关联的子单、母单或销售单完整单号，不凭金额相同认定订单一致。"""
     for kind, key in (

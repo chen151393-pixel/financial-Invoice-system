@@ -3,6 +3,7 @@
 import pytest
 from backend.modules.matching.dto.matching_dto import QueueQuery
 from backend.tests.invoice_files import invoice
+from backend.tests.matching_batch_helpers import complete_buyer
 from backend.tests.matching_helpers import confirm_groups
 from backend.tests.test_matching import FLUID, INK, USER, import_invoices, invoice_id
 from backend.tests.test_matching import engine as engine
@@ -34,7 +35,7 @@ def test_invoice_queue_groups_before_paging(engine, world, reviewed):
     first = world["queries"].invoice_queue(QueueQuery(pageSize=1))
     second = world["queries"].invoice_queue(QueueQuery(pageSize=1, page=2))
     assert first.total == first.pages == 4
-    assert first.counts == {"all": 4, "high": 1, "medium": 1, "low": 2}
+    assert first.counts == {"all": 4, "high": 1, "medium": 1, "low": 2, "pending": 4, "auto": 0}
     assert first.rows[0].proposalCount == 2
     assert first.rows[0].invoice.number == "26000000000000009901"
     assert first.rows[0].invoice.id != second.rows[0].invoice.id
@@ -118,3 +119,34 @@ def test_queue_bulk_search_validation(field):
     for value in ("x" * 121, ";".join(str(i) for i in range(51))):
         with pytest.raises(ValidationError):
             QueueQuery(**{field: value})
+
+
+def test_auto_view_lists_only_batchable_invoices(engine, world, reviewed):
+    import_invoices(
+        world,
+        [
+            invoice("26000000000000009931", [INK, FLUID], remark="SUB-200"),
+            invoice("26000000000000009932", [("其他商品", "箱", "1000", "100000", "0")]),
+        ],
+    )
+    complete_buyer(engine, world, invoice_id(engine, "26000000000000009931"))
+    pending = world["queries"].invoice_queue(QueueQuery())
+    assert pending.counts["pending"] == 2 and pending.counts["auto"] == 1
+    automatic = world["queries"].invoice_queue(QueueQuery(view="auto"))
+    assert automatic.total == 1 and automatic.counts["all"] == 1 and automatic.counts["high"] == 1
+    row = automatic.rows[0]
+    assert row.invoice.number == "26000000000000009931" and row.batch.allowed and row.batchIds
+    # 置信度分段在可自动审核视图内继续筛选
+    assert world["queries"].invoice_queue(QueueQuery(view="auto", tier="low")).total == 0
+
+
+def test_abnormal_face_invoices_leave_the_queue(engine, world, reviewed):
+    import_invoices(world, [invoice("26000000000000009941", [INK, FLUID], remark="SUB-200")])
+    assert world["queries"].invoice_queue(QueueQuery()).total == 1
+    with engine.begin() as connection:
+        connection.execute(
+            text("UPDATE invoice_headers SET status = 'void' WHERE id = :i"),
+            {"i": invoice_id(engine, "26000000000000009941")},
+        )
+    result = world["queries"].invoice_queue(QueueQuery())
+    assert result.total == 0 and result.counts["pending"] == 0

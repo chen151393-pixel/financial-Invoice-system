@@ -15,8 +15,8 @@ from backend.tests.test_task import USER, approve
 from sqlalchemy import text
 
 
-def existing(world, engine, number="26000000000000008701", lines=None, **kwargs):
-    import_invoices(world, [invoice(number, lines or [INK, FLUID], remark="SUB-200", **kwargs)])
+def existing(world, engine, number="26000000000000008701", lines=None, remark="SUB-200", **kwargs):
+    import_invoices(world, [invoice(number, lines or [INK, FLUID], remark=remark, **kwargs)])
     return invoice_id(engine, number)
 
 
@@ -60,7 +60,8 @@ def test_reapproval_refreshes_basis_and_does_not_duplicate(ns, engine, world):
 
 
 def test_new_task_can_complete_multi_order_combination(ns, engine, world):
-    target = existing(world, engine, lines=[("墨水", "个", "40", "241.00", "0")])
+    # 备注同时写了两张子采购单，第二张审核后才能组合成整单建议
+    target = existing(world, engine, lines=[("墨水", "个", "40", "241.00", "0")], remark="SUB-200 SUB-201")
     orders = [purchase("200", "870"), purchase("201", "871")]
     declarations = [customs("870"), customs("871")]
     for order in orders:
@@ -122,3 +123,38 @@ def test_pagination_reaches_older_invoices_and_skips_incomplete(ns, engine, worl
     save(ns, engine, bundle([purchase()], [customs("870")]))
     approve(world, "CD870")
     assert len(proposals(world, older)) == 2 and not proposals(world, newer)
+
+
+def test_regenerate_retires_proposal_when_remark_number_no_longer_matches(ns, engine, world):
+    # 旧规则下按供应商召回的建议；备注改为未入库的我方采购单号后重新匹配，旧建议失效且不再按供应商替代
+    target = existing(world, engine, remark="")
+    save(ns, engine, bundle([purchase()], [customs("870")]))
+    approve(world, "CD870")
+    assert {row.status for row in proposals(world, target)} == {"proposed"}
+    with engine.begin() as connection:
+        connection.execute(
+            text("UPDATE invoice_headers SET remark = '采购单号 YE-AB20260101-P001' WHERE id = :i"),
+            {"i": target},
+        )
+    assert world["proposals"].generate_now([target], USER) == 0
+    found = rows(
+        engine, "SELECT status, review_note FROM matching_allocations WHERE invoice_id=:id", id=target
+    )
+    assert found and all(row["status"] == "rejected" for row in found)
+    assert all("现行召回规则" in row["review_note"] for row in found)
+
+
+def test_supplier_recall_threshold_needs_matching_seller():
+    from backend.modules.matching.service.group_plan_service import seller_matched
+
+    def option(result):
+        return [
+            {
+                "checks": {
+                    "1": ([{"key": "seller", "result": result}, {"key": "order", "result": "mismatch"}], 30)
+                }
+            }
+        ]
+
+    assert seller_matched(option("match"))
+    assert not seller_matched(option("partial"))
