@@ -12,7 +12,7 @@
 
 `/sync` 提供真实后台任务历史、状态筛选、分页及计划状态；`/sync/ns` 独立提供 NS 拉取；`/sync/lemon` 提供全部/指定授权账套后台拉票和每日计划，保留账号绑定、单账套手动拉票与 Excel 导入。专业版与免费版商品明细均已接入，附件尚未接入。
 
-`SyncOverview.tsx` 展示平台入口卡片（`SyncSourceCards`，NS 与柠檬云均显示计划启用状态和下次执行时间）并读取持久批次；`pages/LemonBackgroundPanel.tsx` 装配后台拉取/计划表单，`SyncBatchDetailPage.tsx` 展示 `/sync/batches/:requestId` 的账套及日期分片结果。类型/API/hooks/业务组件分目录，样式在 `components/sync-background.css`（面板、表单、表格）与 `components/sync-layout.css`（平台卡片、状态条、页签、状态标签）；批次状态标签统一用 `SyncPhaseTag`。柠檬云页面依次为同步状态条（`LemonSyncStatus`）、“手动补拉 / 定时计划”页签（计划表单 `SyncPlanForm` 左栏执行时间与业务类型、右栏账套范围；`SyncAccountScope` 查询后按后端返回列出各账套“专业版／免费版”及可拉取内容）、最近执行（`LemonRecentBatches`，取执行记录第一页前三条）和“更多操作”（账号授权、单账套即时拉取、Excel 导入，默认收起）；加载、失败、空记录和执行状态均来自真实接口。任务详情可刷新恢复，失败重试服从后端 allowed/reason。覆盖范围与部署见[后台同步说明](../../../../docs/lemon-background-sync.md)。
+`SyncOverview.tsx` 展示平台入口卡片（`SyncSourceCards`，NS 与柠檬云均显示计划启用状态和下次执行时间）、近 14 天同步情况，以及合并执行记录 `components/SyncRecords.tsx`：NS（定时批次 + 当前身份手动分页）与柠檬云发票批次一张表，按执行时间倒序，可按来源和状态筛选，数据来自 `GET /api/sync/batches`（`api/history-api.ts`、`hooks/useSyncRecords.ts`，每 5 秒刷新），计划状态也取自该接口；`pages/LemonBackgroundPanel.tsx` 装配后台拉取/计划表单，`SyncBatchDetailPage.tsx` 展示 `/sync/batches/:requestId` 的账套及日期分片结果。类型/API/hooks/业务组件分目录，样式在 `components/sync-background.css`（面板、表单、表格）与 `components/sync-layout.css`（平台卡片、状态条、页签、状态标签）；批次状态标签统一用 `SyncPhaseTag`。柠檬云页面依次为同步状态条（`LemonSyncStatus`）、“手动补拉 / 定时计划”页签（计划表单 `SyncPlanForm` 左栏执行时间与业务类型、右栏账套范围；`SyncAccountScope` 查询后按后端返回列出各账套“专业版／免费版”及可拉取内容）、最近执行（`LemonRecentBatches`，取执行记录第一页前三条）和“更多操作”（账号授权、单账套即时拉取、Excel 导入，默认收起）；加载、失败、空记录和执行状态均来自真实接口。任务详情可刷新恢复，失败重试服从后端 allowed/reason。覆盖范围与部署见[后台同步说明](../../../../docs/lemon-background-sync.md)。
 
 SyncPage.tsx 管理 UI 和请求状态，api.ts 提供请求契约，sync.css 限定模块样式。SyncWorkspacePage 装配公共 AppFrame。复用 identity 本机会话和 shared HTTP 客户端。
 

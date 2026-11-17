@@ -1,5 +1,9 @@
 # 数据同步与连接模块
 
+## 同步中心合并执行记录（2026-11-17）
+
+`GET /api/sync/batches?page=&pageSize=&phase=&source=ns|lemon`（`controller/sync_history_controller.py` → `service/sync_history_service.py`）把 NS 记录（计划批次 + 当前身份手动分页，规则同下节）与柠檬云发票批次合并为一张列表，统一按执行时间（批次开始时间、手动分页提交时间）倒序，在数据库中筛选、分页并统计状态数量（`dao/ns_history_dao.py` 的 `lemon_scope` / `source` 参数；不传时与原 NS 列表一致）。每条记录带 `source`、`sourceLabel`、`kindLabel`、`rangeLabel`，柠檬云记录 `recordType` 为 `lemon`，详情仍走各自原接口；响应附两边计划状态 `plans.ns` / `plans.lemon`。仅系统管理员可用，柠檬云沿用绑定作用域。测试：`backend/tests/sync/test_sync_history.py`。
+
 ## NS 同步执行记录（2026-10-30）
 
 `GET /api/sync/ns/batches` 合并当前 NS 账套的计划批次与当前登录身份的历史手动分页保存记录，按触发时间倒序，在数据库中按状态筛选、分页并统计状态数量。手动记录沿用原账户与身份 scope，不扩大到其他操作者；计划批次的子分页不重复列入。记录新增 `recordType: plan | manual`，详情 `GET /api/sync/ns/batches/{request_id}?recordType=manual` 读取手动结果，省略参数仍读取计划批次。两类记录即使使用相同 UUID 也按类型定位，接口仍要求系统管理员。

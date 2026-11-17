@@ -78,6 +78,7 @@ from .modules.sync.controller.lemon_invoice_controller import create_router as l
 from .modules.sync.controller.ns_plan_controller import create_router as ns_plan_router
 from .modules.sync.controller.ns_run_controller import create_router as ns_run_router
 from .modules.sync.controller.sync_health_controller import create_router as sync_health_router
+from .modules.sync.controller.sync_history_controller import create_router as sync_history_router
 from .modules.sync.public import LemonInvoicesFetched
 from .modules.sync.pull_service import PullService
 from .modules.sync.service import ConnectionService
@@ -94,6 +95,7 @@ from .modules.sync.service.ns_plan_service import NsPlanService
 from .modules.sync.service.ns_plan_worker import NsPlanWorker
 from .modules.sync.service.ns_run_service import NsRunService
 from .modules.sync.service.sync_health_service import SyncHealthService
+from .modules.sync.service.sync_history_service import SyncHistoryService
 from .modules.task.controller.board_controller import create_router as task_board_router
 from .modules.task.controller.delivery_controller import create_router as delivery_router
 from .modules.task.controller.external_group_controller import create_router as external_group_router
@@ -386,5 +388,6 @@ def _register_business(app, settings, ns, contract_ns, wecom, engine, lemon_invo
     ns_batches = NsBatchService(engine, app.state.ns_runs, app.state.identity.require_admin)
     ns_plans = NsPlanService(ns_batches)
     app.include_router(ns_plan_router(ns_plans, ns_batches))
+    app.include_router(sync_history_router(SyncHistoryService(engine, ns_batches, batches)))
     app.state.ns_plan_worker = NsPlanWorker(ns_plans, NsJobService(ns_batches, ns_plans))
     app.include_router(sync_health_router(SyncHealthService(engine)))
