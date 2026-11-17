@@ -229,11 +229,91 @@ test("财务主行展示后端双审和阻塞原因，有对页权限才定位�
   );
   assert.match(html, /财务审核.*海关审核.*开票进度.*下一步/);
   assert.match(html, /等待海关审核.*海关回执已换版/);
-  assert.match(html, /href="\/review\/customs\?exactDeclarationNo=REAL%26870"[^>]*>去海关审核/);
+  assert.match(html, /ui-button--ghost ui-button--sm[^>]*href="\/review\/customs/);
+  const expanded = renderToStaticMarkup(
+    inRouter(
+      createElement(PlComparison, {
+        ...props,
+        links: { customs: customsDeclarationPath },
+        initialExpanded: [item.id],
+      }),
+    ),
+  );
+  assert.equal((expanded.match(/>查看对应海关回执</g) ?? []).length, 1);
+  item.approvalProgress = { ...item.approvalProgress, nextStep: "import", linked: false };
+  const importHtml = renderToStaticMarkup(
+    inRouter(createElement(PlComparison, { ...props, links: { customs: customsDeclarationPath } })),
+  );
+  assert.match(importHtml, /ui-button--ghost ui-button--sm[^>]*>导入海关回执<\/a><button[^>]*>查看记录</);
+  assert.doesNotMatch(importHtml, /查看对应海关回执/);
+  assert.match(html, /href="\/review\/customs\?exactDeclarationNo=REAL%26870"[^>]*>查看对应海关回执/);
   assert.doesNotMatch(
     renderToStaticMarkup(inRouter(createElement(PlComparison, props))),
     /href="\/review\/customs/,
   );
+
+  item.review = { ...item.review, status: "pending", allowed: true };
+  item.approvalProgress = {
+    ...item.approvalProgress,
+    finance: { status: "pending", label: "待审核", reason: "" },
+    customs: { status: "approved", label: "已通过", reason: "" },
+    status: "waiting_finance",
+    label: "等待财务审核",
+    reason: "",
+    nextStep: "finance",
+    linked: true,
+  };
+  const financeHtml = renderToStaticMarkup(
+    inRouter(createElement(PlComparison, { ...props, links: { customs: customsDeclarationPath } })),
+  );
+  assert.match(financeHtml, />查看对应海关回执<\/a><button[^>]*>审核财务</);
+});
+
+test("已生成任务的财务核对行仅在主行提供单任务入口", () => {
+  const item = group();
+  item.review = { ...item.review, status: "approved", allowed: false };
+  item.approvalProgress = {
+    finance: { status: "approved", label: "已通过", reason: "" },
+    customs: { status: "approved", label: "已通过", reason: "" },
+    status: "created",
+    label: "已生成任务",
+    reason: "",
+    nextStep: "tasks",
+    linked: true,
+    taskIds: ["308"],
+  };
+  const renderRow = () =>
+    renderToStaticMarkup(
+      inRouter(
+        createElement(DeclarationRow, {
+          group: item,
+          open: true,
+          checked: false,
+          checkable: false,
+          onToggle() {},
+          onCheck() {},
+          onReview() {},
+          onSelectLine() {},
+          links: { customs: () => "/review/customs", task: (id) => `/tasks/${id}` },
+        }),
+      ),
+    );
+
+  const html = renderRow();
+  assert.match(html, /已生成任务/);
+  assert.match(html, /href="\/tasks\/308"[^>]*>查看任务</);
+  assert.match(html, />查看记录</);
+  assert.match(html, /SUB-TEST/);
+  assert.doesNotMatch(html, /查看对应海关回执|查看任务 #308|fr-progress-detail/);
+
+  item.approvalProgress.taskIds.push("309");
+  const multiple = renderRow();
+  assert.match(multiple, /查看任务 #308/);
+  assert.match(multiple, /查看任务 #309/);
+  assert.doesNotMatch(multiple, /查看对应海关回执/);
+
+  item.approvalProgress.status = "reused";
+  assert.match(renderRow(), /查看对应海关回执/);
 });
 
 test("主行按后端结果区分单位、数量和实际申报幅度异常", () => {
@@ -928,6 +1008,33 @@ test("海关审核行复用财务勾选与主按钮样式，移除重新匹配�
   assert.match(html, /ui-button--primary/);
   assert.match(html, /aria-label="审核通过：TEST-17"/);
   assert.doesNotMatch(html, /重新匹配|选本页/);
+  const pending = { status: "pending", label: "待审核", reason: "" };
+  const linked = renderToStaticMarkup(
+    inRouter(
+      createElement(CustomsReceiptRow, {
+        ...props,
+        open: true,
+        links: { finance: (number) => "/review?exactDeclarationNo=" + number },
+        receipt: {
+          ...receipt,
+          approvalProgress: {
+            finance: pending,
+            customs: pending,
+            status: "waiting_both",
+            label: "待双审",
+            reason: "",
+            nextStep: "both",
+            linked: true,
+            taskIds: [],
+          },
+        },
+      }),
+    ),
+  );
+  const rowActions = linked.match(/<div class="fr-next-action">(.*?)<\/div>/)?.[1] ?? "";
+  assert.match(rowActions, /ui-button--primary[^>]*>审核通过</);
+  assert.match(rowActions, /ui-button--ghost ui-button--sm[^>]*href="\/review\?exactDeclarationNo=TEST-17"[^>]*>查看对应财务核对</);
+  assert.equal((linked.match(/>查看对应财务核对</g) ?? []).length, 1);
   const blocked = renderToStaticMarkup(
     createElement(CustomsReceiptRow, {
       ...props,

@@ -188,6 +188,12 @@
   margin-top: 4px;
   font-size: 12px;
 }
+.fr-next-action-column {
+  width: 18em;
+}
+.fr-declaration-table:has(.fr-next-action > :nth-child(3)) .fr-next-action-column {
+  width: 24em;
+}
 .fr-declaration-table > thead > tr > .fr-declaration-action,
 .fr-declaration-row > .fr-declaration-action {
   position: sticky;
@@ -221,13 +227,14 @@
   border: 0;
 }
 .fr-declaration-action .ui-button {
+  flex: none;
   padding: 6px 8px;
   white-space: nowrap;
   font-size: 12px;
 }
 .fr-next-action {
   display: flex;
-  flex-wrap: wrap;
+  align-items: center;
   justify-content: flex-end;
   gap: 4px;
 }

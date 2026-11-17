@@ -31,7 +31,9 @@ export function DeclarationRow({
   onSelectLine: (line: PurchaseLine) => void;
   links?: ReviewLinks;
 }) {
-  const { review } = group;
+  const { review, approvalProgress } = group;
+  const detailLinks =
+    approvalProgress?.status === "created" && approvalProgress.taskIds.length === 1 ? undefined : links;
   const approved = review.status === "approved";
   const selectable = checkable && review.status === "pending" && review.allowed;
   return (
@@ -118,10 +120,11 @@ export function DeclarationRow({
             <>
               {review.reason && <p className="fr-review-reason">{review.reason}</p>}
               <ApprovalProgressDetail
-                progress={group.approvalProgress}
-                links={links}
+                progress={approvalProgress}
+                links={detailLinks}
                 page="finance"
                 declarationNo={group.declaration}
+                showRelatedLink={false}
               />
               <CustomsRows group={group} selectLine={onSelectLine} />
             </>

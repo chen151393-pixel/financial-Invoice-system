@@ -139,7 +139,7 @@ export function CustomsReceiptRow({
                 aria-label={`审核通过：${receipt.declarationNo}`}
                 onClick={onApprove}
               >
-                {receipt.approvalProgress ? "审核海关回执" : "审核通过"}
+                审核通过
               </Button>
             )
           }
@@ -154,6 +154,7 @@ export function CustomsReceiptRow({
                 links={links}
                 page="customs"
                 declarationNo={receipt.declarationNo}
+                showRelatedLink={false}
               />
               {receipt.status === "different" && receipt.approval.allowed && (
                 <Alert tone="warning">审核本张回执时需填写差异说明。</Alert>

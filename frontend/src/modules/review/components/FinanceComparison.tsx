@@ -7,8 +7,8 @@ import { PurchaseDialog } from "./PurchaseDialog";
 import { ReviewListToolbar } from "./ReviewListToolbar";
 import "./review.css";
 
-const COLUMN_WIDTHS = [12, 15, 17, 13, 8, 9, 14, 12];
-const BATCH_WIDTHS = [3, 12, 15, 15, 12, 8, 9, 14, 12];
+const COLUMN_WIDTHS = [12, 15, 17, 13, 8, 9, 14];
+const BATCH_WIDTHS = [3, 12, 15, 15, 12, 8, 9, 14];
 
 /**
  * 报关单列表：工具条（汇总、展开收起、刷新、批量审核）+ 主行表格。
@@ -130,6 +130,7 @@ export function FinanceComparison({
               {widths.map((width, index) => (
                 <col key={index} style={{ width: `${width}%` }} />
               ))}
+              <col className="fr-next-action-column" />
             </colgroup>
             <thead>
               <tr>
