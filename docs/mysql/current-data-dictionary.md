@@ -2041,3 +2041,59 @@ NS 来源按批后台保存记录与结果，不保存令牌。
 | currency | VARCHAR(20) | 否 | 成交币制 |
 | declared_amount | DECIMAL(24,6) | 否 | 建批次时冻结的成交总价合计 |
 | created_at / updated_at | DATETIME(6) | 否 | 本地创建与更新时间，UTC |
+
+### settlement_bills｜结汇批次提单
+
+文件本体保存在结汇资料目录（`SETTLEMENT_DOCUMENT_ROOT`），本表只记录文件标识与字段。移除为软删除。
+
+| 字段                                | 类型                       | 可空 | 说明                                             |
+| ----------------------------------- | -------------------------- | ---- | ------------------------------------------------ |
+| id                                  | BIGINT                     | 否   | 本地自增主键                                     |
+| batch_id                            | BIGINT                     | 否   | 所属批次，本模块外键                             |
+| file_id / file_name                 | VARCHAR(36) / VARCHAR(255) | 否   | 资料目录中的文件标识（UUID）与上传时的原文件名   |
+| sha256 / size_bytes                 | CHAR(64) / INTEGER         | 否   | 文件校验值与大小；同一批次内按校验值拒绝重复上传 |
+| bl_no                               | VARCHAR(100)               | 是   | 提单号，解析得到或人工填写                       |
+| port_of_loading / port_of_discharge | VARCHAR(200)               | 是   | 装运口岸、目的口岸（英文，取自提单）             |
+| on_board_date                       | DATE                       | 是   | 装船日期                                         |
+| declaration_nos                     | JSON                       | 否   | 该提单对应的报关单号列表，须属于本批次           |
+| parse_note                          | VARCHAR(500)               | 是   | 自动解析说明，如未识别的字段                     |
+| uploaded_by / uploaded_at           | VARCHAR(190) / DATETIME(6) | 否   | 上传人与时间                                     |
+| confirmed_by                        | VARCHAR(190)               | 是   | 最近一次人工修改字段的操作人                     |
+| removed_by / removed_at             | VARCHAR(190) / DATETIME(6) | 是   | 移除人与时间；非空表示已移除                     |
+| created_at / updated_at             | DATETIME(6)                | 否   | 本地创建与更新时间，UTC                          |
+
+### settlement_contracts｜结汇批次销售合同
+
+平台按模板生成的销售合同 PDF，一个批次内每个出口合同号一份；重新生成时整批替换。
+
+| 字段                                  | 类型                             | 可空 | 说明                                                             |
+| ------------------------------------- | -------------------------------- | ---- | ---------------------------------------------------------------- |
+| id                                    | BIGINT                           | 否   | 本地自增主键                                                     |
+| batch_id                              | BIGINT                           | 否   | 所属批次，本模块外键；与 contract_no 联合唯一                    |
+| contract_no                           | VARCHAR(100)                     | 否   | 合同编号，即海关回执的出口合同号                                 |
+| contract_date                         | DATE                             | 否   | 签订日期：最早出口日期往前推 `SETTLEMENT_CONTRACT_LEAD_DAYS` 天  |
+| declaration_nos                       | JSON                             | 否   | 该合同覆盖的报关单号列表                                         |
+| buyer_party_id / seller_party_id      | BIGINT                           | 否   | 买方、卖方抬头，指向 settlement_parties.id                       |
+| trade_term                            | VARCHAR(20)                      | 否   | 成交方式，如 FOB                                                 |
+| payment_terms_cn / payment_terms_en   | VARCHAR(300)                     | 否   | 付款条件（中、英文）                                             |
+| port_of_loading / port_of_destination | VARCHAR(200)                     | 否   | 装运口岸、目的口岸，取自提单                                     |
+| currency / amount                     | VARCHAR(20) / DECIMAL(24,6)      | 否   | 币种与合同金额（该合同号下海关回执成交总价合计）                 |
+| source_digest                         | CHAR(64)                         | 否   | 生成时输入内容摘要；明细、口岸、抬头、印章、条款变化后须重新生成 |
+| file_id / sha256 / size_bytes         | VARCHAR(36) / CHAR(64) / INTEGER | 否   | PDF 文件标识、校验值与大小                                       |
+| stamp_note                            | VARCHAR(200)                     | 是   | 未盖章的一方说明；双方均已盖章为空                               |
+| generated_by / generated_at           | VARCHAR(190) / DATETIME(6)       | 否   | 生成人与时间                                                     |
+| created_at / updated_at               | DATETIME(6)                      | 否   | 本地创建与更新时间，UTC                                          |
+
+### settlement_parties｜销售合同抬头
+
+| 字段                                           | 类型                                 | 可空    | 说明                                          |
+| ---------------------------------------------- | ------------------------------------ | ------- | --------------------------------------------- |
+| id                                             | BIGINT                               | 否      | 本地自增主键                                  |
+| name                                           | VARCHAR(300)                         | 否      | 匹配用名称；买方须与海关回执境外收货人一致    |
+| name_key                                       | VARCHAR(300)                         | 否      | 名称规范化键，唯一                            |
+| name_cn / name_en                              | VARCHAR(255)                         | 是 / 否 | 合同上的中、英文名称                          |
+| address_cn / address_en                        | VARCHAR(500)                         | 是 / 否 | 中、英文地址                                  |
+| phone                                          | VARCHAR(100)                         | 是      | 电话                                          |
+| stamp_file_id / stamp_sha256 / stamp_extension | VARCHAR(36) / CHAR(64) / VARCHAR(10) | 是      | 印章图片文件标识、校验值与扩展名（png / jpg） |
+| updated_by                                     | VARCHAR(190)                         | 否      | 最近维护人                                    |
+| created_at / updated_at                        | DATETIME(6)                          | 否      | 本地创建与更新时间，UTC                       |

@@ -3,7 +3,7 @@
 > 本文件由 `npm.cmd run db:map` 根据迁移链离线 MySQL DDL、实体定义和字段字典生成，请勿手工修改；迁移或实体变化后重新生成，`backend/tests/test_schema_map.py` 会检查是否过期。
 > “修改”含加列、改列、索引与中文备注；数据回填仅在线执行，不在离线 DDL 中体现。
 
-当前最新迁移：`0045_settlement_batches`；共 45 个迁移、70 张实体表。
+当前最新迁移：`0046_settlement_documents`；共 46 个迁移、73 张实体表。
 
 ## 1. 按模块查表
 
@@ -123,6 +123,9 @@
 | --- | --- | --- | --- | --- |
 | `settlement_batch_items` | 结汇批次包含的报关单，金额按建批次时的海关回执冻结 | `0045` | — | [查看](current-data-dictionary.md#settlement_batch_items结汇批次明细) |
 | `settlement_batches` | 结汇批次：一笔回款及其对应的报关单合计、手续费与汇回记录 | `0045` | — | [查看](current-data-dictionary.md#settlement_batches结汇批次) |
+| `settlement_bills` | 结汇批次的提单文件及装运口岸、目的口岸、装船日期 | `0046` | — | [查看](current-data-dictionary.md#settlement_bills结汇批次提单) |
+| `settlement_contracts` | 结汇批次按模板生成的销售合同 PDF 及其生成依据 | `0046` | — | [查看](current-data-dictionary.md#settlement_contracts结汇批次销售合同) |
+| `settlement_parties` | 销售合同买卖双方抬头与印章 | `0046` | — | [查看](current-data-dictionary.md#settlement_parties销售合同抬头) |
 
 ## 2. 按迁移查表
 
@@ -173,3 +176,4 @@
 | [`0043_task_supplier_owners`](../../backend/migrations/versions/0043_task_supplier_owners.py) | `task_supplier_owners` | — | 供应商人员分工：仅新增一张九字段历史表，任务归属复用 task_events。 |
 | [`0044_review_dual_approval`](../../backend/migrations/versions/0044_review_dual_approval.py) | `review_customs_approvals` | `review_records` | 海关审核记录与财务审核放行依据：新增一张表、一个可空字段。 |
 | [`0045_settlement_batches`](../../backend/migrations/versions/0045_settlement_batches.py) | `settlement_batch_items`、`settlement_batches` | — | settlement：结汇批次与批次明细（香港中转 / 直接收汇两种回款路径）。 |
+| [`0046_settlement_documents`](../../backend/migrations/versions/0046_settlement_documents.py) | `settlement_bills`、`settlement_contracts`、`settlement_parties` | — | settlement：结汇资料包——提单、按模板生成的销售合同、合同抬头与印章。 |

@@ -48,8 +48,12 @@ def balances(batch, fee_alert):
     return views, received["balanced"], (remitted["balanced"] if remitted else None)
 
 
-def summary_fields(batch, count, fee_alert):
+def summary_fields(batch, count, fee_alert, documents_issue=""):
     views, received_ok, remitted_ok = balances(batch, fee_alert)
+    allowed = actions(batch, received_ok, remitted_ok)
+    if documents_issue and allowed["documentsReady"]["allowed"]:
+        # 金额已对平但资料未齐：给出资料缺项
+        allowed["documentsReady"] = {"allowed": False, "reason": documents_issue}
     return {
         "id": batch["id"],
         "batchNo": text(batch["batch_no"]),
@@ -68,7 +72,7 @@ def summary_fields(batch, count, fee_alert):
         "remittedFee": amount(batch["remitted_fee"]),
         "declarationCount": count,
         "balances": views,
-        "actions": BatchActions(**actions(batch, received_ok, remitted_ok)),
+        "actions": BatchActions(**allowed),
     }
 
 
@@ -76,9 +80,9 @@ def summary(batch, count, fee_alert):
     return BatchSummary(**summary_fields(batch, count, fee_alert))
 
 
-def detail(batch, items, fee_alert):
+def detail(batch, items, fee_alert, documents_issue=""):
     return BatchDetail(
-        **summary_fields(batch, len(items), fee_alert),
+        **summary_fields(batch, len(items), fee_alert, documents_issue),
         payer=text(batch["payer"]),
         receivingAccount=text(batch["receiving_account"]),
         receivedReference=text(batch["received_reference"]),

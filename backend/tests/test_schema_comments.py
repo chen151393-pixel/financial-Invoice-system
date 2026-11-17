@@ -60,6 +60,9 @@ TABLES = ALL_TABLES - {
     "identity_role_pages",
     "settlement_batches",
     "settlement_batch_items",
+    "settlement_bills",
+    "settlement_contracts",
+    "settlement_parties",
 }
 COMMENT_HEAD = "0015_sync_comments"
 

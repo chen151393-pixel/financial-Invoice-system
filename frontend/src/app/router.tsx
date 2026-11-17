@@ -67,6 +67,10 @@ export const router = createBrowserRouter([
             element: page("settlement", "香港中转批次", <SettlementWorkspacePage />),
           },
           {
+            path: paths.settlementParties,
+            element: page("settlement", "合同抬头", <SettlementWorkspacePage />),
+          },
+          {
             path: paths.settlementDirect,
             element: page("settlement", "直接收汇批次", <SettlementWorkspacePage />),
           },

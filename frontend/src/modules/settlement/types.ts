@@ -147,3 +147,115 @@ export interface RemittanceBody {
   remittedFee: string;
   remittedReference: string;
 }
+
+// ---- 结汇资料（提单、销售合同、资料包）----
+
+export interface Bill {
+  id: number;
+  fileName: string;
+  fileUrl: string;
+  blNo: string;
+  portOfLoading: string;
+  portOfDischarge: string;
+  onBoardDate: string;
+  declarationNos: string[];
+  missing: string[];
+  parseNote: string;
+  uploadedBy: string;
+  uploadedAt: string;
+}
+
+export interface Contract {
+  id: number;
+  contractNo: string;
+  fileUrl: string;
+  contractDate: string;
+  currency: string;
+  amount: string;
+  declarationNos: string[];
+  sellerName: string;
+  tradeTerm: string;
+  portOfLoading: string;
+  portOfDestination: string;
+  stale: boolean;
+  stampNote: string;
+  generatedBy: string;
+  generatedAt: string;
+}
+
+export interface PlannedContract {
+  contractNo: string;
+  currency: string;
+  amount: string;
+  declarationNos: string[];
+}
+
+export interface PartyOption {
+  id: number;
+  name: string;
+  hasStamp: boolean;
+}
+
+export interface BatchDocuments {
+  batchId: number;
+  declarationNos: string[];
+  bills: Bill[];
+  planned: PlannedContract[];
+  contracts: Contract[];
+  buyerName: string;
+  buyerReady: boolean;
+  sellers: PartyOption[];
+  defaults: {
+    sellerPartyId: number | null;
+    tradeTerm: string;
+    paymentTermsCn: string;
+    paymentTermsEn: string;
+  };
+  complete: boolean;
+  issues: string[];
+  warnings: string[];
+  notIncluded: string[];
+  edit: Action;
+  generate: Action;
+  package: Action;
+  packageUrl: string;
+}
+
+export interface BillFields {
+  blNo: string;
+  portOfLoading: string;
+  portOfDischarge: string;
+  onBoardDate: string | null;
+  declarationNos: string[];
+}
+
+export interface GenerateContractsBody {
+  sellerPartyId: number;
+  tradeTerm: string;
+  paymentTermsCn: string;
+  paymentTermsEn: string;
+}
+
+export interface Party {
+  id: number;
+  name: string;
+  nameCn: string;
+  nameEn: string;
+  addressCn: string;
+  addressEn: string;
+  phone: string;
+  hasStamp: boolean;
+  stampUrl: string;
+  updatedBy: string;
+  updatedAt: string;
+}
+
+export interface PartyBody {
+  id: number | null;
+  name: string;
+  nameCn: string;
+  nameEn: string;
+  addressCn: string;
+  addressEn: string;
+  phone: string;
+}

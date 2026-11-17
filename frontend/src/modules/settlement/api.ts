@@ -1,11 +1,17 @@
 import { http } from "../../shared/api/http";
+import { readImportFile } from "../../shared/api/import-file";
 import type {
   BatchDetail,
+  BatchDocuments,
   BatchList,
   BatchQuery,
+  BillFields,
   CandidateList,
   CandidateQuery,
   CreateBatchBody,
+  GenerateContractsBody,
+  Party,
+  PartyBody,
   RemittanceBody,
 } from "./types";
 
@@ -31,3 +37,36 @@ export const settleBatch = (id: number) => http<BatchDetail>(`/settlement/batche
 
 export const cancelBatch = (id: number, reason: string) =>
   http<BatchDetail>(`/settlement/batches/${id}/cancel`, "POST", { reason });
+
+// ---- 结汇资料：文件只读取字节后提交，格式、解析与齐全度由后端负责 ----
+
+export const getDocuments = (batchId: number, signal?: AbortSignal) =>
+  http<BatchDocuments>(`/settlement/batches/${batchId}/documents`, "GET", undefined, signal);
+
+export async function uploadBill(batchId: number, file: File) {
+  const { filename, content } = await readImportFile(file);
+  return http<BatchDocuments>(`/settlement/batches/${batchId}/bills`, "POST", {
+    fileName: filename,
+    content,
+    declarationNos: [],
+  });
+}
+
+export const updateBill = (batchId: number, billId: number, body: BillFields) =>
+  http<BatchDocuments>(`/settlement/batches/${batchId}/bills/${billId}`, "POST", body);
+
+export const removeBill = (batchId: number, billId: number) =>
+  http<BatchDocuments>(`/settlement/batches/${batchId}/bills/${billId}/remove`, "POST", {});
+
+export const generateContracts = (batchId: number, body: GenerateContractsBody) =>
+  http<BatchDocuments>(`/settlement/batches/${batchId}/contracts/generate`, "POST", body);
+
+export const queryParties = (signal?: AbortSignal) =>
+  http<{ items: Party[] }>("/settlement/parties/query", "POST", {}, signal);
+
+export const saveParty = (body: PartyBody) => http<Party>("/settlement/parties", "POST", body);
+
+export async function uploadStamp(partyId: number, file: File) {
+  const { filename, content } = await readImportFile(file);
+  return http<Party>(`/settlement/parties/${partyId}/stamp`, "POST", { fileName: filename, content });
+}

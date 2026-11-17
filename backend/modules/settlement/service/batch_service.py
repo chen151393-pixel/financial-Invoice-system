@@ -57,9 +57,11 @@ def validate_selection(rows, numbers):
 
 
 class BatchService:
-    def __init__(self, engine, candidates, *, fee_alert=Decimal("50")):
+    def __init__(self, engine, candidates, documents, *, fee_alert=Decimal("50")):
         self.engine = engine
         self.candidates = candidates
+        # 资料齐全度读取器：香港中转确认资料已出前校验提单与销售合同
+        self.documents = documents
         self.fee_alert = fee_alert
 
     def _require_engine(self):
@@ -104,8 +106,7 @@ class BatchService:
             batch = batch_dao.get(connection, batch_id)
             if batch is None:
                 raise ApiError(404, "结汇批次不存在")
-            items = batch_item_dao.of_batches(connection, [batch_id])[batch_id]
-        return detail(batch, items, self.fee_alert)
+            return self._detail(connection, batch_id)
 
     # ---- 写入 ----
 
@@ -174,7 +175,7 @@ class BatchService:
             raise ApiError(503, "结汇批次保存失败，请检查业务数据库及迁移状态") from None
 
     def documents_ready(self, batch_id, owner):
-        """香港中转：到账对平后确认资料包已出（报关单、提单、销售合同、形式发票已提交银行）。"""
+        """香港中转：到账对平、提单与销售合同齐全后确认资料包已出。"""
         return self._transition(batch_id, owner, "documents_ready", "documentsReady", {})
 
     def settle(self, batch_id, owner):
@@ -215,6 +216,11 @@ class BatchService:
             check = getattr(summary(candidate, 0, self.fee_alert).actions, action)
             if not check.allowed:
                 raise ApiError(409, check.reason)
+            if target == "documents_ready":
+                items = batch_item_dao.of_batches(connection, [batch_id])[batch_id]
+                reason = self.documents.blocking_reason(connection, batch, items)
+                if reason:
+                    raise ApiError(409, reason)
             if not can_transition(batch["route"], batch["status"], target):
                 raise ApiError(
                     409,
@@ -233,4 +239,7 @@ class BatchService:
     def _detail(self, connection, batch_id):
         batch = batch_dao.get(connection, batch_id)
         items = batch_item_dao.of_batches(connection, [batch_id])[batch_id]
-        return detail(batch, items, self.fee_alert)
+        issue = ""
+        if batch["status"] == "collected":
+            issue = self.documents.blocking_reason(connection, batch, items)
+        return detail(batch, items, self.fee_alert, issue)

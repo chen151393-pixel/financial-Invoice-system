@@ -21,6 +21,7 @@ const settlementChildren: readonly { id: SubView; label: string; short: string }
   { id: "settlement-declarations", label: "待结汇报关单", short: "待结汇" },
   { id: "settlement-hk", label: "香港中转批次", short: "香港" },
   { id: "settlement-direct", label: "直接收汇批次", short: "直收" },
+  { id: "settlement-parties", label: "合同抬头", short: "抬头" },
 ];
 
 // 所有页面共用的导航，按岗位分组（财务 / 采购 / 系统），不携带模拟业务计数。

@@ -15,6 +15,8 @@ from backend.modules.settlement.dto.batch_dto import (
 )
 from backend.modules.settlement.service.batch_service import BatchService
 from backend.modules.settlement.service.candidate_service import CandidateService
+from backend.modules.settlement.service.document_reader import DocumentReader
+from backend.tests.settlement.documents_support import complete_documents
 from backend.tests.test_customs_receipts import _import, row
 from backend.tests.test_schema_baseline import schema_engine as schema_engine
 from backend.tests.test_source_storage import bundle, customs, purchase, save
@@ -25,7 +27,7 @@ HK = "HONGKONG VISION DIGITAL PRINTING CO., LIMITED"
 
 def services(engine):
     candidates = CandidateService(engine, fee_alert=Decimal("50"))
-    return candidates, BatchService(engine, candidates, fee_alert=Decimal("50"))
+    return candidates, BatchService(engine, candidates, DocumentReader(), fee_alert=Decimal("50"))
 
 
 @pytest.fixture
@@ -80,13 +82,15 @@ def test_candidates_split_routes_and_suggest_combination(seeded):
     assert totals == {("direct", "USD"): (1, "1000.00"), ("hk_transit", "USD"): (2, "1000.50")}
 
 
-def test_hk_transit_batch_two_stage_reconciliation(seeded):
+def test_hk_transit_batch_two_stage_reconciliation(seeded, tmp_path):
     candidates, batches = services(seeded)
     batch = create(batches, ["REAL870", "REAL871"], "985.50", fee="15.00", payer="Brazil Buyer")
     assert (batch.route, batch.status, batch.statusLabel) == ("hk_transit", "collected", "香港已收")
     assert batch.declaredTotal == "1000.50" and batch.balances[0].balanced
     assert batch.batchNo.startswith("SB") and [i.recordNo for i in batch.items] == ["CD870", "CD871"]
-    assert batch.actions.documentsReady.allowed and not batch.actions.settle.allowed
+    # 金额已对平，但提单与销售合同未齐，不能确认资料已出
+    assert not batch.actions.documentsReady.allowed and not batch.actions.settle.allowed
+    assert batch.actions.documentsReady.reason.startswith("资料未齐")
 
     # 已在批次中的报关单不能再选
     blocked = {i.declarationNo: i for i in candidates.query(CandidateQuery()).items}["REAL870"]
@@ -100,6 +104,9 @@ def test_hk_transit_batch_two_stage_reconciliation(seeded):
             RemittanceRequest.model_validate({"remittedOn": "2026-11-12", "remittedAmount": "990"}),
             "u",
         )
+    with pytest.raises(ApiError, match="资料未齐"):
+        batches.documents_ready(batch.id, "finance-user")
+    complete_documents(seeded, tmp_path, batch.id)
     ready = batches.documents_ready(batch.id, "finance-user")
     assert ready.status == "documents_ready" and ready.documentsReadyBy == "finance-user"
 

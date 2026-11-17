@@ -41,3 +41,26 @@ def settlement_declarations(connection, *, numbers=None, consignee="", limit=500
             }
         )
     return result
+
+
+def settlement_declaration_lines(connection, numbers):
+    """按报关单号返回海关回执当前版本明细，供结汇生成销售合同：
+    {declaration_no: [{item_no, name, specification, contract_no, unit, quantity, currency, total}]}。"""
+    heads = dao.settlement_heads(connection, numbers=list(numbers), limit=max(len(numbers), 1))
+    lines = dao.current_lines(connection, [head["id"] for head in heads])
+    return {
+        head["declaration_no"]: [
+            {
+                "item_no": row["item_no"],
+                "name": row["name"],
+                "specification": row["specification"],
+                "contract_no": row["contract_no"],
+                "unit": row["deal_unit"],
+                "quantity": row["deal_quantity"],
+                "currency": row["currency"],
+                "total": row["deal_total"],
+            }
+            for row in lines.get(head["id"], [])
+        ]
+        for head in heads
+    }

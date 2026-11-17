@@ -62,9 +62,18 @@ from .modules.review.service.customs_receipt_service import CustomsReceiptServic
 from .modules.review.service.purchase_basis_service import on_source_changed
 from .modules.review.service.review_service import ReviewService
 from .modules.review.service.task_release_service import on_finance_approved
+from .modules.settlement.controller import document_controller as settlement_documents
+from .modules.settlement.controller import party_controller as settlement_parties
 from .modules.settlement.controller.batch_controller import create_router as settlement_router
 from .modules.settlement.service.batch_service import BatchService as SettlementBatchService
+from .modules.settlement.service.bill_service import BillService as SettlementBillService
 from .modules.settlement.service.candidate_service import CandidateService as SettlementCandidateService
+from .modules.settlement.service.contract_service import ContractService as SettlementContractService
+from .modules.settlement.service.document_reader import DocumentReader as SettlementDocumentReader
+from .modules.settlement.service.document_service import DocumentService as SettlementDocumentService
+from .modules.settlement.service.document_store import DocumentStore as SettlementDocumentStore
+from .modules.settlement.service.package_service import PackageService as SettlementPackageService
+from .modules.settlement.service.party_service import PartyService as SettlementPartyService
 from .modules.source.controller.pl_comparison_controller import create_router as source_pl_router
 from .modules.source.controller.relation_rebuild_controller import create_router as source_relation_router
 from .modules.source.controller.vendor_bill_controller import create_router as vendor_bill_router
@@ -217,7 +226,13 @@ def create_app(settings=None, ns=None, engine=None, wecom=None, lemon=None, lemo
         role_page_router(RolePageService(engine, identity), UserAccessPreviewService(engine, identity))
     )
     app.add_middleware(
-        RequestGuard, secure=settings.origin.startswith("https://"), json_body_limits=JSON_BODY_LIMITS
+        RequestGuard,
+        secure=settings.origin.startswith("https://"),
+        json_body_limits={
+            **JSON_BODY_LIMITS,
+            **settlement_documents.JSON_BODY_LIMITS,
+            **settlement_parties.JSON_BODY_LIMITS,
+        },
     )
     register_error_handlers(app)
     app.include_router(identity_router(identity, settings, feishu))
@@ -312,12 +327,32 @@ def _register_business(app, settings, ns, contract_ns, wecom, engine, lemon_invo
     settlement_candidates = SettlementCandidateService(
         engine, hk_consignees=settings.settlement_hk_consignees, fee_alert=settings.settlement_fee_alert
     )
+    settlement_reader = SettlementDocumentReader(lead_days=settings.settlement_contract_lead_days)
     app.include_router(
         settlement_router(
             settlement_candidates,
-            SettlementBatchService(engine, settlement_candidates, fee_alert=settings.settlement_fee_alert),
+            SettlementBatchService(
+                engine, settlement_candidates, settlement_reader, fee_alert=settings.settlement_fee_alert
+            ),
         )
     )
+    settlement_store = SettlementDocumentStore(settings.settlement_document_root)
+    settlement_views = SettlementDocumentService(engine, settlement_reader)
+    app.include_router(
+        settlement_documents.create_router(
+            settlement_views,
+            SettlementBillService(engine, settlement_store, settlement_views),
+            SettlementContractService(
+                engine,
+                settlement_store,
+                settlement_reader,
+                settlement_views,
+                font_path=settings.settlement_pdf_font,
+            ),
+            SettlementPackageService(engine, settlement_store, settlement_reader),
+        )
+    )
+    app.include_router(settlement_parties.create_router(SettlementPartyService(engine, settlement_store)))
     directory = SourceDirectory(engine)
     app.include_router(
         external_group_router(

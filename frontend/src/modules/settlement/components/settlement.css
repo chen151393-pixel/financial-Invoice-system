@@ -90,3 +90,45 @@
     grid-template-columns: 1fr;
   }
 }
+
+/* 批次详情中的结汇资料区 */
+.settlement-docs {
+  display: grid;
+  gap: var(--space-control);
+  padding-top: var(--space-control);
+  border-top: 1px solid var(--color-border);
+}
+
+.settlement-docs__list {
+  margin: 4px 0;
+  padding-left: 18px;
+}
+
+.settlement-checks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-small) var(--space-control);
+  margin: 0;
+  padding: var(--space-small) var(--space-control);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-control);
+}
+
+.settlement-checks legend {
+  padding: 0 4px;
+  color: var(--color-muted);
+  font-size: 13px;
+}
+
+.settlement-form .settlement-checks label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.settlement-stamp {
+  display: block;
+  width: 44px;
+  height: 44px;
+  object-fit: contain;
+}

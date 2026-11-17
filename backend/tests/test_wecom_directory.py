@@ -240,6 +240,9 @@ def test_directory_migration_can_downgrade_and_upgrade_without_touching_other_ta
         # 0045 在没有结汇批次时随之回退
         "settlement_batches",
         "settlement_batch_items",
+        "settlement_bills",
+        "settlement_contracts",
+        "settlement_parties",
     }
     command.upgrade(config, "head")
     assert set(inspect(engine).get_table_names()) == before

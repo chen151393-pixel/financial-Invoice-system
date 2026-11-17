@@ -43,6 +43,9 @@ TABLES = {
     "review_customs_approvals",
     "settlement_batches",
     "settlement_batch_items",
+    "settlement_bills",
+    "settlement_contracts",
+    "settlement_parties",
     "review_purchase_bases",
     "invoice_versions",
     "review_lines",
@@ -333,6 +336,9 @@ def test_downgrade_refuses_to_erase_version_evidence(tmp_path):
                 "review_customs_approvals",
                 "settlement_batches",
                 "settlement_batch_items",
+                "settlement_bills",
+                "settlement_contracts",
+                "settlement_parties",
             }
             assert evidence_tables <= set(inspect(connection).get_table_names())
             assert connection.execute(text("SELECT id FROM invoice_lines")).scalar_one() == 77

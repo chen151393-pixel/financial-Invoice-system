@@ -62,6 +62,12 @@ class Settings:
     settlement_hk_consignees: tuple[str, ...] = ()
     # 结汇：单笔手续费预警上限（与批次币种同单位），超过时提示复核
     settlement_fee_alert: Decimal = Decimal("50")
+    # 结汇资料（提单、生成的销售合同、印章图片）存放目录
+    settlement_document_root: Path = ROOT / "data" / "settlement-documents"
+    # 销售合同签订日期 = 最早出口日期往前推的天数
+    settlement_contract_lead_days: int = 28
+    # 销售合同 PDF 嵌入的中文字体（TTF 路径）；为空时使用 PDF 内置 STSong-Light
+    settlement_pdf_font: Path | None = None
     wecom_corp_id: str = field(default="", repr=False)
     wecom_secret: str = field(default="", repr=False)
     wecom_connection_file: Path | None = field(default=None, repr=False)
@@ -123,6 +129,9 @@ def load_settings(source=None):
     fee_alert = get("SETTLEMENT_FEE_ALERT", "50").strip()
     if not re.fullmatch(r"[0-9]+(?:\.[0-9]{1,2})?", fee_alert):
         raise ValueError("SETTLEMENT_FEE_ALERT 须为非负金额，最多两位小数")
+    lead_days = get("SETTLEMENT_CONTRACT_LEAD_DAYS", "28").strip()
+    if not re.fullmatch(r"[0-9]{1,3}", lead_days):
+        raise ValueError("SETTLEMENT_CONTRACT_LEAD_DAYS 须为 0–999 的整数")
 
     sync_date_format = get("NETSUITE_SYNC_DATE_FORMAT", "YYYY-MM-DD")
     if sync_date_format not in {"YYYY-MM-DD", "M/D/YYYY", "D/M/YYYY"}:
@@ -293,6 +302,9 @@ def load_settings(source=None):
             name.strip() for name in get("SETTLEMENT_HK_CONSIGNEES").split(";") if name.strip()
         ),
         settlement_fee_alert=Decimal(fee_alert),
+        settlement_document_root=ROOT / get("SETTLEMENT_DOCUMENT_ROOT", "data/settlement-documents"),
+        settlement_contract_lead_days=int(lead_days),
+        settlement_pdf_font=(ROOT / get("SETTLEMENT_PDF_FONT")) if get("SETTLEMENT_PDF_FONT") else None,
         wecom_corp_id=get("WECOM_CORP_ID"),
         wecom_send_enabled=wecom_send == "true",
         wecom_group_daily_limit=int(wecom_limit),

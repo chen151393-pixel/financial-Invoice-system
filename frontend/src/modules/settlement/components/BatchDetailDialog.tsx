@@ -3,6 +3,7 @@ import { Alert, Badge, Button, DataTable, Dialog, ErrorState, Skeleton } from ".
 import { money } from "../../../shared/format/money";
 import { cancelBatch, getBatch, markDocumentsReady, recordRemittance, settleBatch } from "../api";
 import type { BatchDetail, BatchItem } from "../types";
+import { BatchDocuments } from "./BatchDocuments";
 
 type State = { kind: "loading" } | { kind: "ready"; batch: BatchDetail } | { kind: "error"; message: string };
 
@@ -133,6 +134,17 @@ export function BatchDetailDialog({
           rowKey={(row) => row.declarationNo}
           density="compact"
         />
+        {hk && batch.status !== "cancelled" && (
+          <BatchDocuments
+            batchId={batch.id}
+            onChanged={() => {
+              // 资料变化会影响“确认资料已出”是否可用，重新读取批次
+              getBatch(batch.id)
+                .then((fresh) => setState({ kind: "ready", batch: fresh }))
+                .catch(() => undefined);
+            }}
+          />
+        )}
         {mode === "remit" && (
           <form
             className="settlement-form"
@@ -244,7 +256,11 @@ export function BatchDetailDialog({
           !batch.actions.settle.allowed &&
           batch.status !== "settled" &&
           batch.status !== "cancelled" && (
-            <p className="settlement-form__hint">{batch.actions.settle.reason}</p>
+            <p className="settlement-form__hint">
+              {hk && batch.status === "collected"
+                ? batch.actions.documentsReady.reason
+                : batch.actions.settle.reason}
+            </p>
           )}
       </div>
     </Dialog>

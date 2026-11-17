@@ -10,6 +10,8 @@ export const paths = {
   settlement: "/settlement",
   settlementHk: "/settlement/hk-transit",
   settlementDirect: "/settlement/direct",
+  // 销售合同买卖双方抬头与印章
+  settlementParties: "/settlement/parties",
   tasks: "/tasks",
   taskWorkflowDemo: "/tasks/workflow-demo",
   supplierGroups: "/suppliers",
@@ -101,12 +103,17 @@ export function viewPath(view: View): string {
 }
 
 // 侧栏子页面与路径的对应；子页面沿用所属菜单项的页面权限。
-export type SubView = "settlement-declarations" | "settlement-hk" | "settlement-direct";
+export type SubView =
+  | "settlement-declarations"
+  | "settlement-hk"
+  | "settlement-direct"
+  | "settlement-parties";
 
 const subViewPaths: Record<SubView, string> = {
   "settlement-declarations": paths.settlement,
   "settlement-hk": paths.settlementHk,
   "settlement-direct": paths.settlementDirect,
+  "settlement-parties": paths.settlementParties,
 };
 
 export function subViewPath(id: string): string | undefined {
