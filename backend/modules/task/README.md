@@ -61,7 +61,7 @@ documents_pending → notify_pending → awaiting_invoice → partially_received
 - 取消已通过的分配后按实际收票退回：仍有收票 → `partially_received`；没有收票 → 收票前节点（已登记通知 → `awaiting_invoice`；合同已全部归档 → `notify_pending`；否则 `documents_pending`）。
 - 任务行（数据库设计第 6.1 节）：数量相等且金额相差不超过 0.01 元为已收齐；超开单独标记，不能自动结束；显式差异结束绑定当前依据和账本摘要。
 - 重新审核时，被替代任务行的已收进度带到同一子采购行的新任务行，新任务按进度直接进入相应节点。
-- 详情页六个节点各按自身事实显示（合同是否归档、通知是否登记、是否收票、是否完成），不因任务完成而标记未做的步骤。
+- 详情页六个节点各按自身事实显示（合同是否归档、通知是否登记、是否收票、是否完成），不因任务完成而标记未做的步骤；当前节点按已发生的业务事实推进（2026-11-17，见下文“节点按业务事实推进”）。
 - 每次状态变化写 `task_events`。
 
 **合同**：事务外下载 → 短事务登记首次获取记录（来源与 SHA-256）→ 事务外写共享盘（2026-10-26 起新归档使用 `YYYY年MM月/CD号_真实报关单号/子采购单号_供应商简称_真实报关单号.pdf`，月份取 NS 报关单创建时间的中国日期）→ 短事务标记已归档。再次获取到不同内容时拒绝覆盖；共享盘失败记为 `failed` 并可重试。
@@ -214,7 +214,7 @@ MySQL 命名锁保证多实例单消费者，并对同一任务的同一子采�
 
 前端统一入口 `/tasks`。工作台下钻的 `stage` 与成对日期复用原查询的报关单最慢阶段、来源创建日期口径；指定阶段且未选节点时包含该范围内已完成的同单任务。原 `/api/tasks/query` 暂留一个版本供旧客户端及兼容性测试使用，新前端统一调用节点查询；旧客户端迁移后删除旧查询契约。
 
-- 六个节点与详情页共用 `task_mapper.steps`（新增稳定 `key`），资料齐全用 `document_mapper.completion_of`，通知文案用 `notification_mapper.status_label`；任务按第一个未完成节点归入分区（`policy/board_policy.py` 负责分区文案与下一步提示）。
+- 六个节点与详情页共用 `task_mapper.steps`（新增稳定 `key`），资料齐全用 `document_mapper.completion_of`，通知文案用 `notification_mapper.status_label`；任务按当前节点（最后一个已完成节点之后的第一个未完成节点）归入分区（`policy/board_policy.py` 负责分区文案与下一步提示）。
 - 响应：`nodes`（各分区计数，覆盖全部筛选结果）、`openTotal`、`items[]`（`task` 摘要、`steps`、`currentNode/currentLabel`、`nextAction`、`blockedReason`、`missing`）、`suppliers` 与分页。进行中按等待最久在前；已完成分区按最新在前并在数据库分页。
 - 来源或依据变化用 `basis_guard.changed_task_ids` 批量判断，只提示“暂不能推进”，不改变状态。批量读取新增 `document_dao.archived_orders`、`notification_dao.latest_by_tasks`、`task_dao.by_statuses`。
 - 进行中任务全部参与节点判定（逐个按事实计算），数据量大时为 O(进行中任务数)；已完成任务只按状态计数。
@@ -266,6 +266,14 @@ MySQL 命名锁保证多实例单消费者，并对同一任务的同一子采�
 - 判定当前节点所需的事实读取从 `TaskBoardService` 抽出为 `service/board_facts.py`（`board_facts`），任务台与工作台共用，节点计数一致。
 - 2026-10-28 `public.py` 新增 `unbound_notify_suppliers(connection, tasks)`：入参为 `workbench_tasks` 结果（调用方可先按账套筛选），返回“待通知供应商”节点中供应商未绑定企微开票群的家数、任务数与前 5 家名称，供工作台提醒；“未绑定”与供应商档案筛选同一口径。
 - `workbench_tasks` 每个任务新增 `node` / `node_label`（未完成任务按事实判定，已完成为 done）、`status_reason`、`waiting_days`（未完成任务自生成起的天数）；原拼接等待天数的 `reason` 移除。`public.py` 新增暴露 `NODES`、`NODE_LABELS`。
+
+## 节点按业务事实推进（2026-11-17）
+
+- 原规则以“第一个未完成节点”为当前节点，已收票但没有通知记录的任务会停在“通知供应商”，落后于实际进度。现 `task_mapper.steps` 以最后一个已完成节点之后的第一个未完成节点为当前节点；被越过但事实未发生的节点 `state = "skipped"`：通知节点说明“未通知即收票”，资料准备节点说明“子采购合同未归档，完结前需补齐”（子采购合同仍是完结必需资料，见完成节点的“尚缺”）。
+- 跳过只影响节点展示与任务台分区，不补写通知记录，也不改变任务状态机；`notification_mapper.status_label` 与通知历史仍按实际记录。
+- 资料准备节点完成时说明改为“子采购合同已归档”，原“原件已备齐”易被误读为完结资料齐全；完结仍缺其他资料时追加“完结仍缺：报关单、回签合同…”（`steps` 新增 `missing` 参数，取 `completion.missing`）。
+- 真实通知统计仍按发送记录：`workbench_tasks` 新增 `notified`（有发送记录），工作台漏斗“已通知供应商”扣除位置已越过通知、但有任务无发送记录的报关单，单列为 `notification_skipped`“未通知即收票”；下一步“已收到发票”的通过率仍相对按位置越过通知的报关单数计算。“待通知供应商”指标及节点分布按节点判定，未通知即收票的任务不再计入待通知。
+- 测试：`test_task_board.py::test_receipt_without_notification_advances_by_facts`、`test_workbench.py::test_funnel_notified_counts_send_records_only`。
 
 ## 供应商档案分字段搜索（2026-10-28）
 

@@ -52,19 +52,26 @@ export function WorkbenchMetrics({
                       ? "上一环节为 0，暂无通过率"
                       : `上一环节通过 ${step.rate}%`}
                 </span>
-                {step.stuck.map((item) => (
-                  <Link
-                    key={item.key}
-                    className="wb-flow__stuck"
-                    to={
-                      item.key === "pending_review"
-                        ? reviewListPath({ status: "pending" })
-                        : taskListPath({ node: item.key })
-                    }
-                  >
-                    {item.count} 张{item.label} →
-                  </Link>
-                ))}
+                {step.stuck.map((item) =>
+                  // 未通知即收票：节点已越过，没有对应的任务节点分区，只展示数量
+                  item.key === "notification_skipped" ? (
+                    <span key={item.key} className="wb-flow__stuck">
+                      {item.count} 张{item.label}
+                    </span>
+                  ) : (
+                    <Link
+                      key={item.key}
+                      className="wb-flow__stuck"
+                      to={
+                        item.key === "pending_review"
+                          ? reviewListPath({ status: "pending" })
+                          : taskListPath({ node: item.key })
+                      }
+                    >
+                      {item.count} 张{item.label} →
+                    </Link>
+                  ),
+                )}
               </span>
             ),
           }))}

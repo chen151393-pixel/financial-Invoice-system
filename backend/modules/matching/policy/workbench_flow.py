@@ -3,6 +3,8 @@
 报关单所处位置：待财务审核为 pending_review；审核通过后取其当前任务中最慢的开票跟进节点（与任务台同一判定），
 任务全部完成为 done；审核通过但没有任务（供应商均关闭通知）为"无需开票"，不进漏斗。
 漏斗每一步为"至少走到这一步"的报关单数，卡点为停在上一步与这一步之间的报关单。
+"已通知供应商"按发送记录计算：节点已越过通知（未通知即收票）但有任务没有发送记录的报关单不计入，
+单列为"未通知即收票"；其后一步的通过率仍相对按位置走到通知之后的报关单数计算。
 """
 
 from collections import Counter, defaultdict
@@ -16,6 +18,8 @@ from .workbench_reports import percent
 POSITIONS = ("pending_review", *NODES)
 POSITION_LABELS = {"pending_review": "待财务审核", **NODE_LABELS}
 
+SKIPPED_NOTIFY = {"key": "notification_skipped", "label": "未通知即收票"}
+
 # (步骤键, 文字, 到达这一步须越过的位置)；最后一步要求位置为 done
 FLOW = (
     ("synced", "已入库待开票报关单", None),
@@ -28,18 +32,27 @@ FLOW = (
 
 
 def declaration_positions(declarations, pending_ids, tasks, scope, admitted):
-    """返回 (各位置的报关单数 Counter, 无需开票张数)。admitted(row) 判断报关单是否已出库。"""
-    nodes = defaultdict(list)
+    """返回 (各位置的报关单数 Counter, 无需开票张数)。admitted(row) 判断报关单是否已出库。
+
+    Counter 另含 notification_skipped：位置已越过通知、但有任务没有发送记录的报关单数（不属于任何位置）。
+    """
+    nodes, unnotified = defaultdict(list), set()
     for task in tasks:
         nodes[task["customs_declaration_id"]].append(task["node"])
+        if not task.get("notified", True):
+            unnotified.add(task["customs_declaration_id"])
     counts, none = Counter(), 0
+    beyond = POSITIONS.index("notification")
     for row in declarations:
         if not admitted(row) or not scope.declaration(row):
             continue
         if row["id"] in pending_ids:
             counts["pending_review"] += 1
         elif nodes.get(row["id"]):
-            counts[min(nodes[row["id"]], key=POSITIONS.index)] += 1
+            position = min(nodes[row["id"]], key=POSITIONS.index)
+            counts[position] += 1
+            if row["id"] in unnotified and POSITIONS.index(position) > beyond:
+                counts[SKIPPED_NOTIFY["key"]] += 1
         else:
             none += 1
     return counts, none
@@ -47,7 +60,8 @@ def declaration_positions(declarations, pending_ids, tasks, scope, admitted):
 
 def funnel(positions):
     """六步漏斗：数量、相对上一步的通过率（上一步为 0 时为空）及卡在上一步的位置分项。"""
-    total = sum(positions.values())
+    skipped = positions[SKIPPED_NOTIFY["key"]]
+    total = sum(positions[position] for position in POSITIONS)
     result, previous, passed = [], None, 0
     for key, label, threshold in FLOW:
         if threshold is not None:
@@ -60,10 +74,14 @@ def funnel(positions):
             passed = end
         else:
             stuck = []
-        count = sum(positions[position] for position in POSITIONS[passed:])
+        reached = sum(positions[position] for position in POSITIONS[passed:])
+        count = reached
+        if key == "notified" and skipped:
+            count -= skipped
+            stuck.append({**SKIPPED_NOTIFY, "count": skipped})
         rate = None if not previous else percent(Decimal(count), Decimal(previous))
         result.append({"key": key, "label": label, "count": count, "rate": rate, "stuck": stuck})
-        previous = count
+        previous = reached
     return {
         "steps": result,
         "completionRate": percent(Decimal(result[-1]["count"]), Decimal(total)) if total else None,

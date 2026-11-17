@@ -1,15 +1,16 @@
 /**
- * 流程节点：已完成 ✓、当前节点高亮、未开始灰色；状态由后端判定，组件只展示。
+ * 流程节点：已完成 ✓、当前节点高亮、未开始灰色；已跳过（后续事实已发生而本节点未发生）为虚线圈“–”。
+ * 状态由后端判定，组件只展示。
  * compact 用于列表行内；传 onSelect 时每个节点可点击（如详情页按节点切换内容分区），selectedKey 为当前查看的节点。
  */
 export interface StepItem {
   key: string;
   label: string;
   description?: string;
-  state: "done" | "current" | "waiting";
+  state: "done" | "current" | "waiting" | "skipped";
 }
 
-const STATE_TEXT = { done: "已完成", current: "当前节点", waiting: "未开始" } as const;
+const STATE_TEXT = { done: "已完成", current: "当前节点", waiting: "未开始", skipped: "已跳过" } as const;
 
 export function Stepper({
   steps,
@@ -34,7 +35,7 @@ export function Stepper({
         const body = (
           <>
             <span className="ui-stepper__dot" aria-hidden="true">
-              {step.state === "done" ? "✓" : index + 1}
+              {step.state === "done" ? "✓" : step.state === "skipped" ? "–" : index + 1}
             </span>
             <span className="ui-stepper__label">
               {step.label}

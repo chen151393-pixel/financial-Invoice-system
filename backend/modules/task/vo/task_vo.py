@@ -157,7 +157,8 @@ class TaskStep(StrictModel):
     key: str
     label: str
     description: str
-    state: Literal["done", "current", "waiting"]
+    # skipped：后续事实已发生而本节点事实未发生（如未通知即收票），流程不停留在此
+    state: Literal["done", "current", "waiting", "skipped"]
 
 
 class TaskEvent(StrictModel):
