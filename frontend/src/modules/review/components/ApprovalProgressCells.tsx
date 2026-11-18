@@ -44,14 +44,23 @@ export function ApprovalProgressCells({
   if (page === "customs" && (step === "finance" || (step === "both" && !localFirst))) {
     cross = links?.finance?.(declarationNo);
   }
-  const linkLabel = step === "import" ? "导入海关回执" : page === "finance" ? "去海关审核" : "去财务核对";
+  const relatedLabel = page === "finance" ? "查看对应海关回执" : "查看对应财务核对";
+  const linkLabel = step === "import" ? "导入海关回执" : relatedLabel;
+  let related: string | undefined;
+  if (progress?.linked && !cross) {
+    if (page === "customs") {
+      related = links?.finance?.(declarationNo);
+    } else if (progress.status !== "created") {
+      related = links?.customs?.(declarationNo);
+    }
+  }
   const taskIds = progress?.taskIds ?? [];
   const taskLink = taskIds.length === 1 ? links?.task?.(taskIds[0]) : undefined;
   let action: ReactNode;
   if (localFirst) {
     action = (
       <Button variant="primary" size="sm" onClick={onReview}>
-        {page === "finance" ? "审核财务" : "审核海关回执"}
+        {page === "finance" ? "审核财务" : "审核通过"}
       </Button>
     );
   } else if (cross) {
@@ -101,6 +110,11 @@ export function ApprovalProgressCells({
       </td>
       <td className="fr-declaration-action">
         <div className="fr-next-action">
+          {related && (
+            <Link to={related} className="ui-button ui-button--ghost ui-button--sm">
+              {relatedLabel}
+            </Link>
+          )}
           {action}
           {!localFirst && localAction}
         </div>
@@ -114,11 +128,13 @@ export function ApprovalProgressDetail({
   links,
   page,
   declarationNo,
+  showRelatedLink = true,
 }: {
   progress?: ApprovalProgress | null;
   links?: ReviewLinks;
   page: "finance" | "customs";
   declarationNo: string;
+  showRelatedLink?: boolean;
 }) {
   if (!progress) return null;
   const messages = [
@@ -126,7 +142,7 @@ export function ApprovalProgressDetail({
     progress.customs.reason && `海关审核：${progress.customs.reason}`,
   ].filter(Boolean);
   const taskLink = links?.task;
-  const related = progress.linked
+  const related = showRelatedLink && progress.linked
     ? page === "finance"
       ? links?.customs?.(declarationNo)
       : links?.finance?.(declarationNo)
@@ -138,7 +154,7 @@ export function ApprovalProgressDetail({
         <p key={message}>{message}</p>
       ))}
       {related && (
-        <Link to={related} className="ui-button ui-button--secondary ui-button--sm">
+        <Link to={related} className="ui-button ui-button--ghost ui-button--sm">
           {page === "finance" ? "查看对应海关回执" : "查看对应财务核对"}
         </Link>
       )}

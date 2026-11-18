@@ -46,8 +46,8 @@ const TITLES: Record<CustomsFilter, string> = {
   different: "海关回执 · 有差异",
   ns_missing: "海关回执 · 未找到 NS 报关单",
 };
-const COLUMN_WIDTHS = [16, 12, 15, 14, 8, 8, 15, 12];
-const BATCH_WIDTHS = [3, 16, 11, 14, 13, 8, 8, 15, 12];
+const COLUMN_WIDTHS = [16, 12, 15, 14, 8, 8, 15];
+const BATCH_WIDTHS = [3, 16, 11, 14, 13, 8, 8, 15];
 
 /** 海关审核沿用财务核对的查询、列表工具栏、批量选择和行操作布局。 */
 export function CustomsMatchPage({ links }: { links?: ReviewLinks }) {
@@ -333,6 +333,7 @@ function ReceiptList({
           {(batch ? BATCH_WIDTHS : COLUMN_WIDTHS).map((width, index) => (
             <col key={index} style={{ width: `${width}%` }} />
           ))}
+          <col className="fr-next-action-column" />
         </colgroup>
         <thead>
           <tr>
