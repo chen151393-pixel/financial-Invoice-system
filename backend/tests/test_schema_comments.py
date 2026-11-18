@@ -64,6 +64,7 @@ TABLES = ALL_TABLES - {
     "settlement_contracts",
     "settlement_parties",
     "settlement_bank_receipts",
+    "settlement_direct_allocations",
 }
 COMMENT_HEAD = "0015_sync_comments"
 
@@ -74,8 +75,12 @@ MODULES = ("source", "review", "task", "invoice", "matching", "sync", "writeback
 def test_entity_comments_cover_all_columns():
     for module in MODULES:
         importlib.import_module(f"backend.modules.{module}.entity")
-    # sync_lemon_jobs 自 0025 起并入 sync_lemon_runs，表保留在库中待管理员处理，不再有实体。
-    assert set(schema_metadata.tables) == ALL_TABLES - {"sync_cursors", "sync_lemon_jobs"}
+    # 这些表仅由迁移保留，应用层没有实体。
+    assert set(schema_metadata.tables) == ALL_TABLES - {
+        "sync_cursors",
+        "sync_lemon_jobs",
+        "settlement_direct_allocations",
+    }
     for table in schema_metadata.tables.values():
         assert table.comment and re.search(r"[\u4e00-\u9fff]", table.comment), table.name
         for column in table.c:

@@ -2119,15 +2119,4 @@ NS 来源按批后台保存记录与结果，不保存令牌。
 
 ### settlement_direct_allocations｜直接收汇历史分配
 
-迁移 `0049_settlement_direct_allocations` 创建历史分配表。直接收汇总账按原始流水计算余额。
-
-| 字段 | 类型 | 可空 | 说明 |
-| --- | --- | --- | --- |
-| id | BIGINT | 否 | 本地自增主键 |
-| receipt_id | BIGINT | 否 | 银行收汇记录 ID |
-| bank_reference | VARCHAR(200) | 否 | 确认时的银行流水号 |
-| declaration_no | VARCHAR(150) | 否 | 真实报关单号 |
-| amount | DECIMAL(24,6) | 否 | 确认分配金额，大于零 |
-| request_id | VARCHAR(36) | 否 | 确认请求 ID，与报关单号组成唯一键 |
-| confirmed_at | DATETIME(6) | 否 | 确认时间，UTC |
-| confirmed_by | VARCHAR(190) | 否 | 确认人身份 |
+已退役的逐笔匹配表，由迁移 `0049_settlement_direct_allocations` 保留在库中。应用不读写此表。

@@ -5,7 +5,6 @@ from .batch import settlement_batches
 from .batch_item import settlement_batch_items
 from .bill import settlement_bills
 from .contract import settlement_contracts
-from .direct_allocation import settlement_direct_allocations
 from .party import settlement_parties
 
 __all__ = [
@@ -14,6 +13,5 @@ __all__ = [
     "settlement_batch_items",
     "settlement_bills",
     "settlement_contracts",
-    "settlement_direct_allocations",
     "settlement_parties",
 ]
