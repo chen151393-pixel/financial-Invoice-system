@@ -146,6 +146,7 @@
 - 失败记录中文原因并以 2—256 秒退避自动重试；进程重启继续未完成任务。启动时发现未建立快照的账套或算法／`REVIEW_UNIT_PRICE_TOLERANCE_CNY` 变化即排队。缺少汇率、金额或单位等属于已完成计算的 `unavailable`，保留具体原因，不当作零或系统失败。
 - `ReviewService.browse` 委托 `review_query_service.py`；`dao/declaration_snapshot_dao.py` 只查 review 表，使用 SQL 聚合计数、供应商子查询、关键字过滤、`ORDER BY declaration_date DESC, customs_declaration_id DESC LIMIT ... OFFSET ...`。每次列表共四条查询，不访问 source 原始 JSON、不组装全量来源、不重算幅度；每月审核数量仍按请求当时的北京时间自然月计算，跨月无需重建。
 - 接口仍为 `POST /api/review/declarations/query`。新增单据字段 `calculationStatus`（ready / pending / failed）、`calculatedAt`（最近完成计算的 UTC 时间）。更新中／失败时 `notices` 明确提示，暂展示上次完成的单据快照与状态统计；旧幅度与自动审核结论隐藏，审核按钮关闭，该账套暂不进入异常／自动审核计数和筛选。首次补算完成前单据尚不显示；完成后刷新列表。
+- 查询返回的 `review.reviewedByName` 通过 `identity.public.actor_names` 按页批量解析。飞书账号取本地人员目录姓名（含已停用人员），系统身份显示“系统”，无法解析时返回原标识，没有审核人时返回 `null`。历史快照读取时即可补充姓名，`review.reviewedBy` 仍保存原操作者标识。
 - 审核接口继续在来源锁内实时重读摘要和冻结依据。缓存只为查询提速，不代替审核校验，也不自动批准任何单据。审核接口返回当前单据时可复用原计算规则，列表请求始终只查库。
 - 兼容单位字典或来源数据通过外部维护脚本直接修改、未发布事件的情况：执行下列补算命令刷新；新来源写入口必须发布 `SourceChanged`。算法或快照结构变化时提升 `policy/calculation_policy.py` 中的版本。
 
@@ -223,7 +224,8 @@ npm.cmd run dev:api
 
 ### 导入与换版
 
-- 一个文件内任一行有误（缺必需列、长号码被存为数字、项号重复、出口日期或境外收货人前后不一致、数值格式或精度超限）时整份拒绝并返回行号。
+- 同一文件按真实报关单号分组，组内按规范化项号去重。重复项的明细内容相同则保留首次出现的行，不同项号各自保留。`POST /api/review/customs-receipts/import` 返回的 `rows` 为去重后的明细行数。
+- 一个文件内任一行有误（缺必需列、长号码被存为数字、同号同项的明细内容冲突、出口日期或境外收货人前后不一致、数值格式或精度超限）时整份拒绝。
 - 同一报关单号再次导入：内容相同不换版，只刷新比对；内容变化时版本号加 1，新增一版明细，旧版本保留。
 - 重新匹配只按当前 NS 报关单重算比对结果，不修改回执内容；不传 ID 时处理全部回执。
 - 服务身份（`service:`）只读，导入与重新匹配返回 403。

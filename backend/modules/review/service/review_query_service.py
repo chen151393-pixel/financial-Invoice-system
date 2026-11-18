@@ -5,6 +5,7 @@ from datetime import UTC, datetime, timedelta, timezone
 from sqlalchemy.exc import SQLAlchemyError
 
 from backend.core.errors import ApiError
+from backend.modules.identity.public import actor_names
 from backend.modules.source.public import declaration_ids_created
 
 from ..dao import declaration_snapshot_dao
@@ -42,6 +43,7 @@ class ReviewQueryService:
                         connection, query, self.key, month_start_utc(datetime.now(UTC)), declaration_ids
                     )
                     groups = [Declaration.model_validate_json(row["payload"]) for row in page]
+                    reviewer_names = actor_names(connection, (g.review.reviewedBy for g in groups))
                     progress = read_progress(
                         connection,
                         {g.id: (g.declaration, int(g.id)) for g in groups},
@@ -51,6 +53,8 @@ class ReviewQueryService:
         except SQLAlchemyError:
             raise ApiError(503, "财务计算结果读取失败，请检查数据库及迁移状态") from None
         for group, row in zip(groups, page, strict=True):
+            actor = group.review.reviewedBy
+            group.review.reviewedByName = reviewer_names.get(actor) if actor else None
             group.approvalProgress = progress[group.id]
             group.calculatedAt = row["calculated_at"].replace(tzinfo=UTC).isoformat()
             if not row["fresh"]:

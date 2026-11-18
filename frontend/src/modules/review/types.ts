@@ -96,6 +96,7 @@ export interface ComparisonGroup {
     revision?: number | null;
     reviewedAt: string | null;
     reviewedBy: string | null;
+    reviewedByName?: string | null;
     note: string;
   };
 }

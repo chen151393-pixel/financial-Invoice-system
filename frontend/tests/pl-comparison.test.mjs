@@ -1068,8 +1068,9 @@ test("海关人工审核说明独立成行，输入框关联标签与说明", as
   );
   assert.match(html, /cm-approve__note/);
   assert.match(html, /<label for="[^"]+">人工审核说明<\/label>/);
-  assert.match(html, /差异单必填，其余选填/);
+  assert.match(html, /选填，本次说明应用于全部选中回执/);
   assert.match(html, /<textarea[^>]*aria-describedby="[^"]+"[^>]*rows="3"/);
+  assert.doesNotMatch(html, /<textarea[^>]*\brequired\b/);
   assert.match(html, /maxlength="300"/i);
   assert.match(html, /cm-approve__footer/);
   assert.match(html, /data-tone="success"/);

@@ -79,6 +79,7 @@ class ReviewState(StrictModel):
     revision: int | None = None
     reviewedAt: str | None = None
     reviewedBy: str | None = None
+    reviewedByName: str | None = None
     note: str = ""
 
 

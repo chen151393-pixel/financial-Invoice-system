@@ -1,7 +1,7 @@
 """海关回执列识别与校验：把原始行整理为按出口报关单号分组的回执。
 
 表头按别名识别（单一窗口不同导出版本列名略有差异），未识别的列忽略并告知页面。
-同一报关单内项号不能重复；出口日期、境外收货人在同一报关单内必须一致。
+同一报关单内，同项号明细相同则去重，有冲突则拒绝；出口日期、境外收货人须一致。
 """
 
 import base64
@@ -202,32 +202,34 @@ def parse(filename, content):
             number = values.pop("declaration_no")
             declaration = declarations.setdefault(
                 number,
-                {"declaration_no": number, "export_date": None, "consignee": None, "lines": [], "items": {}},
+                {"declaration_no": number, "export_date": None, "consignee": None, "items": {}},
             )
             _same(declaration, "export_date", values.pop("export_date", None), "出口日期")
             _same(declaration, "consignee", values.pop("consignee", None), "境外收货人")
-            item = values["item_no"]
-            if item in declaration["items"]:
-                raise ApiError(
-                    422,
-                    f"出口报关单号 {number} 项号 {item} 重复（第{declaration['items'][item]}行与第{offset}行）",
-                )
-            declaration["items"][item] = offset
             line = {
                 key: values.get(key)
                 for key in COLUMNS
                 if key not in {"declaration_no", "export_date", "consignee"}
             }
-            declaration["lines"].append({**line, "source_row": offset})
+            item = line["item_no"]
+            previous = declaration["items"].get(item)
+            if previous is None:
+                declaration["items"][item] = {**line, "source_row": offset}
+            elif any(value != previous[key] for key, value in line.items()):
+                raise ApiError(
+                    422,
+                    f"出口报关单号 {number} 项号 {item} 重复且明细内容不一致"
+                    f"（第{previous['source_row']}行与第{offset}行）",
+                )
         if not declarations:
             raise ApiError(422, f"{sheet}没有海关回执明细")
         result = []
         for declaration in declarations.values():
-            declaration.pop("items")
+            declaration["lines"] = list(declaration.pop("items").values())
             result.append({**declaration, "content_sha256": content_digest(declaration)})
         return {
             "declarations": result,
-            "rows": count,
+            "rows": sum(len(declaration["lines"]) for declaration in result),
             "columns": [COLUMNS[key][0] for key in COLUMNS if key in mapping.values()],
             "ignored": ignored,
         }

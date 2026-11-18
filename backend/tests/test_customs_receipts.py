@@ -253,7 +253,7 @@ def test_parse_groups_items_by_declaration_and_normalizes_values():
         ([row(310120260514395336, "01", "相纸", "千克", 1)], "须为文本格式"),
         (
             [row("3101202605", "01", "相纸", "千克", 1), row("3101202605", "1", "相纸", "千克", 2)],
-            "项号 01 重复",
+            "项号 01 重复且明细内容不一致（第2行与第3行）",
         ),
         (
             [
@@ -305,12 +305,14 @@ def test_import_matches_ns_declaration_and_saves_consignee(schema_engine, ns):
         service,
         [
             row("REAL870", "01", "墨水", "个", 6, "ACME LTD"),
+            row("REAL870", "1", "墨水", "个", "6.00", "ACME LTD"),
             row("REAL870", "02", "墨水", "个", 4, "ACME LTD"),
             row("REAL870", "03", "清洗液", "个", 10, "ACME LTD", total=15),
             row("REAL999", "01", "相纸", "千克", 1, "OTHER CO"),
         ],
     )
     assert (result.created, result.replaced, result.unchanged) == (2, 0, 0)
+    assert result.rows == 4
     first, second = result.declarations
     assert (first.status, first.consignee.state) == ("split_matched", "saved")
     assert (second.status, second.consignee.state) == ("ns_missing", "pending")
@@ -343,8 +345,9 @@ def test_reimport_replaces_changed_content_and_keeps_unchanged(schema_engine, ns
         row("REAL870", "02", "清洗液", "个", 10, total=15),
     ]
     _import(service, rows)
-    again = _import(service, rows)
+    again = _import(service, [*rows, rows[0]])
     assert again.unchanged == 1 and again.declarations[0].status == "matched"
+    assert again.rows == again.declarations[0].itemCount == 2
     changed = _import(
         service, [row("REAL870", "01", "墨水", "个", 9), row("REAL870", "02", "清洗液", "套", 10)]
     )

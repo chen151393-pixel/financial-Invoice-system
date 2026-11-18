@@ -8,6 +8,7 @@ from decimal import Decimal
 import pytest
 from backend.app import create_events
 from backend.core.events import EventBus
+from backend.modules.identity.dao import user_dao
 from backend.modules.review.dao import calculation_job_dao
 from backend.modules.review.dto.review_dto import ApproveRequest, DeclarationListQuery
 from backend.modules.review.service.calculation_service import CalculationService, now_utc
@@ -99,6 +100,38 @@ def test_list_paginates_before_batching_live_approval_progress(review, ns, engin
     assert review.browse(query(supplierId=supplier, keyword="SUB-201")).total == 1
     assert review.browse(query(keyword="清洗液")).total == 2
     assert review.browse(query(account="missing")).total == 0
+
+
+def test_list_resolves_historical_reviewer_from_the_local_directory(review, ns, engine):
+    seed(ns, engine)
+    calculations = CalculationService(review)
+    calculations.rebuild()
+    item = review.browse(query()).groups[0]
+    actor = "user:fs:finance-reviewer"
+    review.approve(int(item.id), ApproveRequest(contentSha256=item.contentSha256), actor)
+    calculations.rebuild()
+
+    historical = review.browse(query(status="approved")).groups[0].review
+    assert historical.reviewedBy == historical.reviewedByName == actor
+
+    with engine.begin() as connection:
+        user_dao.save(
+            connection,
+            {
+                "user_id": "finance-reviewer",
+                "open_id": None,
+                "union_id": None,
+                "name": "张三",
+                "avatar_url": None,
+                "active": False,
+                "inactive_reason": "已离职",
+            },
+            now_utc(),
+        )
+
+    resolved = review.browse(query(status="approved")).groups[0].review
+    assert resolved.reviewedBy == actor
+    assert resolved.reviewedByName == "张三"
 
 
 def test_dirty_results_cannot_advertise_auto_review(review, ns, engine):

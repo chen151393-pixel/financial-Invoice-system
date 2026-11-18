@@ -128,8 +128,8 @@ export function ReviewDialog({
         {approved ? (
           <dl className="fr-record">
             <div>
-              <dt>审核身份</dt>
-              <dd>{group.review.reviewedBy}</dd>
+              <dt>审核人</dt>
+              <dd>{group.review.reviewedByName || group.review.reviewedBy || "未记录"}</dd>
             </div>
             <div>
               <dt>审核时间</dt>
