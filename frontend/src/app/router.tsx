@@ -63,6 +63,10 @@ export const router = createBrowserRouter([
           },
           { path: paths.settlement, element: page("settlement", "结汇对账", <SettlementWorkspacePage />) },
           {
+            path: paths.settlementBank,
+            element: page("settlement", "银行收汇明细", <SettlementWorkspacePage />),
+          },
+          {
             path: paths.settlementHk,
             element: page("settlement", "香港中转批次", <SettlementWorkspacePage />),
           },
@@ -72,7 +76,7 @@ export const router = createBrowserRouter([
           },
           {
             path: paths.settlementDirect,
-            element: page("settlement", "直接收汇批次", <SettlementWorkspacePage />),
+            element: page("settlement", "直接收汇明细", <SettlementWorkspacePage />),
           },
           { path: legacyPaths.finance, element: <Navigate to={paths.review} replace /> },
           { path: paths.tasks, element: page("invoice-followup", "开票跟进", <TaskWorkspacePage />) },

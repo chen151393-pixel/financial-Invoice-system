@@ -2097,3 +2097,20 @@ NS 来源按批后台保存记录与结果，不保存令牌。
 | stamp_file_id / stamp_sha256 / stamp_extension | VARCHAR(36) / CHAR(64) / VARCHAR(10) | 是      | 印章图片文件标识、校验值与扩展名（png / jpg） |
 | updated_by                                     | VARCHAR(190)                         | 否      | 最近维护人                                    |
 | created_at / updated_at                        | DATETIME(6)                          | 否      | 本地创建与更新时间，UTC                       |
+
+### settlement_bank_receipts｜银行收汇明细
+
+迁移 `0047_settlement_bank_receipts` 新建，归属 settlement。境内美金账户的收汇记录，由银行流水表格导入（导入用例尚未实现）。直接收汇明细（总账）按 `customer_key` 把收汇归到境外收货人；`payer_key` 与 `customer_key` 不同即三方代付，只作标记。
+
+| 字段                                  | 类型                        | 可空    | 说明                                                             |
+| ------------------------------------- | --------------------------- | ------- | ---------------------------------------------------------------- |
+| id                                    | BIGINT                      | 否      | 本地自增主键                                                     |
+| receipt_date                          | DATE                        | 否      | 收汇日期（银行入账日期）                                         |
+| receiving_company / receiving_account | VARCHAR(200)                | 否 / 是 | 收汇抬头（我方收款主体，如上海毅鑫）与收款账户                   |
+| payer_name / payer_key                | VARCHAR(500)                | 否      | 付款人户名原文及其规范化名称                                     |
+| customer_name / customer_key          | VARCHAR(500)                | 否      | 实际客户（境外收货人，取导入表格）及其规范化名称，用于归属收货人 |
+| currency / amount                     | VARCHAR(20) / DECIMAL(24,6) | 否      | 币种与收汇金额                                                   |
+| reference                             | VARCHAR(200)                | 是      | 银行流水号                                                       |
+| source_file / source_row              | VARCHAR(255) / INTEGER      | 是      | 导入来源文件名与行号                                             |
+| imported_by / imported_at             | VARCHAR(190) / DATETIME(6)  | 否      | 导入人（认证身份）与导入时间，UTC                                |
+| created_at / updated_at               | DATETIME(6)                 | 否      | 本地创建与更新时间，UTC                                          |

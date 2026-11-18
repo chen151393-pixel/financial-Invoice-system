@@ -6,9 +6,11 @@ export const paths = {
   review: "/review",
   // 海关报关单比对（财务核对下的独立页面）
   reviewCustoms: "/review/customs",
-  // 结汇对账（回款与报关金额核对）：待结汇报关单、香港中转批次、直接收汇批次
+  // 结汇对账（回款与报关金额核对）：报关应收汇、银行收汇明细、香港中转批次、直接收汇明细
   settlement: "/settlement",
+  settlementBank: "/settlement/bank-receipts",
   settlementHk: "/settlement/hk-transit",
+  // 非香港中转的总账（2026-11-18 起取代“直接收汇批次”列表）
   settlementDirect: "/settlement/direct",
   // 销售合同买卖双方抬头与印章
   settlementParties: "/settlement/parties",
@@ -105,12 +107,14 @@ export function viewPath(view: View): string {
 // 侧栏子页面与路径的对应；子页面沿用所属菜单项的页面权限。
 export type SubView =
   | "settlement-declarations"
+  | "settlement-bank"
   | "settlement-hk"
   | "settlement-direct"
   | "settlement-parties";
 
 const subViewPaths: Record<SubView, string> = {
   "settlement-declarations": paths.settlement,
+  "settlement-bank": paths.settlementBank,
   "settlement-hk": paths.settlementHk,
   "settlement-direct": paths.settlementDirect,
   "settlement-parties": paths.settlementParties,

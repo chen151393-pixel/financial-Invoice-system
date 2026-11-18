@@ -168,7 +168,8 @@ def page(connection, filters, statuses, offset, limit):
 
 
 def settlement_heads(connection, *, numbers=None, consignee="", limit=500):
-    """结汇可选的回执头：已唯一匹配 NS 报关单的回执，按出口日期倒序；numbers 为空时不限单号。"""
+    """结汇可选的回执头：已唯一匹配 NS 报关单的回执，按出口日期倒序；numbers 为空时不限单号，
+    limit 为 None 时不限张数（总账需要完整历史）。"""
     query = select(receipts).where(receipts.c.match_status.in_(("matched", "split_matched", "different")))
     if numbers is not None:
         if not numbers:
@@ -176,5 +177,7 @@ def settlement_heads(connection, *, numbers=None, consignee="", limit=500):
         query = query.where(receipts.c.declaration_no.in_(numbers))
     if consignee:
         query = query.where(receipts.c.consignee.contains(consignee, autoescape=True))
-    query = query.order_by(receipts.c.export_date.desc(), receipts.c.declaration_no).limit(limit)
+    query = query.order_by(receipts.c.export_date.desc(), receipts.c.declaration_no)
+    if limit is not None:
+        query = query.limit(limit)
     return [dict(row) for row in connection.execute(query).mappings()]

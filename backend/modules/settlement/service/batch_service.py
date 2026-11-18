@@ -2,6 +2,10 @@
 
 写入只涉及 settlement 自己的表，使用模块写锁；海关回执金额经 review 门面在同一连接内只读获取，
 建批次时冻结到明细，之后回执换版不改变已建批次的金额。
+
+2026-11-18 起只有香港中转建批次；直接收汇改记直接收汇明细（总账），不再新建直接收汇批次。
+settle()（直接收汇确认结汇）仅为此前已建的直接收汇批次保留，调用方是批次详情的“确认结汇”；
+确认库中没有未完结的直接收汇批次后，连同 batch_state_policy 中的 DIRECT 状态转换一并删除。
 """
 
 import math
@@ -49,6 +53,9 @@ def validate_selection(rows, numbers):
     if blocked:
         raise ApiError(409, "以下报关单不能结汇：" + "；".join(blocked))
     chosen = [found[number] for number in numbers]
+    ledger = [row["declaration_no"] for row in chosen if row["handling"] != "batch"]
+    if ledger:
+        raise ApiError(422, "直接收汇的报关单不建批次，请在“直接收汇明细”核对：" + "、".join(ledger))
     route = _single((row["route"] for row in chosen), "回款路径")
     _single((normalize_name(row["consignee"]) for row in chosen), "境外收货人")
     currency = _single((row["currency"] for row in chosen), "币种")
@@ -111,7 +118,7 @@ class BatchService:
     # ---- 写入 ----
 
     def create(self, body, owner):
-        """一笔回款建一个批次：报关单须同一路径、同一境外收货人、同一币种，且未在其他有效批次中。"""
+        """一笔回款建一个批次：报关单须为香港中转、同一境外收货人、同一币种，且未在其他有效批次中。"""
         _require_operator(owner)
         self._require_engine()
         request_id = str(body.requestId)

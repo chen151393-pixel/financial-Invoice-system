@@ -96,7 +96,7 @@
   review   → source
   task     → source、review（仅核对依据）
   matching → source、review、invoice、task
-  settlement → review（海关回执金额）、source（CD 编号）
+  settlement → review（海关回执金额）、source（CD 编号、申报主体名称）
 
 事件：
   review   发布「双审核放行 InvoiceReady」       → task 订阅：生成任务和任务行

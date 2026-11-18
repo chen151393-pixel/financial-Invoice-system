@@ -62,9 +62,14 @@ from .modules.review.service.customs_receipt_service import CustomsReceiptServic
 from .modules.review.service.purchase_basis_service import on_source_changed
 from .modules.review.service.review_service import ReviewService
 from .modules.review.service.task_release_service import on_finance_approved
+from .modules.settlement.controller import bank_receipt_controller as settlement_bank_receipts
 from .modules.settlement.controller import document_controller as settlement_documents
+from .modules.settlement.controller import ledger_controller as settlement_ledger
 from .modules.settlement.controller import party_controller as settlement_parties
 from .modules.settlement.controller.batch_controller import create_router as settlement_router
+from .modules.settlement.service.bank_receipt_service import (
+    BankReceiptService as SettlementBankReceiptService,
+)
 from .modules.settlement.service.batch_service import BatchService as SettlementBatchService
 from .modules.settlement.service.bill_ocr import BillOcr as SettlementBillOcr
 from .modules.settlement.service.bill_service import BillService as SettlementBillService
@@ -74,6 +79,7 @@ from .modules.settlement.service.declaration_files import DeclarationFiles as Se
 from .modules.settlement.service.document_reader import DocumentReader as SettlementDocumentReader
 from .modules.settlement.service.document_service import DocumentService as SettlementDocumentService
 from .modules.settlement.service.document_store import DocumentStore as SettlementDocumentStore
+from .modules.settlement.service.ledger_service import LedgerService as SettlementLedgerService
 from .modules.settlement.service.package_service import PackageService as SettlementPackageService
 from .modules.settlement.service.party_service import PartyService as SettlementPartyService
 from .modules.source.controller.pl_comparison_controller import create_router as source_pl_router
@@ -360,6 +366,12 @@ def _register_business(app, settings, ns, contract_ns, wecom, engine, lemon_invo
         )
     )
     app.include_router(settlement_parties.create_router(SettlementPartyService(engine, settlement_store)))
+    app.include_router(
+        settlement_bank_receipts.create_router(SettlementBankReceiptService(engine, settlement_candidates))
+    )
+    app.include_router(
+        settlement_ledger.create_router(SettlementLedgerService(engine, settlement_candidates))
+    )
     directory = SourceDirectory(engine)
     app.include_router(
         external_group_router(

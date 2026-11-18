@@ -243,6 +243,7 @@ def test_directory_migration_can_downgrade_and_upgrade_without_touching_other_ta
         "settlement_bills",
         "settlement_contracts",
         "settlement_parties",
+        "settlement_bank_receipts",
     }
     command.upgrade(config, "head")
     assert set(inspect(engine).get_table_names()) == before

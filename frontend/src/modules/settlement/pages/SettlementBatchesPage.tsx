@@ -22,7 +22,8 @@ import "../components/settlement.css";
 
 type State = { kind: "loading" } | { kind: "ready"; result: BatchList } | { kind: "error"; message: string };
 
-// 直接收汇没有“资料已出”环节，状态筛选按路径给出
+// 直接收汇没有“资料已出”环节，状态筛选按路径给出。
+// 2026-11-18 起直接收汇不再建批次，本页只挂载香港中转；direct 的配置随后端旧批次的兼容代码一并保留。
 const STATUSES: Record<Route, readonly { value: StatusFilter; label: string }[]> = {
   hk_transit: [
     { value: "open", label: "未完结" },
@@ -43,12 +44,12 @@ const TITLES: Record<Route, { title: string; description: string; empty: string 
   hk_transit: {
     title: "香港中转批次",
     description: "香港已收 → 资料已出 → 汇回对平后已结汇。",
-    empty: "在“待结汇报关单”勾选香港中转的报关单并登记回款即可建批次。",
+    empty: "在“报关应收汇”勾选香港中转的报关单并登记回款即可建批次。",
   },
   direct: {
     title: "直接收汇批次",
     description: "到账加手续费等于报关合计即可确认已结汇。",
-    empty: "在“待结汇报关单”勾选直接收汇的报关单并登记回款即可建批次。",
+    empty: "直接收汇不再建批次，请在“直接收汇明细”核对。",
   },
 };
 const INITIAL: Omit<BatchQuery, "route"> = {

@@ -3,6 +3,8 @@ export type Route = "hk_transit" | "direct";
 export type BatchStatus = "collected" | "documents_ready" | "settled" | "cancelled";
 export type RouteFilter = "all" | Route;
 export type StatusFilter = "all" | "open" | BatchStatus;
+// 处理方式：香港中转登记回款建批次；直接收汇进直接收汇明细（总账）
+export type Handling = "batch" | "ledger";
 
 export interface Action {
   allowed: boolean;
@@ -13,6 +15,7 @@ export interface Candidate {
   declarationNo: string;
   recordNo: string;
   consignee: string;
+  exportCompany: string;
   exportDate: string;
   salesOrders: string[];
   currency: string;
@@ -20,6 +23,9 @@ export interface Candidate {
   route: Route;
   routeLabel: string;
   routeBasis: string;
+  handling: Handling;
+  handlingLabel: string;
+  // 报关单本身的问题或占用；handling 为 batch 且此项为空才可选入批次
   blockedReason: string;
   batchNo: string;
 }
@@ -32,9 +38,34 @@ export interface RouteTotal {
   amount: string;
 }
 
+/** 一家境外收货人（按币种分开）的应收汇汇总。 */
+export interface ConsigneeTotal {
+  consignee: string;
+  currency: string;
+  route: Route;
+  routeLabel: string;
+  routeBasis: string;
+  handling: Handling;
+  handlingLabel: string;
+  exportCompanies: string[];
+  count: number;
+  firstExportDate: string;
+  lastExportDate: string;
+  amount: string;
+  batchedCount: number;
+  pendingCount: number;
+  issueCount: number;
+}
+
 export interface CandidateList {
+  // 最多列出 500 张；total 为符合筛选的全部张数
   items: Candidate[];
+  total: number;
+  truncated: boolean;
+  // 汇总按符合筛选的全部报关单计算
+  totals: RouteTotal[];
   unsettled: RouteTotal[];
+  consignees: ConsigneeTotal[];
   suggestion: string[] | null;
   suggestionNote: string;
 }
@@ -43,6 +74,8 @@ export interface CandidateQuery {
   consignee: string;
   declarationNo: string;
   route: RouteFilter;
+  exportFrom: string | null;
+  exportTo: string | null;
   targetAmount: string;
 }
 
@@ -268,4 +301,118 @@ export interface PartyBody {
   addressCn: string;
   addressEn: string;
   phone: string;
+}
+
+// ---- 银行收汇明细 ----
+
+export type ThirdPartyFilter = "all" | "yes" | "no";
+
+export interface BankReceipt {
+  id: number;
+  receiptDate: string;
+  receivingCompany: string;
+  receivingAccount: string;
+  payerName: string;
+  // 实际客户，即境外收货人（取导入表格）
+  customerName: string;
+  thirdParty: boolean;
+  currency: string;
+  amount: string;
+  reference: string;
+  route: Route;
+  routeLabel: string;
+}
+
+export interface BankReceiptTotal {
+  receivingCompany: string;
+  currency: string;
+  count: number;
+  amount: string;
+  thirdPartyCount: number;
+  thirdPartyAmount: string;
+}
+
+export interface BankReceiptList {
+  items: BankReceipt[];
+  total: number;
+  page: number;
+  pageSize: number;
+  totals: BankReceiptTotal[];
+}
+
+export interface BankReceiptQuery {
+  customer: string;
+  receivingCompany: string;
+  receiptFrom: string | null;
+  receiptTo: string | null;
+  thirdParty: ThirdPartyFilter;
+  page: number;
+  pageSize: number;
+}
+
+// ---- 直接收汇明细（总账）----
+
+export type LedgerStatus = "outstanding" | "settled" | "overpaid";
+export type LedgerStatusFilter = "all" | LedgerStatus;
+
+export interface LedgerEntry {
+  kind: "export" | "receipt";
+  kindLabel: string;
+  exportCompany: string;
+  exportDate: string;
+  exportAmount: string;
+  receiptCompany: string;
+  receiptDate: string;
+  receiptAmount: string;
+  // 本笔之后的期末余额
+  balance: string;
+  sourceNo: string;
+  thirdParty: boolean;
+  payerName: string;
+}
+
+export interface LedgerGroup {
+  consignee: string;
+  currency: string;
+  exportTotal: string;
+  receiptTotal: string;
+  balance: string;
+  status: LedgerStatus;
+  statusLabel: string;
+  entries: LedgerEntry[];
+}
+
+export interface LedgerTotal {
+  currency: string;
+  exportTotal: string;
+  receiptTotal: string;
+  balance: string;
+  outstanding: string;
+  overpaid: string;
+  consigneeCount: number;
+  exportCount: number;
+  receiptCount: number;
+}
+
+export interface LedgerSkipped {
+  declarationNo: string;
+  consignee: string;
+  reason: string;
+}
+
+export interface LedgerList {
+  groups: LedgerGroup[];
+  total: number;
+  page: number;
+  pageSize: number;
+  totals: LedgerTotal[];
+  skipped: LedgerSkipped[];
+}
+
+export interface LedgerQuery {
+  consignee: string;
+  company: string;
+  status: LedgerStatusFilter;
+  page: number;
+  pageSize: number;
 }

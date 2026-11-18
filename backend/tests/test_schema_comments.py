@@ -63,6 +63,7 @@ TABLES = ALL_TABLES - {
     "settlement_bills",
     "settlement_contracts",
     "settlement_parties",
+    "settlement_bank_receipts",
 }
 COMMENT_HEAD = "0015_sync_comments"
 

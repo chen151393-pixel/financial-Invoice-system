@@ -1,11 +1,14 @@
-"""结汇批次用例：海关回执金额 → 候选与路径判定 → 建批次 → 香港中转两段对账 / 直接收汇对平 → 作废释放。"""
+"""结汇批次用例：海关回执金额 → 候选与路径判定 → 香港中转建批次与两段对账 → 作废释放；
+直接收汇不建批次，此前已建的直接收汇批次仍可结汇。"""
 
 import uuid
+from datetime import date, datetime
 from decimal import Decimal
 
 import pytest
 from backend.core.errors import ApiError
 from backend.modules.review.service.customs_receipt_service import CustomsReceiptService
+from backend.modules.settlement.dao import batch_dao, batch_item_dao
 from backend.modules.settlement.dto.batch_dto import (
     BatchQuery,
     CancelRequest,
@@ -65,6 +68,43 @@ def create(batches, numbers, amount, fee="0", **extra):
     return batches.create(CreateBatchRequest.model_validate(body), "finance-user")
 
 
+def legacy_direct_batch(engine, number="REAL872", received="1000", fee="0"):
+    """模拟 2026-11-18 之前已建的直接收汇批次：现在不能再通过接口新建，只保留结汇与作废。"""
+    now = datetime(2026, 11, 10)
+    with engine.begin() as connection:
+        batch_id = batch_dao.insert_batch(
+            connection,
+            {
+                "request_id": str(uuid.uuid4()),
+                "route": "direct",
+                "status": "collected",
+                "consignee": "ACME LTD",
+                "currency": "USD",
+                "declared_total": Decimal("1000"),
+                "received_on": date(2026, 11, 10),
+                "received_amount": Decimal(received),
+                "received_fee": Decimal(fee),
+                "created_by": "finance-user",
+            },
+            now,
+        )
+        batch_dao.update_batch(connection, batch_id, {"batch_no": f"SB20261110-{batch_id:05d}"}, now)
+        batch_item_dao.insert_items(
+            connection,
+            batch_id,
+            [
+                {
+                    "declaration_no": number,
+                    "consignee": "ACME LTD",
+                    "currency": "USD",
+                    "declared_amount": Decimal("1000"),
+                }
+            ],
+            now,
+        )
+    return batch_id
+
+
 def test_candidates_split_routes_and_suggest_combination(seeded):
     candidates, _ = services(seeded)
     result = candidates.query(CandidateQuery(consignee="HONGKONG VISION", targetAmount="1000.50"))
@@ -80,6 +120,37 @@ def test_candidates_split_routes_and_suggest_combination(seeded):
         (t.route, t.currency): (t.count, t.amount) for t in candidates.query(CandidateQuery()).unsettled
     }
     assert totals == {("direct", "USD"): (1, "1000.00"), ("hk_transit", "USD"): (2, "1000.50")}
+
+
+def test_candidates_mark_handling_and_summarise_by_consignee(seeded):
+    candidates, batches = services(seeded)
+    create(batches, ["REAL870"], "600")
+    result = candidates.query(CandidateQuery())
+    by_no = {item.declarationNo: item for item in result.items}
+    # 沿用原有路径判定：香港中转建批次，直接收汇进总账
+    assert (by_no["REAL870"].handling, by_no["REAL871"].handlingLabel) == ("batch", "登记回款建批次")
+    assert (by_no["REAL872"].route, by_no["REAL872"].handling) == ("direct", "ledger")
+    assert by_no["REAL872"].blockedReason == "" and by_no["REAL872"].handlingLabel == "进直接收汇明细"
+    assert by_no["REAL870"].exportCompany == "申报主体" and by_no["REAL870"].exportDate == "2026-10-29"
+    assert (result.total, result.truncated) == (3, False)
+    # 全部报关单按路径汇总；未在批次中的另列
+    assert {(t.route, t.amount) for t in result.totals} == {("hk_transit", "1000.50"), ("direct", "1000.00")}
+    assert {(t.route, t.amount) for t in result.unsettled} == {
+        ("hk_transit", "400.50"),
+        ("direct", "1000.00"),
+    }
+    hk, direct = result.consignees
+    assert (hk.consignee, hk.route, hk.count, hk.amount) == (HK, "hk_transit", 2, "1000.50")
+    assert (hk.batchedCount, hk.pendingCount, hk.exportCompanies) == (1, 1, ["申报主体"])
+    assert (hk.firstExportDate, hk.lastExportDate) == ("2026-10-29", "2026-10-29")
+    assert (direct.consignee, direct.handling, direct.pendingCount) == ("ACME LTD", "ledger", 0)
+    # 推荐组合只在香港中转的报关单中找
+    note = candidates.query(CandidateQuery(consignee="ACME", targetAmount="1000")).suggestionNote
+    assert note.startswith("请先按境外收货人筛选到同一家香港中转收货人")
+    only = candidates.query(CandidateQuery(exportFrom="2026-10-30"))
+    assert only.items == [] and only.consignees == []
+    with pytest.raises(ValueError, match="出口日期开始不能晚于结束"):
+        CandidateQuery(exportFrom="2026-11-02", exportTo="2026-11-01")
 
 
 def test_hk_transit_batch_two_stage_reconciliation(seeded, tmp_path):
@@ -135,30 +206,45 @@ def test_hk_transit_batch_two_stage_reconciliation(seeded, tmp_path):
     assert all(b.balanced for b in settled.balances) and not settled.actions.cancel.allowed
 
 
-def test_direct_batch_and_cancel_releases_declarations(seeded):
+def test_direct_declarations_are_not_batched(seeded):
     _, batches = services(seeded)
-    with pytest.raises(ApiError, match="境外收货人必须一致|回款路径必须一致"):
+    with pytest.raises(ApiError, match="直接收汇的报关单不建批次.*REAL872"):
         create(batches, ["REAL870", "REAL872"], "1600")
-    short = create(batches, ["REAL872"], "980", fee="10")
+    with pytest.raises(ApiError, match="直接收汇的报关单不建批次"):
+        create(batches, ["REAL872"], "1000")
+    assert batches.browse(BatchQuery(status="all")).total == 0
+
+
+def test_cancel_releases_declarations(seeded):
+    _, batches = services(seeded)
+    short = create(batches, ["REAL870"], "580", fee="10")
+    assert short.route == "hk_transit" and not short.balances[0].balanced
+    cancelled = batches.cancel(short.id, CancelRequest(reason="金额录错"), "finance-user")
+    assert cancelled.status == "cancelled" and cancelled.cancelReason == "金额录错"
+    again = create(batches, ["REAL870"], "590", fee="10")
+    assert again.balances[0].balanced
+
+    listing = batches.browse(BatchQuery(status="all", declarationNo="REAL870"))
+    assert listing.total == 2
+    assert {(c.route, c.status): c.count for c in listing.counts} == {
+        ("hk_transit", "cancelled"): 1,
+        ("hk_transit", "collected"): 1,
+    }
+    assert batches.browse(BatchQuery()).total == 1  # 默认只看未完结
+
+
+def test_legacy_direct_batch_still_settles(seeded):
+    _, batches = services(seeded)
+    short = batches.get(legacy_direct_batch(seeded, received="980", fee="10"))
     assert short.route == "direct" and not short.balances[0].balanced
     assert short.actions.settle.reason == "到账加手续费与报关合计不一致，不能确认结汇"
     with pytest.raises(ApiError, match="不一致"):
         batches.settle(short.id, "finance-user")
     with pytest.raises(ApiError, match="仅香港中转"):
         batches.documents_ready(short.id, "finance-user")
-
-    cancelled = batches.cancel(short.id, CancelRequest(reason="金额录错"), "finance-user")
-    assert cancelled.status == "cancelled" and cancelled.cancelReason == "金额录错"
-    again = create(batches, ["REAL872"], "990", fee="10")
-    assert batches.settle(again.id, "finance-user").statusLabel == "已结汇"
-
-    listing = batches.browse(BatchQuery(status="all", declarationNo="REAL872"))
-    assert listing.total == 2
-    assert {(c.route, c.status): c.count for c in listing.counts} == {
-        ("direct", "cancelled"): 1,
-        ("direct", "settled"): 1,
-    }
-    assert batches.browse(BatchQuery()).total == 0  # 默认只看未完结
+    batches.cancel(short.id, CancelRequest(reason="金额录错"), "finance-user")
+    again = legacy_direct_batch(seeded, received="990", fee="10")
+    assert batches.settle(again, "finance-user").statusLabel == "已结汇"
 
 
 def test_create_is_idempotent_and_service_identity_is_read_only(seeded):
@@ -166,9 +252,9 @@ def test_create_is_idempotent_and_service_identity_is_read_only(seeded):
     body = CreateBatchRequest.model_validate(
         {
             "requestId": str(uuid.uuid4()),
-            "declarationNos": ["REAL872"],
+            "declarationNos": ["REAL870"],
             "receivedOn": "2026-11-10",
-            "receivedAmount": "1000",
+            "receivedAmount": "600",
         }
     )
     first = batches.create(body, "finance-user")

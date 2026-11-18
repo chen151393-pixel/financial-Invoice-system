@@ -20,7 +20,7 @@ from backend.tests.settlement.documents_support import (
     complete_documents,
     encoded,
 )
-from backend.tests.settlement.test_settlement_batches import create, services
+from backend.tests.settlement.test_settlement_batches import create, legacy_direct_batch, services
 from backend.tests.settlement.test_settlement_batches import seeded as seeded
 from backend.tests.test_schema_baseline import schema_engine as schema_engine
 from backend.tests.test_source_storage import ns as ns
@@ -165,7 +165,7 @@ def _file_id(engine, contract_id):
 
 def test_direct_batch_needs_no_documents(seeded, tmp_path):
     _, batches = services(seeded)
-    batch = create(batches, ["REAL872"], "1000")
+    batch = batches.get(legacy_direct_batch(seeded))
     documents = Documents(seeded, tmp_path)
     view = documents.views.get(batch.id)
     assert not view.edit.allowed and view.edit.reason == "仅香港中转批次需要资料包"

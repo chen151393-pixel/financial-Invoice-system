@@ -1,4 +1,6 @@
 import { useEffect, useState } from "react";
+import { Link } from "react-router";
+import { paths } from "../../../app/paths";
 import {
   Alert,
   Badge,
@@ -17,16 +19,29 @@ import {
 import { money } from "../../../shared/format/money";
 import { queryCandidates } from "../api";
 import type { Candidate, CandidateList, CandidateQuery, RouteFilter } from "../types";
+import { ConsigneeSummary } from "./ConsigneeSummary";
 import { CreateBatchDialog } from "./CreateBatchDialog";
+import { ReceivableStats } from "./ReceivableStats";
 
 type State =
   | { kind: "loading" }
   | { kind: "ready"; result: CandidateList }
   | { kind: "error"; message: string };
 
-const EMPTY: CandidateQuery = { consignee: "", declarationNo: "", route: "all", targetAmount: "" };
+const EMPTY: CandidateQuery = {
+  consignee: "",
+  declarationNo: "",
+  route: "all",
+  exportFrom: null,
+  exportTo: null,
+  targetAmount: "",
+};
 
-/** 可结汇报关单：按境外收货人筛选、按到账金额推荐组合，勾选后登记回款建批次。 */
+/**
+ * 报关应收汇：按境外收货人汇总应收汇并显示回款路径。
+ * 香港中转的报关单勾选后登记回款建批次；直接收汇的报关单不建批次，进入直接收汇明细。
+ * 路径判定、能否建批次均由后端给出（handling、blockedReason），提交时后端再次校验。
+ */
 export function CandidatePanel({ onCreated }: { onCreated: (batchId: number) => void }) {
   const [query, setQuery] = useState<CandidateQuery>(EMPTY);
   const [state, setState] = useState<State>({ kind: "loading" });
@@ -63,19 +78,23 @@ export function CandidatePanel({ onCreated }: { onCreated: (batchId: number) => 
       key: "pick",
       header: "选择",
       width: "56px",
-      render: (row) => (
-        <input
-          type="checkbox"
-          aria-label={`选择报关单 ${row.declarationNo}`}
-          checked={selected.includes(row.declarationNo)}
-          disabled={Boolean(row.blockedReason)}
-          onChange={() => toggle(row)}
-        />
-      ),
+      render: (row) =>
+        row.handling === "batch" ? (
+          <input
+            type="checkbox"
+            aria-label={`选择报关单 ${row.declarationNo}`}
+            checked={selected.includes(row.declarationNo)}
+            disabled={Boolean(row.blockedReason)}
+            onChange={() => toggle(row)}
+          />
+        ) : (
+          "—"
+        ),
     },
     {
       key: "number",
       header: "报关单号 / CD",
+      width: "150px",
       render: (row) => (
         <div className="settlement-cell">
           <strong>{row.declarationNo}</strong>
@@ -83,12 +102,18 @@ export function CandidatePanel({ onCreated }: { onCreated: (batchId: number) => 
         </div>
       ),
     },
-    { key: "orders", header: "销售订单", render: (row) => row.salesOrders.join("、") || "—" },
+    {
+      key: "orders",
+      header: "销售订单",
+      width: "120px",
+      render: (row) => row.salesOrders.join("、") || "—",
+    },
     { key: "consignee", header: "境外收货人", render: (row) => row.consignee || "—" },
-    { key: "date", header: "出口日期", render: (row) => row.exportDate || "—" },
+    { key: "date", header: "出口日期", width: "110px", render: (row) => row.exportDate || "—" },
     {
       key: "route",
       header: "回款路径",
+      width: "110px",
       render: (row) => (
         <span title={row.routeBasis}>
           <Badge tone={row.route === "hk_transit" ? "info" : "neutral"}>{row.routeLabel}</Badge>
@@ -99,105 +124,152 @@ export function CandidatePanel({ onCreated }: { onCreated: (batchId: number) => 
       key: "amount",
       header: "报关金额",
       align: "right",
+      width: "150px",
       render: (row) => (row.amount ? `${row.currency} ${money(row.amount)}` : "—"),
     },
     {
       key: "state",
       header: "状态",
+      width: "270px",
       render: (row) =>
         row.blockedReason ? (
           <Badge tone="warning">{row.blockedReason}</Badge>
+        ) : row.handling === "ledger" ? (
+          <Link to={paths.settlementDirect}>已进直接收汇明细</Link>
         ) : (
-          <Badge tone="success">可结汇</Badge>
+          <Badge tone="success">可建批次</Badge>
         ),
     },
   ];
 
+  const failure = state.kind === "error" && (
+    <ErrorState
+      title="报关应收汇读取失败"
+      message={state.message}
+      action={<Button onClick={() => setRefresh((n) => n + 1)}>重试</Button>}
+    />
+  );
+
   return (
-    <Card>
-      <CardHeader
-        title="待结汇报关单"
-        description="报关金额取海关回执成交总价。按收款金额（到账 + 手续费）可自动推荐金额恰好吻合的报关单组合。"
-        actions={
-          <Button disabled={!selected.length} onClick={() => setCreating(true)}>
-            登记回款并建批次（{selected.length}）
-          </Button>
-        }
-      />
-      <FilterBar
-        embedded
-        onSubmit={(form) => {
-          const data = new FormData(form);
-          setQuery({
-            consignee: String(data.get("consignee") || "").trim(),
-            declarationNo: String(data.get("declarationNo") || "").trim(),
-            route: String(data.get("route") || "all") as RouteFilter,
-            targetAmount: String(data.get("targetAmount") || "").trim(),
-          });
-        }}
-        actions={
-          <>
-            <Button type="submit">查询</Button>
-            <Button type="reset" variant="ghost" onClick={() => setQuery(EMPTY)}>
-              清空
-            </Button>
-          </>
-        }
-      >
-        <Field label="境外收货人">
-          <input name="consignee" defaultValue={query.consignee} placeholder="如 HONGKONG VISION" />
-        </Field>
-        <Field label="报关单号">
-          <input name="declarationNo" defaultValue={query.declarationNo} />
-        </Field>
-        <Field label="回款路径">
-          <select name="route" defaultValue={query.route}>
-            <option value="all">全部</option>
-            <option value="hk_transit">香港中转</option>
-            <option value="direct">直接收汇</option>
-          </select>
-        </Field>
-        <Field label="收款金额（到账 + 手续费）">
-          <input
-            name="targetAmount"
-            inputMode="decimal"
-            defaultValue={query.targetAmount}
-            placeholder="推荐组合用"
-          />
-        </Field>
-      </FilterBar>
-      <CardContent flush>
-        {state.kind === "loading" && <Skeleton rows={4} label="正在读取待结汇报关单" />}
-        {state.kind === "error" && (
-          <ErrorState
-            title="待结汇报关单读取失败"
-            message={state.message}
-            action={<Button onClick={() => setRefresh((n) => n + 1)}>重试</Button>}
-          />
-        )}
-        {state.kind === "ready" && (
-          <>
-            {state.result.suggestionNote && (
-              <Alert tone={state.result.suggestion ? "success" : "info"}>{state.result.suggestionNote}</Alert>
-            )}
-            {state.result.items.length ? (
-              <DataTable
-                label="待结汇报关单"
-                columns={columns}
-                rows={state.result.items}
-                rowKey={(row) => row.declarationNo}
-                rowTone={(row) => (selected.includes(row.declarationNo) ? "accent" : undefined)}
-                minWidth={980}
-              />
+    <>
+      {state.kind === "ready" && (
+        <ReceivableStats totals={state.result.totals} unsettled={state.result.unsettled} />
+      )}
+      <Card>
+        <CardHeader
+          title="按境外收货人汇总"
+          description="应收汇金额为该收货人全部报关单的海关回执成交总价之和，按币种分开。"
+        />
+        <FilterBar
+          embedded
+          onSubmit={(form) => {
+            const data = new FormData(form);
+            setQuery({
+              consignee: String(data.get("consignee") || "").trim(),
+              declarationNo: String(data.get("declarationNo") || "").trim(),
+              route: String(data.get("route") || "all") as RouteFilter,
+              exportFrom: String(data.get("exportFrom") || "") || null,
+              exportTo: String(data.get("exportTo") || "") || null,
+              targetAmount: String(data.get("targetAmount") || "").trim(),
+            });
+          }}
+          actions={
+            <>
+              <Button type="submit">查询</Button>
+              <Button type="reset" variant="ghost" onClick={() => setQuery(EMPTY)}>
+                清空
+              </Button>
+            </>
+          }
+        >
+          <Field label="境外收货人">
+            <input name="consignee" defaultValue={query.consignee} placeholder="如 HONGKONG VISION" />
+          </Field>
+          <Field label="报关单号">
+            <input name="declarationNo" defaultValue={query.declarationNo} />
+          </Field>
+          <Field label="回款路径">
+            <select name="route" defaultValue={query.route}>
+              <option value="all">全部</option>
+              <option value="hk_transit">香港中转</option>
+              <option value="direct">直接收汇</option>
+            </select>
+          </Field>
+          <Field label="出口日期 从">
+            <input type="date" name="exportFrom" defaultValue={query.exportFrom ?? ""} />
+          </Field>
+          <Field label="至">
+            <input type="date" name="exportTo" aria-label="出口日期 至" defaultValue={query.exportTo ?? ""} />
+          </Field>
+          <Field label="香港到账金额（到账 + 手续费）">
+            <input
+              name="targetAmount"
+              inputMode="decimal"
+              defaultValue={query.targetAmount}
+              placeholder="推荐组合用"
+            />
+          </Field>
+        </FilterBar>
+        <CardContent flush>
+          {state.kind === "loading" && <Skeleton rows={3} label="正在汇总报关应收汇" />}
+          {failure}
+          {state.kind === "ready" &&
+            (state.result.consignees.length ? (
+              <ConsigneeSummary rows={state.result.consignees} />
             ) : (
               <EmptyState
                 title="没有符合条件的报关单"
                 description="海关回执导入并匹配到 NS 报关单后出现在这里。"
               />
+            ))}
+        </CardContent>
+      </Card>
+      {state.kind !== "error" && (
+        <Card>
+          <CardHeader
+            title="报关单明细"
+            description="香港中转的报关单勾选后登记回款建批次；直接收汇的报关单不建批次，自动进入直接收汇明细。"
+            actions={
+              <Button disabled={!selected.length} onClick={() => setCreating(true)}>
+                登记回款并建批次（{selected.length}）
+              </Button>
+            }
+          />
+          <CardContent flush>
+            {state.kind === "loading" && <Skeleton rows={4} label="正在读取报关单明细" />}
+            {state.kind === "ready" && (
+              <>
+                {state.result.suggestionNote && (
+                  <Alert tone={state.result.suggestion ? "success" : "info"}>
+                    {state.result.suggestionNote}
+                  </Alert>
+                )}
+                {state.result.truncated && (
+                  <Alert tone="warning">
+                    符合条件的报关单共 {state.result.total} 张，下方只列出出口日期最近的{" "}
+                    {state.result.items.length} 张；上方汇总按全部计算。请缩小查询条件查看其余报关单。
+                  </Alert>
+                )}
+                {state.result.items.length ? (
+                  <DataTable
+                    label="报关单明细"
+                    columns={columns}
+                    rows={state.result.items}
+                    rowKey={(row) => row.declarationNo}
+                    rowTone={(row) => (selected.includes(row.declarationNo) ? "accent" : undefined)}
+                    minWidth={980}
+                  />
+                ) : (
+                  <EmptyState
+                    title="没有符合条件的报关单"
+                    description="海关回执导入并匹配到 NS 报关单后出现在这里。"
+                  />
+                )}
+              </>
             )}
-          </>
-        )}
-      </CardContent>
+          </CardContent>
+        </Card>
+      )}
       {creating && (
         <CreateBatchDialog
           declarationNos={selected}
@@ -211,6 +283,6 @@ export function CandidatePanel({ onCreated }: { onCreated: (batchId: number) => 
           }}
         />
       )}
-    </Card>
+    </>
   );
 }

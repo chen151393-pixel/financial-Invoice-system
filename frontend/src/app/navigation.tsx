@@ -16,11 +16,12 @@ function MenuIcon({ path }: { path: string }) {
   );
 }
 
-// 结汇对账的子页面：先选报关单登记回款，再按回款路径跟进批次。
+// 结汇对账的子页面：报关应收汇判定回款路径；香港中转登记回款建批次，其余记直接收汇明细（总账）。
 const settlementChildren: readonly { id: SubView; label: string; short: string }[] = [
-  { id: "settlement-declarations", label: "待结汇报关单", short: "待结汇" },
+  { id: "settlement-declarations", label: "报关应收汇", short: "应收" },
+  { id: "settlement-bank", label: "银行收汇明细", short: "收汇" },
   { id: "settlement-hk", label: "香港中转批次", short: "香港" },
-  { id: "settlement-direct", label: "直接收汇批次", short: "直收" },
+  { id: "settlement-direct", label: "直接收汇明细", short: "直收" },
   { id: "settlement-parties", label: "合同抬头", short: "抬头" },
 ];
 

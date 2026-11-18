@@ -35,7 +35,9 @@ class CandidateQuery(StrictModel):
     consignee: Text200 = ""
     declarationNo: Text200 = ""
     route: Literal["all", "hk_transit", "direct"] = "all"
-    # 填写后按“到账 + 手续费”推荐金额恰好吻合的报关单组合
+    exportFrom: date | None = Field(default=None, strict=False)
+    exportTo: date | None = Field(default=None, strict=False)
+    # 填写后按“到账 + 手续费”推荐金额恰好吻合的香港中转报关单组合
     targetAmount: str = ""
 
     @field_validator("targetAmount", mode="before")
@@ -44,6 +46,12 @@ class CandidateQuery(StrictModel):
         if value in (None, ""):
             return ""
         return str(amount_value(value, "目标金额", allow_zero=False))
+
+    @model_validator(mode="after")
+    def valid_export_dates(self):
+        if self.exportFrom and self.exportTo and self.exportFrom > self.exportTo:
+            raise ValueError("出口日期开始不能晚于结束")
+        return self
 
 
 class CreateBatchRequest(StrictModel):

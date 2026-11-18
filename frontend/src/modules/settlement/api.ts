@@ -1,6 +1,8 @@
 import { http } from "../../shared/api/http";
 import { readImportFile } from "../../shared/api/import-file";
 import type {
+  BankReceiptList,
+  BankReceiptQuery,
   BatchDetail,
   BatchDocuments,
   BatchList,
@@ -10,6 +12,8 @@ import type {
   CandidateQuery,
   CreateBatchBody,
   GenerateContractsBody,
+  LedgerList,
+  LedgerQuery,
   Party,
   PartyBody,
   RemittanceBody,
@@ -18,6 +22,13 @@ import type {
 // 结汇接口：路径判定、金额核对与可操作判断全部在后端，前端只提交输入并展示结果。
 export const queryCandidates = (query: CandidateQuery, signal?: AbortSignal) =>
   http<CandidateList>("/settlement/candidates/query", "POST", query, signal);
+
+// 银行收汇明细与直接收汇明细（总账）：只读查询，逐笔余额与合计由后端计算。
+export const queryBankReceipts = (query: BankReceiptQuery, signal?: AbortSignal) =>
+  http<BankReceiptList>("/settlement/bank-receipts/query", "POST", query, signal);
+
+export const queryLedger = (query: LedgerQuery, signal?: AbortSignal) =>
+  http<LedgerList>("/settlement/ledger/query", "POST", query, signal);
 
 export const queryBatches = (query: BatchQuery, signal?: AbortSignal) =>
   http<BatchList>("/settlement/batches/query", "POST", query, signal);

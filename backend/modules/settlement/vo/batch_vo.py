@@ -6,6 +6,8 @@ from backend.core.dto import StrictModel
 
 Route = Literal["hk_transit", "direct"]
 Status = Literal["collected", "documents_ready", "settled", "cancelled"]
+# 处理方式：香港中转登记回款建批次；直接收汇进直接收汇明细（总账）
+Handling = Literal["batch", "ledger"]
 
 
 class Action(StrictModel):
@@ -23,6 +25,8 @@ class Candidate(StrictModel):
     declarationNo: str
     recordNo: str
     consignee: str
+    # 出口抬头：NS 报关单的申报主体；未知时为空串
+    exportCompany: str
     exportDate: str
     salesOrders: list[str]
     currency: str
@@ -30,7 +34,9 @@ class Candidate(StrictModel):
     route: Route
     routeLabel: str
     routeBasis: str
-    # 不能选入批次的原因（已在其他批次、金额缺失等）；为空表示可选
+    handling: Handling
+    handlingLabel: str
+    # 报关单本身的问题或占用（已在其他批次、金额缺失等）；handling 为 batch 且此项为空才可选入批次
     blockedReason: str
     batchNo: str
 
@@ -43,9 +49,39 @@ class RouteTotal(StrictModel):
     amount: str
 
 
+class ConsigneeTotal(StrictModel):
+    """一家境外收货人（按币种分开）的应收汇汇总。"""
+
+    consignee: str
+    currency: str
+    route: Route
+    routeLabel: str
+    routeBasis: str
+    handling: Handling
+    handlingLabel: str
+    exportCompanies: list[str]
+    count: int
+    firstExportDate: str
+    lastExportDate: str
+    # 金额有效的报关单成交总价合计
+    amount: str
+    # 香港中转：已在有效批次中的张数、可登记回款建批次的张数
+    batchedCount: int
+    pendingCount: int
+    # 金额或币制有问题、未计入合计的张数
+    issueCount: int
+
+
 class CandidateList(StrictModel):
+    # 最多列出 500 张；total 为符合筛选的全部张数，超出时 truncated 为真
     items: list[Candidate]
+    total: int
+    truncated: bool
+    # 以下汇总按符合筛选的全部报关单计算，不受列出张数限制
+    totals: list[RouteTotal]
+    # 未在批次中、金额有效的报关单按路径汇总
     unsettled: list[RouteTotal]
+    consignees: list[ConsigneeTotal]
     suggestion: list[str] | None
     suggestionNote: str
 

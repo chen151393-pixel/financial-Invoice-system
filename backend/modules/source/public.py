@@ -14,6 +14,7 @@ from .policy.declared_price_policy import (
 )
 from .policy.unit_policy import unit_label
 from .service.contract_service import SubpoContractSource
+from .service.customs_number_reader import declarant_names_by_number as declarant_names_by_number
 from .service.customs_number_reader import declaration_refs_by_number as declaration_refs_by_number
 from .service.customs_number_reader import declarations_by_number
 from .service.declaration_service import DeclarationService, digest, snapshot

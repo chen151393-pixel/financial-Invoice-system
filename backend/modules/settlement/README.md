@@ -4,12 +4,14 @@
 
 报关之后的结汇：客户货款必须与报关金额一致。按报关单“贸易国”分两条回款路径：
 
-| 路径                  | 判定                 | 资金流                       | 对账                                                                                 |
-| --------------------- | -------------------- | ---------------------------- | ------------------------------------------------------------------------------------ |
-| `hk_transit` 香港中转 | 贸易国为中国香港     | 客户 → 香港账户 → 汇回境内   | 两段：香港到账对报关合计；汇回境内对报关合计。批次与汇回一一对应（按资料一单一单做） |
-| `direct` 直接收汇     | 贸易国为真实客户国家 | 客户 → 境内账户（NS 已核销） | 一段：到账对报关合计                                                                 |
+| 路径                  | 判定                 | 资金流                     | 对账                                                                                 |
+| --------------------- | -------------------- | -------------------------- | ------------------------------------------------------------------------------------ |
+| `hk_transit` 香港中转 | 贸易国为中国香港     | 客户 → 香港账户 → 汇回境内 | 两段：香港到账对报关合计；汇回境内对报关合计。批次与汇回一一对应（按资料一单一单做） |
+| `direct` 直接收汇     | 贸易国为真实客户国家 | 客户 → 境内账户            | 总账：按境外收货人逐笔累计，出口加、收汇减，不建批次                                 |
 
-**差额只认手续费**：到账金额 + 手续费 = 报关合计，严格相等才通过；手续费超过 `SETTLEMENT_FEE_ALERT` 时提示复核，防止把少收款当作手续费。
+**香港中转——差额只认手续费**：到账金额 + 手续费 = 报关合计，严格相等才通过；手续费超过 `SETTLEMENT_FEE_ALERT` 时提示复核，防止把少收款当作手续费。登记回款建批次、提单与销售合同、汇回结汇只适用于香港中转。
+
+**直接收汇——总账（2026-11-18 业务确认）**：非香港中转的报关单不建批次，进入“直接收汇明细”。同一境外收货人（按币种分开）的出口与收汇按日期先后逐笔累计期末余额，同一天先记出口；余额为正是未收，为负是超收。出口取海关回执的出口日期与成交总价，出口抬头取 NS 报关单的申报主体；收汇取银行收汇明细，按表格中填写的实际客户归到收货人。付款人户名与实际客户不同即三方代付，只作标记，不影响归属，也不判断是否有代付协议。香港公司汇回境内的款项不进总账。金额或币制有问题、没有境外收货人的直接收汇报关单不计入总账，在页面上单独列出原因。
 
 > 海关回执导入文件目前不含“贸易国”。未取得贸易国时，按境外收货人是否为集团香港公司判定（`SETTLEMENT_HK_CONSIGNEES`，分号分隔；为空时使用 `policy/route_policy.py` 内置名单）。NS 报关记录字段 `custrecord_swc_country_body`（值 95 为中国香港）同步进 source 后，可直接传入 `route_of()` 的 `trade_country`。
 
@@ -21,16 +23,18 @@
 - `settlement_bills`：批次的提单文件及提单号、装运口岸、目的口岸、装船日期、对应的报关单；移除为软删除。
 - `settlement_contracts`：按模板生成的销售合同 PDF（批次内每个出口合同号一份）及生成依据摘要。
 - `settlement_parties`：销售合同买卖双方抬头（中英文名称、地址、电话）与印章图片。
+- `settlement_bank_receipts`：银行收汇明细（收汇日期、收汇抬头、付款人户名、实际客户、币种、金额、流水号）；规范化名称 `customer_key` 用于归属境外收货人，`payer_key` 与它不同即三方代付。
 
 文件本体（提单、合同 PDF、印章图片）保存在 `SETTLEMENT_DOCUMENT_ROOT`，只用服务端 UUID 命名，数据库记录标识与校验值；部署时该目录须为持久卷。
 
-迁移：`0045_settlement_batches.py`、`0046_settlement_documents.py`。
+迁移：`0045_settlement_batches.py`、`0046_settlement_documents.py`、`0047_settlement_bank_receipts.py`（手动执行脚本见 `backend/migrations/manual/0047_settlement_bank_receipts.sql`）。
 
 ## 读取依赖
 
-- `review.public.settlement_declarations`：海关回执当前版本（境外收货人、出口日期、出口合同号、成交总价）；只取已匹配到 NS 报关单的回执。
+- `review.public.settlement_declarations`：海关回执当前版本（境外收货人、出口日期、出口合同号、成交总价）；只取已匹配到 NS 报关单的回执。汇总与总账需要完整历史，传 `limit=None` 读取全部。
 - `review.public.settlement_declaration_lines`：海关回执当前版本明细（品名、规格、数量、单位、成交总价、出口合同号），供生成销售合同。
 - `source.public.declaration_refs_by_number`：真实报关单号 → NS CD 编号（展示）。
+- `source.public.declarant_names_by_number`：真实报关单号 → 申报主体名称（出口抬头）。
 
 不发布、不订阅事件；`public.py` 暂无对外函数。
 
@@ -38,9 +42,10 @@
 
 ```text
 香港中转：collected 香港已收 → documents_ready 资料已出 → settled 已结汇（汇回对平）
-直接收汇：collected 已收款   → settled 已结汇（到账对平）
 未结汇前均可 cancelled 作废，作废释放报关单。
 ```
+
+直接收汇不再建批次。此前已建的直接收汇批次（`collected 已收款 → settled 已结汇`）仍可结汇或作废：`BatchService.settle()` 与 `batch_state_policy` 中的 `DIRECT` 转换只为这些旧数据保留，调用方是批次详情的“确认结汇”；页面已不再列出直接收汇批次。确认库中没有未完结的直接收汇批次后（核对语句见手动执行脚本）一并删除。
 
 状态转换集中在 `policy/batch_state_policy.py`；可操作判断（`allowed/reason`）由后端返回，执行时再次校验。
 
@@ -57,32 +62,36 @@
 
 ## HTTP 接口（页面权限代码 `settlement`）
 
-| 方法 | 路径                                                       | 说明                                                                                 |
-| ---- | ---------------------------------------------------------- | ------------------------------------------------------------------------------------ |
-| POST | `/api/settlement/candidates/query`                         | 可结汇报关单、路径判定、已报关未结汇汇总；带 `targetAmount` 时推荐金额恰好吻合的组合 |
-| POST | `/api/settlement/batches/query`                            | 批次列表（路径、状态、收货人、批次号、报关单号筛选）                                 |
-| POST | `/api/settlement/batches`                                  | 登记回款建批次（`requestId` 幂等）                                                   |
-| GET  | `/api/settlement/batches/{id}`                             | 批次详情与金额核对                                                                   |
-| POST | `/api/settlement/batches/{id}/documents-ready`             | 香港中转：确认资料已出（须香港到账对平，且提单与销售合同齐全）                       |
-| POST | `/api/settlement/batches/{id}/remittance`                  | 香港中转：登记汇回并确认结汇（须汇回对平）                                           |
-| POST | `/api/settlement/batches/{id}/settle`                      | 直接收汇：确认结汇（须到账对平）                                                     |
-| POST | `/api/settlement/batches/{id}/cancel`                      | 作废（填写原因）                                                                     |
-| GET  | `/api/settlement/batches/{id}/documents`                   | 批次资料：提单、销售合同、齐全度、缺项与可操作判断                                   |
-| POST | `/api/settlement/batches/{id}/bills`                       | 上传提单（`fileName`、base64 `content`、可选 `declarationNos`）                      |
-| POST | `/api/settlement/batches/{id}/bills/{billId}`              | 人工修改提单字段与对应报关单                                                         |
-| POST | `/api/settlement/batches/{id}/bills/{billId}/remove`       | 移除提单                                                                             |
-| GET  | `/api/settlement/batches/{id}/bills/{billId}/file`         | 查看提单 PDF                                                                         |
-| POST | `/api/settlement/batches/{id}/contracts/generate`          | 按模板生成 / 重新生成销售合同（卖方、成交方式、付款条件）                            |
-| GET  | `/api/settlement/batches/{id}/contracts/{contractId}/file` | 查看销售合同 PDF                                                                     |
-| GET  | `/api/settlement/batches/{id}/package`                     | 下载资料包 zip（资料未齐时拒绝）                                                     |
-| POST | `/api/settlement/parties/query`                            | 合同抬头列表                                                                         |
-| POST | `/api/settlement/parties`                                  | 新增 / 修改合同抬头                                                                  |
-| POST | `/api/settlement/parties/{id}/stamp`                       | 上传印章图片（PNG / JPG，不超过 2 MB）                                               |
-| GET  | `/api/settlement/parties/{id}/stamp`                       | 查看印章图片                                                                         |
+| 方法 | 路径                                                       | 说明                                                                                                                                                                          |
+| ---- | ---------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| POST | `/api/settlement/candidates/query`                         | 报关应收汇：报关单、路径判定与处理方式（`handling`）、按路径和按境外收货人汇总；带 `targetAmount` 时在香港中转报关单中推荐金额恰好吻合的组合。最多列出 500 张，汇总按全部计算 |
+| POST | `/api/settlement/bank-receipts/query`                      | 银行收汇明细：收汇记录、三方代付标记、实际客户的回款路径、按收汇抬头与币种汇总                                                                                                |
+| POST | `/api/settlement/ledger/query`                             | 直接收汇明细（总账）：按境外收货人分组的出口 / 收汇流水、逐笔期末余额、状态与各币种合计                                                                                       |
+| POST | `/api/settlement/batches/query`                            | 批次列表（路径、状态、收货人、批次号、报关单号筛选）                                                                                                                          |
+| POST | `/api/settlement/batches`                                  | 登记回款建批次（`requestId` 幂等）；只接受香港中转的报关单                                                                                                                    |
+| GET  | `/api/settlement/batches/{id}`                             | 批次详情与金额核对                                                                                                                                                            |
+| POST | `/api/settlement/batches/{id}/documents-ready`             | 香港中转：确认资料已出（须香港到账对平，且提单与销售合同齐全）                                                                                                                |
+| POST | `/api/settlement/batches/{id}/remittance`                  | 香港中转：登记汇回并确认结汇（须汇回对平）                                                                                                                                    |
+| POST | `/api/settlement/batches/{id}/settle`                      | 此前已建的直接收汇批次：确认结汇（须到账对平）；不再有新的直接收汇批次                                                                                                        |
+| POST | `/api/settlement/batches/{id}/cancel`                      | 作废（填写原因）                                                                                                                                                              |
+| GET  | `/api/settlement/batches/{id}/documents`                   | 批次资料：提单、销售合同、齐全度、缺项与可操作判断                                                                                                                            |
+| POST | `/api/settlement/batches/{id}/bills`                       | 上传提单（`fileName`、base64 `content`、可选 `declarationNos`）                                                                                                               |
+| POST | `/api/settlement/batches/{id}/bills/{billId}`              | 人工修改提单字段与对应报关单                                                                                                                                                  |
+| POST | `/api/settlement/batches/{id}/bills/{billId}/remove`       | 移除提单                                                                                                                                                                      |
+| GET  | `/api/settlement/batches/{id}/bills/{billId}/file`         | 查看提单 PDF                                                                                                                                                                  |
+| POST | `/api/settlement/batches/{id}/contracts/generate`          | 按模板生成 / 重新生成销售合同（卖方、成交方式、付款条件）                                                                                                                     |
+| GET  | `/api/settlement/batches/{id}/contracts/{contractId}/file` | 查看销售合同 PDF                                                                                                                                                              |
+| GET  | `/api/settlement/batches/{id}/package`                     | 下载资料包 zip（资料未齐时拒绝）                                                                                                                                              |
+| POST | `/api/settlement/parties/query`                            | 合同抬头列表                                                                                                                                                                  |
+| POST | `/api/settlement/parties`                                  | 新增 / 修改合同抬头                                                                                                                                                           |
+| POST | `/api/settlement/parties/{id}/stamp`                       | 上传印章图片（PNG / JPG，不超过 2 MB）                                                                                                                                        |
+| GET  | `/api/settlement/parties/{id}/stamp`                       | 查看印章图片                                                                                                                                                                  |
 
 ## 尚未实现（计划）
 
-- NS 客户收款与核销记录同步：目前直接收汇的到账需人工登记，计划由 sync 模块同步 NS 收款后自动建批次。
+- 银行流水表格导入：`settlement_bank_receipts` 目前没有写入用例，页面提示“表格导入尚未接入”。导入时须写入规范化名称（`backend.core.names.normalize_name`）到 `payer_key`、`customer_key`；重复导入的去重规则待随导入一并确定。
+- 直接收汇明细每次读取全部直接收汇报关单与收汇记录后在内存中累计，数据量明显增大后需改为按收货人预汇总；暂不支持按日期区间查看（需要期初余额）。
+- NS 客户收款与核销记录同步：尚未接入，直接收汇的收汇目前只来自银行收汇明细。
 - 贸易国字段同步（见上方说明）。
 - 报关单 xls 原件转 PDF（需在服务端安装 LibreOffice 之类的转换程序）未做，资料包内保持原件格式；报关单未归档时不强制。
 - 提单与报关单的交叉核对（提运单号、件数、毛重、柜号）：本地尚未同步报关单的这些字段。

@@ -3,7 +3,7 @@
 只返回报关口径：报关品名、规格、数量、单位、行金额及币种。
 """
 
-from ..dao import customs_declaration_dao, unit_dictionary_dao
+from ..dao import company_dao, customs_declaration_dao, unit_dictionary_dao
 from ..policy.currency_policy import currency_code
 from ..policy.unit_policy import unit_label
 
@@ -19,6 +19,32 @@ def declaration_refs_by_number(connection, numbers):
         for head in customs_declaration_dao.active_by_numbers(connection, wanted[start : start + _CHUNK]):
             result.setdefault(head["declaration_no"], []).append(head)
     return result
+
+
+def declarant_names_by_number(connection, numbers):
+    """真实报关单号 → 申报主体名称（结汇的“出口抬头”）；同号多张时去重后以顿号连接，未知时为空串。"""
+    refs = declaration_refs_by_number(connection, numbers)
+    company_ids = sorted(
+        {
+            head["declarant_company_id"]
+            for heads in refs.values()
+            for head in heads
+            if head["declarant_company_id"]
+        }
+    )
+    names = company_dao.names(connection, company_ids)
+    return {
+        number: "、".join(
+            sorted(
+                {
+                    names[head["declarant_company_id"]]
+                    for head in heads
+                    if head["declarant_company_id"] in names
+                }
+            )
+        )
+        for number, heads in refs.items()
+    }
 
 
 def declarations_by_number(connection, numbers):

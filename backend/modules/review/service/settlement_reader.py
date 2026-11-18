@@ -10,7 +10,8 @@ from ..dao import customs_receipt_dao as dao
 
 def settlement_declarations(connection, *, numbers=None, consignee="", limit=500):
     """返回 [{receipt_id, revision, declaration_no, ns_declaration_id, consignee, export_date,
-    sales_orders, currency, amount, currency_issue}]；多币种或缺总价时 amount 为 None 并给出原因。"""
+    sales_orders, currency, amount, currency_issue}]；多币种或缺总价时 amount 为 None 并给出原因。
+    limit 为 None 时返回全部（结汇总账需要完整历史）。"""
     heads = dao.settlement_heads(connection, numbers=numbers, consignee=consignee, limit=limit)
     lines = dao.current_lines(connection, [head["id"] for head in heads])
     result = []

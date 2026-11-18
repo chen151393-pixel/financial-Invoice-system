@@ -3,7 +3,7 @@
 > 本文件由 `npm.cmd run db:map` 根据迁移链离线 MySQL DDL、实体定义和字段字典生成，请勿手工修改；迁移或实体变化后重新生成，`backend/tests/test_schema_map.py` 会检查是否过期。
 > “修改”含加列、改列、索引与中文备注；数据回填仅在线执行，不在离线 DDL 中体现。
 
-当前最新迁移：`0046_settlement_documents`；共 46 个迁移、73 张实体表。
+当前最新迁移：`0047_settlement_bank_receipts`；共 47 个迁移、74 张实体表。
 
 ## 1. 按模块查表
 
@@ -121,6 +121,7 @@
 
 | 表 | 中文说明 | 新建 | 后续修改 | 字段字典 |
 | --- | --- | --- | --- | --- |
+| `settlement_bank_receipts` | 银行收汇明细：境内美金账户收汇记录及其对应的实际客户（境外收货人） | `0047` | — | [查看](current-data-dictionary.md#settlement_bank_receipts银行收汇明细) |
 | `settlement_batch_items` | 结汇批次包含的报关单，金额按建批次时的海关回执冻结 | `0045` | — | [查看](current-data-dictionary.md#settlement_batch_items结汇批次明细) |
 | `settlement_batches` | 结汇批次：一笔回款及其对应的报关单合计、手续费与汇回记录 | `0045` | — | [查看](current-data-dictionary.md#settlement_batches结汇批次) |
 | `settlement_bills` | 结汇批次的提单文件及装运口岸、目的口岸、装船日期 | `0046` | — | [查看](current-data-dictionary.md#settlement_bills结汇批次提单) |
@@ -177,3 +178,4 @@
 | [`0044_review_dual_approval`](../../backend/migrations/versions/0044_review_dual_approval.py) | `review_customs_approvals` | `review_records` | 海关审核记录与财务审核放行依据：新增一张表、一个可空字段。 |
 | [`0045_settlement_batches`](../../backend/migrations/versions/0045_settlement_batches.py) | `settlement_batch_items`、`settlement_batches` | — | settlement：结汇批次与批次明细（香港中转 / 直接收汇两种回款路径）。 |
 | [`0046_settlement_documents`](../../backend/migrations/versions/0046_settlement_documents.py) | `settlement_bills`、`settlement_contracts`、`settlement_parties` | — | settlement：结汇资料包——提单、按模板生成的销售合同、合同抬头与印章。 |
+| [`0047_settlement_bank_receipts`](../../backend/migrations/versions/0047_settlement_bank_receipts.py) | `settlement_bank_receipts` | — | settlement：银行收汇明细（直接收汇明细总账的收汇来源）。 |
