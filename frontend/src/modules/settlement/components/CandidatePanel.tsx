@@ -17,8 +17,8 @@ import {
   type Column,
 } from "../../../shared/components/ui";
 import { money } from "../../../shared/format/money";
-import { queryCandidates } from "../api";
-import type { Candidate, CandidateList, CandidateQuery, RouteFilter } from "../types";
+import { queryCandidates, queryLedger } from "../api";
+import type { Candidate, CandidateList, CandidateQuery, LedgerTotal, RouteFilter } from "../types";
 import { ConsigneeSummary } from "./ConsigneeSummary";
 import { CreateBatchDialog } from "./CreateBatchDialog";
 import { ReceivableStats } from "./ReceivableStats";
@@ -45,6 +45,7 @@ const EMPTY: CandidateQuery = {
 export function CandidatePanel({ onCreated }: { onCreated: (batchId: number) => void }) {
   const [query, setQuery] = useState<CandidateQuery>(EMPTY);
   const [state, setState] = useState<State>({ kind: "loading" });
+  const [directTotals, setDirectTotals] = useState<LedgerTotal[] | null>();
   const [selected, setSelected] = useState<string[]>([]);
   const [creating, setCreating] = useState(false);
   const [refresh, setRefresh] = useState(0);
@@ -65,6 +66,18 @@ export function CandidatePanel({ onCreated }: { onCreated: (batchId: number) => 
     void load();
     return () => controller.abort();
   }, [query, refresh]);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    void queryLedger({ consignee: "", company: "", status: "all", byRecipient: true, page: 1, pageSize: 1 }, controller.signal)
+      .then((result) => {
+        if (!controller.signal.aborted) setDirectTotals(result.totals);
+      })
+      .catch(() => {
+        if (!controller.signal.aborted) setDirectTotals(null);
+      });
+    return () => controller.abort();
+  }, []);
 
   const toggle = (row: Candidate) =>
     setSelected((current) =>
@@ -153,7 +166,11 @@ export function CandidatePanel({ onCreated }: { onCreated: (batchId: number) => 
   return (
     <>
       {state.kind === "ready" && (
-        <ReceivableStats totals={state.result.totals} unsettled={state.result.unsettled} />
+        <ReceivableStats
+          totals={state.result.totals}
+          unsettled={state.result.unsettled}
+          directTotals={directTotals}
+        />
       )}
       <Card>
         <CardHeader
@@ -175,39 +192,34 @@ export function CandidatePanel({ onCreated }: { onCreated: (batchId: number) => 
           }}
           actions={
             <>
-              <Button type="submit">查询</Button>
-              <Button type="reset" variant="ghost" onClick={() => setQuery(EMPTY)}>
+              <Button type="submit" variant="primary">查询</Button>
+              <Button type="reset" onClick={() => setQuery(EMPTY)}>
                 清空
               </Button>
             </>
           }
         >
-          <Field label="境外收货人">
-            <input name="consignee" defaultValue={query.consignee} placeholder="如 HONGKONG VISION" />
+          <Field label="境外收货人" grow>
+            <input name="consignee" placeholder="如 HONGKONG VISION" />
           </Field>
-          <Field label="报关单号">
-            <input name="declarationNo" defaultValue={query.declarationNo} />
+          <Field label="报关单号" grow>
+            <input name="declarationNo" />
           </Field>
           <Field label="回款路径">
-            <select name="route" defaultValue={query.route}>
+            <select name="route" defaultValue={EMPTY.route}>
               <option value="all">全部</option>
               <option value="hk_transit">香港中转</option>
               <option value="direct">直接收汇</option>
             </select>
           </Field>
           <Field label="出口日期 从">
-            <input type="date" name="exportFrom" defaultValue={query.exportFrom ?? ""} />
+            <input type="date" name="exportFrom" />
           </Field>
           <Field label="至">
-            <input type="date" name="exportTo" aria-label="出口日期 至" defaultValue={query.exportTo ?? ""} />
+            <input type="date" name="exportTo" aria-label="出口日期 至" />
           </Field>
           <Field label="香港到账金额（到账 + 手续费）">
-            <input
-              name="targetAmount"
-              inputMode="decimal"
-              defaultValue={query.targetAmount}
-              placeholder="推荐组合用"
-            />
+            <input name="targetAmount" inputMode="decimal" placeholder="推荐组合用" />
           </Field>
         </FilterBar>
         <CardContent flush>

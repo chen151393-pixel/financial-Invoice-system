@@ -62,7 +62,7 @@ const COLUMNS: Column<ConsigneeTotal>[] = [
       ) : (
         <div className="settlement-cell">
           <Link to={paths.settlementDirect}>直接收汇明细</Link>
-          <span>按出口、收汇逐笔累计余额</span>
+          <span>按收货人和收款人汇总差额</span>
         </div>
       ),
   },

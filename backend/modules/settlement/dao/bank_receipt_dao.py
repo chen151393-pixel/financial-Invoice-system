@@ -1,7 +1,4 @@
-"""银行收汇明细读取；不提交事务、不判断回款路径。
-
-本文件只有读取：收汇记录由表格导入写入，导入用例尚未实现（见模块 README“尚未实现”）。
-"""
+"""银行收汇明细读写。事务与导入判断由 service 管理。"""
 
 from sqlalchemy import case, func, select
 
@@ -34,7 +31,7 @@ def page(connection, filters, offset, limit):
     query = (
         select(receipts)
         .where(*conditions)
-        .order_by(receipts.c.receipt_date.desc(), receipts.c.id.desc())
+        .order_by(receipts.c.receipt_date.desc(), receipts.c.receipt_time.desc(), receipts.c.id.desc())
         .offset(offset)
         .limit(limit)
     )
@@ -62,6 +59,17 @@ def totals(connection, filters):
 
 
 def all_receipts(connection):
-    """全部收汇记录，按收汇日期、主键升序；直接收汇明细逐笔累计余额用。"""
+    """全部收汇记录，按收汇日期、主键升序；直接收汇明细汇总用。"""
     query = select(receipts).order_by(receipts.c.receipt_date, receipts.c.id)
     return [dict(row) for row in connection.execute(query).mappings()]
+
+
+def by_import_keys(connection, keys):
+    query = select(
+        receipts.c.import_key, receipts.c.customer_key, receipts.c.payer_key, receipts.c.amount
+    ).where(receipts.c.import_key.in_(keys))
+    return {row["import_key"]: row for row in connection.execute(query).mappings()}
+
+
+def insert_many(connection, rows):
+    connection.execute(receipts.insert(), rows)

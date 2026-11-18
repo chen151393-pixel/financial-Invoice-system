@@ -1,4 +1,4 @@
-import type { CSSProperties, ReactNode } from "react";
+import { Fragment, type CSSProperties, type ReactNode } from "react";
 
 /**
  * 数据表：浅色表头、行悬停、数值列右对齐等宽数字；宽表在自身容器内横向滚动。
@@ -20,6 +20,7 @@ export function DataTable<Row>({
   minWidth = 720,
   density = "default",
   rowTone,
+  renderDetails,
   maxHeight,
 }: {
   label: string;
@@ -29,6 +30,8 @@ export function DataTable<Row>({
   minWidth?: number;
   density?: "default" | "compact";
   rowTone?: (row: Row) => "accent" | undefined;
+  /** 返回该行下方的明细，收起时返回 null。 */
+  renderDetails?: (row: Row) => ReactNode;
   /** 限高后在表内上下滚动，并固定表头。 */
   maxHeight?: CSSProperties["maxHeight"];
 }) {
@@ -58,15 +61,25 @@ export function DataTable<Row>({
           </tr>
         </thead>
         <tbody>
-          {rows.map((row) => (
-            <tr key={rowKey(row)} data-tone={rowTone?.(row)}>
-              {columns.map((column) => (
-                <td key={column.key} data-align={column.align}>
-                  {column.render(row)}
-                </td>
-              ))}
-            </tr>
-          ))}
+          {rows.map((row) => {
+            const details = renderDetails?.(row);
+            return (
+              <Fragment key={rowKey(row)}>
+                <tr data-tone={rowTone?.(row)}>
+                  {columns.map((column) => (
+                    <td key={column.key} data-align={column.align}>
+                      {column.render(row)}
+                    </td>
+                  ))}
+                </tr>
+                {details != null && (
+                  <tr className="ui-table__details">
+                    <td colSpan={columns.length}>{details}</td>
+                  </tr>
+                )}
+              </Fragment>
+            );
+          })}
         </tbody>
       </table>
     </div>

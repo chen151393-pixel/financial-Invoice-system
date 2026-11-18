@@ -6,7 +6,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { MemoryRouter } from "react-router";
 import { createServer } from "vite";
 
-let server, navigation, subViewPath, ConsigneeSummary, LedgerGroupTable, ReceivableStats;
+let server, navigation, subViewPath, ConsigneeSummary, LedgerGroupTable, LedgerSummaryTable, ReceivableStats;
 // 含应用内链接的组件需要路由上下文。
 const inRouter = (element) => createElement(MemoryRouter, null, element);
 
@@ -22,7 +22,7 @@ before(async () => {
   ({ ConsigneeSummary } = await server.ssrLoadModule(
     "/src/modules/settlement/components/ConsigneeSummary.tsx",
   ));
-  ({ LedgerGroupTable } = await server.ssrLoadModule(
+  ({ LedgerGroupTable, LedgerSummaryTable } = await server.ssrLoadModule(
     "/src/modules/settlement/components/LedgerGroupTable.tsx",
   ));
   ({ ReceivableStats } = await server.ssrLoadModule(
@@ -102,15 +102,17 @@ test("应收汇概况只展示后端汇总：按路径分卡，香港中转另�
         { route: "direct", routeLabel: "直接收汇", count: 8, currency: "USD", amount: "345300.00" },
         { route: "hk_transit", routeLabel: "香港中转", count: 3, currency: "USD", amount: "231600.00" },
       ],
+      directTotals: [{ currency: "USD", outstanding: "22350.00", balance: "-435725.67" }],
     }),
   );
   assert.match(html, /直接收汇应收汇（USD）[\s\S]*345,300\.00[\s\S]*8 票 · 进直接收汇明细/);
   assert.match(html, /香港中转应收汇（USD）[\s\S]*431,150\.00[\s\S]*6 票 · 登记回款建批次/);
   assert.match(html, /香港中转待登记回款（USD）[\s\S]*231,600\.00[\s\S]*3 票尚未建批次/);
+  assert.match(html, /直接收汇待收金额（USD）[\s\S]*22,350\.00/);
   assert.equal(renderToStaticMarkup(createElement(ReceivableStats, { totals: [], unsettled: [] })), "");
 });
 
-test("直接收汇明细按后端给出的逐笔余额展示，另一侧留空，三方代付只作标记", () => {
+test("直接收汇明细末列显示各笔累计余额，保留来源单据", () => {
   const entry = (overrides) => ({
     kind: "export",
     kindLabel: "出口",
@@ -120,7 +122,6 @@ test("直接收汇明细按后端给出的逐笔余额展示，另一侧留空�
     receiptCompany: "",
     receiptDate: "",
     receiptAmount: "",
-    balance: "0.00",
     sourceNo: "",
     thirdParty: false,
     payerName: "",
@@ -141,8 +142,8 @@ test("直接收汇明细按后端给出的逐笔余额展示，另一侧留空�
             exportCompany: "上海毅烁",
             exportDate: "2026-10-13",
             exportAmount: "56900.00",
-            balance: "56900.00",
             sourceNo: "223120260002291375",
+            balance: "56900.00",
           }),
           entry({
             kind: "receipt",
@@ -150,8 +151,8 @@ test("直接收汇明细按后端给出的逐笔余额展示，另一侧留空�
             receiptCompany: "上海毅烁",
             receiptDate: "2026-10-27",
             receiptAmount: "62000.00",
-            balance: "-5100.00",
             sourceNo: "FT2610270009871",
+            balance: "-5100.00",
             thirdParty: true,
             payerName: "HANSA PAY SERVICES LTD",
           }),
@@ -159,24 +160,67 @@ test("直接收汇明细按后端给出的逐笔余额展示，另一侧留空�
       },
     }),
   );
-  assert.match(html, /ACME LTD<\/strong>[\s\S]*超收/);
-  assert.match(html, /出口 56,900\.00 · 收汇 62,000\.00 · 期末余额 <strong>-5,100\.00<\/strong>/);
   for (const header of [
     "事务类型",
     "出口抬头",
     "出口日期",
     "出口金额",
     "收汇抬头",
-    "收汇日期",
+    "实际到账日期",
     "收汇金额",
-    "期末余额",
+    "真实报关单号 / 银行流水号",
+    "余额",
   ]) {
     assert.match(html, new RegExp(`<th[^>]*>${header}</th>`));
   }
-  assert.match(html, /报关单 223120260002291375/);
-  assert.match(html, /银行收汇 FT2610270009871[\s\S]*三方代付 · 付款人 HANSA PAY SERVICES LTD/);
+  assert.match(html, /class="settlement-cell">223120260002291375<\/div>/);
+  assert.match(
+    html,
+    /class="settlement-cell">FT2610270009871<span>三方代付 · 付款人 HANSA PAY SERVICES LTD<\/span>/,
+  );
   // 出口行的收汇金额单元格留空，不显示占位符或 0
   const exportRow = html.slice(html.indexOf("<tbody>"), html.indexOf("</tr>", html.indexOf("<tbody>")));
   assert.equal((exportRow.match(/<td[^>]*><\/td>/g) ?? []).length, 3);
-  assert.doesNotMatch(html, /协议/);
+  assert.match(html, /<th[^>]*>余额<\/th><\/tr><\/thead>/);
+  assert.match(exportRow, /<strong>56,900\.00<\/strong><\/td>$/);
+  assert.match(html, /<strong>-5,100\.00<\/strong><\/td><\/tr>/);
+  assert.doesNotMatch(html, /协议|待匹配金额|收汇匹配|期末余额/);
+});
+
+test("直接收汇默认按收货人和币种显示汇总，逐笔流水默认收起", () => {
+  const group = {
+    consignee: "ACME LTD",
+    currency: "USD",
+    receivingCompany: "上海毅烁",
+    openingBalance: "1000.00",
+    exportTotal: "56900.00",
+    receiptTotal: "62000.00",
+    balance: "-5100.00",
+    status: "overpaid",
+    statusLabel: "超收",
+    entries: [{ sourceNo: "FT2610270009871" }],
+  };
+  const html = renderToStaticMarkup(
+    createElement(LedgerSummaryTable, { groups: [group, { ...group, currency: "EUR" }] }),
+  );
+  for (const title of [
+    "境外收货人",
+    "收款人（收汇抬头）",
+    "状态",
+    "期初差额",
+    "本期出口",
+    "本期收汇",
+    "期末差额",
+  ]) {
+    assert.match(html, new RegExp(`<th[^>]*>${title}</th>`));
+  }
+  assert.match(html, /aria-expanded="false" aria-label="展开 ACME LTD USD 的流水"/);
+  assert.match(html, /aria-expanded="false" aria-label="展开 ACME LTD EUR 的流水"/);
+  assert.doesNotMatch(html, /settlement-ledger__meta">USD<\/div>/);
+  assert.match(
+    html,
+    /settlement-ledger__meta">EUR<\/div><\/td><td>上海毅烁<\/td><td><span class="ui-badge"[^>]*>超收/,
+  );
+  assert.match(html, /56,900\.00[\s\S]*62,000\.00[\s\S]*-5,100\.00/);
+  assert.doesNotMatch(html, /FT2610270009871|ui-table__details|事务类型/);
 });

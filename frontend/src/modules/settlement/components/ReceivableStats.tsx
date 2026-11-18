@@ -1,11 +1,19 @@
 import { StatCard, StatGrid } from "../../../shared/components/ui";
 import { money } from "../../../shared/format/money";
-import type { RouteTotal } from "../types";
+import type { LedgerTotal, RouteTotal } from "../types";
 
-/** 报关应收汇概况：金额与张数全部来自后端汇总（随查询条件变化），按回款路径与币种分开。 */
-export function ReceivableStats({ totals, unsettled }: { totals: RouteTotal[]; unsettled: RouteTotal[] }) {
+/** 报关金额按当前查询汇总，直接收汇待收金额取总账。 */
+export function ReceivableStats({
+  totals,
+  unsettled,
+  directTotals,
+}: {
+  totals: RouteTotal[];
+  unsettled: RouteTotal[];
+  directTotals?: LedgerTotal[] | null;
+}) {
   const pending = unsettled.filter((total) => total.route === "hk_transit");
-  if (!totals.length) return null;
+  if (!totals.length && !directTotals?.length && directTotals !== null) return null;
   return (
     <StatGrid label="应收汇概况">
       {totals.map((total) => (
@@ -28,6 +36,19 @@ export function ReceivableStats({ totals, unsettled }: { totals: RouteTotal[]; u
           note={`${total.count} 票尚未建批次`}
         />
       ))}
+      {directTotals?.map((total) => (
+        <StatCard
+          key={`direct-outstanding-${total.currency}`}
+          glyph="收"
+          tone="warning"
+          label={`直接收汇待收金额（${total.currency}）`}
+          value={money(total.outstanding)}
+          note="直接收汇总账 · 按收货人汇总未收余额"
+        />
+      ))}
+      {directTotals === null && (
+        <StatCard glyph="收" tone="warning" label="直接收汇待收金额" value="—" note="暂时无法读取总账" />
+      )}
     </StatGrid>
   );
 }

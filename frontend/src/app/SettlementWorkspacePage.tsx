@@ -31,7 +31,7 @@ const PAGES = {
   direct: {
     child: "settlement-direct",
     title: "直接收汇明细",
-    description: "非香港中转的境外收货人总账：出口取自报关单，收汇取自银行收汇明细，按日期逐笔累计期末余额。",
+    description: "非香港中转的境外收货人总账：出口取自报关单，收汇取自银行收汇明细，按境外收货人和收款人汇总差额。",
     source: "海关回执 + 银行收汇明细",
   },
   parties: {

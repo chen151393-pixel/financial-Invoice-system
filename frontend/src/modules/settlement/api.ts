@@ -1,6 +1,7 @@
 import { http } from "../../shared/api/http";
 import { readImportFile } from "../../shared/api/import-file";
 import type {
+  BankReceiptImportResult,
   BankReceiptList,
   BankReceiptQuery,
   BatchDetail,
@@ -23,9 +24,14 @@ import type {
 export const queryCandidates = (query: CandidateQuery, signal?: AbortSignal) =>
   http<CandidateList>("/settlement/candidates/query", "POST", query, signal);
 
-// 银行收汇明细与直接收汇明细（总账）：只读查询，逐笔余额与合计由后端计算。
+// 银行收汇明细与直接收汇明细（总账）：总账差额与合计由后端计算。
 export const queryBankReceipts = (query: BankReceiptQuery, signal?: AbortSignal) =>
   http<BankReceiptList>("/settlement/bank-receipts/query", "POST", query, signal);
+
+export async function importBankReceipts(file: File) {
+  const body = await readImportFile(file);
+  return http<BankReceiptImportResult>("/settlement/bank-receipts/import", "POST", body);
+}
 
 export const queryLedger = (query: LedgerQuery, signal?: AbortSignal) =>
   http<LedgerList>("/settlement/ledger/query", "POST", query, signal);

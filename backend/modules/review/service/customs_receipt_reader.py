@@ -6,76 +6,21 @@
 
 import csv
 import io
-from datetime import date, datetime
-from decimal import Decimal
-from xml.etree.ElementTree import ParseError
-from zipfile import BadZipFile
 
 import xlrd
-from defusedxml.common import DefusedXmlException
-from openpyxl import load_workbook
-from openpyxl.utils.exceptions import InvalidFileException
 from xlrd.compdoc import CompDocError
 
 from backend.core.errors import ApiError
-from backend.core.xlsx_archive import check_xlsx_archive
+from backend.core.xlsx_reader import Cell, number_text, read_xlsx_sheets
 
 MAX_ROWS = 6000
 MAX_COLUMNS = 80
 MAX_CELL = 1000
 
 
-class Cell:
-    """单元格文本及是否为数字类型（数字类型的长号码可能已丢失精度）。"""
-
-    __slots__ = ("text", "numeric")
-
-    def __init__(self, text, numeric=False):
-        self.text = text
-        self.numeric = numeric
-
-
-def _number_text(value):
-    return format(Decimal(str(value)).normalize(), "f")
-
-
 def _check_size(sheet_name, row_count, column_count):
     if row_count > MAX_ROWS + 20 or column_count > MAX_COLUMNS:
         raise ApiError(422, f"{sheet_name}超过{MAX_ROWS}行或{MAX_COLUMNS}列，请拆分文件")
-
-
-def _xlsx_sheets(raw):
-    try:
-        check_xlsx_archive(raw)
-        book = load_workbook(io.BytesIO(raw), read_only=True, data_only=False, keep_links=False)
-    except (BadZipFile, InvalidFileException, KeyError, OSError, ParseError, DefusedXmlException):
-        raise ApiError(422, "文件不是有效的XLSX工作簿，请勿仅修改扩展名") from None
-    try:
-        for sheet in book:
-            # 不信任工作表声明的尺寸，逐行读取并设置硬上限。
-            sheet.reset_dimensions()
-            rows = []
-            for row_no, cells in enumerate(sheet.iter_rows(), 1):
-                _check_size(sheet.title, row_no, len(cells))
-                rows.append([_xlsx_cell(sheet.title, row_no, cell) for cell in cells])
-            yield sheet.title, rows
-    finally:
-        book.close()
-
-
-def _xlsx_cell(sheet_name, row_no, cell):
-    value = cell.value
-    if cell.data_type == "f":
-        raise ApiError(422, f"{sheet_name}第{row_no}行包含公式，请粘贴为值后重新导入")
-    if cell.data_type == "e":
-        raise ApiError(422, f"{sheet_name}第{row_no}行有Excel错误值")
-    if isinstance(value, datetime):
-        return Cell(value.date().isoformat())
-    if isinstance(value, date):
-        return Cell(value.isoformat())
-    if isinstance(value, (int, float)) and not isinstance(value, bool):
-        return Cell(_number_text(value), numeric=True)
-    return Cell("" if value is None else str(value).strip())
 
 
 def _xls_sheets(raw):
@@ -99,7 +44,7 @@ def _xls_sheets(raw):
                         value = xlrd.xldate_as_datetime(cell.value, book.datemode).date().isoformat()
                         row.append(Cell(value))
                     elif cell.ctype == xlrd.XL_CELL_NUMBER:
-                        row.append(Cell(_number_text(cell.value), numeric=True))
+                        row.append(Cell(number_text(cell.value), numeric=True))
                     else:
                         row.append(Cell(str(cell.value).strip()))
                 rows.append(row)
@@ -128,7 +73,7 @@ def read_sheets(filename, raw):
     """逐个工作表产出 (名称, [[Cell, ...], ...])；单元格过长时拒绝。"""
     lower = filename.lower()
     if lower.endswith(".xlsx"):
-        sheets = _xlsx_sheets(raw)
+        sheets = read_xlsx_sheets(raw, max_rows=MAX_ROWS + 20, max_columns=MAX_COLUMNS)
     elif lower.endswith(".xls"):
         sheets = _xls_sheets(raw)
     elif lower.endswith(".csv"):

@@ -1,4 +1,4 @@
-"""直接收汇明细（总账）：非香港中转的境外收货人按出口、收汇逐笔累计期末余额。
+"""直接收汇明细（总账）：按出口与收汇汇总期初和期末差额。
 
 只读。出口取报关应收汇中判定为直接收汇的报关单（海关回执出口日期与成交总价），
 收汇取银行收汇明细中实际客户为直接收汇的记录；香港中转的报关单与汇回不进总账。
@@ -41,8 +41,8 @@ def _entry(row):
         receiptCompany="" if export else row["company"],
         receiptDate="" if export else day,
         receiptAmount="" if export else _amount(row["amount"]),
-        balance=_amount(row["balance"]),
         sourceNo=row["source_no"],
+        balance=_amount(row["balance"]),
         thirdParty=row["third_party"],
         payerName=row["payer"],
     )
@@ -65,6 +65,8 @@ class LedgerService:
             if row["route"] != DIRECT:
                 continue
             reason = row["currency_issue"] or ("" if row["consignee"] else "海关回执没有境外收货人")
+            if not reason and body.startDate and not row["export_date"]:
+                reason = "海关回执没有出口日期"
             if reason:
                 skipped.append(
                     LedgerSkipped(
@@ -77,7 +79,15 @@ class LedgerService:
             # 香港公司汇回境内的款项在香港中转批次登记，不进总账
             if self.candidates.route(row["customer_name"])[0] == DIRECT:
                 entries.append(receipt_entry(row))
-        groups = build_groups(entries)
+        if body.receivingCompany:
+            recipient = normalize_name(body.receivingCompany)
+            entries = [entry for entry in entries if recipient in normalize_name(entry["company"])]
+        groups = build_groups(
+            entries,
+            start=body.startDate,
+            end=body.endDate,
+            by_recipient=body.byRecipient or bool(body.receivingCompany),
+        )
         if body.consignee:
             wanted = normalize_name(body.consignee)
             groups = [group for group in groups if wanted in group["key"]]
@@ -97,6 +107,8 @@ class LedgerService:
             groups=[
                 LedgerGroup(
                     consignee=group["consignee"],
+                    receivingCompany=group["receiving_company"],
+                    openingBalance=_amount(group["opening_balance"]),
                     currency=group["currency"],
                     exportTotal=_amount(group["export_total"]),
                     receiptTotal=_amount(group["receipt_total"]),
@@ -113,6 +125,7 @@ class LedgerService:
             totals=[
                 LedgerTotal(
                     currency=row["currency"],
+                    openingBalance=_amount(row["opening_balance"]),
                     exportTotal=_amount(row["export_total"]),
                     receiptTotal=_amount(row["receipt_total"]),
                     balance=_amount(row["balance"]),

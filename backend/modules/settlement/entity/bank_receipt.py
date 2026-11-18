@@ -5,7 +5,7 @@
 直接收汇明细（总账）按 customer_key 把收汇归到对应的境外收货人。
 """
 
-from sqlalchemy import Column, Date, Index, Integer, Numeric, String, Table
+from sqlalchemy import CHAR, Column, Date, Index, Integer, Numeric, String, Table, Time
 
 from backend.core.schema import ID, TIMESTAMP, identifier, schema_metadata, table_options, timestamps
 
@@ -14,6 +14,7 @@ settlement_bank_receipts = Table(
     schema_metadata,
     Column("id", ID, primary_key=True, autoincrement=True, comment="银行收汇记录本地主键"),
     Column("receipt_date", Date, nullable=False, comment="收汇日期（银行入账日期）"),
+    Column("receipt_time", Time, comment="银行交易时间，取导入表交易时间"),
     Column("receiving_company", String(200), nullable=False, comment="收汇抬头：我方收款主体，如上海毅鑫"),
     Column("receiving_account", String(200), comment="收款账户（境内美金账户）"),
     Column("payer_name", String(500), nullable=False, comment="付款人户名（银行流水原文）"),
@@ -40,11 +41,13 @@ settlement_bank_receipts = Table(
     Column("reference", String(200), comment="银行流水号"),
     Column("source_file", String(255), comment="导入来源文件名"),
     Column("source_row", Integer, comment="来源文件中的行号，便于核对"),
+    Column("import_key", CHAR(64), comment="银行流水导入去重摘要，历史记录可为空"),
     Column("imported_by", String(190), nullable=False, comment="导入人（认证身份）"),
     Column("imported_at", TIMESTAMP, nullable=False, comment="导入时间，UTC"),
     *timestamps(),
     Index("ix_settlement_bank_receipt_date", "receipt_date"),
     Index("ix_settlement_bank_receipt_customer", "customer_key", "currency"),
+    Index("uq_settlement_bank_receipt_import_key", "import_key", unique=True),
     comment="银行收汇明细：境内美金账户收汇记录及其对应的实际客户（境外收货人）",
     **table_options,
 )

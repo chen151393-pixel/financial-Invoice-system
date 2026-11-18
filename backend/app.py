@@ -240,6 +240,7 @@ def create_app(settings=None, ns=None, engine=None, wecom=None, lemon=None, lemo
             **JSON_BODY_LIMITS,
             **settlement_documents.JSON_BODY_LIMITS,
             **settlement_parties.JSON_BODY_LIMITS,
+            **settlement_bank_receipts.JSON_BODY_LIMITS,
         },
     )
     register_error_handlers(app)

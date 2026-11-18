@@ -1,4 +1,4 @@
-"""直接收汇明细（总账）响应：逐笔余额、状态与合计均由服务器计算；金额为十进制字符串。"""
+"""直接收汇明细（总账）响应：总账差额、状态与合计均由服务器计算；金额为十进制字符串。"""
 
 from typing import Literal
 
@@ -17,16 +17,18 @@ class LedgerEntry(StrictModel):
     receiptCompany: str
     receiptDate: str
     receiptAmount: str
-    # 本笔之后的期末余额（出口加、收汇减）
-    balance: str
     # 来源单据：出口为报关单号，收汇为银行流水号
     sourceNo: str
+    # 该组计入本笔后的累计余额
+    balance: str
     thirdParty: bool
     payerName: str
 
 
 class LedgerGroup(StrictModel):
     consignee: str
+    receivingCompany: str = ""
+    openingBalance: str = "0.00"
     currency: str
     exportTotal: str
     receiptTotal: str
@@ -38,6 +40,7 @@ class LedgerGroup(StrictModel):
 
 class LedgerTotal(StrictModel):
     currency: str
+    openingBalance: str = "0.00"
     exportTotal: str
     receiptTotal: str
     balance: str

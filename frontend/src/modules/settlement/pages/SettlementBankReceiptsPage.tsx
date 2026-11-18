@@ -2,7 +2,6 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router";
 import { paths } from "../../../app/paths";
 import {
-  Alert,
   Badge,
   Button,
   Card,
@@ -22,6 +21,7 @@ import {
 } from "../../../shared/components/ui";
 import { money } from "../../../shared/format/money";
 import { queryBankReceipts } from "../api";
+import { BankReceiptImportDialog } from "../components/BankReceiptImportDialog";
 import type { BankReceipt, BankReceiptList, BankReceiptQuery, ThirdPartyFilter } from "../types";
 import "../components/settlement.css";
 
@@ -46,8 +46,8 @@ const COLUMNS: Column<BankReceipt>[] = [
     header: "收汇日期 / 流水号",
     render: (row) => (
       <div className="settlement-cell">
-        {row.receiptDate}
-        <span>{row.reference || "—"}</span>
+        {[row.receiptDate, row.receiptTime].filter(Boolean).join(" ")}
+        {row.reference && <span>{row.reference}</span>}
       </div>
     ),
   },
@@ -100,6 +100,7 @@ export function SettlementBankReceiptsPage() {
   const [query, setQuery] = useState<BankReceiptQuery>(INITIAL);
   const [state, setState] = useState<State>({ kind: "loading" });
   const [refresh, setRefresh] = useState(0);
+  const [importOpen, setImportOpen] = useState(false);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -118,9 +119,6 @@ export function SettlementBankReceiptsPage() {
 
   return (
     <div className="settlement-page">
-      <Alert tone="info" title="表格导入尚未接入">
-        银行流水表格导入功能还没有上线，本页只展示已入库的收汇记录。
-      </Alert>
       {state.kind === "ready" && state.result.totals.length > 0 && (
         <StatGrid label="收汇概况">
           {state.result.totals.map((total) => (
@@ -143,6 +141,11 @@ export function SettlementBankReceiptsPage() {
         <CardHeader
           title="收汇记录"
           description="收汇按表格中的实际客户归到境外收货人；付款人户名与实际客户不同的标为三方代付。"
+          actions={
+            <Button variant="primary" onClick={() => setImportOpen(true)}>
+              导入银行流水
+            </Button>
+          }
         />
         <FilterBar
           embedded
@@ -160,32 +163,27 @@ export function SettlementBankReceiptsPage() {
           }}
           actions={
             <>
-              <Button type="submit">查询</Button>
-              <Button type="reset" variant="ghost" onClick={() => setQuery(INITIAL)}>
+              <Button type="submit" variant="primary">查询</Button>
+              <Button type="reset" onClick={() => setQuery(INITIAL)}>
                 清空
               </Button>
             </>
           }
         >
+          <Field label="实际客户（境外收货人）" grow>
+            <input name="customer" placeholder="按表格中的名称搜索" />
+          </Field>
+          <Field label="收汇抬头" grow>
+            <input name="receivingCompany" placeholder="如 上海毅鑫" />
+          </Field>
           <Field label="收汇日期 从">
-            <input type="date" name="receiptFrom" defaultValue={query.receiptFrom ?? ""} />
+            <input type="date" name="receiptFrom" />
           </Field>
           <Field label="至">
-            <input
-              type="date"
-              name="receiptTo"
-              aria-label="收汇日期 至"
-              defaultValue={query.receiptTo ?? ""}
-            />
-          </Field>
-          <Field label="实际客户（境外收货人）">
-            <input name="customer" defaultValue={query.customer} placeholder="按表格中的名称搜索" />
-          </Field>
-          <Field label="收汇抬头">
-            <input name="receivingCompany" defaultValue={query.receivingCompany} placeholder="如 上海毅鑫" />
+            <input type="date" name="receiptTo" aria-label="收汇日期 至" />
           </Field>
           <Field label="三方代付">
-            <select name="thirdParty" defaultValue={query.thirdParty}>
+            <select name="thirdParty" defaultValue={INITIAL.thirdParty}>
               <option value="all">全部</option>
               <option value="yes">仅三方代付</option>
               <option value="no">非三方代付</option>
@@ -233,6 +231,12 @@ export function SettlementBankReceiptsPage() {
           </CardFooter>
         )}
       </Card>
+      {importOpen && (
+        <BankReceiptImportDialog
+          onClose={() => setImportOpen(false)}
+          onImported={() => setQuery((current) => ({ ...current, page: 1 }))}
+        />
+      )}
     </div>
   );
 }

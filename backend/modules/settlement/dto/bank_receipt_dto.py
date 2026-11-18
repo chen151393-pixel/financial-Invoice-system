@@ -8,6 +8,12 @@ from pydantic import Field, StringConstraints, model_validator
 from backend.core.dto import StrictModel
 
 Text200 = Annotated[str, StringConstraints(strip_whitespace=True, max_length=200)]
+MAX_IMPORT_BYTES = 4 * 1024 * 1024
+
+
+class BankReceiptImportRequest(StrictModel):
+    filename: str = Field(min_length=1, max_length=255)
+    content: str = Field(min_length=1, max_length=((MAX_IMPORT_BYTES + 2) // 3) * 4)
 
 
 class BankReceiptQuery(StrictModel):

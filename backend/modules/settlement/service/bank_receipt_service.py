@@ -1,16 +1,18 @@
-"""银行收汇明细查询：收汇记录、三方代付标记、实际客户的回款路径与按收汇抬头汇总。
-
-只读。收汇记录由银行流水表格导入写入，导入用例尚未实现。
-"""
+"""银行收汇明细的导入与查询。"""
 
 import math
+from datetime import UTC, datetime
 
+from backend.core import write_lock
 from backend.core.errors import ApiError
 
 from ..dao import bank_receipt_dao
+from ..dto.bank_receipt_dto import MAX_IMPORT_BYTES
 from ..policy.amount_policy import money
 from ..policy.route_policy import ROUTE_LABELS
-from ..vo.bank_receipt_vo import BankReceipt, BankReceiptList, BankReceiptTotal
+from ..vo.bank_receipt_vo import BankReceipt, BankReceiptImportResult, BankReceiptList, BankReceiptTotal
+from .bank_receipt_parser import parse_bank_receipts
+from .bill_service import decode
 
 THIRD_PARTY = {"all": None, "yes": True, "no": False}
 
@@ -20,6 +22,36 @@ class BankReceiptService:
         self.engine = engine
         # 回款路径判定与报关应收汇共用同一套规则
         self.candidates = candidates
+
+    def import_file(self, body, owner):
+        if owner.startswith("service:"):
+            raise ApiError(403, "服务身份只读，不能导入银行流水")
+        if self.engine is None:
+            raise ApiError(503, "业务数据库未配置")
+        filename = body.filename.strip()
+        if any(char in filename for char in ("/", "\\", "\x00")) or not filename.lower().endswith(".xlsx"):
+            raise ApiError(422, "请选择银行导出的 .xlsx 工作簿")
+        entries, ignored = parse_bank_receipts(decode(body.content, MAX_IMPORT_BYTES, "银行流水"))
+        now = datetime.now(UTC).replace(tzinfo=None)
+        with write_lock.transaction(self.engine, scope="settlement-bank-receipts") as connection:
+            known = bank_receipt_dao.by_import_keys(connection, list({row["import_key"] for row in entries}))
+            added = []
+            for row in entries:
+                key = row["import_key"]
+                stored = known.get(key)
+                if stored is not None:
+                    if any(stored[field] != row[field] for field in ("customer_key", "payer_key", "amount")):
+                        raise ApiError(
+                            409, f"第 {row['source_row']} 行与同一笔流水的客户、付款人或金额冲突，请核对"
+                        )
+                    continue
+                known[key] = row
+                added.append({**row, "source_file": filename, "imported_by": owner, "imported_at": now})
+            if added:
+                bank_receipt_dao.insert_many(connection, added)
+        return BankReceiptImportResult(
+            imported=len(added), duplicates=len(entries) - len(added), ignored=ignored
+        )
 
     def browse(self, body):
         if self.engine is None:
@@ -65,6 +97,7 @@ class BankReceiptService:
         return BankReceipt(
             id=row["id"],
             receiptDate=str(row["receipt_date"]),
+            receiptTime=str(row["receipt_time"]) if row["receipt_time"] is not None else "",
             receivingCompany=row["receiving_company"],
             receivingAccount=row["receiving_account"] or "",
             payerName=row["payer_name"],

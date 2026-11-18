@@ -7,6 +7,7 @@ const PATHS = {
   bell: "M6 16V11a6 6 0 0 1 12 0v5l2 2H4z M10 20a2 2 0 0 0 4 0",
   clock: "M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18z M12 7v5l3 2",
   check: "M5 12l4 4L19 6",
+  chevronRight: "m9 6 6 6-6 6",
   alert: "M12 3l10 18H2z M12 10v4 M12 17.5v.5",
   chart: "M4 20V4 M4 20h16 M8 16v-4 M12 16V8 M16 16v-6",
   trendUp: "M4 17l6-6 4 4 6-7 M15 8h5v5",

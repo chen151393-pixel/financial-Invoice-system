@@ -2100,17 +2100,34 @@ NS 来源按批后台保存记录与结果，不保存令牌。
 
 ### settlement_bank_receipts｜银行收汇明细
 
-迁移 `0047_settlement_bank_receipts` 新建，归属 settlement。境内美金账户的收汇记录，由银行流水表格导入（导入用例尚未实现）。直接收汇明细（总账）按 `customer_key` 把收汇归到境外收货人；`payer_key` 与 `customer_key` 不同即三方代付，只作标记。
+迁移 `0047_settlement_bank_receipts` 创建银行收汇表，`0048_settlement_receipt_import` 增加交易时间和导入去重摘要。直接收汇明细按 `customer_key` 把收汇归到境外收货人；`payer_key` 与 `customer_key` 不同即三方代付，只作标记。
 
 | 字段                                  | 类型                        | 可空    | 说明                                                             |
 | ------------------------------------- | --------------------------- | ------- | ---------------------------------------------------------------- |
 | id                                    | BIGINT                      | 否      | 本地自增主键                                                     |
 | receipt_date                          | DATE                        | 否      | 收汇日期（银行入账日期）                                         |
+| receipt_time                          | TIME                        | 是      | 银行交易时间                                                     |
 | receiving_company / receiving_account | VARCHAR(200)                | 否 / 是 | 收汇抬头（我方收款主体，如上海毅鑫）与收款账户                   |
 | payer_name / payer_key                | VARCHAR(500)                | 否      | 付款人户名原文及其规范化名称                                     |
 | customer_name / customer_key          | VARCHAR(500)                | 否      | 实际客户（境外收货人，取导入表格）及其规范化名称，用于归属收货人 |
 | currency / amount                     | VARCHAR(20) / DECIMAL(24,6) | 否      | 币种与收汇金额                                                   |
 | reference                             | VARCHAR(200)                | 是      | 银行流水号                                                       |
 | source_file / source_row              | VARCHAR(255) / INTEGER      | 是      | 导入来源文件名与行号                                             |
+| import_key                            | CHAR(64)                    | 是      | 导入去重摘要，有值时唯一                                         |
 | imported_by / imported_at             | VARCHAR(190) / DATETIME(6)  | 否      | 导入人（认证身份）与导入时间，UTC                                |
 | created_at / updated_at               | DATETIME(6)                 | 否      | 本地创建与更新时间，UTC                                          |
+
+### settlement_direct_allocations｜直接收汇历史分配
+
+迁移 `0049_settlement_direct_allocations` 创建历史分配表。直接收汇总账按原始流水计算余额。
+
+| 字段 | 类型 | 可空 | 说明 |
+| --- | --- | --- | --- |
+| id | BIGINT | 否 | 本地自增主键 |
+| receipt_id | BIGINT | 否 | 银行收汇记录 ID |
+| bank_reference | VARCHAR(200) | 否 | 确认时的银行流水号 |
+| declaration_no | VARCHAR(150) | 否 | 真实报关单号 |
+| amount | DECIMAL(24,6) | 否 | 确认分配金额，大于零 |
+| request_id | VARCHAR(36) | 否 | 确认请求 ID，与报关单号组成唯一键 |
+| confirmed_at | DATETIME(6) | 否 | 确认时间，UTC |
+| confirmed_by | VARCHAR(190) | 否 | 确认人身份 |

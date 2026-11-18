@@ -1,7 +1,7 @@
 """直接收汇明细（总账）规则（纯函数）。
 
 业务规则（2026-11-18 确认）：非香港中转的报关单不建批次，按境外收货人记流水账——
-出口（报关单成交总价）增加应收，收汇（银行收汇明细）减少应收，按日期先后逐笔累计期末余额；
+出口（报关单成交总价）增加应收，收汇（银行收汇明细）减少应收，按对账期间汇总期初与期末差额；
 余额为负表示超收。同一天既有出口又有收汇时先记出口。金额一律 Decimal，不使用浮点。
 """
 
@@ -54,41 +54,51 @@ def receipt_entry(row):
         "source_no": row["reference"] or "",
         "payer": row["payer_name"],
         "third_party": row["payer_key"] != row["customer_key"],
-        "order": f"{row['id']:020d}",
+        "order": f"{row.get('receipt_time') or '00:00:00'}|{row['id']:020d}",
     }
 
 
-def build_groups(entries):
-    """流水 → 按（境外收货人, 币种）分组的总账，组内按日期逐笔累计余额。
+def build_groups(entries, *, start=None, end=None, by_recipient=False):
+    """流水按境外收货人、币种分组，可进一步按收款抬头拆分。
 
     返回 [{key, consignee, currency, export_total, receipt_total, balance, status, entries}]，
     按收货人名称、币种排序；缺出口日期的出口排在最前。
     """
     grouped = {}
     for entry in entries:
-        grouped.setdefault((entry["key"], entry["currency"]), []).append(entry)
+        if end and (entry["date"] is None or entry["date"] > end):
+            continue
+        recipient = normalize_name(entry["company"]) if by_recipient else ""
+        grouped.setdefault((entry["key"], entry["currency"], recipient), []).append(entry)
     groups = []
-    for (key, currency), rows in grouped.items():
+    for (key, currency, _), rows in grouped.items():
         rows.sort(key=lambda e: (e["date"] or date.min, _KIND_ORDER[e["kind"]], e["order"]))
-        balance = Decimal(0)
+        opening = Decimal(0)
         export_total = Decimal(0)
         receipt_total = Decimal(0)
         lines = []
         for row in rows:
+            if start and row["date"] < start:
+                opening += row["amount"] if row["kind"] == EXPORT else -row["amount"]
+                continue
             if row["kind"] == EXPORT:
-                balance += row["amount"]
                 export_total += row["amount"]
             else:
-                balance -= row["amount"]
                 receipt_total += row["amount"]
-            lines.append({**row, "balance": balance})
+            lines.append({**row, "balance": opening + export_total - receipt_total})
+        if not lines and opening == 0:
+            continue
+        balance = lines[-1]["balance"] if lines else opening
         # 展示名称优先取报关单上的境外收货人，没有出口时取收汇表格的实际客户
         named = next((row for row in rows if row["kind"] == EXPORT), rows[0])
+        recipient = next((row["company"] for row in rows if row["kind"] == RECEIPT), named["company"])
         groups.append(
             {
                 "key": key,
                 "consignee": named["name"],
+                "receiving_company": recipient if by_recipient else "",
                 "currency": currency,
+                "opening_balance": opening,
                 "export_total": export_total,
                 "receipt_total": receipt_total,
                 "balance": balance,
@@ -96,7 +106,9 @@ def build_groups(entries):
                 "entries": lines,
             }
         )
-    groups.sort(key=lambda group: (group["consignee"].casefold(), group["currency"]))
+    groups.sort(
+        key=lambda group: (group["consignee"].casefold(), group["currency"], group["receiving_company"])
+    )
     return groups
 
 
@@ -111,6 +123,7 @@ def currency_totals(groups):
             group["currency"],
             {
                 "currency": group["currency"],
+                "opening_balance": Decimal(0),
                 "export_total": Decimal(0),
                 "receipt_total": Decimal(0),
                 "balance": Decimal(0),
@@ -119,6 +132,7 @@ def currency_totals(groups):
             },
         )
         total["export_total"] += group["export_total"]
+        total["opening_balance"] += group["opening_balance"]
         total["receipt_total"] += group["receipt_total"]
         total["balance"] += group["balance"]
         total["outstanding" if group["balance"] > 0 else "overpaid"] += group["balance"]

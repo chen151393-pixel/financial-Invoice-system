@@ -1,4 +1,4 @@
-"""直接收汇明细（总账）与银行收汇明细：非香港中转按境外收货人逐笔累计余额，香港中转不进总账。"""
+"""直接收汇明细（总账）与银行收汇明细：非香港中转按境外收货人、收款人和币种汇总，香港中转不进总账。"""
 
 from datetime import date, datetime
 from decimal import Decimal
@@ -31,7 +31,7 @@ def receipt_row(number, consignee, total, exported, item="01", currency="USD"):
 
 
 def add_receipt(engine, day, payer, customer, amount, company="上海毅鑫", currency="USD", reference=None):
-    """直接写入一笔银行收汇（表格导入尚未实现，测试用 SQL 模拟导入结果）。"""
+    """直接写入一笔银行收汇，构造总账测试数据。"""
     now = datetime(2026, 11, 1)
     with engine.begin() as connection:
         connection.execute(
@@ -100,7 +100,24 @@ def services(engine):
     return LedgerService(engine, candidates), BankReceiptService(engine, candidates)
 
 
-def test_running_balance_orders_exports_before_receipts_on_same_day():
+def test_period_uses_opening_difference_and_receiving_company(seeded):
+    company = "申报主体"
+    add_receipt(seeded, "2026-10-18", "ACME LTD", "ACME LTD", "700", company=company, reference="DIRECT-1")
+    add_receipt(seeded, "2026-10-26", "ACME LTD", "ACME LTD", "200", company=company, reference="DIRECT-2")
+    ledger, _ = services(seeded)
+    query = LedgerQuery(receivingCompany=company, startDate="2026-10-18", endDate="2026-10-20")
+    (group,) = ledger.query(query).groups
+    assert (group.openingBalance, group.exportTotal, group.receiptTotal, group.balance) == (
+        "500.00",
+        "300.00",
+        "700.00",
+        "100.00",
+    )
+    assert [entry.sourceNo for entry in group.entries] == ["DIRECT-1", "REAL871"]
+    assert [entry.balance for entry in group.entries] == ["-200.00", group.balance]
+
+
+def test_ledger_orders_exports_before_receipts_on_same_day():
     def entry(kind, day, amount, order):
         return {
             "kind": kind,
@@ -128,7 +145,9 @@ def test_running_balance_orders_exports_before_receipts_on_same_day():
     (group,) = groups
     # 缺出口日期的排最前；1 月 15 日先出口后收汇
     assert [e["source_no"] for e in group["entries"]] == ["e0", "e1", "e2", "r0", "r1"]
-    assert [str(e["balance"]) for e in group["entries"]] == ["5", "50005", "90005", "80005", "20005"]
+    assert [e["balance"] for e in group["entries"]] == list(
+        map(Decimal, ["5", "50005", "90005", "80005", "20005"])
+    )
     assert (group["status"], group["balance"]) == ("outstanding", Decimal("20005"))
     (total,) = currency_totals(groups)
     assert (total["outstanding"], total["overpaid"]) == (Decimal("20005"), Decimal(0))
@@ -142,11 +161,11 @@ def test_ledger_covers_only_direct_consignees(seeded):
         ("BETA GMBH", "USD", "超收"),
     ]
     acme, beta = result.groups
-    assert [(e.kind, e.exportDate or e.receiptDate, e.balance) for e in acme.entries] == [
-        ("export", "2026-10-01", "500.00"),
-        ("receipt", "2026-10-01", "300.00"),
-        ("export", "2026-10-20", "600.00"),
-        ("receipt", "2026-10-25", "-100.00"),
+    assert [(e.kind, e.exportDate or e.receiptDate) for e in acme.entries] == [
+        ("export", "2026-10-01"),
+        ("receipt", "2026-10-01"),
+        ("export", "2026-10-20"),
+        ("receipt", "2026-10-25"),
     ]
     first, _, _, paid = acme.entries
     # 出口取海关回执的出口日期与成交总价，出口抬头取 NS 报关单申报主体

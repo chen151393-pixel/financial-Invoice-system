@@ -4,6 +4,10 @@
   gap: var(--space-layout);
 }
 
+.settlement-page .ui-filter-bar .ui-field--grow {
+  flex: 1 1 220px;
+}
+
 .settlement-cell {
   display: grid;
   gap: 2px;
@@ -133,18 +137,42 @@
   object-fit: contain;
 }
 
-/* 直接收汇明细：每个境外收货人（按币种）一组，组标题下是该收货人的流水表 */
-.settlement-ledger__head {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-small) var(--space-control);
+/* 直接收汇汇总按收货人和币种分行，展开后的流水在独立容器内横向滚动。 */
+.ui-button.settlement-ledger__toggle {
+  display: inline-flex;
+  gap: 4px;
   align-items: center;
-  justify-content: space-between;
-  padding: 10px 20px;
-  border-top: 1px solid var(--color-table-border);
-  background: var(--color-table-heading);
-  font-size: 13px;
-  font-variant-numeric: tabular-nums;
+  max-width: 100%;
+  padding-inline: 0;
+  text-align: left;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.settlement-ledger__toggle .ui-icon {
+  flex: none;
+}
+
+.settlement-ledger__toggle[aria-expanded="true"] .ui-icon {
+  transform: rotate(90deg);
+}
+
+.settlement-ledger__meta {
+  color: var(--color-muted);
+}
+
+.settlement-ledger__detail {
+  padding: var(--space-small);
+  background: var(--color-canvas);
+}
+
+.settlement-ledger__detail .ui-table {
+  background: var(--color-surface);
+}
+
+/* 在出口金额与收汇抬头之间留出分组间距。 */
+.settlement-ledger__detail .ui-table[data-density="compact"] :is(th, td):nth-child(5) {
+  padding-inline-start: var(--space-layout);
 }
 
 /* 列表卡片内紧贴表格的提示：与卡片左右留白对齐 */

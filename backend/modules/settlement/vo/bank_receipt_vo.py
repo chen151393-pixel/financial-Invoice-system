@@ -8,6 +8,7 @@ from .batch_vo import Route
 class BankReceipt(StrictModel):
     id: int
     receiptDate: str
+    receiptTime: str
     receivingCompany: str
     receivingAccount: str
     payerName: str
@@ -39,3 +40,9 @@ class BankReceiptList(StrictModel):
     pageSize: int
     # 筛选范围内按收汇抬头与币种汇总（不受分页影响）
     totals: list[BankReceiptTotal]
+
+
+class BankReceiptImportResult(StrictModel):
+    imported: int
+    duplicates: int
+    ignored: int

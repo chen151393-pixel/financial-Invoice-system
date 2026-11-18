@@ -17,16 +17,23 @@ import {
 } from "../../../shared/components/ui";
 import { money } from "../../../shared/format/money";
 import { queryLedger } from "../api";
-import { LedgerGroupTable } from "../components/LedgerGroupTable";
+import { LedgerSummaryTable } from "../components/LedgerGroupTable";
 import type { LedgerList, LedgerQuery, LedgerStatusFilter } from "../types";
 import "../components/settlement.css";
 
 type State = { kind: "loading" } | { kind: "ready"; result: LedgerList } | { kind: "error"; message: string };
 
-const INITIAL: LedgerQuery = { consignee: "", company: "", status: "all", page: 1, pageSize: 20 };
+const INITIAL: LedgerQuery = {
+  consignee: "",
+  company: "",
+  byRecipient: true,
+  status: "all",
+  page: 1,
+  pageSize: 20,
+};
 
 /**
- * 直接收汇明细（总账）：非香港中转的境外收货人按出口、收汇逐笔累计期末余额。
+ * 直接收汇明细（总账）：按境外收货人、收款人和币种汇总对账期间金额。
  * 余额、状态与合计全部来自后端；本页不做任何金额计算。
  */
 export function SettlementLedgerPage() {
@@ -55,22 +62,27 @@ export function SettlementLedgerPage() {
         state.result.totals.map((total) => (
           <StatGrid key={total.currency} label={`${total.currency} 收汇概况`}>
             <StatCard
+              glyph="初"
+              label={`期初差额（${total.currency}）`}
+              value={money(total.openingBalance)}
+            />
+            <StatCard
               glyph="出"
-              label={`出口金额合计（${total.currency}）`}
+              label={`本期出口（${total.currency}）`}
               value={money(total.exportTotal)}
-              note={`${total.exportCount} 票报关单 · ${total.consigneeCount} 家境外收货人`}
+              note={`${total.exportCount} 票报关单`}
             />
             <StatCard
               glyph="收"
               tone="primary"
-              label={`收汇金额合计（${total.currency}）`}
+              label={`本期收汇（${total.currency}）`}
               value={money(total.receiptTotal)}
               note={`${total.receiptCount} 笔银行收汇`}
             />
             <StatCard
               glyph="余"
               tone="warning"
-              label={`期末余额（${total.currency}）`}
+              label={`期末差额（${total.currency}）`}
               value={money(total.balance)}
               note={`未收 ${money(total.outstanding)} · 超收 ${money(total.overpaid)}`}
             />
@@ -79,7 +91,7 @@ export function SettlementLedgerPage() {
       <Card>
         <CardHeader
           title="直接收汇明细"
-          description="只含非香港中转的境外收货人；同一收货人按日期先后逐笔累计，出口加、收汇减，余额为负表示超收。"
+          description="按境外收货人和收款抬头对账，出口计入出口日期，收汇计入实际到账日期。"
         />
         <FilterBar
           embedded
@@ -88,28 +100,38 @@ export function SettlementLedgerPage() {
             setQuery({
               ...query,
               consignee: String(data.get("consignee") || "").trim(),
-              company: String(data.get("company") || "").trim(),
+              receivingCompany: String(data.get("receivingCompany") || "").trim(),
+              startDate: String(data.get("startDate") || "") || null,
+              endDate: String(data.get("endDate") || "") || null,
               status: String(data.get("status") || "all") as LedgerStatusFilter,
               page: 1,
             });
           }}
           actions={
             <>
-              <Button type="submit">查询</Button>
-              <Button type="reset" variant="ghost" onClick={() => setQuery(INITIAL)}>
+              <Button type="submit" variant="primary">
+                查询
+              </Button>
+              <Button type="reset" onClick={() => setQuery(INITIAL)}>
                 清空
               </Button>
             </>
           }
         >
-          <Field label="境外收货人">
-            <input name="consignee" defaultValue={query.consignee} placeholder="按名称搜索" />
+          <Field label="境外收货人" grow>
+            <input name="consignee" placeholder="按名称搜索" />
           </Field>
-          <Field label="出口 / 收汇抬头">
-            <input name="company" defaultValue={query.company} placeholder="如 上海毅鑫" />
+          <Field label="收款人（收汇抬头）" grow>
+            <input name="receivingCompany" placeholder="按收款抬头搜索" />
           </Field>
-          <Field label="期末余额">
-            <select name="status" defaultValue={query.status}>
+          <Field label="对账开始日">
+            <input type="date" name="startDate" />
+          </Field>
+          <Field label="对账结束日">
+            <input type="date" name="endDate" />
+          </Field>
+          <Field label="期末差额">
+            <select name="status" defaultValue={INITIAL.status}>
               <option value="all">全部</option>
               <option value="outstanding">有未收</option>
               <option value="settled">已收齐</option>
@@ -134,9 +156,7 @@ export function SettlementLedgerPage() {
                 </Alert>
               )}
               {state.result.groups.length ? (
-                state.result.groups.map((group) => (
-                  <LedgerGroupTable key={`${group.consignee}|${group.currency}`} group={group} />
-                ))
+                <LedgerSummaryTable groups={state.result.groups} />
               ) : (
                 <EmptyState
                   title="没有符合条件的直接收汇明细"
@@ -151,7 +171,7 @@ export function SettlementLedgerPage() {
             <Pagination
               label="直接收汇明细分页"
               total={state.result.total}
-              unit="家"
+              unit="组"
               page={state.result.page}
               pageCount={Math.max(1, Math.ceil(state.result.total / state.result.pageSize))}
               pageSize={query.pageSize}

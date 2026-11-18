@@ -990,6 +990,9 @@ button.ui-metric:focus-visible {
 .ui-table[data-density="compact"] td {
   padding: var(--space-small);
 }
+.ui-table > tbody > .ui-table__details > td {
+  padding: 0;
+}
 .ui-table tbody tr[data-tone="accent"] {
   background: var(--color-table-purchase);
 }

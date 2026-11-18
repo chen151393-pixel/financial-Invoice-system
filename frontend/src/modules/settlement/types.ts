@@ -310,6 +310,7 @@ export type ThirdPartyFilter = "all" | "yes" | "no";
 export interface BankReceipt {
   id: number;
   receiptDate: string;
+  receiptTime: string;
   receivingCompany: string;
   receivingAccount: string;
   payerName: string;
@@ -321,6 +322,12 @@ export interface BankReceipt {
   reference: string;
   route: Route;
   routeLabel: string;
+}
+
+export interface BankReceiptImportResult {
+  imported: number;
+  duplicates: number;
+  ignored: number;
 }
 
 export interface BankReceiptTotal {
@@ -364,15 +371,16 @@ export interface LedgerEntry {
   receiptCompany: string;
   receiptDate: string;
   receiptAmount: string;
-  // 本笔之后的期末余额
-  balance: string;
   sourceNo: string;
+  balance: string;
   thirdParty: boolean;
   payerName: string;
 }
 
 export interface LedgerGroup {
   consignee: string;
+  receivingCompany: string;
+  openingBalance: string;
   currency: string;
   exportTotal: string;
   receiptTotal: string;
@@ -384,6 +392,7 @@ export interface LedgerGroup {
 
 export interface LedgerTotal {
   currency: string;
+  openingBalance: string;
   exportTotal: string;
   receiptTotal: string;
   balance: string;
@@ -412,6 +421,10 @@ export interface LedgerList {
 export interface LedgerQuery {
   consignee: string;
   company: string;
+  receivingCompany?: string;
+  byRecipient?: boolean;
+  startDate?: string | null;
+  endDate?: string | null;
   status: LedgerStatusFilter;
   page: number;
   pageSize: number;
