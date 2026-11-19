@@ -85,7 +85,7 @@ export function TaskBoardPage() {
       current.includes(id) ? current.filter((value) => value !== id) : [...current, id],
     );
   }
-  async function recordBatch(note: string) {
+  async function recordBatch(note: string, notifiedOn: string) {
     if (!batch) return;
     const items = batch.items;
     setBatch({ items, busy: true, result: null, error: "" });
@@ -93,6 +93,7 @@ export function TaskBoardPage() {
       const result = await recordNotificationBatch(
         items.map((item) => item.task.id),
         note,
+        notifiedOn,
       );
       setBatch({ items, busy: false, result, error: "" });
     } catch (error) {
@@ -170,9 +171,19 @@ export function TaskBoardPage() {
               : undefined
           }
           actions={
-            <Button disabled={busy} onClick={() => setUploading(true)}>
-              批量上传回签合同
-            </Button>
+            <>
+              {selectable.length > 0 && (
+                <Button
+                  disabled={busy || !chosen.length}
+                  onClick={() => setBatch({ items: chosen, busy: false, result: null, error: "" })}
+                >
+                  {`批量登记已通知${chosen.length ? `（${chosen.length}）` : ""}`}
+                </Button>
+              )}
+              <Button disabled={busy} onClick={() => setUploading(true)}>
+                批量上传回签合同
+              </Button>
+            </>
           }
         />
         <BoardSearch
@@ -247,7 +258,7 @@ export function TaskBoardPage() {
             result={batch.result}
             error={batch.error}
             onClose={closeBatch}
-            onSubmit={(note) => void recordBatch(note)}
+            onSubmit={(note, notifiedOn) => void recordBatch(note, notifiedOn)}
           />
         )}
         <section className="tb-list" aria-labelledby="tb-list-title">
@@ -266,15 +277,8 @@ export function TaskBoardPage() {
               <span className="tb-select__hint" role="status">
                 {chosen.length
                   ? `已选 ${chosen.length} 个`
-                  : "线下已通知供应商的任务，勾选后可批量登记，通知时间记为今天"}
+                  : "勾选线下已通知的任务后，点击顶部“批量登记已通知”"}
               </span>
-              <Button
-                variant="primary"
-                disabled={!chosen.length}
-                onClick={() => setBatch({ items: chosen, busy: false, result: null, error: "" })}
-              >
-                {`批量登记已通知${chosen.length ? `（${chosen.length}）` : ""}`}
-              </Button>
             </div>
           )}
 

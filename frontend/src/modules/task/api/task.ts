@@ -26,9 +26,9 @@ export const saveTaskNotification = (id: string, draft: NotificationDraft) =>
 export const recordTaskNotification = (id: string, record: NotificationRecord) =>
   http<TaskDetail>(`${task(id)}/notification/record`, "POST", record);
 
-// 批量登记线下已通知：只提交任务 ID 与说明，发送时间由后端取登记当时；写操作不自动重试。
-export const recordNotificationBatch = (taskIds: string[], note: string) =>
-  http<NotifyBatchResult>(`${root}/notification/record-batch`, "POST", { taskIds, note });
+// 通知日期按北京时间由后端校验保存；写操作不自动重试。
+export const recordNotificationBatch = (taskIds: string[], note: string, notifiedOn: string) =>
+  http<NotifyBatchResult>(`${root}/notification/record-batch`, "POST", { taskIds, note, notifiedOn });
 
 export const closeTaskLine = (id: string, lineId: string, body: ClosureRequest) =>
   http<TaskDetail>(

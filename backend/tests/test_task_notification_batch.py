@@ -1,6 +1,6 @@
 """批量登记线下已通知：逐任务结果、登记时间取服务器当时、草稿复用、跳过原因、任务台能力、HTTP 与页面授权。"""
 
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 
 import pytest
 from backend.app import create_app
@@ -17,6 +17,7 @@ from backend.tests.test_task import engine as engine
 from backend.tests.test_task import ns as ns
 from fastapi.testclient import TestClient
 from pydantic import ValidationError
+from sqlalchemy import text
 
 
 def batch(*task_ids, note=""):
@@ -63,6 +64,50 @@ def test_batch_reuses_saved_draft_and_keeps_its_content(engine, app_services, ap
     saved = notices(engine)
     assert len(saved) == 1 and saved[0]["status"] == "sent" and saved[0]["content"] == "请按合同开票"
     assert saved[0]["recipient_name"] == "上海供应商开票群" and saved[0]["note"] == "电话已通知"
+
+
+def test_batch_saves_selected_china_date_and_keeps_real_audit_time(engine, app_services, approved):
+    task_id = approved["id"]
+    prepare_all(app_services, task_id)
+    selected = (datetime.now(UTC) + timedelta(hours=8)).date() - timedelta(days=2)
+    created_at = datetime.combine(selected - timedelta(days=1), datetime.min.time())
+    with engine.begin() as connection:
+        connection.execute(
+            text("UPDATE task_tasks SET created_at=:created WHERE id=:id"),
+            {"created": created_at, "id": task_id},
+        )
+    before = datetime.now(UTC).replace(tzinfo=None) - timedelta(seconds=1)
+    body = NotificationBatchRecord(taskIds=[str(task_id)], notifiedOn=selected)
+    result = app_services["notifications"].record_batch(body, USER)
+    assert result.recorded and not result.skipped
+    saved = notices(engine)[0]
+    sent_at = datetime.fromisoformat(str(saved["sent_at"]))
+    assert sent_at == datetime.combine(selected, datetime.min.time()) - timedelta(hours=8)
+    assert datetime.fromisoformat(str(saved["updated_at"])) >= before
+    events = rows(engine, "SELECT * FROM task_events ORDER BY id")
+    assert datetime.fromisoformat(str(events[-1]["occurred_at"])) >= before
+
+
+def test_batch_rejects_future_and_skips_date_before_task_creation(engine, app_services, approved):
+    task_id = approved["id"]
+    prepare_all(app_services, task_id)
+    today = (datetime.now(UTC) + timedelta(hours=8)).date()
+    with pytest.raises(ApiError, match="通知日期不能晚于今天"):
+        app_services["notifications"].record_batch(
+            NotificationBatchRecord(taskIds=[str(task_id)], notifiedOn=today + timedelta(days=1)), USER
+        )
+    assert not notices(engine)
+    result = app_services["notifications"].record_batch(
+        NotificationBatchRecord(taskIds=[str(task_id)], notifiedOn=date(2000, 1, 1)), USER
+    )
+    assert not result.recorded and "早于任务生成日期" in result.skipped[0].reason
+    assert not notices(engine)
+
+
+@pytest.mark.parametrize("value", ["", "2026-02-30", "20261119", "2026-W47-4", "2026-11-19T12:00:00Z", 123])
+def test_batch_rejects_invalid_notification_date(value):
+    with pytest.raises(ValidationError):
+        NotificationBatchRecord(taskIds=["1"], notifiedOn=value)
 
 
 def test_batch_skips_blocked_tasks_without_stopping_others(ns, engine, app_services):

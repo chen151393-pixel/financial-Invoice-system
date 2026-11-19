@@ -1,10 +1,10 @@
 import { useState } from "react";
-import { Alert, Badge, Button, DataTable, Dialog } from "../../../shared/components/ui";
+import { Alert, Badge, Button, DataTable, Dialog, Field } from "../../../shared/components/ui";
 import type { BoardItem, NotifyBatchResult } from "../types/board";
 
 /**
  * 批量登记“线下已通知供应商”：确认本页勾选的任务并展示逐任务结果。
- * 只登记，不发送消息；发送时间由后端取登记当时。失败后先关闭刷新核实，不直接重发。
+ * 只登记，不发送消息；通知日期由后端校验保存。失败后先关闭刷新核实，不直接重发。
  */
 export function NotifyBatchDialog({
   items,
@@ -19,17 +19,37 @@ export function NotifyBatchDialog({
   result: NotifyBatchResult | null;
   error: string;
   onClose: () => void;
-  onSubmit: (note: string) => void;
+  onSubmit: (note: string, notifiedOn: string) => void;
 }) {
   const [note, setNote] = useState("");
+  const [defaultNotifiedOn] = useState(() =>
+    new Intl.DateTimeFormat("sv-SE", {
+      timeZone: "Asia/Shanghai",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    }).format(new Date()),
+  );
   const done = !!result || !!error;
   return (
     <Dialog title={done ? "批量登记结果" : "批量登记已通知"} busy={busy} onClose={onClose}>
-      <div className="tb-batch">
+      <form
+        className="tb-batch"
+        onSubmit={(event) => {
+          event.preventDefault();
+          const notifiedOn = new FormData(event.currentTarget).get("notifiedOn");
+          if (!busy && !done && typeof notifiedOn === "string") onSubmit(note, notifiedOn);
+        }}
+      >
         <p className="tb-batch__help">
           用于已在系统外（企微群、电话等）通知供应商开票的任务。本页已选 {items.length}{" "}
-          个任务，登记后进入“待供应商开票”；通知时间记为今天，系统不会发送任何消息。
+          个任务，登记后进入“待供应商开票”。系统不会发送任何消息。
         </p>
+        {!done && (
+          <Field label="通知日期（北京时间）">
+            <input type="date" name="notifiedOn" defaultValue={defaultNotifiedOn} required disabled={busy} />
+          </Field>
+        )}
         {result && (
           <Alert tone={result.skipped.length ? "warning" : "success"}>
             已登记 {result.recorded.length} 个，跳过 {result.skipped.length} 个。
@@ -78,12 +98,12 @@ export function NotifyBatchDialog({
             {done ? "关闭" : "取消"}
           </Button>
           {!done && (
-            <Button variant="primary" disabled={busy || !items.length} onClick={() => onSubmit(note)}>
+            <Button type="submit" variant="primary" disabled={busy || !items.length}>
               {busy ? "登记中…" : `确认已通知 ${items.length} 个`}
             </Button>
           )}
         </div>
-      </div>
+      </form>
     </Dialog>
   );
 }

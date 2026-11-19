@@ -9,6 +9,7 @@
   overflow: hidden;
 }
 .tb-panel > .ui-card__header {
+  flex-wrap: wrap;
   padding-bottom: 14px;
   border-bottom: 1px solid var(--color-border);
 }
@@ -21,7 +22,10 @@
   padding: 16px 20px;
 }
 
-/* 批量登记已通知：全选、已选数量与提交按钮；只在本页有可登记任务时出现。 */
+/* 顶部批量操作沿用卡片按钮；列表中仅保留全选与已选数量。 */
+.tb-panel > .ui-card__header .ui-card__actions {
+  flex-wrap: wrap;
+}
 .tb-select {
   display: flex;
   flex-wrap: wrap;
@@ -64,6 +68,9 @@
   color: var(--color-muted);
   font-size: 12px;
   line-height: 1.7;
+}
+.tb-batch > .ui-field {
+  max-width: 260px;
 }
 .tb-batch__note {
   display: grid;
