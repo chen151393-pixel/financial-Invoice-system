@@ -38,6 +38,12 @@ export interface RouteTotal {
   amount: string;
 }
 
+export interface CurrencyTotal {
+  count: number;
+  currency: string;
+  amount: string;
+}
+
 /** 一家境外收货人（按币种分开）的应收汇汇总。 */
 export interface ConsigneeTotal {
   consignee: string;
@@ -64,6 +70,7 @@ export interface CandidateList {
   truncated: boolean;
   // 汇总按符合筛选的全部报关单计算
   totals: RouteTotal[];
+  combinedTotals: CurrencyTotal[];
   unsettled: RouteTotal[];
   consignees: ConsigneeTotal[];
   suggestion: string[] | null;
@@ -332,6 +339,7 @@ export interface BankReceiptImportResult {
 
 export interface BankReceiptTotal {
   receivingCompany: string;
+  featuredCompany: boolean;
   currency: string;
   count: number;
   amount: string;

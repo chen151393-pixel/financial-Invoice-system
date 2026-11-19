@@ -120,6 +120,9 @@ def test_candidates_split_routes_and_suggest_combination(seeded):
         (t.route, t.currency): (t.count, t.amount) for t in candidates.query(CandidateQuery()).unsettled
     }
     assert totals == {("direct", "USD"): (1, "1000.00"), ("hk_transit", "USD"): (2, "1000.50")}
+    combined = candidates.query(CandidateQuery()).combinedTotals
+    assert [(t.currency, t.count, t.amount) for t in combined] == [("USD", 3, "2000.50")]
+    assert [(t.count, t.amount) for t in result.combinedTotals] == [(2, "1000.50")]
 
 
 def test_candidates_mark_handling_and_summarise_by_consignee(seeded):

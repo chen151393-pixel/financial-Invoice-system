@@ -14,7 +14,7 @@ from backend.modules.source.public import declarant_names_by_number, declaration
 from ..dao import batch_dao, batch_item_dao
 from ..policy.amount_policy import money, suggest_combination
 from ..policy.route_policy import HK_TRANSIT, ROUTE_LABELS, hk_consignee_keys, route_of
-from ..vo.batch_vo import Candidate, CandidateList, ConsigneeTotal, RouteTotal
+from ..vo.batch_vo import Candidate, CandidateList, ConsigneeTotal, CurrencyTotal, RouteTotal
 
 # 页面一次最多列出的报关单张数；汇总不受此限制
 CANDIDATE_LIMIT = 500
@@ -138,6 +138,7 @@ class CandidateService:
             total=len(rows),
             truncated=len(rows) > CANDIDATE_LIMIT,
             totals=_route_totals(rows),
+            combinedTotals=_currency_totals(rows),
             unsettled=_route_totals(open_rows),
             consignees=_consignee_totals(rows),
             suggestion=suggestion,
@@ -163,6 +164,20 @@ def _route_totals(rows):
             amount=str(money(total)),
         )
         for (route, currency), (count, total) in sorted(totals.items())
+    ]
+
+
+def _currency_totals(rows):
+    """在同一筛选范围内合计两条回款路径，原始 Decimal 加总后再格式化。"""
+    totals = defaultdict(lambda: [0, Decimal(0)])
+    for row in rows:
+        if row["amount"] is None:
+            continue
+        totals[row["currency"]][0] += 1
+        totals[row["currency"]][1] += row["amount"]
+    return [
+        CurrencyTotal(currency=currency, count=count, amount=str(money(amount)))
+        for currency, (count, amount) in sorted(totals.items())
     ]
 
 

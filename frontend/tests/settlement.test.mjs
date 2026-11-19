@@ -14,7 +14,8 @@ let server,
   LedgerSummaryTable,
   ReceivableStats,
   OverviewMetrics,
-  OverviewCustomers;
+  OverviewCustomers,
+  BankReceiptStats;
 // 含应用内链接的组件需要路由上下文。
 const inRouter = (element) => createElement(MemoryRouter, null, element);
 
@@ -42,6 +43,9 @@ before(async () => {
   ({ OverviewCustomers } = await server.ssrLoadModule(
     "/src/modules/settlement/components/OverviewCustomers.tsx",
   ));
+  ({ BankReceiptStats } = await server.ssrLoadModule(
+    "/src/modules/settlement/components/BankReceiptStats.tsx",
+  ));
 });
 after(() => server?.close());
 
@@ -54,6 +58,72 @@ test("结汇对账子菜单顺序：银行收汇明细在香港中转批次之�
   assert.equal(subViewPath("settlement-overview"), "/settlement/overview");
   assert.equal(subViewPath("settlement-bank"), "/settlement/bank-receipts");
   assert.equal(subViewPath("settlement-direct"), "/settlement/direct");
+});
+
+test("收汇总览展示后端三项合计、路径拆分与负数超收，不自行重算", () => {
+  const html = renderToStaticMarkup(
+    createElement(OverviewMetrics, {
+      total: {
+        currency: "USD",
+        declaredTotal: "1000.00",
+        receivedTotal: "1005.10",
+        outstanding: "-5.10",
+        receivedFee: "2.00",
+        routes: [
+          {
+            route: "hk_transit",
+            routeLabel: "香港中转",
+            declaredTotal: "600.00",
+            receivedTotal: "600.00",
+            outstanding: "0.00",
+            receivedFee: "0.00",
+          },
+          {
+            route: "direct",
+            routeLabel: "直接收汇",
+            declaredTotal: "400.00",
+            receivedTotal: "405.10",
+            outstanding: "-5.10",
+            receivedFee: "2.00",
+          },
+        ],
+      },
+    }),
+  );
+  assert.match(html, /报关应收汇（总）/);
+  assert.match(html, /实收汇金额（总）/);
+  assert.match(html, /未收汇金额（总）/);
+  assert.match(html, /1,005\.10/);
+  assert.match(html, /-5\.10/);
+  assert.match(html, /负数表示超收/);
+  assert.match(html, /香港中转/);
+  assert.match(html, /直接收汇/);
+});
+
+test("客户收汇明细按回款路径进入对应客户列表，不提供登记或结汇写操作", () => {
+  const row = {
+    consignee: "ACME & CO",
+    currency: "USD",
+    declarationCount: 1,
+    declaredTotal: "600.00",
+    receivedTotal: "585.00",
+    outstanding: "15.00",
+    receivedFee: "15.00",
+  };
+  const html = renderToStaticMarkup(
+    inRouter(
+      createElement(OverviewCustomers, {
+        rows: [
+          { ...row, route: "hk_transit", routeLabel: "香港中转" },
+          { ...row, route: "direct", routeLabel: "直接收汇" },
+        ],
+      }),
+    ),
+  );
+  assert.match(html, /href="\/settlement\/hk-transit\?consignee=ACME\+%26\+CO"/);
+  assert.match(html, /href="\/settlement\/direct\?consignee=ACME\+%26\+CO"/);
+  assert.match(html, /已登记手续费/);
+  assert.doesNotMatch(html, /登记回款|确认结汇|确认资料已出/);
 });
 
 const total = (overrides) => ({
@@ -109,6 +179,7 @@ test("按境外收货人汇总：香港中转指向批次并显示建批次进�
 test("应收汇概况只展示后端汇总：按路径分卡，香港中转另列待登记回款", () => {
   const html = renderToStaticMarkup(
     createElement(ReceivableStats, {
+      combinedTotals: [{ count: 14, currency: "USD", amount: "776450.00" }],
       totals: [
         { route: "direct", routeLabel: "直接收汇", count: 8, currency: "USD", amount: "345300.00" },
         { route: "hk_transit", routeLabel: "香港中转", count: 6, currency: "USD", amount: "431150.00" },
@@ -121,10 +192,41 @@ test("应收汇概况只展示后端汇总：按路径分卡，香港中转另�
     }),
   );
   assert.match(html, /直接收汇应收汇（USD）[\s\S]*345,300\.00[\s\S]*8 票 · 进直接收汇明细/);
+  assert.match(html, /报关应收汇（总）（USD）[\s\S]*776,450\.00[\s\S]*14 票 · 香港中转 \+ 直接收汇/);
   assert.match(html, /香港中转应收汇（USD）[\s\S]*431,150\.00[\s\S]*6 票 · 登记回款建批次/);
   assert.match(html, /香港中转待登记回款（USD）[\s\S]*231,600\.00[\s\S]*3 票尚未建批次/);
   assert.match(html, /直接收汇待收金额（USD）[\s\S]*22,350\.00/);
-  assert.equal(renderToStaticMarkup(createElement(ReceivableStats, { totals: [], unsettled: [] })), "");
+  assert.equal(
+    renderToStaticMarkup(createElement(ReceivableStats, { totals: [], combinedTotals: [], unsettled: [] })),
+    "",
+  );
+});
+
+test("银行收汇按三个收款抬头出卡片，零金额不省略，其他抬头单独展示", () => {
+  const names = ["上海绎色数码科技有限公司", "上海绎视数码科技有限公司", "上海毅鑫实业有限公司"];
+  const base = { currency: "USD", count: 0, amount: "0.00", thirdPartyCount: 0, thirdPartyAmount: "0.00" };
+  const html = renderToStaticMarkup(
+    createElement(BankReceiptStats, {
+      totals: [
+        ...names.map((receivingCompany, index) => ({
+          ...base,
+          receivingCompany,
+          featuredCompany: true,
+          ...(index === 2
+            ? { count: 2, amount: "1069499.39", thirdPartyCount: 1, thirdPartyAmount: "300.00" }
+            : {}),
+        })),
+        { ...base, receivingCompany: "其他公司", featuredCompany: false, amount: "100.00", count: 1 },
+      ],
+    }),
+  );
+  for (const name of names) assert.match(html, new RegExp(name));
+  assert.match(html, /USD · 2 笔/);
+  assert.equal((html.match(/class="ui-stat"/g) || []).length, 3);
+  assert.match(html, /1,069,499\.39/);
+  assert.match(html, /当前条件下暂无收汇记录/);
+  assert.match(html, /其他收款抬头/);
+  assert.match(html, /其他公司：USD 100\.00/);
 });
 
 test("直接收汇明细末列显示各笔累计余额，保留来源单据", () => {
@@ -238,72 +340,6 @@ test("直接收汇默认按收货人和币种显示汇总，逐笔流水默认�
   );
   assert.match(html, /56,900\.00[\s\S]*62,000\.00[\s\S]*-5,100\.00/);
   assert.doesNotMatch(html, /FT2610270009871|ui-table__details|事务类型/);
-});
-
-test("收汇总览展示后端三项合计、路径拆分与负数超收，不自行重算", () => {
-  const html = renderToStaticMarkup(
-    createElement(OverviewMetrics, {
-      total: {
-        currency: "USD",
-        declaredTotal: "1000.00",
-        receivedTotal: "1005.10",
-        outstanding: "-5.10",
-        receivedFee: "2.00",
-        routes: [
-          {
-            route: "hk_transit",
-            routeLabel: "香港中转",
-            declaredTotal: "600.00",
-            receivedTotal: "600.00",
-            outstanding: "0.00",
-            receivedFee: "0.00",
-          },
-          {
-            route: "direct",
-            routeLabel: "直接收汇",
-            declaredTotal: "400.00",
-            receivedTotal: "405.10",
-            outstanding: "-5.10",
-            receivedFee: "2.00",
-          },
-        ],
-      },
-    }),
-  );
-  assert.match(html, /报关应收汇（总）/);
-  assert.match(html, /实收汇金额（总）/);
-  assert.match(html, /未收汇金额（总）/);
-  assert.match(html, /1,005\.10/);
-  assert.match(html, /-5\.10/);
-  assert.match(html, /负数表示超收/);
-  assert.match(html, /香港中转/);
-  assert.match(html, /直接收汇/);
-});
-
-test("客户收汇明细按回款路径进入对应客户列表，不提供登记或结汇写操作", () => {
-  const row = {
-    consignee: "ACME & CO",
-    currency: "USD",
-    declarationCount: 1,
-    declaredTotal: "600.00",
-    receivedTotal: "585.00",
-    outstanding: "15.00",
-    receivedFee: "15.00",
-  };
-  const html = renderToStaticMarkup(
-    inRouter(
-      createElement(OverviewCustomers, {
-        rows: [
-          { ...row, route: "hk_transit", routeLabel: "香港中转" },
-          { ...row, route: "direct", routeLabel: "直接收汇" },
-        ],
-      }),
-    ),
-  );
-  assert.match(html, /href="\/settlement\/hk-transit\?consignee=ACME\+%26\+CO"/);
-  assert.match(html, /href="\/settlement\/direct\?consignee=ACME\+%26\+CO"/);
-  assert.match(html, /已登记手续费/);
-  assert.doesNotMatch(html, /登记回款|确认结汇|确认资料已出/);
 });
 
 test("收汇路径表展示后端全量汇总、独立币种及带客户筛选的查看入口", async () => {

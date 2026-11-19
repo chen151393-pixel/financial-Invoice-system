@@ -1,14 +1,16 @@
 import { StatCard, StatGrid } from "../../../shared/components/ui";
 import { money } from "../../../shared/format/money";
-import type { LedgerTotal, RouteTotal } from "../types";
+import type { CurrencyTotal, LedgerTotal, RouteTotal } from "../types";
 
 /** 报关金额按当前查询汇总，直接收汇待收金额取总账。 */
 export function ReceivableStats({
   totals,
+  combinedTotals,
   unsettled,
   directTotals,
 }: {
   totals: RouteTotal[];
+  combinedTotals: CurrencyTotal[];
   unsettled: RouteTotal[];
   directTotals?: LedgerTotal[] | null;
 }) {
@@ -16,6 +18,16 @@ export function ReceivableStats({
   if (!totals.length && !directTotals?.length && directTotals !== null) return null;
   return (
     <StatGrid label="应收汇概况">
+      {combinedTotals.map((total) => (
+        <StatCard
+          key={`combined-${total.currency}`}
+          glyph="总"
+          tone="primary"
+          label={`报关应收汇（总）（${total.currency}）`}
+          value={money(total.amount)}
+          note={`${total.count} 票 · 香港中转 + 直接收汇`}
+        />
+      ))}
       {totals.map((total) => (
         <StatCard
           key={`${total.route}-${total.currency}`}
