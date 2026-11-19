@@ -131,6 +131,7 @@ export interface DeclarationListQuery {
   createdFrom?: string;
   createdTo?: string;
   supplierName?: string;
+  declarantName?: string;
   recordNo?: string;
   // 真实报关单号，与 CD 号不同
   declarationNo?: string;

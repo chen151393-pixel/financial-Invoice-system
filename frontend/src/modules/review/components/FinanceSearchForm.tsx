@@ -3,6 +3,7 @@ import { Button, Field, FilterBar, SearchInput } from "../../../shared/component
 
 export interface SearchCriteria {
   supplierName: string;
+  declarantName: string;
   recordNo: string;
   declarationNo: string;
   purchaseOrderNo: string;
@@ -12,6 +13,7 @@ export interface SearchCriteria {
 
 const EMPTY: SearchCriteria = {
   supplierName: "",
+  declarantName: "",
   recordNo: "",
   declarationNo: "",
   purchaseOrderNo: "",
@@ -20,6 +22,7 @@ const EMPTY: SearchCriteria = {
 };
 const FIELDS = [
   ["supplierName", "供应商", "输入供应商名称，多条用逗号分隔"],
+  ["declarantName", "申报抬头", "输入申报抬头，多条用逗号分隔"],
   ["recordNo", "CD 号", "输入 CD 号，多条用逗号分隔"],
   ["declarationNo", "报关单号", "输入报关单号，多条用逗号分隔"],
   ["purchaseOrderNo", "子采购单号", "输入子采购单号，多条用逗号分隔"],

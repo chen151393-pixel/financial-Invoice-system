@@ -509,9 +509,43 @@ def test_split_bulk_search_uses_snapshot_fields_and_filtered_counts(review, ns, 
     assert review.browse(query(declarationNo="REAL870;REAL871")).total == 2
     assert review.browse(query(declarationNo="CD871")).total == 0
     assert review.browse(query(declarationNo="REAL870", recordNo="871")).total == 0
-    for field in ("supplierName", "recordNo", "declarationNo", "purchaseOrderNo"):
+    for field in ("supplierName", "declarantName", "recordNo", "declarationNo", "purchaseOrderNo"):
         assert review.browse(query(**{field: "%"})).total == 0
     assert review.browse(query(recordNo="，；\n ")).total == 2
+
+
+def test_declarant_filter_uses_header_company_before_counts_and_paging(review, ns, engine, monkeypatch):
+    orders, declarations = [], []
+    for index, name in enumerate(("上海毅鑫实业有限公司", "上海毅鑫实业有限公司", "上海绎视数码科技有限公司")):
+        identity = str(870 + index)
+        head = customs(identity)
+        for _, line in head[2]:
+            line["custrecord_swc_company"] = {"id": "8" if index < 2 else "9", "refName": name}
+        orders.append(purchase(str(200 + index), identity))
+        declarations.append(head)
+    save(ns, engine, bundle(orders, declarations))
+    calculations = CalculationService(review)
+    calculations.rebuild()
+    first = review.browse(query(recordNo="CD870")).groups[0]
+    review.approve(int(first.id), ApproveRequest(contentSha256=first.contentSha256), "user:admin")
+    CalculationWorker(calculations).run_once()
+
+    def forbidden(*args, **kwargs):
+        raise AssertionError("申报抬头筛选应读取已有快照")
+
+    monkeypatch.setattr(review.declarations, "details", forbidden)
+    found = review.browse(query(declarantName="上海毅鑫", pageSize=1, page=2))
+    assert found.total == found.counts["all"] == found.pages == 2
+    assert found.counts["pending"] == found.counts["approved"] == 1
+    assert [group.recordNumber for group in found.groups] == ["CD870"]
+    assert review.browse(query(declarantName="上海毅鑫", status="approved")).total == 1
+    assert review.browse(query(declarantName="上海毅鑫", recordNo="CD872")).total == 0
+    # 采购公司和供应商名称不能命中申报抬头字段。
+    assert review.browse(query(declarantName="采购公司A")).total == 0
+    assert review.browse(query(declarantName="供应商")).total == 0
+    assert review.browse(query(declarantName="毅鑫；绎视\n毅鑫")).total == 3
+    assert review.browse(query(declarantName="不存在")).total == 0
+    assert review.browse(query(declarantName="")).total == 3
 
 
 def test_bulk_input_limits_and_literal_spaces():
@@ -520,9 +554,12 @@ def test_bulk_input_limits_and_literal_spaces():
 
     assert search_terms(" ACME LTD，乙; ACME LTD\n丙 ") == ("ACME LTD", "乙", "丙")
     assert query(recordNo=";".join(str(i) for i in range(50))).recordNo
+    assert query(declarantName=" 上海毅鑫，上海绎视 ").declarantName == "上海毅鑫\n上海绎视"
     for value in ("x" * 121, ";".join(str(i) for i in range(51)), "x" * 6501):
         with pytest.raises(ValidationError):
             query(recordNo=value)
+        with pytest.raises(ValidationError):
+            query(declarantName=value)
 
 
 def test_creation_date_filter_uses_china_day_boundaries_before_counts_and_paging(review, ns, engine):

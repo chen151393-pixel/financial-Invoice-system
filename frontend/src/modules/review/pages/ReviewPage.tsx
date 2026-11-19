@@ -35,6 +35,7 @@ export function ReviewPage({ links }: { links?: ReviewLinks }) {
     keyword: "",
     supplierId: "",
     supplierName: searchParams.get("supplierName") || "",
+    declarantName: searchParams.get("declarantName") || "",
     recordNo: searchParams.get("recordNo") || searchParams.get("keyword") || "",
     declarationNo: exactDeclarationNo || searchParams.get("declarationNo") || "",
     exactDeclarationNo,
@@ -155,6 +156,7 @@ export function ReviewPage({ links }: { links?: ReviewLinks }) {
         <FinanceSearchForm
           initial={{
             supplierName: query.supplierName || "",
+            declarantName: query.declarantName || "",
             recordNo: query.recordNo || "",
             declarationNo: query.declarationNo || "",
             purchaseOrderNo: query.purchaseOrderNo || "",

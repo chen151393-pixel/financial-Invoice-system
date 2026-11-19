@@ -526,7 +526,7 @@ test("订单口径、缺失金额和缺失单位不冒充报关口径或零值",
   assert.doesNotMatch(html, /本次数量|本次采购金额/);
 });
 
-test("财务搜索拆为四个批量输入框（含真实报关单号），上方显示标签", () => {
+test("财务搜索包含申报抬头等五个批量输入框，上方显示标签", () => {
   const html = renderToStaticMarkup(
     createElement(FinanceSearchForm, {
       suppliers: [{ id: "77", name: "合成供应商" }],
@@ -534,14 +534,15 @@ test("财务搜索拆为四个批量输入框（含真实报关单号），上�
       onSearch() {},
     }),
   );
-  assert.equal((html.match(/type="search"/g) || []).length, 4);
+  assert.equal((html.match(/type="search"/g) || []).length, 5);
   assert.equal((html.match(/type="date"/g) || []).length, 2);
   assert.match(html, /name="declarationNo"/);
+  assert.match(html, /name="declarantName"/);
   assert.match(html, /报关单创建日期 从/);
   assert.match(html, /name="createdFrom"/);
   assert.match(html, /name="createdTo"/);
   // 2026-11-09 起查询栏与进项发票列表一致，标签显示在输入框上方
-  for (const label of ["供应商", "CD 号", "报关单号", "子采购单号"]) {
+  for (const label of ["供应商", "申报抬头", "CD 号", "报关单号", "子采购单号"]) {
     assert.ok(html.includes(`<span>${label}</span>`));
   }
   assert.doesNotMatch(html, /ui-sr-only/);
@@ -559,8 +560,15 @@ test("财务日期筛选原样传给后端，清空后提交 null 恢复不限",
     return Response.json({ groups: [] });
   });
   const { queryDeclarations } = await server.ssrLoadModule("/src/modules/review/api.ts");
-  await queryDeclarations({ createdFrom: "2026-08-01", createdTo: "2026-08-31", page: 1 });
-  await queryDeclarations({ createdFrom: "", createdTo: "", page: 1 });
+  await queryDeclarations({
+    declarantName: "上海毅鑫",
+    createdFrom: "2026-08-01",
+    createdTo: "2026-08-31",
+    page: 1,
+  });
+  await queryDeclarations({ declarantName: "", createdFrom: "", createdTo: "", page: 1 });
+  assert.equal(calls[0].declarantName, "上海毅鑫");
+  assert.equal(calls[1].declarantName, "");
   assert.equal(calls[0].createdFrom, "2026-08-01");
   assert.equal(calls[0].createdTo, "2026-08-31");
   assert.equal(calls[1].createdFrom, null);
