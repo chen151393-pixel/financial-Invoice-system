@@ -81,7 +81,7 @@ export default function SettlementWorkspacePage() {
       {key === "declarations" && <SettlementDeclarationsPage />}
       {key === "bank" && <SettlementBankReceiptsPage />}
       {key === "hk" && <SettlementHkTransitPage key={search} />}
-      {key === "direct" && <SettlementLedgerPage key={search} />}
+      {key === "direct" && <SettlementLedgerPage key={new URLSearchParams(search).get("consignee") || ""} />}
       {key === "parties" && <SettlementPartiesPage />}
     </AppFrame>
   );

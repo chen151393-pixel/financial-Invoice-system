@@ -47,29 +47,6 @@ const VIEWS = [
 export function SettlementLedgerPage() {
   const [params, setParams] = useSearchParams();
   const view = params.get("tab") === "documents" ? "documents" : "ledger";
-  return (
-    <div className="settlement-page">
-      <Tabs
-        label="直接收汇工作区"
-        items={VIEWS}
-        value={view}
-        onChange={(next) => {
-          const values = new URLSearchParams(params);
-          if (next === "documents") values.set("tab", "documents");
-          else {
-            values.delete("tab");
-            values.delete("declarationNo");
-          }
-          setParams(values);
-        }}
-      />
-      {view === "documents" ? <DirectDocumentsPanel /> : <CustomerLedger />}
-    </div>
-  );
-}
-
-function CustomerLedger() {
-  const [params] = useSearchParams();
   const [query, setQuery] = useState<LedgerQuery>(() => ({
     ...INITIAL,
     consignee: params.get("consignee") || "",
@@ -124,100 +101,117 @@ function CustomerLedger() {
             />
           </StatGrid>
         ))}
-      <Card>
-        <CardHeader
-          title="直接收汇明细"
-          description="按境外收货人和收款抬头对账，出口计入出口日期，收汇计入实际到账日期。"
-        />
-        <FilterBar
-          embedded
-          onSubmit={(form) => {
-            const data = new FormData(form);
-            setQuery({
-              ...query,
-              consignee: String(data.get("consignee") || "").trim(),
-              receivingCompany: String(data.get("receivingCompany") || "").trim(),
-              startDate: String(data.get("startDate") || "") || null,
-              endDate: String(data.get("endDate") || "") || null,
-              status: String(data.get("status") || "all") as LedgerStatusFilter,
-              page: 1,
-            });
-          }}
-          actions={
-            <>
-              <Button type="submit" variant="primary">
-                查询
-              </Button>
-              <Button type="reset" onClick={() => setQuery(INITIAL)}>
-                清空
-              </Button>
-            </>
+      <Tabs
+        label="直接收汇工作区"
+        items={VIEWS}
+        value={view}
+        onChange={(next) => {
+          const values = new URLSearchParams(params);
+          if (next === "documents") values.set("tab", "documents");
+          else {
+            values.delete("tab");
+            values.delete("declarationNo");
           }
-        >
-          <Field label="境外收货人" grow>
-            <input name="consignee" placeholder="按名称搜索" defaultValue={query.consignee} />
-          </Field>
-          <Field label="收款人（收汇抬头）" grow>
-            <input name="receivingCompany" placeholder="按收款抬头搜索" />
-          </Field>
-          <Field label="对账开始日">
-            <input type="date" name="startDate" />
-          </Field>
-          <Field label="对账结束日">
-            <input type="date" name="endDate" />
-          </Field>
-          <Field label="期末差额">
-            <select name="status" defaultValue={INITIAL.status}>
-              <option value="all">全部</option>
-              <option value="outstanding">有未收</option>
-              <option value="settled">已收齐</option>
-              <option value="overpaid">超收</option>
-            </select>
-          </Field>
-        </FilterBar>
-        <CardContent flush>
-          {state.kind === "loading" && <Skeleton rows={5} label="正在读取直接收汇明细" />}
-          {state.kind === "error" && (
-            <ErrorState
-              title="直接收汇明细读取失败"
-              message={state.message}
-              action={<Button onClick={() => setRefresh((n) => n + 1)}>重试</Button>}
-            />
+          setParams(values);
+        }}
+      />
+      {view === "documents" && <DirectDocumentsPanel />}
+      <div hidden={view !== "ledger"}>
+        <Card>
+          <CardHeader
+            title="直接收汇明细"
+            description="按境外收货人和收款抬头对账，出口计入出口日期，收汇计入实际到账日期。"
+          />
+          <FilterBar
+            embedded
+            onSubmit={(form) => {
+              const data = new FormData(form);
+              setQuery({
+                ...query,
+                consignee: String(data.get("consignee") || "").trim(),
+                receivingCompany: String(data.get("receivingCompany") || "").trim(),
+                startDate: String(data.get("startDate") || "") || null,
+                endDate: String(data.get("endDate") || "") || null,
+                status: String(data.get("status") || "all") as LedgerStatusFilter,
+                page: 1,
+              });
+            }}
+            actions={
+              <>
+                <Button type="submit" variant="primary">
+                  查询
+                </Button>
+                <Button type="reset" onClick={() => setQuery(INITIAL)}>
+                  清空
+                </Button>
+              </>
+            }
+          >
+            <Field label="境外收货人" grow>
+              <input name="consignee" placeholder="按名称搜索" defaultValue={query.consignee} />
+            </Field>
+            <Field label="收款人（收汇抬头）" grow>
+              <input name="receivingCompany" placeholder="按收款抬头搜索" />
+            </Field>
+            <Field label="对账开始日">
+              <input type="date" name="startDate" />
+            </Field>
+            <Field label="对账结束日">
+              <input type="date" name="endDate" />
+            </Field>
+            <Field label="期末差额">
+              <select name="status" defaultValue={INITIAL.status}>
+                <option value="all">全部</option>
+                <option value="outstanding">有未收</option>
+                <option value="settled">已收齐</option>
+                <option value="overpaid">超收</option>
+              </select>
+            </Field>
+          </FilterBar>
+          <CardContent flush>
+            {state.kind === "loading" && <Skeleton rows={5} label="正在读取直接收汇明细" />}
+            {state.kind === "error" && (
+              <ErrorState
+                title="直接收汇明细读取失败"
+                message={state.message}
+                action={<Button onClick={() => setRefresh((n) => n + 1)}>重试</Button>}
+              />
+            )}
+            {state.kind === "ready" && (
+              <>
+                {state.result.skipped.length > 0 && (
+                  <Alert tone="warning" title={`${state.result.skipped.length} 张直接收汇报关单未计入`}>
+                    {state.result.skipped.map((item) => `${item.declarationNo}（${item.reason}）`).join("；")}
+                  </Alert>
+                )}
+                {state.result.groups.length ? (
+                  <LedgerSummaryTable groups={state.result.groups} />
+                ) : (
+                  <EmptyState
+                    title="没有符合条件的直接收汇明细"
+                    description="判定为直接收汇的报关单和银行收汇明细中的收汇记录出现在这里。"
+                  />
+                )}
+              </>
+            )}
+          </CardContent>
+          {state.kind === "ready" && state.result.total > 0 && (
+            <CardFooter>
+              <Pagination
+                label="直接收汇明细分页"
+                total={state.result.total}
+                unit="组"
+                page={state.result.page}
+                pageCount={Math.max(1, Math.ceil(state.result.total / state.result.pageSize))}
+                pageSize={query.pageSize}
+                pageSizes={[20, 50]}
+                onPageChange={(page) => setQuery({ ...query, page })}
+                onPageSizeChange={(pageSize) => setQuery({ ...query, pageSize, page: 1 })}
+              />
+            </CardFooter>
           )}
-          {state.kind === "ready" && (
-            <>
-              {state.result.skipped.length > 0 && (
-                <Alert tone="warning" title={`${state.result.skipped.length} 张直接收汇报关单未计入`}>
-                  {state.result.skipped.map((item) => `${item.declarationNo}（${item.reason}）`).join("；")}
-                </Alert>
-              )}
-              {state.result.groups.length ? (
-                <LedgerSummaryTable groups={state.result.groups} />
-              ) : (
-                <EmptyState
-                  title="没有符合条件的直接收汇明细"
-                  description="判定为直接收汇的报关单和银行收汇明细中的收汇记录出现在这里。"
-                />
-              )}
-            </>
-          )}
-        </CardContent>
-        {state.kind === "ready" && state.result.total > 0 && (
-          <CardFooter>
-            <Pagination
-              label="直接收汇明细分页"
-              total={state.result.total}
-              unit="组"
-              page={state.result.page}
-              pageCount={Math.max(1, Math.ceil(state.result.total / state.result.pageSize))}
-              pageSize={query.pageSize}
-              pageSizes={[20, 50]}
-              onPageChange={(page) => setQuery({ ...query, page })}
-              onPageSizeChange={(pageSize) => setQuery({ ...query, pageSize, page: 1 })}
-            />
-          </CardFooter>
-        )}
-      </Card>
+        </Card>
+      </div>
     </div>
   );
 }
