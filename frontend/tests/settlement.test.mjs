@@ -6,7 +6,15 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { MemoryRouter } from "react-router";
 import { createServer } from "vite";
 
-let server, navigation, subViewPath, ConsigneeSummary, LedgerGroupTable, LedgerSummaryTable, ReceivableStats;
+let server,
+  navigation,
+  subViewPath,
+  ConsigneeSummary,
+  LedgerGroupTable,
+  LedgerSummaryTable,
+  ReceivableStats,
+  OverviewMetrics,
+  OverviewCustomers;
 // 含应用内链接的组件需要路由上下文。
 const inRouter = (element) => createElement(MemoryRouter, null, element);
 
@@ -28,6 +36,12 @@ before(async () => {
   ({ ReceivableStats } = await server.ssrLoadModule(
     "/src/modules/settlement/components/ReceivableStats.tsx",
   ));
+  ({ OverviewMetrics } = await server.ssrLoadModule(
+    "/src/modules/settlement/components/OverviewMetrics.tsx",
+  ));
+  ({ OverviewCustomers } = await server.ssrLoadModule(
+    "/src/modules/settlement/components/OverviewCustomers.tsx",
+  ));
 });
 after(() => server?.close());
 
@@ -35,8 +49,9 @@ test("结汇对账子菜单顺序：银行收汇明细在香港中转批次之�
   const settlement = navigation.flatMap((group) => group.items).find((item) => item.id === "settlement");
   assert.deepEqual(
     settlement.children.map((child) => child.label),
-    ["报关应收汇", "银行收汇明细", "香港中转批次", "直接收汇明细", "合同抬头"],
+    ["收汇总览", "报关应收汇", "银行收汇明细", "香港中转批次", "直接收汇明细", "合同抬头"],
   );
+  assert.equal(subViewPath("settlement-overview"), "/settlement/overview");
   assert.equal(subViewPath("settlement-bank"), "/settlement/bank-receipts");
   assert.equal(subViewPath("settlement-direct"), "/settlement/direct");
 });
@@ -223,4 +238,112 @@ test("直接收汇默认按收货人和币种显示汇总，逐笔流水默认�
   );
   assert.match(html, /56,900\.00[\s\S]*62,000\.00[\s\S]*-5,100\.00/);
   assert.doesNotMatch(html, /FT2610270009871|ui-table__details|事务类型/);
+});
+
+test("收汇总览展示后端三项合计、路径拆分与负数超收，不自行重算", () => {
+  const html = renderToStaticMarkup(
+    createElement(OverviewMetrics, {
+      total: {
+        currency: "USD",
+        declaredTotal: "1000.00",
+        receivedTotal: "1005.10",
+        outstanding: "-5.10",
+        receivedFee: "2.00",
+        routes: [
+          {
+            route: "hk_transit",
+            routeLabel: "香港中转",
+            declaredTotal: "600.00",
+            receivedTotal: "600.00",
+            outstanding: "0.00",
+            receivedFee: "0.00",
+          },
+          {
+            route: "direct",
+            routeLabel: "直接收汇",
+            declaredTotal: "400.00",
+            receivedTotal: "405.10",
+            outstanding: "-5.10",
+            receivedFee: "2.00",
+          },
+        ],
+      },
+    }),
+  );
+  assert.match(html, /报关应收汇（总）/);
+  assert.match(html, /实收汇金额（总）/);
+  assert.match(html, /未收汇金额（总）/);
+  assert.match(html, /1,005\.10/);
+  assert.match(html, /-5\.10/);
+  assert.match(html, /负数表示超收/);
+  assert.match(html, /香港中转/);
+  assert.match(html, /直接收汇/);
+});
+
+test("客户收汇明细按回款路径进入对应客户列表，不提供登记或结汇写操作", () => {
+  const row = {
+    consignee: "ACME & CO",
+    currency: "USD",
+    declarationCount: 1,
+    declaredTotal: "600.00",
+    receivedTotal: "585.00",
+    outstanding: "15.00",
+    receivedFee: "15.00",
+  };
+  const html = renderToStaticMarkup(
+    inRouter(
+      createElement(OverviewCustomers, {
+        rows: [
+          { ...row, route: "hk_transit", routeLabel: "香港中转" },
+          { ...row, route: "direct", routeLabel: "直接收汇" },
+        ],
+      }),
+    ),
+  );
+  assert.match(html, /href="\/settlement\/hk-transit\?consignee=ACME\+%26\+CO"/);
+  assert.match(html, /href="\/settlement\/direct\?consignee=ACME\+%26\+CO"/);
+  assert.match(html, /已登记手续费/);
+  assert.doesNotMatch(html, /登记回款|确认结汇|确认资料已出/);
+});
+
+test("收汇路径表展示后端全量汇总、独立币种及带客户筛选的查看入口", async () => {
+  const { OverviewRoutes } = await server.ssrLoadModule(
+    "/src/modules/settlement/components/OverviewRoutes.tsx",
+  );
+  const amounts = {
+    declaredTotal: "9000000000000.01",
+    receivedTotal: "100.00",
+    outstanding: "-8.88",
+    receivedFee: "3.00",
+  };
+  const html = renderToStaticMarkup(
+    inRouter(
+      createElement(OverviewRoutes, {
+        consignee: "ACME & CO",
+        totals: [
+          {
+            ...amounts,
+            currency: "USD",
+            routes: [
+              { ...amounts, route: "hk_transit", routeLabel: "香港中转" },
+              { ...amounts, route: "direct", routeLabel: "直接收汇" },
+            ],
+          },
+          {
+            ...amounts,
+            currency: "EUR",
+            routes: [{ ...amounts, route: "direct", routeLabel: "直接收汇" }],
+          },
+        ],
+      }),
+    ),
+  );
+  assert.match(html, /按收汇路径查看/);
+  assert.match(html, /9,000,000,000,000\.01/);
+  assert.match(html, /-8\.88/);
+  assert.match(html, /USD/);
+  assert.match(html, /EUR/);
+  assert.match(html, /香港汇回境内不再次增加实收汇金额/);
+  assert.match(html, /href="\/settlement\/hk-transit\?consignee=ACME\+%26\+CO"/);
+  assert.match(html, /href="\/settlement\/direct\?consignee=ACME\+%26\+CO"/);
 });
