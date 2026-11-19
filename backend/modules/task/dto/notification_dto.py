@@ -19,6 +19,27 @@ class NotificationDraft(StrictModel):
         return value.strip()
 
 
+class NotificationBatchRecord(StrictModel):
+    """批量登记线下已通知：只提交任务 ID；发送时间由服务器取登记当时，一次最多一页（50 个）。"""
+
+    taskIds: list[str] = Field(min_length=1, max_length=50)
+    note: str = Field(default="", max_length=300)
+
+    @field_validator("taskIds")
+    @classmethod
+    def unique_ids(cls, value):
+        if any(not item.isascii() or not item.isdigit() or item.startswith("0") for item in value):
+            raise ValueError("任务编号格式不正确")
+        if len(set(value)) != len(value):
+            raise ValueError("同一个任务不能重复提交")
+        return value
+
+    @field_validator("note")
+    @classmethod
+    def strip_note(cls, value):
+        return value.strip()
+
+
 class NotificationRecord(StrictModel):
     revision: int = Field(ge=1, description="登记的通知版本")
     sentAt: datetime

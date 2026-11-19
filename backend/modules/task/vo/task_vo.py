@@ -205,6 +205,8 @@ class BoardItem(StrictModel):
     # 来源或开票依据变化时不能继续推进，需财务重新审核
     blockedReason: str = ""
     missing: list[str]
+    # 能否在列表勾选后批量登记“线下已通知”；提交时后端逐个任务重新校验
+    notifyRecord: Capability
 
 
 class TaskBoard(StrictModel):

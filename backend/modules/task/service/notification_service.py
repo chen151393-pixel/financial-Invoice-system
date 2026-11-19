@@ -11,6 +11,7 @@ from ..dao import notification_dao, notification_delivery_dao, supplier_group_da
 from ..policy.delivery_policy import ACTIVE, BLOCK_REASON
 from ..policy.notification_policy import edit_block, record_block
 from .basis_guard import require_current
+from .notification_batch_service import record_batch
 from .task_status_service import change_status
 
 
@@ -73,6 +74,10 @@ class NotificationService:
             )
 
         return self._write(task_id, actor, action)
+
+    def record_batch(self, body, actor):
+        """列表勾选批量登记线下已通知；逐个任务独立事务，规则见 notification_batch_service。"""
+        return record_batch(self.engine, body, actor)
 
     def record(self, task_id, body, actor):
         sent_at = body.sentAt.astimezone(UTC).replace(tzinfo=None) if body.sentAt.tzinfo else None

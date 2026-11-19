@@ -14,18 +14,25 @@ import {
 } from "../../../shared/components/ui";
 import { openLocalSession } from "../../identity/api";
 import { queryTaskBoard } from "../api/board";
+import { recordNotificationBatch } from "../api/task";
 import { BoardNodeCards } from "../components/BoardNodeCards";
 import { BoardTaskItem } from "../components/BoardTaskItem";
+import { NotifyBatchDialog } from "../components/NotifyBatchDialog";
 import { SignedContractUpload } from "../components/SignedContractUpload";
 import { BoardSearch } from "../components/BoardSearch";
 import { readBoardQuery, writeBoardQuery } from "../hooks/board-query";
-import type { TaskBoard, TaskBoardQuery } from "../types/board";
+import type { BoardItem, NotifyBatchResult, TaskBoard, TaskBoardQuery } from "../types/board";
 import { stageLabels } from "../types/task";
 import "./task-board.css";
 
 type Remote = { kind: "loading" } | { kind: "error"; message: string } | { kind: "ready"; data: TaskBoard };
+// 批量登记弹窗：打开时固定本次任务，提交后保留逐任务结果直到关闭
+type NotifyBatch = { items: BoardItem[]; busy: boolean; result: NotifyBatchResult | null; error: string };
 
-/** 开票跟进：节点卡片筛选，列表卡片内含查询栏与任务卡片；单项处理进入详情，回签合同支持批量上传。 */
+/**
+ * 开票跟进：节点卡片筛选，列表卡片内含查询栏与任务卡片；单项处理进入详情。
+ * 回签合同支持批量上传；线下已通知的任务可在本页勾选后批量登记。
+ */
 export function TaskBoardPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const query = useMemo(() => readBoardQuery(searchParams), [searchParams]);
@@ -34,6 +41,9 @@ export function TaskBoardPage() {
   const [last, setLast] = useState<TaskBoard | null>(null);
   const [refresh, setRefresh] = useState(0);
   const [uploading, setUploading] = useState(false);
+  // 本页勾选的任务 ID；查询条件、分页变化或重新加载后清空，避免登记看不到的任务
+  const [selected, setSelected] = useState<string[]>([]);
+  const [batch, setBatch] = useState<NotifyBatch | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -60,13 +70,46 @@ export function TaskBoardPage() {
 
   function change(patch: Partial<TaskBoardQuery>) {
     setState({ kind: "loading" });
+    setSelected([]);
     const next = { ...query, page: 1, ...patch };
     setSearchParams(writeBoardQuery(next), { replace: true });
     setRefresh((n) => n + 1);
   }
   function reload() {
     setState({ kind: "loading" });
+    setSelected([]);
     setRefresh((n) => n + 1);
+  }
+  function toggle(id: string) {
+    setSelected((current) =>
+      current.includes(id) ? current.filter((value) => value !== id) : [...current, id],
+    );
+  }
+  async function recordBatch(note: string) {
+    if (!batch) return;
+    const items = batch.items;
+    setBatch({ items, busy: true, result: null, error: "" });
+    try {
+      const result = await recordNotificationBatch(
+        items.map((item) => item.task.id),
+        note,
+      );
+      setBatch({ items, busy: false, result, error: "" });
+    } catch (error) {
+      // 写操作不自动重试；结果不明时关闭后刷新列表核实
+      const message = error instanceof Error ? error.message : "批量登记请求失败";
+      setBatch({
+        items,
+        busy: false,
+        result: null,
+        error: `${message}；部分任务可能已登记，请关闭后核实列表再操作。`,
+      });
+    }
+  }
+  function closeBatch() {
+    const changed = Boolean(batch && (batch.result || batch.error));
+    setBatch(null);
+    if (changed) reload();
   }
   function showAll() {
     change({
@@ -98,6 +141,11 @@ export function TaskBoardPage() {
     purchaseOrderNo: query.purchaseOrderNo || "",
   };
   const filtered = Boolean(scoped || Object.values(searchValues).some(Boolean));
+  // 后端允许登记的本页任务；勾选只在这些任务中生效
+  const selectable =
+    state.kind === "ready" ? state.data.items.filter((item) => item.notifyRecord.allowed) : [];
+  const chosen = selectable.filter((item) => selected.includes(item.task.id));
+  const allChosen = selectable.length > 0 && chosen.length === selectable.length;
 
   return (
     <div className="tb">
@@ -192,8 +240,43 @@ export function TaskBoardPage() {
             }}
           />
         )}
+        {batch && (
+          <NotifyBatchDialog
+            items={batch.items}
+            busy={batch.busy}
+            result={batch.result}
+            error={batch.error}
+            onClose={closeBatch}
+            onSubmit={(note) => void recordBatch(note)}
+          />
+        )}
         <section className="tb-list" aria-labelledby="tb-list-title">
           {state.kind === "loading" && <Skeleton label="正在读取开票任务" />}
+
+          {selectable.length > 0 && (
+            <div className="tb-select">
+              <label className="tb-select__all">
+                <input
+                  type="checkbox"
+                  checked={allChosen}
+                  onChange={() => setSelected(allChosen ? [] : selectable.map((item) => item.task.id))}
+                />
+                全选本页待通知任务（{selectable.length} 个）
+              </label>
+              <span className="tb-select__hint" role="status">
+                {chosen.length
+                  ? `已选 ${chosen.length} 个`
+                  : "线下已通知供应商的任务，勾选后可批量登记，通知时间记为今天"}
+              </span>
+              <Button
+                variant="primary"
+                disabled={!chosen.length}
+                onClick={() => setBatch({ items: chosen, busy: false, result: null, error: "" })}
+              >
+                {`批量登记已通知${chosen.length ? `（${chosen.length}）` : ""}`}
+              </Button>
+            </div>
+          )}
 
           {state.kind === "error" && (
             <ErrorState
@@ -205,7 +288,17 @@ export function TaskBoardPage() {
 
           {state.kind === "ready" &&
             (state.data.items.length ? (
-              state.data.items.map((item) => <BoardTaskItem key={item.task.id} item={item} />)
+              state.data.items.map((item) => (
+                <BoardTaskItem
+                  key={item.task.id}
+                  item={item}
+                  selection={{
+                    checked: selected.includes(item.task.id),
+                    disabled: false,
+                    onToggle: () => toggle(item.task.id),
+                  }}
+                />
+              ))
             ) : (
               <EmptyState
                 title={

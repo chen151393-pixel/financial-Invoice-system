@@ -9,8 +9,15 @@ import { NODE_GLYPHS, NODE_TONES } from "./BoardNodeCards";
 /**
  * 开票跟进的任务卡片：摘要常驻，流程默认展开、可收起；阻塞原因始终可见。
  * 卡片不放节点操作按钮，「跟进详情」直接进入任务当前节点处理。
+ * 后端允许批量登记“线下已通知”的任务在标题前显示勾选框；能否登记不在前端判断。
  */
-export function BoardTaskItem({ item }: { item: BoardItem }) {
+export function BoardTaskItem({
+  item,
+  selection,
+}: {
+  item: BoardItem;
+  selection?: { checked: boolean; disabled: boolean; onToggle: () => void };
+}) {
   const [expanded, setExpanded] = useState(true);
   const flowId = useId();
   const { task } = item;
@@ -24,6 +31,16 @@ export function BoardTaskItem({ item }: { item: BoardItem }) {
         </span>
         <div className="tb-item__summary">
           <div className="tb-item__title">
+            {selection && item.notifyRecord.allowed && (
+              <input
+                type="checkbox"
+                className="tb-item__check"
+                checked={selection.checked}
+                disabled={selection.disabled}
+                aria-label={`选择 ${name}，用于批量登记已通知`}
+                onChange={selection.onToggle}
+              />
+            )}
             <h3 id={`tb-item-${task.id}`}>
               <Link to={taskPath(task.id)}>{task.supplier}</Link>
             </h3>

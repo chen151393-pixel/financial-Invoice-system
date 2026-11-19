@@ -40,3 +40,15 @@ class NotificationDetail(StrictModel):
     record: Capability
     send: Capability
     history: list[NotificationEvent]
+
+
+class NotificationBatchItem(StrictModel):
+    id: str
+    reason: str = ""
+
+
+class NotificationBatchResult(StrictModel):
+    """批量登记逐个任务的结果；跳过的任务附原因，不影响其他任务。"""
+
+    recorded: list[NotificationBatchItem]
+    skipped: list[NotificationBatchItem]
