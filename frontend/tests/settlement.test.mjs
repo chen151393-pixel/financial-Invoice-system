@@ -15,7 +15,9 @@ let server,
   ReceivableStats,
   OverviewMetrics,
   OverviewCustomers,
-  BankReceiptStats;
+  BankReceiptStats,
+  CreateBatchDialog,
+  createBatch;
 // 含应用内链接的组件需要路由上下文。
 const inRouter = (element) => createElement(MemoryRouter, null, element);
 
@@ -46,8 +48,44 @@ before(async () => {
   ({ BankReceiptStats } = await server.ssrLoadModule(
     "/src/modules/settlement/components/BankReceiptStats.tsx",
   ));
+  ({ CreateBatchDialog } = await server.ssrLoadModule(
+    "/src/modules/settlement/components/CreateBatchDialog.tsx",
+  ));
+  ({ createBatch } = await server.ssrLoadModule("/src/modules/settlement/api.ts"));
 });
 after(() => server?.close());
+
+test("回款登记保留原始金额字符串提交，由后端解释千分位", async (t) => {
+  const body = {
+    requestId: "d529d215-3d42-4ede-a23a-e1cf6af62b75",
+    declarationNos: ["310120260514395336"],
+    receivedOn: "2026-11-19",
+    receivedAmount: "10,002.59",
+    receivedFee: "0",
+    payer: "Hongkong Yesop Connect Supply Limited",
+    receivingAccount: "香港账户",
+    receivedReference: "BANK-001",
+    note: "",
+  };
+  t.mock.method(globalThis, "fetch", async (url, options) => {
+    assert.equal(url, "/api/settlement/batches");
+    assert.deepEqual(JSON.parse(options.body), body);
+    return Response.json({ id: 42 });
+  });
+  assert.deepEqual(await createBatch(body), { id: 42 });
+  const html = renderToStaticMarkup(
+    createElement(CreateBatchDialog, {
+      declarationNos: body.declarationNos,
+      defaultAmount: body.receivedAmount,
+      onClose() {},
+      onCreated() {},
+    }),
+  );
+  assert.match(html, /value="10,002\.59"/);
+  assert.match(html, /到账金额（必填）/);
+  assert.match(html, /ui-button--primary[^>]*>登记并建批次/);
+  assert.match(html, /<textarea[^>]*name="note"/);
+});
 
 test("结汇对账子菜单顺序：银行收汇明细在香港中转批次之前，直接收汇明细取代直接收汇批次", () => {
   const settlement = navigation.flatMap((group) => group.items).find((item) => item.id === "settlement");
@@ -384,6 +422,46 @@ test("收汇路径表展示后端全量汇总、独立币种及带客户筛选�
   assert.match(html, /href="\/settlement\/direct\?consignee=ACME\+%26\+CO"/);
 });
 
+test("报关应收汇默认按客户汇总，报关单明细位于右侧并共用一个查询区", async () => {
+  const { CandidatePanel } = await server.ssrLoadModule(
+    "/src/modules/settlement/components/CandidatePanel.tsx",
+  );
+  const html = renderToStaticMarkup(inRouter(createElement(CandidatePanel, { mode: "receivables" })));
+  assert.match(html, /aria-label="报关应收汇展示方式"/);
+  assert.match(html, /aria-pressed="true">按客户汇总<\/button><button[^>]*aria-pressed="false">报关单明细/);
+  assert.equal((html.match(/<form/g) || []).length, 1);
+  assert.equal((html.match(/class="ui-card /g) || []).length, 1);
+  assert.match(html, /正在汇总客户应收汇/);
+  assert.doesNotMatch(html, /正在读取报关单明细/);
+});
+
+test("报关明细视图与已提交筛选可从地址恢复，非法展示方式回到客户汇总", async () => {
+  const { CandidatePanel } = await server.ssrLoadModule(
+    "/src/modules/settlement/components/CandidatePanel.tsx",
+  );
+  const render = (entry) =>
+    renderToStaticMarkup(
+      createElement(
+        MemoryRouter,
+        { initialEntries: [entry] },
+        createElement(CandidatePanel, { mode: "receivables" }),
+      ),
+    );
+  const html = render(
+    "/settlement?view=declarations&consignee=HK+%26+CO&declarationNo=31012026&route=hk_transit&exportFrom=2026-11-01&exportTo=2026-11-19",
+  );
+  assert.match(html, /aria-pressed="false">按客户汇总<\/button><button[^>]*aria-pressed="true">报关单明细/);
+  assert.match(html, /name="consignee"[^>]*value="HK &amp; CO"/);
+  assert.match(html, /name="declarationNo"[^>]*value="31012026"/);
+  assert.match(html, /option value="hk_transit" selected=""/);
+  assert.match(html, /name="exportFrom"[^>]*value="2026-11-01"/);
+  assert.match(html, /name="exportTo"[^>]*value="2026-11-19"/);
+  assert.match(html, /正在读取报关单明细/);
+  const fallback = render("/settlement?view=unknown&route=unknown");
+  assert.match(fallback, /aria-pressed="true">按客户汇总/);
+  assert.match(fallback, /option value="all" selected=""/);
+});
+
 test("报关应收页不再登记回款；香港待登记页提供勾选与登记入口", async () => {
   const { CandidatePanel } = await server.ssrLoadModule(
     "/src/modules/settlement/components/CandidatePanel.tsx",
@@ -410,6 +488,7 @@ test("报关应收页不再登记回款；香港待登记页提供勾选与登�
   assert.match(registration, /name="targetAmount"/);
   assert.match(registration, /value="HK"/);
   assert.doesNotMatch(registration, /name="route"/);
+  assert.doesNotMatch(registration, /报关应收汇展示方式|按客户汇总/);
 });
 
 test("报关单明细只在登记区域允许勾选，并保留后端不可选原因", async () => {

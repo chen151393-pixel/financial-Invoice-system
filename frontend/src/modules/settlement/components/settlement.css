@@ -8,6 +8,17 @@
   flex: 1 1 220px;
 }
 
+/* 客户汇总与报关单明细共用一个查询区，明细页签排列在右侧。 */
+.settlement-receivables__views {
+  padding: var(--space-control) 20px 0;
+}
+
+@media (max-width: 640px) {
+  .settlement-receivables > .ui-card__header {
+    flex-wrap: wrap;
+  }
+}
+
 .settlement-cell {
   display: grid;
   gap: 2px;

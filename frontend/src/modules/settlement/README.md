@@ -17,15 +17,19 @@
 
 后端规则见[后端 settlement 模块](../../../../backend/modules/settlement/README.md)。
 
+报关应收汇展示（2026-11-19）：原上下排列的客户汇总、报关单明细合并到“应收报关单”区域，通过左侧“按客户汇总”和右侧“报关单明细”切换，默认客户汇总。两个视图共用查询条件和一次候选查询结果；切换不重发接口请求，已填写未提交的筛选也保留。`view`、客户、报关单号、回款路径、出口日期范围保存在 URL；重置只清空查询条件，保留当前视图。汇总仍使用后端全量 `consignees`，明细截断时单独说明展示范围。香港中转待登记页面不展示这组页签，保留勾选与建批次流程。
+
+回款登记弹窗（2026-11-19）：复用统一 `Field`、`Dialog`、`Alert` 和主按钮；回款信息与收款凭证分区，付款方占整行，小屏单列。金额以输入字符串原样提交，千分位和精度由后端校验；通过公共 `HttpError.fieldErrors` 在对应金额字段显示错误并聚焦。失败保留输入，提交期间禁用编辑与关闭，并防止重复提交。
+
 收汇总览调用 `POST /api/settlement/overview/query`，币种、收货人和分页条件保存在 URL。金额与合计全部由后端提供，合计覆盖全部筛选结果；不同币种分别展示。未收 = 应收 − 客户实收，负数表示超收，手续费单列且不并入实收。客户明细可进入按收货人筛选的香港批次（含已结汇）或直接收汇列表。香港到账只反映客户收款，不能据此判断已汇回或已结汇。报关应收汇保留查询展示，回款登记统一在香港中转批次办理。
 
 | 文件                                                                | 作用                                                                                                     |
 | ------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
-| `pages/SettlementDeclarationsPage.tsx`                              | 报关应收汇页；建好批次后立即打开批次详情                                                                 |
+| `pages/SettlementDeclarationsPage.tsx`                              | 报关应收汇页；客户汇总与报关单明细切换，只读查询展示                                                     |
 | `pages/SettlementBatchesPage.tsx`                                   | 批次列表（目前只挂载香港中转；状态筛选按路径给出）                                                       |
 | `pages/SettlementBankReceiptsPage.tsx`、`components/BankReceiptImportDialog.tsx` | 银行流水导入、导入结果、收汇抬头汇总、列表与筛选 |
 | `pages/SettlementLedgerPage.tsx`、`components/LedgerGroupTable.tsx` | 直接收汇明细：按境外收货人、收款人和币种汇总，可展开查看流水、单据编号及每笔后的累计余额 |
-| `components/CandidatePanel.tsx`                                     | 报关应收汇：查询、按境外收货人汇总、报关单明细勾选、按香港到账金额推荐组合                               |
+| `components/CandidatePanel.tsx`                                     | 报关应收汇双视图与共享查询；香港待登记页复用勾选、到账组合推荐和登记流程                                 |
 | `components/ReceivableStats.tsx`、`ConsigneeSummary.tsx`            | 按回款路径的应收汇概况卡；按境外收货人汇总表（路径、出口抬头、张数、金额、处理方式）                     |
 | `components/CreateBatchDialog.tsx`                                  | 登记回款建批次（到账、手续费、付款方、账户、流水号）                                                     |
 | `components/BatchDetailDialog.tsx`                                  | 批次详情：到账 / 汇回核对、确认资料已出、登记汇回、确认结汇、作废                                        |

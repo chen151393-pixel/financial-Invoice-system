@@ -268,6 +268,15 @@ def test_create_is_idempotent_and_service_identity_is_read_only(seeded):
         CreateBatchRequest.model_validate({**body.model_dump(mode="json"), "receivedAmount": "1.005"})
 
 
+def test_grouped_bank_amount_is_saved_and_balanced_as_decimal(seeded):
+    _, batches = services(seeded)
+    batch = create(batches, ["REAL870", "REAL871"], "1,000.50")
+    assert batch.receivedAmount == "1000.50"
+    assert batch.declaredTotal == "1000.50"
+    assert batch.balances[0].balanced
+    assert batches.get(batch.id).receivedAmount == "1000.50"
+
+
 def test_hk_registration_lists_only_unbatched_and_cancel_releases(seeded):
     candidates, batches = services(seeded)
     batch = create(batches, ["REAL870"], "600")
