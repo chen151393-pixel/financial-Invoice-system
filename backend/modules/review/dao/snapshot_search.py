@@ -12,6 +12,11 @@ from ..entity.snapshot_supplier import snapshot_suppliers as suppliers
 
 def conditions(query, dialect):
     result = []
+    if query.declarantName:
+        company = text_field("$.company", dialect)
+        result.append(
+            or_(*(company.contains(term, autoescape=True) for term in search_terms(query.declarantName)))
+        )
     if query.supplierName:
         result.append(
             snapshots.c.customs_declaration_id.in_(

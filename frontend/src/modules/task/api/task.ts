@@ -1,3 +1,4 @@
+import type { NotifyBatchResult } from "../types/board";
 import type { ClosureRequest } from "../types/task";
 import { http } from "../../../shared/api/http";
 import type {
@@ -24,6 +25,10 @@ export const saveTaskNotification = (id: string, draft: NotificationDraft) =>
 
 export const recordTaskNotification = (id: string, record: NotificationRecord) =>
   http<TaskDetail>(`${task(id)}/notification/record`, "POST", record);
+
+// 通知日期按北京时间由后端校验保存；写操作不自动重试。
+export const recordNotificationBatch = (taskIds: string[], note: string, notifiedOn: string) =>
+  http<NotifyBatchResult>(`${root}/notification/record-batch`, "POST", { taskIds, note, notifiedOn });
 
 export const closeTaskLine = (id: string, lineId: string, body: ClosureRequest) =>
   http<TaskDetail>(

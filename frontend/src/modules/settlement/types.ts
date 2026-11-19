@@ -38,6 +38,12 @@ export interface RouteTotal {
   amount: string;
 }
 
+export interface CurrencyTotal {
+  count: number;
+  currency: string;
+  amount: string;
+}
+
 /** 一家境外收货人（按币种分开）的应收汇汇总。 */
 export interface ConsigneeTotal {
   consignee: string;
@@ -64,6 +70,7 @@ export interface CandidateList {
   truncated: boolean;
   // 汇总按符合筛选的全部报关单计算
   totals: RouteTotal[];
+  combinedTotals: CurrencyTotal[];
   unsettled: RouteTotal[];
   consignees: ConsigneeTotal[];
   suggestion: string[] | null;
@@ -71,6 +78,7 @@ export interface CandidateList {
 }
 
 export interface CandidateQuery {
+  batchStatus?: "all" | "unbatched";
   consignee: string;
   declarationNo: string;
   route: RouteFilter;
@@ -206,6 +214,7 @@ export interface Contract {
   currency: string;
   amount: string;
   declarationNos: string[];
+  buyerName: string;
   sellerName: string;
   tradeTerm: string;
   portOfLoading: string;
@@ -218,6 +227,8 @@ export interface Contract {
 
 export interface PlannedContract {
   contractNo: string;
+  buyerName: string;
+  sellerName: string;
   currency: string;
   amount: string;
   declarationNos: string[];
@@ -239,8 +250,39 @@ export interface DeclarationFile {
   fileNames: string[];
 }
 
+/** 数字为香港批次 ID，字符串为直接收汇报关单号；API 命名空间分别处理。 */
+export type DocumentTarget = number | string;
+
+export interface DirectDocumentRow {
+  declarationNo: string;
+  recordNo: string;
+  salesOrders: string[];
+  consignee: string;
+  exportCompany: string;
+  currency: string;
+  amount: string;
+  billLabel: string;
+  contractLabel: string;
+  status: string;
+  statusLabel: string;
+  edit: Action;
+}
+export interface DirectDocumentQuery {
+  keyword: string;
+  consignee: string;
+  status: "all" | "pending_bill" | "pending_contract" | "stale" | "complete";
+  page: number;
+  pageSize: number;
+}
+export interface DirectDocumentList {
+  items: DirectDocumentRow[];
+  total: number;
+  page: number;
+  pageSize: number;
+}
+
 export interface BatchDocuments {
-  batchId: number;
+  batchId: number | null;
   declarationNos: string[];
   bills: Bill[];
   planned: PlannedContract[];
@@ -273,7 +315,7 @@ export interface BillFields {
 }
 
 export interface GenerateContractsBody {
-  sellerPartyId: number;
+  sellerPartyId?: number | null;
   tradeTerm: string;
   paymentTermsCn: string;
   paymentTermsEn: string;
@@ -332,6 +374,7 @@ export interface BankReceiptImportResult {
 
 export interface BankReceiptTotal {
   receivingCompany: string;
+  featuredCompany: boolean;
   currency: string;
   count: number;
   amount: string;

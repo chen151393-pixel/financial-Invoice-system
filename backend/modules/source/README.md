@@ -190,6 +190,16 @@ docker compose exec -T app python -m backend.manage rebuild-source-links --recor
 
 `unit_dictionary` 为管理员维护的历史兼容表，本次明确归 source 只读访问，经 `public.py` 的 `unit_names(connection)`、`unit_label(value, names)` 提供给其他模块；不纳入新迁移链，不复制、改名或覆盖其数据。保留它以支持现有单位编号；后续明确迁移到 source 命名表并切换所有展示调用方后，才能移除兼容映射。
 
+### 母采购对应明细单位（2026-11-19）
+
+`declaration_service.snapshot` 在子采购明细副本中补充 `parent_purchase_unit`、`parent_purchase_unit_issue`，供 review 核对申报幅度。`mapper/parent_purchase_unit_mapper.py` 从子采购原始快照读取母单 `custrecord_swc_subpo_mainpo`、行号 `custrecord_swc_subpo_item_mainpo_lineid` 和货品 `custrecord_swc_subpo_item_item`，在同一报关单的关联证据 `parentLines` 中按母单 NS ID、原生行号和货品 ID 唯一定位有效商品行。
+
+`parent_lines` 查询新增 `BUILTIN.DF(units) AS unitname`，与原有母采购行证据一起保存。比较单位使用该母采购行的明确名称；母采购 `units` 编号不套用报关单位兼容字典。旧快照已经保存明确名称或原生 `refName` 时可直接使用；只有编号、缺少对应行、引用不明确或没有母单时返回缺失原因。旧证据缺少单位名称时需重新同步关联单据补齐，再由既有 `SourceChanged` 触发财务补算。
+
+这两个字段是只读投影，来源表中的子采购单位、数量、金额及审核冻结依据继续使用各自保存值。无需数据库迁移。
+
+验证见 `tests/source/test_parent_purchase_units.py`、`tests/source/test_line_projection.py` 及 review 单位与快照回归。
+
 ### 供应商档案只读查询
 
 `SourceDirectory.suppliers(account, keyword, page, page_size, *, include_ids=None, exclude_ids=(), matching_ids=(), name_terms=())` 支持 task 供应商档案：包含/排除 ID 先过滤再分页；关键词匹配名称、NS 内部 ID 或调用方提供的匹配 ID。`name_terms` 按名称部分匹配取并集，与其余条件取交集。返回 NS 内部 ID，用于区分同名供应商；source DAO 只查询本模块表。

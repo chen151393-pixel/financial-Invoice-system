@@ -27,13 +27,14 @@
 
 | 层 | 文件 | 说明 |
 | --- | --- | --- |
-| controller | `task_controller.py` | `/api/tasks`：`POST /query`、`GET /{id}`、`POST /{id}/documents/{orderId}/prepare`、`POST /{id}/notification/draft`、`POST /{id}/notification/record` |
+| controller | `task_controller.py` | `/api/tasks`：`POST /query`、`GET /{id}`、`POST /{id}/documents/{orderId}/prepare`、`POST /{id}/notification/draft`、`POST /{id}/notification/record`、`POST /notification/record-batch` |
 | | `supplier_group_controller.py` | `/api/tasks/supplier-groups`：`/query`、`/suppliers/query`、`/wecom/query`、`/save` |
 | service | `task_generation_service.py` | `on_review_approved`：生成、分组、跳过已有有效行、替代旧任务 |
 | | `task_status_service.py` | `change_status`：任务状态唯一修改入口，检查转换表并写状态历史 |
 | | `task_service.py` | 列表（分组分页、搜索、统计）与详情 |
 | | `document_service.py` | 合同下载、登记、归档 |
 | | `notification_service.py` | 通知版本与人工发送登记 |
+| | `notification_batch_service.py` | 列表勾选批量登记线下已通知，逐任务独立事务 |
 | | `supplier_group_service.py` | 供应商群查询与保存 |
 | dao | 每张表一个文件 | 只访问本模块的表 |
 | policy | `task_policy.py` | 状态机、分组键、状态文案 |
@@ -305,3 +306,15 @@ MySQL 命名锁保证多实例单消费者，并对同一任务的同一子采�
 部署先执行迁移 `0043_task_supplier_owners`，只新增上述历史表；手动脚本见 `backend/migrations/manual/0043_task_supplier_owners.sql`，不得与自动迁移重复执行。不自动更新既有人事或业务归属；已有归属数据时禁止直接降级删除。实现按 controller/dto/vo、关联 DAO、任务归属 DAO、reader/service 分层，跨模块只通过 source/identity 只读门面。
 
 验证：`test_supplier_owners.py` 覆盖日期、历史、整批回滚、预览冲突、新任务快照与显式交接；`test_supplier_owners_mysql.py` 使用专用随机 MySQL 库验证同一预览并发保存。未提供 `BUSINESS_MIGRATION_TEST_SERVER_URL` 时跳过 MySQL 专项，不将 SQLite 结果视为 MySQL 并发验收。
+
+## 批量登记线下已通知（2026-11-19）
+
+采购在系统外（企微群、电话等）通知供应商后，在开票跟进列表勾选任务一次登记，不必逐个进入详情填写发送时间。只登记，不调用企微。
+
+- 接口：`POST /api/tasks/notification/record-batch`，请求 `{taskIds: ["1", ...], note?, notifiedOn?: "YYYY-MM-DD"}`，一次 1–50 个不重复的任务；页面授权沿用 `invoice-followup`，服务身份返回 403。`notifiedOn` 为北京时间通知日期，不接受客户端时间戳；旧客户端不传日期时取登记当时。
+- 响应 `{recorded: [{id}], skipped: [{id, reason}]}`。每个任务一个事务，逐个重新校验；不符合条件的跳过并附原因，不影响其他任务；数据库不可用时停止后续，已登记的不回滚。
+- 可登记条件（`policy/notification_policy.batch_record_block`）：任务状态为 `notify_pending`（子采购合同已全部归档）、最新通知未发送、来源与开票依据未变化、没有未决的企微通知。不要求先保存群名称和通知正文。
+- 登记内容（`service/notification_batch_service.py`）：通知日期默认今天，可选历史日期。后端拒绝未来日期；早于某任务生成日期的任务逐项跳过。今天取实际登记时刻；历史日期按北京零点折 UTC 保存，同任务生成日时不早于任务生成时刻。版本更新、状态历史等审计时间仍取实际登记时刻。最新版本是草稿时直接登记该草稿，保留其正文与群名称；没有草稿时新增一个版本，正文固定注明“系统未发送消息，未保存通知正文”，群名称取已启用的供应商默认群，发送员工取操作者姓名（飞书人员副本，找不到时为操作者标识）。说明为空时记为“批量登记：线下已通知供应商开票”。
+- 登记后与单个登记一致：通知版本为 `sent`、渠道 `manual`，任务转为 `awaiting_invoice` 并写入状态历史。重复提交按“已登记”跳过，不产生第二条记录。
+- 任务台 `BoardItem` 新增 `notifyRecord`（`allowed/reason`），前端只按它显示勾选框；未决企微通知在提交时复核，列表不预先判断。
+- 无表结构变化，无需迁移。验证：`tests/test_task_notification_batch.py`（默认日期、历史通知日期与真实审计时间、日期格式与未来日期拦截、草稿复用、逐任务跳过、服务身份与参数校验、任务台能力、HTTP 与未登录）。SQLite 隔离测试，未在 MySQL 上验证并发。

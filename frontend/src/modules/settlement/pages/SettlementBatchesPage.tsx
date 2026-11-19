@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useSearchParams } from "react-router";
 import {
   Badge,
   Button,
@@ -44,7 +45,7 @@ const TITLES: Record<Route, { title: string; description: string; empty: string 
   hk_transit: {
     title: "香港中转批次",
     description: "香港已收 → 资料已出 → 汇回对平后已结汇。",
-    empty: "在“报关应收汇”勾选香港中转的报关单并登记回款即可建批次。",
+    empty: "切换到“待登记回款”，勾选报关单并登记香港到账即可建批次。",
   },
   direct: {
     title: "直接收汇批次",
@@ -109,7 +110,14 @@ const COLUMNS: Column<BatchSummary>[] = [
 
 /** 某一回款路径的结汇批次列表：跟进资料、汇回与结汇确认。 */
 export function SettlementBatchesPage({ route }: { route: Route }) {
-  const [query, setQuery] = useState<BatchQuery>({ ...INITIAL, route });
+  const [params] = useSearchParams();
+  const [query, setQuery] = useState<BatchQuery>(() => ({
+    ...INITIAL,
+    route,
+    consignee: params.get("consignee") || "",
+    // 从总览查看客户时包含已结汇批次，避免实收有金额而列表为空。
+    status: params.get("consignee") ? "all" : INITIAL.status,
+  }));
   const text = TITLES[route];
   const [state, setState] = useState<State>({ kind: "loading" });
   const [open, setOpen] = useState<number | null>(null);
@@ -137,7 +145,9 @@ export function SettlementBatchesPage({ route }: { route: Route }) {
       <Card>
         <CardHeader
           title={text.title}
-          description={text.description}
+          description={
+            query.consignee ? `${text.description} 当前境外收货人：${query.consignee}` : text.description
+          }
           actions={
             <Segmented
               label="批次状态"

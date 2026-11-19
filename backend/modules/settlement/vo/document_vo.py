@@ -28,6 +28,7 @@ class Contract(StrictModel):
     currency: str
     amount: str
     declarationNos: list[str]
+    buyerName: str
     sellerName: str
     tradeTerm: str
     portOfLoading: str
@@ -40,6 +41,8 @@ class Contract(StrictModel):
 
 class PlannedContract(StrictModel):
     contractNo: str
+    buyerName: str
+    sellerName: str
     currency: str
     amount: str
     declarationNos: list[str]
@@ -68,7 +71,7 @@ class DeclarationFile(StrictModel):
 
 
 class BatchDocuments(StrictModel):
-    batchId: int
+    batchId: int | None
     declarationNos: list[str]
     bills: list[Bill]
     planned: list[PlannedContract]

@@ -26,6 +26,8 @@
   --color-nav-bg: #111c38;
   --color-nav-text: #c2cde3;
   --color-nav-muted: #9caccd;
+  --color-nav-hover: #192747;
+  --color-nav-current: #253657;
   --radius-control: 7px;
   --radius-panel: 12px;
   --space-small: 8px;

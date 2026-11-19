@@ -39,11 +39,12 @@ def line_number(value, index):
 
 def line_bindings(content):
     """行级关联：子采购行 ID → 报关行 ID。"""
-    return {
-        link["purchase_line_id"]: link["customs_line_id"]
-        for link in content["links"]
-        if link["purchase_line_id"] and link["customs_line_id"]
-    }
+    targets = defaultdict(set)
+    for link in content["links"]:
+        if link["purchase_line_id"] and link["customs_line_id"]:
+            targets[link["purchase_line_id"]].add(link["customs_line_id"])
+    # 无明确份额的多行归属不能任选一条，也不能将整行金额重复计入多个报关行。
+    return {identity: next(iter(values)) for identity, values in targets.items() if len(values) == 1}
 
 
 def purchase_line(order, row, basis=None, unit_names=None, sales_order=None):
@@ -95,6 +96,7 @@ def review_state(state, active_review, allowed, reason):
 
 
 def margin_fields(margin):
+    purchase = margin["purchase"]
     return {
         "margin": f"{margin['margin']}%" if margin["margin"] is not None else "",
         "marginStatus": margin["status"],
@@ -103,6 +105,14 @@ def margin_fields(margin):
         "declaredUnitPriceCny": text(margin["declared"].quantize(Decimal("0.000001")))
         if margin["declared"] is not None
         else "",
+        "purchaseUnitPriceUsd": text(purchase["usd"].quantize(Decimal("0.000001")))
+        if purchase["usd"] is not None
+        else "",
+        "declaredUnitPriceUsd": text(margin["declared_usd"].quantize(Decimal("0.000001")))
+        if margin["declared_usd"] is not None
+        else "",
+        "purchasePriceNote": purchase["note"],
+        "purchaseOrderQuantity": text(purchase["quantity"]),
         "originalUnitPriceCny": text(margin["original"].quantize(Decimal("0.000001")))
         if margin["original"] is not None
         else "",
@@ -142,6 +152,7 @@ def declaration(
             content.get("sales_orders", {}),
             unit_names=content.get("unit_names"),
             tolerance=tolerance,
+            bases=content.get("bases"),
         )
         for row in content["customs_lines"]
     }
@@ -173,10 +184,12 @@ def declaration(
             price=text(prices[row["id"]][0]),
             priceEstimated=prices[row["id"]][1],
             originalQuantity=text(row["quantity"]),
-            originalPrice=text(row["unit_price"]),
+            originalPrice=text(margins[row["id"]]["purchase"]["usd"].quantize(Decimal("0.000001")))
+            if margins[row["id"]]["purchase"]["usd"] is not None
+            else "",
             amount=text(row["amount"]),
             currency=text(row["currency"]),
-            originalPriceUnit=unit_label(row["unit"], content.get("unit_names")),
+            originalPriceUnit=margins[row["id"]]["purchase"]["unit"],
             declaredPriceUnit=unit_label(row["declared_unit"], content.get("unit_names")),
             purchaseCount=len(by_customs[row["id"]]),
             purchaseLines=group_purchase_lines([line.model_dump() for line in by_customs[row["id"]]]),

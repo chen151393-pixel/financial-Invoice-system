@@ -23,6 +23,22 @@ def edit_block(task_status, latest_status):
     return ""
 
 
+OFFLINE_NOTE = "批量登记：线下已通知供应商开票"
+OFFLINE_CONTENT = "已在系统外通知供应商开票（批量登记，系统未发送消息，未保存通知正文）。"
+
+
+def batch_record_block(task_status, latest_status):
+    """批量登记线下已通知：只要求合同已归档且尚未发送；不要求先保存群名称和通知正文。"""
+    if latest_status == "sent":
+        return "通知已登记发送，无需重复登记。"
+    block = edit_block(task_status, latest_status)
+    if block:
+        return block
+    if task_status != "notify_pending":
+        return "请先将全部子采购合同保存到共享盘。"
+    return ""
+
+
 def record_block(task_status, latest):
     """latest 为最新通知版本（字典）或 None。"""
     block = edit_block(task_status, latest["status"] if latest else None)

@@ -18,7 +18,7 @@ from PIL import Image, ImageDraw, ImageFont
 from reportlab.pdfgen import canvas
 
 HK = "HONGKONG VISION DIGITAL PRINTING CO., LIMITED"
-SELLER = "上海绎视数码科技有限公司"
+SELLER = "申报主体"
 BILL_LINES = (
     "BILL OF LADING",
     "B/L NO: EGLV142503975412",

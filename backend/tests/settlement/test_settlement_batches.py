@@ -120,6 +120,9 @@ def test_candidates_split_routes_and_suggest_combination(seeded):
         (t.route, t.currency): (t.count, t.amount) for t in candidates.query(CandidateQuery()).unsettled
     }
     assert totals == {("direct", "USD"): (1, "1000.00"), ("hk_transit", "USD"): (2, "1000.50")}
+    combined = candidates.query(CandidateQuery()).combinedTotals
+    assert [(t.currency, t.count, t.amount) for t in combined] == [("USD", 3, "2000.50")]
+    assert [(t.count, t.amount) for t in result.combinedTotals] == [(2, "1000.50")]
 
 
 def test_candidates_mark_handling_and_summarise_by_consignee(seeded):
@@ -263,3 +266,27 @@ def test_create_is_idempotent_and_service_identity_is_read_only(seeded):
         batches.create(body, "service:robot")
     with pytest.raises(ValueError, match="最多两位小数"):
         CreateBatchRequest.model_validate({**body.model_dump(mode="json"), "receivedAmount": "1.005"})
+
+
+def test_grouped_bank_amount_is_saved_and_balanced_as_decimal(seeded):
+    _, batches = services(seeded)
+    batch = create(batches, ["REAL870", "REAL871"], "1,000.50")
+    assert batch.receivedAmount == "1000.50"
+    assert batch.declaredTotal == "1000.50"
+    assert batch.balances[0].balanced
+    assert batches.get(batch.id).receivedAmount == "1000.50"
+
+
+def test_hk_registration_lists_only_unbatched_and_cancel_releases(seeded):
+    candidates, batches = services(seeded)
+    batch = create(batches, ["REAL870"], "600")
+    query = CandidateQuery(route="hk_transit", batchStatus="unbatched", targetAmount="400.50")
+    pending = candidates.query(query)
+    assert [item.declarationNo for item in pending.items] == ["REAL871"]
+    assert pending.suggestion == ["REAL871"]
+    assert pending.combinedTotals[0].amount == "400.50"
+    assert len(candidates.query(CandidateQuery()).items) == 3
+    batches.cancel(batch.id, CancelRequest(reason="登记有误"), "finance-user")
+    assert {item.declarationNo for item in candidates.query(query).items} == {"REAL870", "REAL871"}
+    with pytest.raises(ValueError):
+        CandidateQuery(batchStatus="unknown")

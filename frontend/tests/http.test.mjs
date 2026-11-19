@@ -14,6 +14,36 @@ test("明确的业务拒绝保留HTTP状态供表单恢复", async (t) => {
   });
 });
 
+test("表单保留后端字段错误，忽略非文本或异常结构", async (t) => {
+  const mock = t.mock.method(globalThis, "fetch", async () =>
+    Response.json(
+      {
+        error: "请检查金额",
+        fieldErrors: {
+          receivedAmount: "到账金额最多两位小数",
+          note: null,
+          payer: { input: "private" },
+          empty: "",
+        },
+      },
+      { status: 400 },
+    ),
+  );
+  await assert.rejects(http("/settlement/batches", "POST", {}), (error) => {
+    assert.ok(error instanceof HttpError);
+    assert.deepEqual(error.fieldErrors, { receivedAmount: "到账金额最多两位小数" });
+    assert.equal(error.status, 400);
+    return true;
+  });
+  for (const fieldErrors of [null, "private", ["private"]]) {
+    mock.mock.mockImplementation(async () => Response.json({ error: "失败", fieldErrors }, { status: 400 }));
+    await assert.rejects(http("/settlement/batches", "POST", {}), (error) => {
+      assert.deepEqual(error.fieldErrors, {});
+      return true;
+    });
+  }
+});
+
 test("公共请求正确处理代理和后端响应", async (t) => {
   const cases = [
     [500, "", /后端服务暂时不可用（HTTP 500）/],

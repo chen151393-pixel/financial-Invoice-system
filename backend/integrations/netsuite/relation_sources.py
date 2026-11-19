@@ -29,7 +29,8 @@ QUERIES = {
         "ORDER BY previousdoc,previousline,nextdoc,nextline,linktype"
     ),
     "parent_lines": (
-        "SELECT transaction,id,uniquekey,item,quantity,units,foreignamount,mainline,taxline "
+        "SELECT transaction,id,uniquekey,item,quantity,units,BUILTIN.DF(units) AS unitname,"
+        "foreignamount,mainline,taxline "
         "FROM transactionline WHERE transaction IN ({ids}) ORDER BY transaction,id"
     ),
     # 母采购单头：子采购单币种取自母采购单（purchaseOrder.currency），汇率作为换算依据。

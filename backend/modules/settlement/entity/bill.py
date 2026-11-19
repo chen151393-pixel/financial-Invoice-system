@@ -4,7 +4,7 @@
 移除为软删除：removed_at 非空的提单不参与资料核对与打包。
 """
 
-from sqlalchemy import CHAR, JSON, Column, Date, ForeignKey, Index, Integer, String, Table
+from sqlalchemy import CHAR, JSON, CheckConstraint, Column, Date, ForeignKey, Index, Integer, String, Table
 
 from backend.core.schema import ID, TIMESTAMP, identifier, schema_metadata, table_options, timestamps
 
@@ -16,9 +16,10 @@ settlement_bills = Table(
         "batch_id",
         ID,
         ForeignKey("settlement_batches.id", name="fk_settlement_bill_batch"),
-        nullable=False,
+        nullable=True,
         comment="所属结汇批次，指向 settlement_batches.id",
     ),
+    Column("direct_declaration_no", identifier(150), comment="直接收汇资料所属报关单；与批次二选一"),
     Column("file_id", identifier(36), nullable=False, comment="资料目录中的文件标识（服务端生成的 UUID）"),
     Column("file_name", String(255), nullable=False, comment="上传时的原文件名，仅展示"),
     Column("sha256", CHAR(64), nullable=False, comment="文件内容 SHA-256，用于识别同一批次内重复上传"),
@@ -36,6 +37,11 @@ settlement_bills = Table(
     Column("removed_at", TIMESTAMP, comment="移除时间，UTC；非空表示已移除"),
     *timestamps(),
     Index("ix_settlement_bill_batch", "batch_id", "removed_at"),
+    CheckConstraint(
+        "(batch_id IS NOT NULL AND direct_declaration_no IS NULL) OR (batch_id IS NULL AND direct_declaration_no IS NOT NULL)",
+        name="ck_settlement_bill_source",
+    ),
+    Index("ix_settlement_bill_direct", "direct_declaration_no", "removed_at"),
     comment="结汇批次的提单文件及装运口岸、目的口岸、装船日期",
     **table_options,
 )

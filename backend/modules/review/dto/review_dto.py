@@ -13,6 +13,8 @@ class DeclarationListQuery(StrictModel):
     createdFrom: date | None = Field(default=None, strict=False)
     createdTo: date | None = Field(default=None, strict=False)
     supplierName: SearchText = ""
+    # 报关单主行申报抬头，按名称包含匹配；多个名称用逗号分隔
+    declarantName: SearchText = ""
     recordNo: SearchText = ""
     # 真实海关报关单号（NS custrecord_swc_realno），与 CD 编号不同；多条用逗号分隔，部分匹配
     declarationNo: SearchText = ""

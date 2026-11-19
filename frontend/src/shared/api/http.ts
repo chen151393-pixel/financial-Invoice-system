@@ -19,11 +19,13 @@ export function onUnauthorized(listener: () => void) {
 
 export class HttpError extends Error {
   readonly status: number;
+  readonly fieldErrors: Readonly<Record<string, string>>;
 
-  constructor(message: string, status: number) {
+  constructor(message: string, status: number, fieldErrors: Record<string, string> = {}) {
     super(message);
     this.name = "HttpError";
     this.status = status;
+    this.fieldErrors = fieldErrors;
   }
 }
 
@@ -75,7 +77,20 @@ export async function http<T>(
       data.error.trim()
         ? data.error
         : fallback;
-    throw new HttpError(message, response.status);
+    const fieldErrors =
+      typeof data === "object" &&
+      data !== null &&
+      "fieldErrors" in data &&
+      typeof data.fieldErrors === "object" &&
+      data.fieldErrors !== null &&
+      !Array.isArray(data.fieldErrors)
+        ? Object.fromEntries(
+            Object.entries(data.fieldErrors).filter(
+              (entry): entry is [string, string] => typeof entry[1] === "string" && !!entry[1].trim(),
+            ),
+          )
+        : {};
+    throw new HttpError(message, response.status, fieldErrors);
   }
   if (data === null) throw new Error(fallback);
   return data as T;

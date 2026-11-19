@@ -1,11 +1,13 @@
 """结汇请求：金额为十进制字符串（最多两位小数）；操作者来自认证身份，不接受前端提交。"""
 
+import re
 from datetime import date
 from decimal import Decimal, InvalidOperation
 from typing import Annotated, Literal
 from uuid import UUID
 
 from pydantic import Field, StringConstraints, field_validator, model_validator
+from pydantic_core import PydanticCustomError
 
 from backend.core.dto import StrictModel
 
@@ -15,19 +17,31 @@ Number = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, m
 
 
 def amount_value(value, label, *, allow_zero):
+    text = str(value).strip()
+    # 接受银行流水常见的千分位金额，但不把分组错误的逗号静默删掉。
+    if "," in text:
+        if not re.fullmatch(r"[0-9]{1,3}(?:,[0-9]{3})+(?:\.[0-9]+)?", text):
+            raise PydanticCustomError(
+                "settlement_amount", f"{label}格式不正确，千分位须每三位分组（如 10,002.59）"
+            )
+        text = text.replace(",", "")
     try:
-        number = Decimal(str(value).strip())
+        number = Decimal(text)
     except (InvalidOperation, ValueError):
-        raise ValueError(f"{label}不是有效数值") from None
+        raise PydanticCustomError(
+            "settlement_amount", f"{label}不是有效数值，请输入金额（如 10002.59）"
+        ) from None
     if (
         not number.is_finite()
         or number < 0
         or (number == 0 and not allow_zero)
         or number >= Decimal(10) ** 16
     ):
-        raise ValueError(f"{label}须为范围内的{'非负数' if allow_zero else '正数'}")
+        raise PydanticCustomError(
+            "settlement_amount", f"{label}须为范围内的{'非负数' if allow_zero else '正数'}"
+        )
     if number != number.quantize(Decimal("0.01")):
-        raise ValueError(f"{label}最多两位小数")
+        raise PydanticCustomError("settlement_amount", f"{label}最多两位小数")
     return number
 
 
@@ -35,6 +49,7 @@ class CandidateQuery(StrictModel):
     consignee: Text200 = ""
     declarationNo: Text200 = ""
     route: Literal["all", "hk_transit", "direct"] = "all"
+    batchStatus: Literal["all", "unbatched"] = "all"
     exportFrom: date | None = Field(default=None, strict=False)
     exportTo: date | None = Field(default=None, strict=False)
     # 填写后按“到账 + 手续费”推荐金额恰好吻合的香港中转报关单组合

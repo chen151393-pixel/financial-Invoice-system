@@ -232,7 +232,11 @@ def test_bank_receipts_mark_third_party_and_route(seeded):
     assert (totals["上海毅烁"].thirdPartyCount, totals["上海毅烁"].thirdPartyAmount) == (1, "700.00")
 
     only = bank.browse(BankReceiptQuery(thirdParty="yes"))
-    assert [r.reference for r in only.items] == ["FT002"] and len(only.totals) == 1
+    assert [r.reference for r in only.items] == ["FT002"]
+    assert len([t for t in only.totals if t.featuredCompany]) == 3
+    assert [(t.receivingCompany, t.amount) for t in only.totals if not t.featuredCompany] == [
+        ("上海毅烁", "700.00")
+    ]
     assert bank.browse(BankReceiptQuery(thirdParty="no", customer="ACME")).total == 1
     ranged = bank.browse(
         BankReceiptQuery(receiptFrom="2026-10-26", receiptTo="2026-10-27", pageSize=1, page=5)

@@ -1,4 +1,4 @@
-"""开票跟进接口：任务列表、详情、保存合同、报关资料单项重试、通知草稿与人工发送登记。"""
+"""开票跟进接口：任务列表、详情、保存合同、报关资料单项重试、通知草稿与人工发送登记（单个、批量）。"""
 
 from typing import Annotated
 
@@ -6,8 +6,9 @@ from fastapi import APIRouter, Path
 
 from backend.core.dependencies import Owner
 
-from ..dto.notification_dto import NotificationDraft, NotificationRecord
+from ..dto.notification_dto import NotificationBatchRecord, NotificationDraft, NotificationRecord
 from ..dto.task_dto import ClosureRequest, TaskListQuery
+from ..vo.notification_vo import NotificationBatchResult
 from ..vo.task_vo import TaskDetail, TaskList
 
 Id = Annotated[int, Path(ge=1, le=2**63 - 1)]
@@ -20,6 +21,10 @@ def create_router(tasks, documents, notifications, closures, declarations):
     @router.post("/query", response_model=TaskList)
     def query(body: TaskListQuery, owner: Owner):
         return tasks.browse(body)
+
+    @router.post("/notification/record-batch", response_model=NotificationBatchResult)
+    def record_notifications(body: NotificationBatchRecord, owner: Owner):
+        return notifications.record_batch(body, owner)
 
     @router.get("/{task_id}", response_model=TaskDetail)
     def detail(task_id: Id, owner: Owner):

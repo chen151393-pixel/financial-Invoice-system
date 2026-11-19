@@ -1,5 +1,5 @@
 // 与后端 TaskBoard VO 一致；节点归类、计数与下一步提示均由后端给出，前端不推断。
-import type { TaskStep, TaskSummary } from "./task";
+import type { Capability, TaskStep, TaskSummary } from "./task";
 
 export type BoardNodeKey = "documents" | "notification" | "invoices" | "comparison" | "completion" | "done";
 
@@ -18,6 +18,14 @@ export interface BoardItem {
   nextAction: string;
   blockedReason: string;
   missing: string[];
+  // 能否勾选后批量登记“线下已通知”，由后端判断；提交时后端逐个任务重新校验
+  notifyRecord: Capability;
+}
+
+// 批量登记线下已通知的逐任务结果；skipped 附后端给出的原因
+export interface NotifyBatchResult {
+  recorded: { id: string; reason: string }[];
+  skipped: { id: string; reason: string }[];
 }
 
 export interface TaskBoard {

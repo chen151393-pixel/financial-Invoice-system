@@ -1,3 +1,5 @@
+import { Link } from "react-router";
+import { settlementDirectDocumentsPath } from "../../../app/paths";
 import { useId, useState } from "react";
 import { Badge, Button, DataTable, Icon, type Column, type Tone } from "../../../shared/components/ui";
 import { money } from "../../../shared/format/money";
@@ -71,7 +73,19 @@ export function LedgerGroupTable({ group }: { group: LedgerGroup }) {
   return (
     <DataTable
       label={`${group.consignee} ${group.currency} 流水`}
-      columns={COLUMNS}
+      columns={[
+        ...COLUMNS,
+        {
+          key: "documents",
+          header: "资料",
+          render: (row) =>
+            row.kind === "export" ? (
+              <Link to={settlementDirectDocumentsPath(group.consignee, row.sourceNo)}>办理资料</Link>
+            ) : (
+              "—"
+            ),
+        },
+      ]}
       rows={group.entries.map((entry, index) => ({ ...entry, index }))}
       rowKey={(row) => String(row.index)}
       minWidth={1080}
@@ -125,6 +139,11 @@ export function LedgerSummaryTable({ groups }: { groups: LedgerGroup[] }) {
       header: "状态",
       width: "80px",
       render: ({ group }) => <Badge tone={STATUS_TONES[group.status]}>{group.statusLabel}</Badge>,
+    },
+    {
+      key: "documents",
+      header: "资料",
+      render: ({ group }) => <Link to={settlementDirectDocumentsPath(group.consignee)}>报关资料</Link>,
     },
     {
       key: "opening",

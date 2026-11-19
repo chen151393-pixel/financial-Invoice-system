@@ -145,6 +145,23 @@ def register_error_handlers(app):
     @app.exception_handler(RequestValidationError)
     async def validation_error(_request, _error):
         # 错误不回显密码、请求体和私有字段。
+        amount_errors = {
+            error["loc"][-1]: error["msg"]
+            for error in _error.errors()
+            if error["type"] == "settlement_amount"
+            and error["loc"]
+            in {
+                ("body", "receivedAmount"),
+                ("body", "receivedFee"),
+                ("body", "remittedAmount"),
+                ("body", "remittedFee"),
+                ("body", "targetAmount"),
+            }
+        }
+        if amount_errors:
+            return JSONResponse(
+                {"error": "；".join(amount_errors.values()), "fieldErrors": amount_errors}, status_code=400
+            )
         for error in _error.errors():
             if error["type"] in {"ns_query_scope", "sync_date_range", "lemon_dates"}:
                 # 此专用类型仅由查询DTO生成固定中文说明，不插入用户输入。

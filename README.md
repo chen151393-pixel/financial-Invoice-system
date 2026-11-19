@@ -24,6 +24,7 @@ React + TypeScript + Vite 前端，Python + FastAPI + SQLAlchemy + Alembic 后�
 | `/login`、`/settings/access`、`/settings/access/roles` | 飞书登录与应急管理员登录；人员角色授权、页面权限配置、菜单与接口访问校验 | 会话保存在单进程内存中；页面访问与具体业务操作权限分开，部署前须执行 `0041_identity_role_pages` 迁移 |
 | `/sync/ns` | NS 分页读取；子采购和报关可补齐来源并保存 | 没有持久定时同步队列；依赖来源接口及字段配置 |
 | `/workbench`（默认首页） | [总体工作台](docs/invoice-workbench.md)：关键指标、业务流程分布、待办处理、供应商待收金额与已开票趋势 | 仅汇总已入库数据，口径见页面说明；超期暂不展示 |
+| `/settlement/overview` | [收汇总览](backend/modules/settlement/README.md#收汇总览2026-11-19)：应收、客户实收、未收金额及香港中转 / 直接收汇拆分，按币种和收货人查询 | 累计已登记数据；香港汇回不重复计入客户实收，手续费单列，不代表订单收齐或结汇状态 |
 | `/pl-reconciliation` | 通过 NS 共用脚本实时查询采购报关依据 | 只读对照，页面查询不自动入库或审核 |
 | `/review`（原 `/finance-reconciliation`） | NS 同步后后台计算并保存申报幅度，列表直接查询快照并在数据库分页；整单人工审核冻结开票口径 | 来源变化后需重新审核；后台更新中显示提示，部署补算见 [review 说明](backend/modules/review/README.md#后台计算与数据库分页2026-10-27) |
 | `/tasks`（原 `/invoice-followup`、`/tasks/board`） | 统一节点式开票跟进、合并任务面板且流程默认展开；海关与财务审核均通过后自动按供应商×采购公司×币种生成任务、审核后自动下载合同并归档到共享盘、供应商群配置、通知版本和人工发送登记 | 收票进度由发票比对通过的分配自动汇总，完成后任务自动结束；已接入企微群发提交与回执，仍需群主确认；默认关闭，启用前须完成定向验收 |

@@ -1,5 +1,7 @@
 """批次资料行 → VO 的纯转换。"""
 
+from urllib.parse import quote
+
 from ..policy.bill_parse_policy import missing_fields
 from ..vo.document_vo import Bill, Contract, DeclarationFile, PartyOption, PlannedContract
 from ..vo.party_vo import Party
@@ -8,11 +10,17 @@ from .batch_mapper import amount, stamp, text
 BASE = "/api/settlement"
 
 
+def document_base(row):
+    if row.get("direct_declaration_no"):
+        return f"{BASE}/direct-documents/{quote(row['direct_declaration_no'], safe='')}"
+    return f"{BASE}/batches/{row['batch_id'] if 'batch_id' in row else row['id']}"
+
+
 def bill(row):
     return Bill(
         id=row["id"],
         fileName=row["file_name"],
-        fileUrl=f"{BASE}/batches/{row['batch_id']}/bills/{row['id']}/file",
+        fileUrl=f"{document_base(row)}/bills/{row['id']}/file",
         blNo=text(row["bl_no"]),
         portOfLoading=text(row["port_of_loading"]),
         portOfDischarge=text(row["port_of_discharge"]),
@@ -27,14 +35,16 @@ def bill(row):
 
 def contract(row, parties, stale):
     seller = parties.get(row["seller_party_id"])
+    buyer = parties.get(row["buyer_party_id"])
     return Contract(
         id=row["id"],
         contractNo=row["contract_no"],
-        fileUrl=f"{BASE}/batches/{row['batch_id']}/contracts/{row['id']}/file",
+        fileUrl=f"{document_base(row)}/contracts/{row['id']}/file",
         contractDate=text(row["contract_date"]),
         currency=row["currency"],
         amount=amount(row["amount"]),
         declarationNos=list(row["declaration_nos"] or []),
+        buyerName=buyer["name"] if buyer else "",
         sellerName=seller["name"] if seller else "",
         tradeTerm=row["trade_term"],
         portOfLoading=row["port_of_loading"],
@@ -46,9 +56,11 @@ def contract(row, parties, stale):
     )
 
 
-def planned(item, currency):
+def planned(item, currency, binding):
     return PlannedContract(
         contractNo=item["contract_no"],
+        buyerName=binding["buyer_name"],
+        sellerName=binding["seller_name"],
         currency=currency,
         amount=amount(item["amount"]),
         declarationNos=item["declaration_nos"],

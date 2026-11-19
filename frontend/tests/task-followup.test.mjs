@@ -152,3 +152,94 @@ test("任务卡片默认展开流程，展示阻塞原因、零金额进度；�
   assert.doesNotMatch(html, /重新审核后继续|下一步/);
   assert.doesNotMatch(html, /class="ui-card /);
 });
+
+test("批量登记已通知提交任务编号、说明及通知日期，不提交时间戳", async (t) => {
+  const taskApi = await server.ssrLoadModule("/src/modules/task/api/task.ts");
+  const calls = [];
+  t.mock.method(globalThis, "fetch", async (url, options) => {
+    calls.push({ url, method: options.method, body: JSON.parse(options.body) });
+    return Response.json({ recorded: [{ id: "1", reason: "" }], skipped: [{ id: "2", reason: "已变化" }] });
+  });
+  const result = await taskApi.recordNotificationBatch(["1", "2"], "电话已通知", "2026-11-18");
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].url, "/api/tasks/notification/record-batch");
+  assert.equal(calls[0].method, "POST");
+  assert.deepEqual(calls[0].body, { taskIds: ["1", "2"], note: "电话已通知", notifiedOn: "2026-11-18" });
+  assert.equal(result.skipped[0].reason, "已变化");
+});
+
+test("任务卡片只在后端允许登记时显示勾选框", () => {
+  const item = (allowed) => ({
+    task,
+    currentNode: "notification",
+    currentLabel: "待通知供应商",
+    blockedReason: "",
+    nextAction: "",
+    steps: [{ key: "notification", label: "通知供应商", state: "current" }],
+    missing: [],
+    notifyRecord: { allowed, reason: allowed ? "" : "请先将全部子采购合同保存到共享盘。" },
+  });
+  const render = (allowed, checked = false) =>
+    renderToStaticMarkup(
+      createElement(
+        Router,
+        null,
+        createElement(BoardTaskItem, {
+          item: item(allowed),
+          selection: { checked, disabled: false, onToggle() {} },
+        }),
+      ),
+    );
+  assert.match(
+    render(true),
+    /type="checkbox"[^>]*aria-label="选择 隔离测试供应商 CD001，用于批量登记已通知"/,
+  );
+  assert.match(render(true, true), /type="checkbox"[^>]*checked=""/);
+  assert.doesNotMatch(render(false), /type="checkbox"/);
+});
+
+test("批量登记弹窗默认北京时间今天，可选择日期，并展示逐任务结果", async (t) => {
+  t.mock.timers.enable({ apis: ["Date"], now: Date.parse("2026-11-18T17:00:00Z") });
+  const { NotifyBatchDialog } = await server.ssrLoadModule(
+    "/src/modules/task/components/NotifyBatchDialog.tsx",
+  );
+  const items = ["1", "2"].map((id) => ({
+    task: { ...task, id, supplier: `供应商${id}` },
+    notifyRecord: { allowed: true, reason: "" },
+  }));
+  const render = (props) =>
+    renderToStaticMarkup(
+      createElement(NotifyBatchDialog, {
+        items,
+        busy: false,
+        result: null,
+        error: "",
+        onClose() {},
+        onSubmit() {},
+        ...props,
+      }),
+    );
+  const confirm = render({});
+  for (const value of [
+    "本页已选 2",
+    "通知日期（北京时间）",
+    "系统不会发送任何消息",
+    "确认已通知 2 个",
+    "SUB001",
+  ])
+    assert.ok(confirm.includes(value), value);
+  assert.match(confirm, /type="date"[^>]*required=""[^>]*value="2026-11-19"/);
+  assert.doesNotMatch(confirm, /通知时间记为今天/);
+  const done = render({
+    result: {
+      recorded: [{ id: "1", reason: "" }],
+      skipped: [{ id: "2", reason: "通知已登记发送，无需重复登记。" }],
+    },
+  });
+  for (const value of ["已登记 1 个，跳过 1 个", "通知已登记发送，无需重复登记。", "关闭"])
+    assert.ok(done.includes(value), value);
+  assert.doesNotMatch(done, /确认已通知/);
+  assert.doesNotMatch(done, /type="date"/);
+  assert.match(render({ busy: true }), /type="date"[^>]*disabled=""/);
+  assert.ok(render({ error: "请求失败；请核实" }).includes("请求失败；请核实"));
+});

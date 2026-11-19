@@ -1,8 +1,9 @@
 import { Link, useLocation } from "react-router";
 import { SettlementBankReceiptsPage } from "../modules/settlement/pages/SettlementBankReceiptsPage";
-import { SettlementBatchesPage } from "../modules/settlement/pages/SettlementBatchesPage";
+import { SettlementHkTransitPage } from "../modules/settlement/pages/SettlementHkTransitPage";
 import { SettlementDeclarationsPage } from "../modules/settlement/pages/SettlementDeclarationsPage";
 import { SettlementLedgerPage } from "../modules/settlement/pages/SettlementLedgerPage";
+import { SettlementOverviewPage } from "../modules/settlement/pages/SettlementOverviewPage";
 import { SettlementPartiesPage } from "../modules/settlement/pages/SettlementPartiesPage";
 import { AppFrame } from "./WorkspaceFrame";
 import { navigation } from "./navigation";
@@ -10,10 +11,16 @@ import { paths, type SubView } from "./paths";
 import { useViewNavigate } from "./useViewNavigate";
 
 const PAGES = {
+  overview: {
+    child: "settlement-overview",
+    title: "收汇总览",
+    description: "统一查看香港中转与直接收汇的报关应收、客户实收和未收金额；香港汇回境内单独跟踪。",
+    source: "海关回执 + 香港到账登记 + 银行收汇明细",
+  },
   declarations: {
     child: "settlement-declarations",
     title: "报关应收汇",
-    description: "按海关回执汇总应收汇并判定回款路径：香港中转登记回款建批次，非香港中转进直接收汇明细。",
+    description: "按海关回执查看应收汇与回款路径；香港回款在香港中转批次登记，非香港中转进入直接收汇明细。",
     source: "海关回执（出口日期、成交总价）",
   },
   bank: {
@@ -31,7 +38,8 @@ const PAGES = {
   direct: {
     child: "settlement-direct",
     title: "直接收汇明细",
-    description: "非香港中转的境外收货人总账：出口取自报关单，收汇取自银行收汇明细，按境外收货人和收款人汇总差额。",
+    description:
+      "非香港中转的境外收货人总账：出口取自报关单，收汇取自银行收汇明细，按境外收货人和收款人汇总差额。",
     source: "海关回执 + 银行收汇明细",
   },
   parties: {
@@ -43,6 +51,7 @@ const PAGES = {
 } as const satisfies Record<string, { child: SubView; title: string; description: string; source: string }>;
 
 const KEYS: Record<string, keyof typeof PAGES> = {
+  [paths.settlementOverview]: "overview",
   [paths.settlementBank]: "bank",
   [paths.settlementHk]: "hk",
   [paths.settlementDirect]: "direct",
@@ -51,7 +60,7 @@ const KEYS: Record<string, keyof typeof PAGES> = {
 
 /** 结汇对账：各子页面共用一个页面权限，由侧栏子列表切换。 */
 export default function SettlementWorkspacePage() {
-  const { pathname } = useLocation();
+  const { pathname, search } = useLocation();
   const navigateView = useViewNavigate();
   const key = KEYS[pathname] ?? "declarations";
   const current = PAGES[key];
@@ -63,15 +72,16 @@ export default function SettlementWorkspacePage() {
       onNavigate={navigateView}
       title={current.title}
       breadcrumb={
-        key === "declarations" ? <span>结汇对账</span> : <Link to={paths.settlement}>结汇对账</Link>
+        key === "overview" ? <span>结汇对账</span> : <Link to={paths.settlementOverview}>结汇对账</Link>
       }
       description={current.description}
       meta={[{ label: "数据来源", value: current.source }]}
     >
+      {key === "overview" && <SettlementOverviewPage />}
       {key === "declarations" && <SettlementDeclarationsPage />}
       {key === "bank" && <SettlementBankReceiptsPage />}
-      {key === "hk" && <SettlementBatchesPage route="hk_transit" />}
-      {key === "direct" && <SettlementLedgerPage />}
+      {key === "hk" && <SettlementHkTransitPage key={search} />}
+      {key === "direct" && <SettlementLedgerPage key={search} />}
       {key === "parties" && <SettlementPartiesPage />}
     </AppFrame>
   );

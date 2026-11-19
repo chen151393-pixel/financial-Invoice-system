@@ -136,7 +136,7 @@ export function BatchDetailDialog({
         />
         {hk && batch.status !== "cancelled" && (
           <BatchDocuments
-            batchId={batch.id}
+            target={batch.id}
             onChanged={() => {
               // 资料变化会影响“确认资料已出”是否可用，重新读取批次
               getBatch(batch.id)

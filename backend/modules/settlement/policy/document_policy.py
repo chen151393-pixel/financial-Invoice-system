@@ -8,7 +8,7 @@ from .bill_parse_policy import missing_fields
 from .contract_policy import digest
 
 
-def checklist(items, bills, planned, plan_issues, contract_rows, parties, buyer):
+def checklist(items, bills, planned, plan_issues, contract_rows, bindings, party_issues):
     """返回 {issues, warnings, stale}；issues 非空时不能确认资料已出、不能打包。"""
     issues, warnings = [], []
     covered = {number for bill in bills for number in bill["declaration_nos"] or []}
@@ -20,8 +20,7 @@ def checklist(items, bills, planned, plan_issues, contract_rows, parties, buyer)
         if missing:
             issues.append(f"提单 {bill['bl_no'] or bill['file_name']} 待补：{'、'.join(missing)}")
     issues.extend(plan_issues)
-    if buyer is None:
-        issues.append("未维护买方合同抬头（名称须与境外收货人一致），请先在“合同抬头”中添加")
+    issues.extend(party_issues)
     rows = {row["contract_no"]: row for row in contract_rows}
     stale = set()
     for contract in planned:
@@ -29,9 +28,17 @@ def checklist(items, bills, planned, plan_issues, contract_rows, parties, buyer)
         if row is None:
             issues.append(f"销售合同 {contract['contract_no']} 尚未生成")
             continue
-        seller = parties.get(row["seller_party_id"])
+        binding = bindings[contract["contract_no"]]
+        buyer, seller = binding["buyer"], binding["seller"]
         terms = contract_terms(row)
-        current = buyer is not None and seller is not None and not plan_issues
+        current = (
+            buyer is not None
+            and seller is not None
+            and not plan_issues
+            and not binding["issues"]
+            and row["buyer_party_id"] == buyer["id"]
+            and row["seller_party_id"] == seller["id"]
+        )
         if not current or digest(contract, buyer, seller, terms) != row["source_digest"]:
             stale.add(row["contract_no"])
             issues.append(f"销售合同 {row['contract_no']} 的生成依据已变化，需重新生成")

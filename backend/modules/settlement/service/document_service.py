@@ -2,7 +2,7 @@
 
 from backend.core.errors import ApiError
 
-from ..dao import batch_dao, batch_item_dao, contract_dao, party_dao
+from ..dao import batch_dao, batch_item_dao
 from ..mapper import document_mapper as mapper
 from ..policy.batch_state_policy import status_label
 from ..policy.route_policy import HK_TRANSIT
@@ -17,6 +17,8 @@ def _action(reason):
 
 def edit_reason(batch):
     """资料只在香港中转批次“香港已收”阶段可修改；确认资料已出后只读。"""
+    if batch.get("document_kind") == "direct":
+        return batch["document_issue"]
     if batch["route"] != HK_TRANSIT:
         return "仅香港中转批次需要资料包"
     if batch["status"] != "collected":
@@ -32,53 +34,63 @@ def load(connection, batch_id, *, lock=False):
 
 
 class DocumentService:
-    def __init__(self, engine, reader):
+    def __init__(self, engine, reader, source=None):
         self.engine = engine
         self.reader = reader
+        self.source = source
+
+    def load(self, connection, reference, *, lock=False):
+        return (
+            self.source.load(connection, reference, lock=lock)
+            if self.source
+            else load(connection, reference, lock=lock)
+        )
 
     def get(self, batch_id):
         if self.engine is None:
             raise ApiError(503, "业务数据库未配置")
         with self.engine.connect() as connection:
-            batch, items = load(connection, batch_id)
+            batch, items = self.load(connection, batch_id)
             return self.view(connection, batch, items)
 
     def view(self, connection, batch, items):
         state = self.reader.state(connection, batch, items)
-        everyone = party_dao.all_parties(connection)
-        buyer = state["buyer"]
-        sellers = [row for row in everyone if buyer is None or row["id"] != buyer["id"]]
-        latest = contract_dao.latest_seller(connection)
+        bindings = list(state["contract_parties"].values())
+        sellers = list(
+            {binding["seller"]["id"]: binding["seller"] for binding in bindings if binding["seller"]}.values()
+        )
+        buyer_names = list(
+            dict.fromkeys(binding["buyer_name"] for binding in bindings if binding["buyer_name"])
+        )
         used = state["contracts"][0] if state["contracts"] else None
         defaults = template()
         editable = edit_reason(batch)
         generate = editable
         if not generate and state["plan_issues"]:
             generate = state["plan_issues"][0]
-        if not generate and buyer is None:
-            generate = "未维护买方合同抬头，请先在“合同抬头”中添加"
-        if not generate and not sellers:
-            generate = "未维护卖方合同抬头，请先在“合同抬头”中添加"
+        if not generate and state["party_issues"]:
+            generate = state["party_issues"][0]
         package = ""
         if batch["status"] == "cancelled":
             package = "批次已作废"
-        elif batch["route"] != HK_TRANSIT:
+        elif batch["route"] != HK_TRANSIT and batch.get("document_kind") != "direct":
             package = "仅香港中转批次需要资料包"
         elif state["issues"]:
             package = f"资料未齐，还有 {len(state['issues'])} 项待处理"
         return BatchDocuments(
-            batchId=batch["id"],
+            batchId=batch["id"] if not self.source else None,
             declarationNos=[item["declaration_no"] for item in items],
             bills=[mapper.bill(row) for row in state["bills"]],
-            planned=[mapper.planned(item, batch["currency"]) for item in state["planned"]],
+            planned=[
+                mapper.planned(item, batch["currency"], state["contract_parties"][item["contract_no"]])
+                for item in state["planned"]
+            ],
             contracts=[mapper.contract(row, state["parties"], state["stale"]) for row in state["contracts"]],
-            buyerName=batch["consignee"],
-            buyerReady=buyer is not None,
+            buyerName="、".join(buyer_names),
+            buyerReady=bool(bindings) and all(binding["buyer"] is not None for binding in bindings),
             sellers=[mapper.party_option(row) for row in sellers],
             defaults=ContractDefaults(
-                sellerPartyId=(used["seller_party_id"] if used else latest)
-                if any(row["id"] == (used["seller_party_id"] if used else latest) for row in sellers)
-                else (sellers[0]["id"] if len(sellers) == 1 else None),
+                sellerPartyId=sellers[0]["id"] if len(sellers) == 1 else None,
                 tradeTerm=used["trade_term"] if used else "FOB",
                 paymentTermsCn=used["payment_terms_cn"] if used else defaults["default_payment_terms_cn"],
                 paymentTermsEn=used["payment_terms_en"] if used else defaults["default_payment_terms_en"],
@@ -90,5 +102,5 @@ class DocumentService:
             edit=_action(editable),
             generate=_action(generate),
             package=_action(package),
-            packageUrl=f"{mapper.BASE}/batches/{batch['id']}/package",
+            packageUrl=f"{mapper.document_base(batch)}/package",
         )

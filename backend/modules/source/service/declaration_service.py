@@ -19,6 +19,7 @@ from ..dao import (
     sales_order_dao,
 )
 from ..mapper.customs_display_mapper import customs_display_lines
+from ..mapper.parent_purchase_unit_mapper import parent_purchase_units
 from ..policy.content_digest import content_digest
 
 EVIDENCE_TYPE = "relation_evidence"
@@ -49,7 +50,9 @@ def snapshot(connection, declaration_id):
         "sales_orders": sales_order_dao.by_ids(
             connection, [o["sales_order_id"] for o in orders if o["sales_order_id"]]
         ),
-        "purchase_lines": purchase_order_dao.lines(connection, order_ids),
+        "purchase_lines": parent_purchase_units(
+            orders, purchase_order_dao.lines(connection, order_ids), evidence
+        ),
         "evidence": evidence,
     }
 

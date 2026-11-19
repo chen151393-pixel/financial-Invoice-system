@@ -77,17 +77,51 @@
   font-size: 13px;
   margin: 3px 0;
 }
-.app-sidebar__item:hover {
-  background: #192747;
+.app-sidebar__item:hover,
+.app-sidebar__child:hover,
+.app-sidebar__item[aria-current="location"] {
+  background: var(--color-nav-hover);
   color: var(--color-surface);
 }
-.app-sidebar__item[aria-current] {
-  background: var(--color-primary);
+.app-sidebar__item[data-active-group] {
   color: var(--color-surface);
+  font-weight: 600;
 }
-.app-sidebar__item:focus-visible {
+.app-sidebar__item[aria-current="page"],
+.app-sidebar__child[aria-current="page"] {
+  background: var(--color-nav-current);
+  color: var(--color-surface);
+  font-weight: 600;
+}
+.app-sidebar__item[aria-current]:hover,
+.app-sidebar__child[aria-current]:hover {
+  background: color-mix(in srgb, var(--color-nav-current) 93%, var(--color-surface));
+}
+.app-sidebar__item:focus-visible,
+.app-sidebar__child:focus-visible {
   outline: 2px solid #b8c9ff;
   outline-offset: -2px;
+}
+.app-sidebar__chevron {
+  width: 14px;
+  height: 14px;
+  margin-inline-start: auto;
+  color: var(--color-nav-muted);
+  flex: none;
+}
+.app-sidebar__item[aria-expanded="true"] .app-sidebar__chevron {
+  transform: rotate(90deg);
+}
+@media (prefers-reduced-motion: no-preference) {
+  .app-sidebar__item,
+  .app-sidebar__child {
+    transition:
+      background-color 140ms ease-out,
+      color 140ms ease-out;
+  }
+  .app-sidebar__chevron {
+    transition: transform 140ms ease-out;
+  }
 }
 /* 子页面列表：缩进并以竖线挂在所属菜单项下。 */
 .app-sidebar__children {
@@ -110,19 +144,6 @@
   font: inherit;
   font-size: 13px;
   margin: 2px 0;
-}
-.app-sidebar__child:hover {
-  background: #192747;
-  color: var(--color-surface);
-}
-.app-sidebar__child[aria-current="page"] {
-  background: #192747;
-  color: var(--color-surface);
-  font-weight: 600;
-}
-.app-sidebar__child:focus-visible {
-  outline: 2px solid #b8c9ff;
-  outline-offset: -2px;
 }
 .app-sidebar__child-short {
   display: none;
@@ -200,6 +221,14 @@
     justify-content: center;
     padding: 11px;
   }
+  .app-sidebar__item[aria-expanded] {
+    padding-inline: 4px;
+    gap: 2px;
+  }
+  .app-sidebar__chevron {
+    width: 12px;
+    margin-inline-start: 0;
+  }
   /* 窄屏子页面只显示简称 */
   .app-sidebar__children {
     margin: 0 0 6px;
@@ -207,6 +236,7 @@
     border: 0;
   }
   .app-sidebar__child {
+    min-height: 44px;
     justify-content: center;
     padding: 6px 2px;
     font-size: 11px;

@@ -6,8 +6,9 @@ export const paths = {
   review: "/review",
   // 海关报关单比对（财务核对下的独立页面）
   reviewCustoms: "/review/customs",
-  // 结汇对账（回款与报关金额核对）：报关应收汇、银行收汇明细、香港中转批次、直接收汇明细
+  // 结汇对账：收汇总览、报关应收汇、银行收汇明细、香港中转批次、直接收汇明细
   settlement: "/settlement",
+  settlementOverview: "/settlement/overview",
   settlementBank: "/settlement/bank-receipts",
   settlementHk: "/settlement/hk-transit",
   // 非香港中转的总账（2026-11-18 起取代“直接收汇批次”列表）
@@ -49,6 +50,12 @@ function withQuery(path: string, filters: Record<string, string>) {
   return query.size ? `${path}?${query}` : path;
 }
 export const reviewListPath = (filters: { status?: string }) => withQuery(paths.review, filters);
+export const settlementReceiptPath = (consignee = "") =>
+  withQuery(paths.settlementHk, { tab: "receipts", consignee });
+export const settlementBatchListPath = (consignee: string) => withQuery(paths.settlementHk, { consignee });
+export const settlementDirectDocumentsPath = (consignee = "", declarationNo = "") =>
+  withQuery(paths.settlementDirect, { tab: "documents", consignee, declarationNo });
+export const settlementLedgerPath = (consignee: string) => withQuery(paths.settlementDirect, { consignee });
 export const financeDeclarationPath = (exactDeclarationNo: string) =>
   withQuery(paths.review, { exactDeclarationNo });
 export const customsDeclarationPath = (exactDeclarationNo: string, importing = false) =>
@@ -93,7 +100,7 @@ const viewPaths: Record<View, string> = {
   pl: paths.pl,
   finance: paths.review,
   "customs-match": paths.reviewCustoms,
-  settlement: paths.settlement,
+  settlement: paths.settlementOverview,
   "invoice-followup": paths.tasks,
   writeback: paths.writeback,
   "supplier-profiles": paths.supplierGroups,
@@ -106,6 +113,7 @@ export function viewPath(view: View): string {
 
 // 侧栏子页面与路径的对应；子页面沿用所属菜单项的页面权限。
 export type SubView =
+  | "settlement-overview"
   | "settlement-declarations"
   | "settlement-bank"
   | "settlement-hk"
@@ -113,6 +121,7 @@ export type SubView =
   | "settlement-parties";
 
 const subViewPaths: Record<SubView, string> = {
+  "settlement-overview": paths.settlementOverview,
   "settlement-declarations": paths.settlement,
   "settlement-bank": paths.settlementBank,
   "settlement-hk": paths.settlementHk,

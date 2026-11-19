@@ -15,7 +15,10 @@ BatchId = Path(ge=1)
 BillId = Path(ge=1)
 ContractId = Path(ge=1)
 # 提单以 base64 放在 JSON 中：8 MB 文件编码后约 10.7 MB
-JSON_BODY_LIMITS = {r"/api/settlement/batches/\d+/bills": 12 * 1024 * 1024}
+JSON_BODY_LIMITS = {
+    r"/api/settlement/batches/\d+/bills": 12 * 1024 * 1024,
+    r"/api/settlement/direct-documents/[^/]+/bills": 12 * 1024 * 1024,
+}
 
 
 def download(filename, content, media_type, *, inline):
@@ -28,41 +31,55 @@ def download(filename, content, media_type, *, inline):
     return Response(content=content, media_type=media_type, headers=headers)
 
 
-def create_router(documents, bills, contracts, packages):
-    router = APIRouter(prefix="/api/settlement/batches/{batch_id}", tags=["结汇资料"])
+def create_router(documents, bills, contracts, packages, *, direct_list=None):
+    direct = direct_list is not None
+    prefix = "/api/settlement/direct-documents/{batch_id}" if direct else "/api/settlement/batches/{batch_id}"
+    router = APIRouter(tags=["结汇资料"])
+    if direct:
+        from ..dto.direct_document_dto import DirectDocumentQuery
+        from ..vo.direct_document_vo import DirectDocumentList
 
-    @router.get("/documents", response_model=BatchDocuments)
-    def get_documents(owner: Owner, batch_id: int = BatchId):
+        @router.post("/api/settlement/direct-documents/query", response_model=DirectDocumentList)
+        def query_documents(body: DirectDocumentQuery, owner: Owner):
+            return direct_list.query(body)
+
+    source_type = str if direct else int
+    source_path = Path(min_length=1, max_length=150) if direct else Path(ge=1)
+
+    @router.get(prefix + "/documents", response_model=BatchDocuments)
+    def get_documents(owner: Owner, batch_id: source_type = source_path):
         return documents.get(batch_id)
 
-    @router.post("/bills", response_model=BatchDocuments)
-    def upload_bill(body: UploadBillRequest, owner: Owner, batch_id: int = BatchId):
+    @router.post(prefix + "/bills", response_model=BatchDocuments)
+    def upload_bill(body: UploadBillRequest, owner: Owner, batch_id: source_type = source_path):
         return bills.upload(batch_id, body, owner)
 
-    @router.post("/bills/{bill_id}", response_model=BatchDocuments)
-    def update_bill(body: UpdateBillRequest, owner: Owner, batch_id: int = BatchId, bill_id: int = BillId):
+    @router.post(prefix + "/bills/{bill_id}", response_model=BatchDocuments)
+    def update_bill(
+        body: UpdateBillRequest, owner: Owner, batch_id: source_type = source_path, bill_id: int = BillId
+    ):
         return bills.update(batch_id, bill_id, body, owner)
 
-    @router.post("/bills/{bill_id}/remove", response_model=BatchDocuments)
-    def remove_bill(owner: Owner, batch_id: int = BatchId, bill_id: int = BillId):
+    @router.post(prefix + "/bills/{bill_id}/remove", response_model=BatchDocuments)
+    def remove_bill(owner: Owner, batch_id: source_type = source_path, bill_id: int = BillId):
         return bills.remove(batch_id, bill_id, owner)
 
-    @router.get("/bills/{bill_id}/file")
-    def bill_file(owner: Owner, batch_id: int = BatchId, bill_id: int = BillId):
+    @router.get(prefix + "/bills/{bill_id}/file")
+    def bill_file(owner: Owner, batch_id: source_type = source_path, bill_id: int = BillId):
         filename, content = bills.file(batch_id, bill_id)
         return download(filename, content, "application/pdf", inline=True)
 
-    @router.post("/contracts/generate", response_model=BatchDocuments)
-    def generate_contracts(body: GenerateContractsRequest, owner: Owner, batch_id: int = BatchId):
+    @router.post(prefix + "/contracts/generate", response_model=BatchDocuments)
+    def generate_contracts(body: GenerateContractsRequest, owner: Owner, batch_id: source_type = source_path):
         return contracts.generate(batch_id, body, owner)
 
-    @router.get("/contracts/{contract_id}/file")
-    def contract_file(owner: Owner, batch_id: int = BatchId, contract_id: int = ContractId):
+    @router.get(prefix + "/contracts/{contract_id}/file")
+    def contract_file(owner: Owner, batch_id: source_type = source_path, contract_id: int = ContractId):
         filename, content = contracts.file(batch_id, contract_id)
         return download(filename, content, "application/pdf", inline=True)
 
-    @router.get("/package")
-    def package(owner: Owner, batch_id: int = BatchId):
+    @router.get(prefix + "/package")
+    def package(owner: Owner, batch_id: source_type = source_path):
         filename, content = packages.build(batch_id)
         return download(filename, content, "application/zip", inline=False)
 

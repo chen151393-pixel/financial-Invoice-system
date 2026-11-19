@@ -3,18 +3,17 @@
 from sqlalchemy import insert, select, update
 
 from ..entity.bill import settlement_bills as bills
+from .document_scope import condition
 
 
 def active(connection, batch_id):
     """批次未移除的提单，按上传顺序。"""
-    query = (
-        select(bills).where(bills.c.batch_id == batch_id, bills.c.removed_at.is_(None)).order_by(bills.c.id)
-    )
+    query = select(bills).where(condition(bills, batch_id), bills.c.removed_at.is_(None)).order_by(bills.c.id)
     return [dict(row) for row in connection.execute(query).mappings()]
 
 
 def get(connection, batch_id, bill_id):
-    query = select(bills).where(bills.c.id == bill_id, bills.c.batch_id == batch_id)
+    query = select(bills).where(bills.c.id == bill_id, condition(bills, batch_id))
     row = connection.execute(query).mappings().first()
     return dict(row) if row else None
 

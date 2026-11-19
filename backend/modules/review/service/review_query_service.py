@@ -66,6 +66,8 @@ class ReviewQueryService:
                 for line in group.customsLines:
                     line.margin, line.marginStatus, line.marginNote = "", "unavailable", reason
                     line.declaredUnitPriceCny, line.originalUnitPriceCny = "", ""
+                    line.originalPrice = line.purchaseUnitPriceUsd = line.declaredUnitPriceUsd = ""
+                    line.purchasePriceNote = reason
             # 兼容旧快照中混合的 marginAlert；只归类已有逐行结果，不重算金额。
             flags = margin_flags({"status": line.marginStatus} for line in group.customsLines)
             group.marginAlert = flags["marginAlert"]

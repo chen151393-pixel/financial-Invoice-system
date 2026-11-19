@@ -135,7 +135,7 @@ def test_list_states_counts_and_purchase_basis(service, seeded, engine):
 
 
 def test_negative_margin_is_alerted_and_not_auto_approvable(service, ns, engine):
-    save(ns, engine, bundle([purchase()], [customs("870", original="3")]))
+    save(ns, engine, bundle([purchase(amounts=("226", "20"))], [customs("870", original="3")]))
     result = service.browse(query())
     assert result.counts["marginAlert"] == 1 and result.counts["autoApprovable"] == 0
     item = result.groups[0]

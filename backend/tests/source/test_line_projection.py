@@ -190,5 +190,6 @@ def test_shared_query_transport_keeps_composite_parent_line_identity(duplicate):
                 ns.relation_rows("parent_lines", ["1", "2"])
         else:
             assert ns.relation_rows("parent_lines", ["1", "2"]) == items
+            assert "BUILTIN.DF(units) AS unitname" in json.loads(calls[0].content)["q"]
     finally:
         ns.close()

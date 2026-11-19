@@ -65,6 +65,7 @@ from .modules.review.service.task_release_service import on_finance_approved
 from .modules.settlement.controller import bank_receipt_controller as settlement_bank_receipts
 from .modules.settlement.controller import document_controller as settlement_documents
 from .modules.settlement.controller import ledger_controller as settlement_ledger
+from .modules.settlement.controller import overview_controller as settlement_overview
 from .modules.settlement.controller import party_controller as settlement_parties
 from .modules.settlement.controller.batch_controller import create_router as settlement_router
 from .modules.settlement.service.bank_receipt_service import (
@@ -76,10 +77,15 @@ from .modules.settlement.service.bill_service import BillService as SettlementBi
 from .modules.settlement.service.candidate_service import CandidateService as SettlementCandidateService
 from .modules.settlement.service.contract_service import ContractService as SettlementContractService
 from .modules.settlement.service.declaration_files import DeclarationFiles as SettlementDeclarationFiles
+from .modules.settlement.service.direct_document_service import (
+    DirectDocumentService as SettlementDirectDocuments,
+)
+from .modules.settlement.service.direct_document_source import DirectDocumentSource as SettlementDirectSource
 from .modules.settlement.service.document_reader import DocumentReader as SettlementDocumentReader
 from .modules.settlement.service.document_service import DocumentService as SettlementDocumentService
 from .modules.settlement.service.document_store import DocumentStore as SettlementDocumentStore
 from .modules.settlement.service.ledger_service import LedgerService as SettlementLedgerService
+from .modules.settlement.service.overview_service import OverviewService as SettlementOverviewService
 from .modules.settlement.service.package_service import PackageService as SettlementPackageService
 from .modules.settlement.service.party_service import PartyService as SettlementPartyService
 from .modules.source.controller.pl_comparison_controller import create_router as source_pl_router
@@ -366,12 +372,35 @@ def _register_business(app, settings, ns, contract_ns, wecom, engine, lemon_invo
             SettlementPackageService(engine, settlement_store, settlement_reader),
         )
     )
+    direct_views = SettlementDocumentService(
+        engine, settlement_reader, SettlementDirectSource(settlement_candidates)
+    )
+    app.include_router(
+        settlement_documents.create_router(
+            direct_views,
+            SettlementBillService(
+                engine, settlement_store, direct_views, SettlementBillOcr(settings.settlement_ocr_command)
+            ),
+            SettlementContractService(
+                engine,
+                settlement_store,
+                settlement_reader,
+                direct_views,
+                font_path=settings.settlement_pdf_font,
+            ),
+            SettlementPackageService(engine, settlement_store, settlement_reader, direct_views),
+            direct_list=SettlementDirectDocuments(engine, settlement_candidates, settlement_reader),
+        )
+    )
     app.include_router(settlement_parties.create_router(SettlementPartyService(engine, settlement_store)))
     app.include_router(
         settlement_bank_receipts.create_router(SettlementBankReceiptService(engine, settlement_candidates))
     )
     app.include_router(
         settlement_ledger.create_router(SettlementLedgerService(engine, settlement_candidates))
+    )
+    app.include_router(
+        settlement_overview.create_router(SettlementOverviewService(engine, settlement_candidates))
     )
     directory = SourceDirectory(engine)
     app.include_router(

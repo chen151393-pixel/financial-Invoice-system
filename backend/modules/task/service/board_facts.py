@@ -55,5 +55,6 @@ def board_facts(connection, rows):
             "node": current_node(steps),
             "missing": completion.missing,
             "blocked": CHANGED if row["id"] in changed else "",
+            "notice_status": notice["status"] if notice else None,
         }
     return result

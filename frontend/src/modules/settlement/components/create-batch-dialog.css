@@ -1,0 +1,130 @@
+/* 仅登记回款弹窗：复用 Field 控件，避免影响结汇模块中的其他表单。 */
+.ui-dialog.settlement-create-dialog {
+  width: min(760px, calc(100vw - 32px));
+}
+
+.settlement-create {
+  display: grid;
+  gap: var(--space-layout);
+  margin-top: var(--space-control);
+}
+
+.settlement-create__selection {
+  padding: var(--space-small) var(--space-control);
+  border-radius: var(--radius-control);
+  background: var(--color-canvas);
+}
+
+.settlement-create__selection summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.settlement-create__selection ul {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px var(--space-control);
+  max-height: 96px;
+  overflow-y: auto;
+  margin: 4px 0 0;
+  padding: 0;
+  list-style: none;
+  color: var(--color-muted);
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+
+.settlement-create__section {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  align-items: start;
+  gap: var(--space-control);
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.settlement-create__section legend {
+  padding: 0;
+  margin-bottom: var(--space-small);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.settlement-create__bank {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.settlement-create__wide,
+.settlement-create__hint {
+  grid-column: 1 / -1;
+  min-width: 0;
+}
+
+.settlement-create__hint {
+  margin: 0;
+  color: var(--color-muted);
+  line-height: 1.6;
+}
+
+.settlement-create .ui-field {
+  color: var(--color-text);
+  font-size: 13px;
+}
+
+.settlement-create .ui-field input {
+  width: 100%;
+  min-height: 40px;
+}
+
+.settlement-create input[inputmode="decimal"] {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.settlement-create textarea {
+  width: 100%;
+  min-height: 64px;
+  padding: var(--space-small) 10px;
+  border: 1px solid var(--color-input-border);
+  border-radius: var(--radius-control);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font: inherit;
+  resize: vertical;
+}
+
+.settlement-create textarea:focus-visible,
+.settlement-create__selection summary:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 1px;
+}
+
+.settlement-create [aria-invalid="true"] {
+  border-color: var(--color-danger-text);
+}
+
+.settlement-create__error {
+  color: var(--color-danger-text);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.settlement-create__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-small);
+  padding-top: var(--space-control);
+  border-top: 1px solid var(--color-border);
+}
+
+@media (max-width: 600px) {
+  .settlement-create__section {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .settlement-create .ui-field :is(input, textarea) {
+    font-size: 16px;
+  }
+}

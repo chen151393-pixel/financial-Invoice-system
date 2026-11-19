@@ -13,13 +13,17 @@ class UnitPriceMargin(StrictModel):
     """按单价计算的幅度；人民币单价保留换算精度，前端不重算。"""
 
     margin: str = ""
-    # unit_mismatch / quantity_mismatch：报关行原始口径与报关口径单位或数量不一致，不计算幅度
+    # unit_mismatch / quantity_mismatch：母采购明细单位或关联报关数量核对不通过，不计算幅度。
     marginStatus: Literal["ok", "negative", "unavailable", "unit_mismatch", "quantity_mismatch"] = (
         "unavailable"
     )
     marginNote: str = ""
     declaredUnitPriceCny: str = ""
-    # 报关行含税采购单价 ÷ 1.13 后折人民币；兼容旧键仅用于读取旧快照并显示“后台计算中”。
+    purchaseUnitPriceUsd: str = ""
+    declaredUnitPriceUsd: str = ""
+    purchasePriceNote: str = ""
+    purchaseOrderQuantity: str = ""
+    # 关联采购未税金额 / 采购下单数量的人民币单价；旧键仅兼容升级期间快照读取。
     originalUnitPriceCny: str = Field(
         default="", validation_alias=AliasChoices("originalUnitPriceCny", "combinedPurchaseUnitPrice")
     )
@@ -62,7 +66,7 @@ class CustomsLine(UnitPriceMargin):
     price: str
     # NS 未填申报单价时 price 为报关金额 ÷ 报关数量的试算值，页面标注“试算”
     priceEstimated: bool = False
-    # 报关行原始口径（NS 数量、单价，单位见 originalPriceUnit），页面列名“采购单价”；旧快照缺省为空
+    # originalQuantity 保留 NS 原始数量；originalPrice 为采购未税 USD 单价，单位取对应母采购行。
     originalQuantity: str = ""
     originalPrice: str = ""
     amount: str

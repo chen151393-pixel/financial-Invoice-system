@@ -9,6 +9,7 @@ from backend.core.errors import ApiError
 from ..dao import bank_receipt_dao
 from ..dto.bank_receipt_dto import MAX_IMPORT_BYTES
 from ..policy.amount_policy import money
+from ..policy.receiving_company_policy import company_totals
 from ..policy.route_policy import ROUTE_LABELS
 from ..vo.bank_receipt_vo import BankReceipt, BankReceiptImportResult, BankReceiptList, BankReceiptTotal
 from .bank_receipt_parser import parse_bank_receipts
@@ -73,7 +74,7 @@ class BankReceiptService:
                 total, rows = bank_receipt_dao.page(
                     connection, filters, (page - 1) * body.pageSize, body.pageSize
                 )
-            totals = bank_receipt_dao.totals(connection, filters)
+            totals = company_totals(bank_receipt_dao.totals(connection, filters))
         return BankReceiptList(
             items=[self._view(row) for row in rows],
             total=total,
@@ -82,6 +83,7 @@ class BankReceiptService:
             totals=[
                 BankReceiptTotal(
                     receivingCompany=row["receiving_company"],
+                    featuredCompany=row["featured_company"],
                     currency=row["currency"],
                     count=row["count"],
                     amount=str(money(row["amount"])),

@@ -68,3 +68,13 @@ def status_counts(connection, filters):
         .group_by(batches.c.route, batches.c.status)
     )
     return {(route, status): count for route, status, count in connection.execute(query)}
+
+
+def customer_receipts(connection):
+    """香港批次的首次客户到账；只取有效批次，不读取汇回金额或旧直接收汇批次。"""
+    query = select(
+        batches.c.consignee, batches.c.currency, batches.c.received_amount, batches.c.received_fee
+    ).where(
+        batches.c.route == "hk_transit", batches.c.status.in_(("collected", "documents_ready", "settled"))
+    )
+    return [dict(row) for row in connection.execute(query).mappings()]
