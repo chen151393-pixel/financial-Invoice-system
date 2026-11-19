@@ -12,6 +12,9 @@ from PIL import Image, ImageChops
 from pypdf import PdfReader
 from pypdf.errors import PyPdfError
 
+from .bill_ocr_cells import refine_cells
+from .bill_ocr_refine import refine_bl
+
 # 整页版面分别按“单一文本块”和“稀疏文字”两种方式识别，结果一致的字段才采用
 PAGE_MODES = ("6", "11")
 MIN_SIDE = 1000
@@ -79,21 +82,25 @@ class BillOcr:
         image = page_image(content)
         if image is None:
             return []
+        readings = [self._read_words(image, mode) for mode in PAGE_MODES]
+        if any(words is None for words in readings):
+            return []
+        readings = refine_bl(image, readings, self.command)
+        return refine_cells(image, readings, lambda crop, mode: self._read_words(crop, mode, timeout=10))
+
+    def _read_words(self, image, mode, *, timeout=TIMEOUT_SECONDS):
         buffer = io.BytesIO()
         image.save(buffer, "PNG")
-        readings = []
-        for mode in PAGE_MODES:
-            try:
-                done = subprocess.run(  # noqa: S603 命令来自部署配置，参数固定，不经过 shell
-                    [self.command, "stdin", "stdout", "--psm", mode, "-l", "eng", "tsv"],
-                    input=buffer.getvalue(),
-                    capture_output=True,
-                    timeout=TIMEOUT_SECONDS,
-                    check=False,
-                )
-            except (OSError, subprocess.TimeoutExpired):
-                return []
-            if done.returncode != 0:
-                return []
-            readings.append(words_from_tsv(done.stdout.decode("utf-8", "replace")))
-        return readings
+        try:
+            done = subprocess.run(  # noqa: S603 命令来自部署配置，参数固定，不经过 shell
+                [self.command, "stdin", "stdout", "--psm", mode, "-l", "eng", "tsv"],
+                input=buffer.getvalue(),
+                capture_output=True,
+                timeout=timeout,
+                check=False,
+            )
+        except (OSError, subprocess.TimeoutExpired):
+            return None
+        if done.returncode != 0:
+            return None
+        return words_from_tsv(done.stdout.decode("utf-8", "replace"))
