@@ -5,6 +5,7 @@ import { RequirePage } from "../modules/identity/RequirePage";
 import { useSession } from "../modules/identity/session-context";
 import { RequireSession } from "../modules/identity/RequireSession";
 import { identityRoutes } from "../modules/identity/routes";
+import { SidebarExpansionProvider } from "../shared/components/Sidebar";
 import { homePath, legacyPaths, paths, type View } from "./paths";
 
 // 各页面按需加载；新增页面只在这里登记路由。
@@ -52,7 +53,11 @@ export const router = createBrowserRouter([
     children: [
       ...identityRoutes,
       {
-        element: <RequireSession />,
+        element: (
+          <SidebarExpansionProvider>
+            <RequireSession />
+          </SidebarExpansionProvider>
+        ),
         children: [
           { path: paths.workbench, element: page("workbench", "总体工作台", <WorkbenchWorkspacePage />) },
           { path: paths.pl, element: page("pl", "采购报关联查", <PlWorkspacePage />) },

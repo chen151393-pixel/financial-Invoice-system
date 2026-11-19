@@ -8,6 +8,7 @@ import { createServer } from "vite";
 
 let server, navigation, identityRoutes, LoginPage, PasswordLoginForm, SessionContext, ImportedDirectory;
 let RolePageForm, RequirePage, AccessDeniedPage, WorkspaceFrame, menu, pagePaths, identityApi;
+let Sidebar, SidebarExpansionProvider;
 before(async () => {
   server = await createServer({
     configFile: fileURLToPath(new URL("../vite.config.ts", import.meta.url)),
@@ -29,12 +30,34 @@ before(async () => {
   ({ RequirePage } = await server.ssrLoadModule("/src/modules/identity/RequirePage.tsx"));
   ({ default: AccessDeniedPage } = await server.ssrLoadModule("/src/app/AccessDeniedWorkspacePage.tsx"));
   ({ AppFrame: WorkspaceFrame } = await server.ssrLoadModule("/src/app/WorkspaceFrame.tsx"));
+  ({ Sidebar, SidebarExpansionProvider } = await server.ssrLoadModule("/src/shared/components/Sidebar.tsx"));
   ({ navigation: menu } = await server.ssrLoadModule("/src/app/navigation.tsx"));
   pagePaths = await server.ssrLoadModule("/src/app/paths.ts");
   identityApi = await server.ssrLoadModule("/src/modules/identity/api.ts");
 });
 after(async () => {
   await server?.close();
+});
+
+test("侧栏子菜单默认收起，有折叠按钮并标识当前页", () => {
+  const props = {
+    groups: menu,
+    activeId: "settlement",
+    activeChildId: "settlement-direct",
+    onNavigate() {},
+    onNavigateChild() {},
+    brand: { mark: "N", title: "发票对账平台", subtitle: "Finance Hub" },
+  };
+  const html = renderToStaticMarkup(
+    createElement(SidebarExpansionProvider, null, createElement(Sidebar, props)),
+  );
+  assert.match(html, /aria-current="location" aria-expanded="false" aria-controls="[^"]+"/);
+  assert.match(html, /role="group" aria-label="结汇对账子页面" hidden=""/);
+  assert.match(html, /app-sidebar__chevron/);
+  assert.match(html, /aria-current="page" aria-label="直接收汇明细"/);
+
+  const parentOnly = renderToStaticMarkup(createElement(Sidebar, { ...props, onNavigateChild: undefined }));
+  assert.doesNotMatch(parentOnly, /aria-expanded|app-sidebar__children/);
 });
 
 test("旧后端缺少部门筛选字段时保留部门导航并明确提示，不冒充空部门", () => {
