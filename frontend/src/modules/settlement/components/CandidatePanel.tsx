@@ -69,7 +69,10 @@ export function CandidatePanel({ onCreated }: { onCreated: (batchId: number) => 
 
   useEffect(() => {
     const controller = new AbortController();
-    void queryLedger({ consignee: "", company: "", status: "all", byRecipient: true, page: 1, pageSize: 1 }, controller.signal)
+    void queryLedger(
+      { consignee: "", company: "", status: "all", byRecipient: true, page: 1, pageSize: 1 },
+      controller.signal,
+    )
       .then((result) => {
         if (!controller.signal.aborted) setDirectTotals(result.totals);
       })
@@ -167,6 +170,7 @@ export function CandidatePanel({ onCreated }: { onCreated: (batchId: number) => 
     <>
       {state.kind === "ready" && (
         <ReceivableStats
+          combinedTotals={state.result.combinedTotals}
           totals={state.result.totals}
           unsettled={state.result.unsettled}
           directTotals={directTotals}
@@ -192,7 +196,9 @@ export function CandidatePanel({ onCreated }: { onCreated: (batchId: number) => 
           }}
           actions={
             <>
-              <Button type="submit" variant="primary">查询</Button>
+              <Button type="submit" variant="primary">
+                查询
+              </Button>
               <Button type="reset" onClick={() => setQuery(EMPTY)}>
                 清空
               </Button>

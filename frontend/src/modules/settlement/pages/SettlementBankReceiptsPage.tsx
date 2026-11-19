@@ -15,13 +15,12 @@ import {
   FilterBar,
   Pagination,
   Skeleton,
-  StatCard,
-  StatGrid,
   type Column,
 } from "../../../shared/components/ui";
 import { money } from "../../../shared/format/money";
 import { queryBankReceipts } from "../api";
 import { BankReceiptImportDialog } from "../components/BankReceiptImportDialog";
+import { BankReceiptStats } from "../components/BankReceiptStats";
 import type { BankReceipt, BankReceiptList, BankReceiptQuery, ThirdPartyFilter } from "../types";
 import "../components/settlement.css";
 
@@ -120,22 +119,7 @@ export function SettlementBankReceiptsPage() {
   return (
     <div className="settlement-page">
       {state.kind === "ready" && state.result.totals.length > 0 && (
-        <StatGrid label="收汇概况">
-          {state.result.totals.map((total) => (
-            <StatCard
-              key={`${total.receivingCompany}-${total.currency}`}
-              glyph="汇"
-              tone="primary"
-              label={`${total.receivingCompany}收汇（${total.currency}）`}
-              value={money(total.amount)}
-              note={
-                total.thirdPartyCount > 0
-                  ? `${total.count} 笔 · 其中三方代付 ${total.thirdPartyCount} 笔 ${money(total.thirdPartyAmount)}`
-                  : `${total.count} 笔`
-              }
-            />
-          ))}
-        </StatGrid>
+        <BankReceiptStats totals={state.result.totals} />
       )}
       <Card>
         <CardHeader
@@ -163,7 +147,9 @@ export function SettlementBankReceiptsPage() {
           }}
           actions={
             <>
-              <Button type="submit" variant="primary">查询</Button>
+              <Button type="submit" variant="primary">
+                查询
+              </Button>
               <Button type="reset" onClick={() => setQuery(INITIAL)}>
                 清空
               </Button>

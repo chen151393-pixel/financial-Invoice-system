@@ -65,6 +65,7 @@ from .modules.review.service.task_release_service import on_finance_approved
 from .modules.settlement.controller import bank_receipt_controller as settlement_bank_receipts
 from .modules.settlement.controller import document_controller as settlement_documents
 from .modules.settlement.controller import ledger_controller as settlement_ledger
+from .modules.settlement.controller import overview_controller as settlement_overview
 from .modules.settlement.controller import party_controller as settlement_parties
 from .modules.settlement.controller.batch_controller import create_router as settlement_router
 from .modules.settlement.service.bank_receipt_service import (
@@ -80,6 +81,7 @@ from .modules.settlement.service.document_reader import DocumentReader as Settle
 from .modules.settlement.service.document_service import DocumentService as SettlementDocumentService
 from .modules.settlement.service.document_store import DocumentStore as SettlementDocumentStore
 from .modules.settlement.service.ledger_service import LedgerService as SettlementLedgerService
+from .modules.settlement.service.overview_service import OverviewService as SettlementOverviewService
 from .modules.settlement.service.package_service import PackageService as SettlementPackageService
 from .modules.settlement.service.party_service import PartyService as SettlementPartyService
 from .modules.source.controller.pl_comparison_controller import create_router as source_pl_router
@@ -372,6 +374,9 @@ def _register_business(app, settings, ns, contract_ns, wecom, engine, lemon_invo
     )
     app.include_router(
         settlement_ledger.create_router(SettlementLedgerService(engine, settlement_candidates))
+    )
+    app.include_router(
+        settlement_overview.create_router(SettlementOverviewService(engine, settlement_candidates))
     )
     directory = SourceDirectory(engine)
     app.include_router(

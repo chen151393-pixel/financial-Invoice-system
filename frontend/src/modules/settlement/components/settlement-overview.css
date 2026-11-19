@@ -1,0 +1,79 @@
+.settlement-overview-page > .ui-metric-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-control);
+}
+
+.settlement-overview-page .ui-metric {
+  padding: 20px;
+}
+
+.settlement-overview-page .ui-metric__label {
+  color: var(--color-primary);
+}
+
+.settlement-overview-page .ui-metric__value strong {
+  font-size: 28px;
+}
+
+.settlement-overview-breakdown {
+  display: grid;
+  gap: var(--space-small);
+  padding-top: var(--space-control);
+  border-top: 1px solid var(--color-border);
+}
+
+.settlement-overview-breakdown > span {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: var(--space-small);
+  font-variant-numeric: tabular-nums;
+}
+
+.settlement-overview-scope {
+  align-self: center;
+  color: var(--color-text);
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.settlement-overview-page .ui-card__content--flush {
+  padding: 0 20px 20px;
+}
+
+.settlement-overview-page .ui-table td {
+  padding-top: 18px;
+  padding-bottom: 18px;
+}
+
+@media (max-width: 800px) {
+  .settlement-overview-page > .ui-metric-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .settlement-overview-page .ui-filter-bar .ui-field--grow {
+    min-width: min(220px, 100%);
+  }
+
+  .settlement-overview-page .ui-card__content--flush {
+    padding-right: var(--space-control);
+    padding-left: var(--space-control);
+  }
+}
+
+.settlement-overview-page .ui-table a {
+  color: var(--color-primary);
+  text-decoration: none;
+}
+
+.settlement-overview-page .ui-table a:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.settlement-overview-page .ui-table a:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 3px;
+  border-radius: var(--radius-control);
+}

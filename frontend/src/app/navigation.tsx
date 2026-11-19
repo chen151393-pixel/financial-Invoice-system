@@ -18,6 +18,7 @@ function MenuIcon({ path }: { path: string }) {
 
 // 结汇对账的子页面：报关应收汇判定回款路径；香港中转登记回款建批次，其余记直接收汇明细（总账）。
 const settlementChildren: readonly { id: SubView; label: string; short: string }[] = [
+  { id: "settlement-overview", label: "收汇总览", short: "总览" },
   { id: "settlement-declarations", label: "报关应收汇", short: "应收" },
   { id: "settlement-bank", label: "银行收汇明细", short: "收汇" },
   { id: "settlement-hk", label: "香港中转批次", short: "香港" },

@@ -49,6 +49,12 @@ class RouteTotal(StrictModel):
     amount: str
 
 
+class CurrencyTotal(StrictModel):
+    count: int
+    currency: str
+    amount: str
+
+
 class ConsigneeTotal(StrictModel):
     """一家境外收货人（按币种分开）的应收汇汇总。"""
 
@@ -79,6 +85,8 @@ class CandidateList(StrictModel):
     truncated: bool
     # 以下汇总按符合筛选的全部报关单计算，不受列出张数限制
     totals: list[RouteTotal]
+    # 香港中转与直接收汇按币种合计，不受明细列出张数限制。
+    combinedTotals: list[CurrencyTotal]
     # 未在批次中、金额有效的报关单按路径汇总
     unsettled: list[RouteTotal]
     consignees: list[ConsigneeTotal]

@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useSearchParams } from "react-router";
 import {
   Alert,
   Button,
@@ -37,7 +38,11 @@ const INITIAL: LedgerQuery = {
  * 余额、状态与合计全部来自后端；本页不做任何金额计算。
  */
 export function SettlementLedgerPage() {
-  const [query, setQuery] = useState<LedgerQuery>(INITIAL);
+  const [params] = useSearchParams();
+  const [query, setQuery] = useState<LedgerQuery>(() => ({
+    ...INITIAL,
+    consignee: params.get("consignee") || "",
+  }));
   const [state, setState] = useState<State>({ kind: "loading" });
   const [refresh, setRefresh] = useState(0);
 
@@ -119,7 +124,7 @@ export function SettlementLedgerPage() {
           }
         >
           <Field label="境外收货人" grow>
-            <input name="consignee" placeholder="按名称搜索" />
+            <input name="consignee" placeholder="按名称搜索" defaultValue={query.consignee} />
           </Field>
           <Field label="收款人（收汇抬头）" grow>
             <input name="receivingCompany" placeholder="按收款抬头搜索" />

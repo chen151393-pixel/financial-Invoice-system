@@ -26,6 +26,8 @@ class BankReceipt(StrictModel):
 
 class BankReceiptTotal(StrictModel):
     receivingCompany: str
+    # 指定的三个收款抬头固定出卡片；其他抬头单独展示，不丢弃。
+    featuredCompany: bool
     currency: str
     count: int
     amount: str
@@ -38,7 +40,7 @@ class BankReceiptList(StrictModel):
     total: int
     page: int
     pageSize: int
-    # 筛选范围内按收汇抬头与币种汇总（不受分页影响）
+    # 筛选范围内按收汇抬头与币种汇总；指定主体补零，不受分页影响。
     totals: list[BankReceiptTotal]
 
 
