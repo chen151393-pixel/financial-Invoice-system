@@ -1,17 +1,22 @@
 """提单扫描件：版面解析规则、多次识别结果比对、上传流程中的识别与人工核对。"""
 
+import io
 import shutil
+import subprocess
 from datetime import date
+from types import SimpleNamespace
 
 import pytest
 from backend.modules.settlement.dto.bill_dto import UpdateBillRequest
 from backend.modules.settlement.policy.bill_layout_policy import agreed, parse_words
 from backend.modules.settlement.service.bill_ocr import BillOcr, page_image, words_from_tsv
+from backend.modules.settlement.service.bill_ocr_refine import refine_bl
 from backend.tests.settlement.documents_support import Documents, bill_pdf, scanned_bill_pdf
 from backend.tests.settlement.test_settlement_batches import create, services
 from backend.tests.settlement.test_settlement_batches import seeded as seeded
 from backend.tests.test_schema_baseline import schema_engine as schema_engine
 from backend.tests.test_source_storage import ns as ns
+from PIL import Image
 
 # 仿船公司格式提单的栏位布局（300dpi 像素坐标）：标签在上、值在下，多栏并排；内容为虚构。
 # 提单号特意不含 0 / O 这类扫描识别容易混淆的字符：混淆时多次识别会一致地认错，只能靠人工核对。
@@ -153,3 +158,68 @@ def test_real_tesseract_reads_a_scanned_layout():
     readings = BillOcr().readings(scanned_bill_pdf(LAYOUT))
     assert len(readings) == 2
     assert agreed([parse_words(reading) for reading in readings]) == EXPECTED
+
+
+# 长标签、同一行留白较大的日期，签发日期与装船日期故意不同。
+INLINE_LAYOUT = (
+    (100, 100, "Bill of Lading No."),
+    (450, 100, "ABCD12345678"),
+    (100, 150, "Booking No. OTHER98765432"),
+    (100, 940, "PLACE & DATE OF ISSUE: PORT, 09-NOV-2026"),
+    (100, 1000, "SHIPPED ON BOARD DATE:"),
+    (700, 1000, "O7-NOV-2026"),
+)
+
+
+def test_inline_long_label_and_spaced_onboard_date():
+    parsed = parse_words(words(INLINE_LAYOUT))
+    assert parsed["bl_no"] == "ABCD12345678"
+    assert parsed["on_board_date"] == date(2026, 11, 7)
+    without_values = [row for row in INLINE_LAYOUT if row[2] not in ("ABCD12345678", "O7-NOV-2026")]
+    missing = parse_words(words(without_values))
+    assert missing["bl_no"] == "" and missing["on_board_date"] is None
+    # 局部字符纠正严格限制在日期中；提单号的 O 不转为零。
+    assert parse_words(words(INLINE_LAYOUT, {"ABCD12345678": "ABCO12345678"}))["bl_no"] == "ABCO12345678"
+
+
+@pytest.mark.parametrize(
+    "outputs",
+    [
+        (b"ABCD12345678", b"ABCD12345678"),
+        (b"ABCD12345678", b"ABCD12345679"),
+        (b"", b""),
+        (b"ABCD12345678\nOTHER123456", b""),
+    ],
+)
+def test_focused_ocr_requires_agreement_and_keeps_other_fields(monkeypatch, outputs):
+    readings = [words(INLINE_LAYOUT), words(INLINE_LAYOUT, {"ABCD12345678": "A8CD12345678"})]
+    calls = []
+
+    def run(command, **kwargs):
+        crop = Image.open(io.BytesIO(kwargs["input"]))
+        assert crop.width < 800 and crop.height < 200
+        calls.append(command)
+        return SimpleNamespace(returncode=0, stdout=outputs[len(calls) - 1])
+
+    monkeypatch.setattr("backend.modules.settlement.service.bill_ocr_refine.subprocess.run", run)
+    result = refine_bl(Image.new("L", (1000, 1200), "white"), readings, "tesseract")
+    merged = agreed([parse_words(reading) for reading in result])
+    assert merged["on_board_date"] == date(2026, 11, 7)
+    assert readings[1] != readings[0]  # 不原地改写原始识别结果。
+    if outputs[0] == outputs[1] and outputs[0]:
+        assert merged["bl_no"] == "ABCD12345678" and len(calls) == 2
+    else:
+        assert merged["bl_no"] == ""
+
+
+def test_focused_ocr_failure_preserves_original_readings(monkeypatch):
+    readings = [words(INLINE_LAYOUT), words(INLINE_LAYOUT, {"ABCD12345678": "A8CD12345678"})]
+
+    def timeout(*args, **kwargs):
+        raise subprocess.TimeoutExpired("tesseract", 10)
+
+    monkeypatch.setattr("backend.modules.settlement.service.bill_ocr_refine.subprocess.run", timeout)
+    assert refine_bl(Image.new("L", (1000, 1200)), readings, "tesseract") is readings
+    # 只有订舱号、没有提单号标签时不进行局部复识。
+    booking = words([(100, 100, "Booking No. OTHER98765432")])
+    assert refine_bl(Image.new("L", (1000, 1200)), [booking, booking], "tesseract") == [booking, booking]
