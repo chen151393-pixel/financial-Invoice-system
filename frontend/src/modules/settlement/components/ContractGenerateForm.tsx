@@ -1,9 +1,9 @@
 import { Link } from "react-router";
 import { paths } from "../../../app/paths";
-import { Button } from "../../../shared/components/ui";
+import { Button, DataTable } from "../../../shared/components/ui";
 import type { BatchDocuments, GenerateContractsBody } from "../types";
 
-/** 生成销售合同前确认卖方与条款；金额、日期、口岸由后端按海关回执和提单取数。 */
+/** 合同双方取关联报关单，经办人确认条款；金额、日期、口岸由后端按海关回执和提单取数。 */
 export function ContractGenerateForm({
   documents,
   busy,
@@ -15,7 +15,7 @@ export function ContractGenerateForm({
   onCancel: () => void;
   onSubmit: (body: GenerateContractsBody) => void;
 }) {
-  const { defaults, sellers } = documents;
+  const { defaults } = documents;
   return (
     <form
       className="settlement-form"
@@ -25,7 +25,6 @@ export function ContractGenerateForm({
         const data = new FormData(event.currentTarget);
         const value = (name: string) => String(data.get(name) || "").trim();
         onSubmit({
-          sellerPartyId: Number(value("sellerPartyId")),
           tradeTerm: value("tradeTerm"),
           paymentTermsCn: value("paymentTermsCn"),
           paymentTermsEn: value("paymentTermsEn"),
@@ -33,23 +32,32 @@ export function ContractGenerateForm({
       }}
     >
       <p className="settlement-form__hint">
-        买方：{documents.buyerName}。按出口合同号各生成一份，金额取海关回执成交总价，口岸取提单。抬头与印章在
+        买方取对应报关单的境外收货人，卖方取 NS 报关单的申报抬头；系统自动匹配，不能在此改选。地址和印章在
         <Link to={paths.settlementParties}>合同抬头</Link>中维护。
       </p>
-      <label>
-        卖方（境内发货人）
-        <select name="sellerPartyId" required defaultValue={defaults.sellerPartyId ?? ""}>
-          <option value="" disabled>
-            请选择
-          </option>
-          {sellers.map((seller) => (
-            <option key={seller.id} value={seller.id}>
-              {seller.name}
-              {seller.hasStamp ? "" : "（未上传印章）"}
-            </option>
-          ))}
-        </select>
-      </label>
+      <div className="settlement-form__wide">
+        <DataTable
+          label="合同买卖方"
+          columns={[
+            {
+              key: "contract",
+              header: "出口合同号 / 对应报关单",
+              render: (row) => (
+                <div className="settlement-cell">
+                  <strong>{row.contractNo}</strong>
+                  <span>{row.declarationNos.join("、")}</span>
+                </div>
+              ),
+            },
+            { key: "buyer", header: "买方（境外收货人）", render: (row) => row.buyerName || "待核对" },
+            { key: "seller", header: "卖方（NS 申报抬头）", render: (row) => row.sellerName || "待核对" },
+          ]}
+          rows={documents.planned}
+          rowKey={(row) => row.contractNo}
+          density="compact"
+          minWidth={640}
+        />
+      </div>
       <label>
         成交方式
         <input name="tradeTerm" required maxLength={20} defaultValue={defaults.tradeTerm} />

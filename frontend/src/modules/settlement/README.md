@@ -34,7 +34,7 @@
 | `components/CreateBatchDialog.tsx`                                  | 登记回款建批次（到账、手续费、付款方、账户、流水号）                                                     |
 | `components/BatchDetailDialog.tsx`                                  | 批次详情：到账 / 汇回核对、确认资料已出、登记汇回、确认结汇、作废                                        |
 | `components/BatchDocuments.tsx`                                     | 香港中转批次详情中的资料区：提单上传 / 修改 / 移除、销售合同（形式发票）生成、报关单归档状态、资料包下载 |
-| `components/BillEditForm.tsx`、`ContractGenerateForm.tsx`           | 提单字段人工确认表单；生成销售合同前确认卖方与条款的表单                                                 |
+| `components/BillEditForm.tsx`、`ContractGenerateForm.tsx`           | 提单字段人工确认表单；生成销售合同前只读核对双方来源并确认条款的表单                                                 |
 | `pages/SettlementPartiesPage.tsx`、`components/PartyDialog.tsx`     | 合同抬头列表、新增 / 修改、印章上传                                                                      |
 | `api.ts`、`types.ts`                                                | 接口与类型，金额为十进制字符串                                                                           |
 
@@ -51,3 +51,6 @@
 保留直接收汇总账，新增“客户总账 / 报关资料”页签。`/settlement/direct?tab=documents` 为资料清单，`consignee` 可限定客户，`declarationNo` 可直接定位资料。客户行“报关资料”、出口流水行“办理资料”均跳转到同一入口。
 
 `DirectDocumentsPanel.tsx` 展示后端资料状态、筛选与分页，选中报关单后复用 `BatchDocuments.tsx` 上传提单、人工核对、生成销售合同并下载资料包。该组件的 `target` 数字代表香港批次，字符串代表直接收汇报关单，API 按命名空间分流。资料操作不创建直接收款批次，不改变总账金额。
+
+
+2026-11-19 合同双方取值：`ContractGenerateForm` 按每个出口合同展示“买方（境外收货人）／卖方（NS 申报抬头）”及关联报关单，取消卖方下拉，不提交手选卖方 ID。资料合同表也展示双方。取值、来源冲突和能否生成均由后端返回；英文地址、印章等仍在“合同抬头”维护。

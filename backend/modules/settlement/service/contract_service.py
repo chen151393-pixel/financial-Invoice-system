@@ -11,7 +11,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from backend.core import write_lock
 from backend.core.errors import ApiError
 
-from ..dao import contract_dao, party_dao
+from ..dao import contract_dao
 from ..policy.contract_policy import digest
 from .contract_pdf import render
 from .document_service import edit_reason
@@ -19,6 +19,11 @@ from .document_service import edit_reason
 
 def _now():
     return datetime.now(UTC).replace(tzinfo=None)
+
+
+def _basis(drafts):
+    # 抬头身份也参与生成期间重校验，防止两个不同主体的展示字段相同时漏掉来源变化。
+    return [(draft["digest"], draft["buyer"]["id"], draft["seller"]["id"]) for draft in drafts]
 
 
 class ContractService:
@@ -54,7 +59,7 @@ class ContractService:
             now = _now()
             with write_lock.transaction(self.engine, "settlement") as connection:
                 batch, current = self._drafts(connection, batch_id, body.sellerPartyId, terms, lock=True)
-                if [draft["digest"] for draft in current] != [draft["digest"] for draft in drafts]:
+                if _basis(current) != _basis(drafts):
                     raise ApiError(409, "生成期间提单、海关回执或合同抬头发生变化，请重新生成")
                 old = contract_dao.of_batch(connection, batch_id)
                 contract_dao.replace(
@@ -92,24 +97,28 @@ class ContractService:
         state = self.reader.state(connection, batch, items)
         if state["plan_issues"]:
             raise ApiError(409, "不能生成销售合同：" + "；".join(state["plan_issues"][:3]))
-        buyer, seller = state["buyer"], party_dao.get(connection, seller_id)
-        if buyer is None:
-            raise ApiError(409, f"未维护买方合同抬头：{batch['consignee']}")
-        if seller is None:
-            raise ApiError(404, "卖方合同抬头不存在")
-        if seller["id"] == buyer["id"]:
-            raise ApiError(422, "卖方不能与买方相同")
+        if state["party_issues"]:
+            raise ApiError(409, "不能生成销售合同：" + "；".join(state["party_issues"][:3]))
         if not state["planned"]:
             raise ApiError(409, "没有可生成销售合同的明细")
-        return batch, [
-            {
-                "contract": contract,
-                "buyer": buyer,
-                "seller": seller,
-                "digest": digest(contract, buyer, seller, terms),
-            }
-            for contract in state["planned"]
-        ]
+        drafts = []
+        for contract in state["planned"]:
+            binding = state["contract_parties"][contract["contract_no"]]
+            buyer, seller = binding["buyer"], binding["seller"]
+            # 旧客户端仍可传卖方 ID，但不能覆盖当前 NS 申报抬头的匹配结果。
+            if seller_id == buyer["id"]:
+                raise ApiError(422, "卖方不能与买方相同")
+            if seller_id is not None and seller_id != seller["id"]:
+                raise ApiError(422, "合同卖方必须与对应 NS 报关单的申报抬头一致，请刷新资料后重试")
+            drafts.append(
+                {
+                    "contract": contract,
+                    "buyer": buyer,
+                    "seller": seller,
+                    "digest": digest(contract, buyer, seller, terms),
+                }
+            )
+        return batch, drafts
 
     def _stamps(self, buyer, seller):
         stamps, missing = {}, []

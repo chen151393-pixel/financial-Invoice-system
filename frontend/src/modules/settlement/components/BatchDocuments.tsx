@@ -220,6 +220,16 @@ export function BatchDocuments({ target, onChanged }: { target: DocumentTarget; 
       render: (row) => (row.planned ?? row.contract)?.declarationNos.join("、") ?? "",
     },
     {
+      key: "buyer",
+      header: "买方（境外收货人）",
+      render: (row) => (row.contract ?? row.planned)?.buyerName || "—",
+    },
+    {
+      key: "seller",
+      header: "卖方（NS 申报抬头）",
+      render: (row) => (row.contract ?? row.planned)?.sellerName || "—",
+    },
+    {
       key: "amount",
       header: "合同金额",
       align: "right",

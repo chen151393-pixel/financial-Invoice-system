@@ -556,3 +556,41 @@ test("直接收汇保留客户总账，报关资料可通过 URL 定位同一复
   assert.match(docs, /正在读取结汇资料/);
   assert.doesNotMatch(docs, /登记回款并建批次|name="receivedAmount"/);
 });
+
+test("合同双方按报关依据只读展示，不提供手选卖方", async () => {
+  const { ContractGenerateForm } = await server.ssrLoadModule(
+    "/src/modules/settlement/components/ContractGenerateForm.tsx",
+  );
+  const html = renderToStaticMarkup(
+    inRouter(
+      createElement(ContractGenerateForm, {
+        documents: {
+          defaults: {
+            sellerPartyId: 2,
+            tradeTerm: "FOB",
+            paymentTermsCn: "预付",
+            paymentTermsEn: "In advance",
+          },
+          planned: [
+            {
+              contractNo: "CONTRACT-1",
+              declarationNos: ["REAL872"],
+              buyerName: "境外客户 A",
+              sellerName: "NS 申报公司 B",
+            },
+          ],
+          sellers: [{ id: 9, name: "无关公司" }],
+        },
+        busy: false,
+        onCancel: () => undefined,
+        onSubmit: () => undefined,
+      }),
+    ),
+  );
+  assert.match(html, /买方（境外收货人）/);
+  assert.match(html, /卖方（NS 申报抬头）/);
+  assert.match(html, /境外客户 A/);
+  assert.match(html, /NS 申报公司 B/);
+  assert.match(html, /REAL872/);
+  assert.doesNotMatch(html, /name="sellerPartyId"|无关公司|请选择/);
+});

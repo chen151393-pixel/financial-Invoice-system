@@ -26,9 +26,3 @@ def replace(connection, batch_id, rows, now):
             insert(contracts),
             [{**row, **scope_values(batch_id), "created_at": now, "updated_at": now} for row in rows],
         )
-
-
-def latest_seller(connection):
-    """最近一次生成使用的卖方抬头 ID，作为生成表单的默认值。"""
-    query = select(contracts.c.seller_party_id).order_by(contracts.c.id.desc()).limit(1)
-    return connection.execute(query).scalar()

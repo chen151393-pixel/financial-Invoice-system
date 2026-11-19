@@ -35,6 +35,7 @@ def bill(row):
 
 def contract(row, parties, stale):
     seller = parties.get(row["seller_party_id"])
+    buyer = parties.get(row["buyer_party_id"])
     return Contract(
         id=row["id"],
         contractNo=row["contract_no"],
@@ -43,6 +44,7 @@ def contract(row, parties, stale):
         currency=row["currency"],
         amount=amount(row["amount"]),
         declarationNos=list(row["declaration_nos"] or []),
+        buyerName=buyer["name"] if buyer else "",
         sellerName=seller["name"] if seller else "",
         tradeTerm=row["trade_term"],
         portOfLoading=row["port_of_loading"],
@@ -54,9 +56,11 @@ def contract(row, parties, stale):
     )
 
 
-def planned(item, currency):
+def planned(item, currency, binding):
     return PlannedContract(
         contractNo=item["contract_no"],
+        buyerName=binding["buyer_name"],
+        sellerName=binding["seller_name"],
         currency=currency,
         amount=amount(item["amount"]),
         declarationNos=item["declaration_nos"],

@@ -214,6 +214,7 @@ export interface Contract {
   currency: string;
   amount: string;
   declarationNos: string[];
+  buyerName: string;
   sellerName: string;
   tradeTerm: string;
   portOfLoading: string;
@@ -226,6 +227,8 @@ export interface Contract {
 
 export interface PlannedContract {
   contractNo: string;
+  buyerName: string;
+  sellerName: string;
   currency: string;
   amount: string;
   declarationNos: string[];
@@ -312,7 +315,7 @@ export interface BillFields {
 }
 
 export interface GenerateContractsBody {
-  sellerPartyId: number;
+  sellerPartyId?: number | null;
   tradeTerm: string;
   paymentTermsCn: string;
   paymentTermsEn: string;

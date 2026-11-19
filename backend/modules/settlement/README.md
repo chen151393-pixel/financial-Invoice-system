@@ -78,7 +78,7 @@
 香港中转批次在“香港已收”阶段准备资料，**提单与销售合同齐全后才能确认资料已出**；确认后资料只读，仍可下载。
 
 - **提单**：上传 PDF（单个不超过 8 MB）。有文字层的提单由 `policy/bill_parse_policy.py` 从文字中识别提单号、装运口岸、目的口岸、装船日期。**扫描件**（无文字层）由 `service/bill_ocr.py` 取第一页图像、去掉彩色底纹后调用本机 tesseract，`policy/bill_layout_policy.py` 按“标签下方 / 右侧同一栏”的位置取值；同一页用两种方式各识别一次，**结果一致的字段才采用**，装船日期的数字写法与英文序数写法（OBD）不一致时不取。识别不到的留空由人工填写，不猜测港口。扫描识别可能认错字符（如 0 与 O），识别出的提单标“待核对”，经办人对照原件点“修改”保存后提示消除。未安装 tesseract 或 `SETTLEMENT_OCR_COMMAND` 留空时，扫描件字段全部人工填写。每张提单标明对应的报关单（默认批次内全部）。
-- **销售合同（即形式发票，2026-11-18 业务确认）**：按 `templates/sales_contract.json`（由原人工模板整理的版式与条款）生成 PDF，批次内每个出口合同号一份。明细与金额取海关回执成交总价，单价 = 成交总价 ÷ 成交数量（仅展示）；签订日期 = 最早出口日期往前推 `SETTLEMENT_CONTRACT_LEAD_DAYS` 天（默认 28）；装运口岸、目的口岸取对应提单；买方按境外收货人匹配合同抬头，卖方、成交方式、付款条件由经办人确认。双方印章取合同抬头的印章图片，缺印章时照常生成并提示。
+- **销售合同（即形式发票，2026-11-18 业务确认）**：按 `templates/sales_contract.json`（由原人工模板整理的版式与条款）生成 PDF，批次内每个出口合同号一份。明细与金额取海关回执成交总价，单价 = 成交总价 ÷ 成交数量（仅展示）；签订日期 = 最早出口日期往前推 `SETTLEMENT_CONTRACT_LEAD_DAYS` 天（默认 28）；装运口岸、目的口岸取对应提单；买方按对应报关单的当前境外收货人匹配合同抬头，卖方按对应 NS 报关单的申报抬头匹配；成交方式和付款条件由经办人确认。双方印章取合同抬头的印章图片，缺印章时照常生成并提示。
 - **需重新生成**：提单口岸、海关回执明细、合同抬头或印章变化后，已生成合同的依据摘要不再一致，须重新生成才算齐全。海关回执换版导致合计与建批次时不一致时，须作废批次重建。
 - **报关单**：取 task 模块从 NS 下载并归档到共享盘的报关单原件（`task/public.py` 的 `archived_declaration_files`，只读），按原件格式（PDF 或 NS 打印模板的 xls）放入资料包，不转换格式；读取时核对归档校验值且路径须在共享盘目录内。**未归档只提示、不阻止确认资料已出**，需到“开票跟进”的任务详情下载。结汇模块自身不下载、不改归档记录。
 - **资料包**：齐全后可下载 zip，结构为“批次 / 出口合同号 / 销售合同（形式发票）、提单、报关单”，附文件清单；未能放入的报关单在清单中注明原因。
@@ -105,7 +105,7 @@
 | POST | `/api/settlement/batches/{id}/bills/{billId}`              | 人工修改提单字段与对应报关单                                                                                                                                                  |
 | POST | `/api/settlement/batches/{id}/bills/{billId}/remove`       | 移除提单                                                                                                                                                                      |
 | GET  | `/api/settlement/batches/{id}/bills/{billId}/file`         | 查看提单 PDF                                                                                                                                                                  |
-| POST | `/api/settlement/batches/{id}/contracts/generate`          | 按模板生成 / 重新生成销售合同（卖方、成交方式、付款条件）                                                                                                                     |
+| POST | `/api/settlement/batches/{id}/contracts/generate`          | 按模板生成 / 重新生成销售合同（双方取报关依据，确认成交方式、付款条件）                                                                                                                     |
 | GET  | `/api/settlement/batches/{id}/contracts/{contractId}/file` | 查看销售合同 PDF                                                                                                                                                              |
 | GET  | `/api/settlement/batches/{id}/package`                     | 下载资料包 zip（资料未齐时拒绝）                                                                                                                                              |
 | POST | `/api/settlement/parties/query`                            | 合同抬头列表                                                                                                                                                                  |
@@ -140,8 +140,15 @@ python -m pytest backend/tests/settlement
 ## 直接收汇资料（2026-11-19）
 
 - 直接收汇按报关单办理资料，不创建 `settlement_batches`，不登记回款、不写银行流水或直接收汇分配、不改变总账与收汇总览。
-- 提单、人工字段核对、合同生成、原件归档提示与资料包共用香港中转实现；买方匹配境外收货人，卖方与条款由经办人确认。合同金额、日期与明细取当前海关回执。
+- 提单、人工字段核对、合同生成、原件归档提示与资料包共用香港中转实现；买方匹配境外收货人，卖方匹配 NS 报关单申报抬头，条款由经办人确认。合同金额、日期与明细取当前海关回执。
 - `0050_settlement_direct_documents` 为两张资料表增加 `direct_declaration_no`；它与 `batch_id` 严格二选一，合同按“直接报关单 + 出口合同号”唯一。已有香港资料保留，有直接资料时拒绝丢失关联的回退。
 - 同一报关单多次收款沿用同一套资料。提单、当前回执、抬头或印章变化后通过原有摘要提示重生成；无需先收齐客户款才能做资料。此版本不跨报关单合并同号合同。
 - 接口：`POST /api/settlement/direct-documents/query` 按关键词、客户及资料进度筛选分页；`/api/settlement/direct-documents/{declarationNo}` 下的 `GET /documents`、`POST /bills`、`POST /bills/{id}`、`POST /bills/{id}/remove`、`GET /bills/{id}/file`、`POST /contracts/generate`、`GET /contracts/{id}/file`、`GET /package` 与香港资料同契约。直接资料响应 `batchId=null`，金额仍为字符串。均沿用结汇权限，服务身份不能修改资料。
 - 验证：`backend/tests/settlement/test_direct_documents.py` 覆盖生成、下载、重复上传、跨来源隔离、回执换版、统计不变、迁移保留与有数据回退拦截；MySQL 验证需配置专用测试连接。
+
+
+### 合同双方自动匹配（2026-11-19）
+
+香港与直接资料统一按每份出口合同的关联报关单确定双方：买方取当前海关回执的境外收货人，卖方取 NS 报关单的唯一申报抬头。地址、英文名称、电话和印章从同名合同抬头读取；不使用其他公司或最近使用卖方兜底。缺少当前来源、NS 重号、缺申报抬头、同一合同覆盖不同买方/卖方时禁止生成并给出缺项；不同出口合同可各自匹配不同申报公司。
+
+资料响应的 `planned[]`、`contracts[]` 增加 `buyerName`、`sellerName`；生成表单只读展示双方。生成请求的 `sellerPartyId` 为可选兼容字段，旧客户端若传入必须与当前 NS 匹配结果一致。后端逐合同重新解析并在文件生成前后核对双方身份与生成摘要；买方、NS 申报抬头或主数据变化时旧合同提示重新生成。不自动修改既有合同文件，不改变收款和批次金额。专项测试见 `test_contract_parties.py`。
