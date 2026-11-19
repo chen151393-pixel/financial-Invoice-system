@@ -94,13 +94,13 @@
 - 未税金额先在各行采购原币下还原，再统一为人民币汇总。人民币采购按销售汇率除为 USD；USD 采购直接使用其美元未税金额（参与人民币汇总时乘同一销售汇率）；其他或待核实币种明确阻止计算。人工核实币种使用当前有效开票依据中的币种。
 - 销售单仅从当前行关联子采购的 `sales_order_id` 候选中，按报关行完整销售单号唯一匹配。币种须为 USD、汇率须为正数；不借用其他销售单汇率。缺金额、税率、有效下单数量或销售汇率时返回具体原因，不回退报关行采购价，也不把缺失税率视为 13% 或零。
 - 例：CD000962 铝运动水壶，含税金额 68400、38400 元，税率均 13%，逐行未税金额 60530.97、33982.30 元；采购数量 9000、6000 个；销售汇率 6.70。USD 单价 = 94513.27 ÷ 15000 ÷ 6.70 = 0.940430547…，响应展示最多六位小数 `0.940431`。
-- 采购单价独立于幅度校验。报关行原始口径与报关口径的单位／数量校验、报关数量与关联子采购报关数量合计校验仍保留；同时核实实际采购下单单位与报关单位是否一致，采购单位缺失或不同不能比较幅度；不一致时采购 USD 价仍可展示，幅度为“—”，不允许自动审核。数量不符使用 `quantity_mismatch`，单位不符使用 `unit_mismatch`；两者不计入单价异常。
+- 采购单价独立于幅度校验。申报幅度比较每条关联子采购明细对应的母采购原生行单位与报关单位，母采购行按母单 NS ID、原生行号、货品 ID 唯一定位；使用 source 返回的 `parent_purchase_unit` 明确名称，报关单位通过既有字典解析。母采购单位不同使用 `unit_mismatch`；缺母单、对应行或单位名称返回 `unavailable` 及具体补同步原因。两种状态下幅度为“—”，不允许自动审核，采购 USD 价可独立展示。报关数量继续与关联子采购报关数量合计核对，数量不符使用 `quantity_mismatch`。报关行原始 `unit`、`quantity` 保留供追溯，原始口径差异不再阻止幅度计算。
 - 申报价仍取 `declared_unit_price`，未填时复用 source 的报关金额 ÷ 报关数量试算。幅度 =（人民币申报单价 − 人民币采购未税单价）÷ 人民币申报单价 × 100%。沿用未舍入人民币差额和 `REVIEW_UNIT_PRICE_TOLERANCE_CNY`（默认 0.10 元）判断异常，不能按页面显示精度放行。
 - 开票审核冻结继续使用采购下单数量、单位、含税金额；本次不改开票依据、审核历史或 NS 来源原文。
 
-`POST /api/review/declarations/query` 及审核返回的报关行新增：`purchaseUnitPriceUsd`（采购未税 USD 单价）、`declaredUnitPriceUsd`（申报 USD 单价）、`purchaseOrderQuantity`（关联采购下单数量合计）、`purchasePriceNote`（取价口径或无法计算原因）。均由后端计算为十进制字符串，前端不计算。`originalPrice` 兼容字段改为同一采购未税 USD 单价，`originalPriceUnit` 改为采购单位；`originalQuantity` 仍保留报关行原始数量。`originalUnitPriceCny` 返回新采购未税人民币比较价，旧 `combinedPurchaseUnitPrice` 仅作旧快照读取别名。
+`POST /api/review/declarations/query` 及审核返回的报关行新增：`purchaseUnitPriceUsd`（采购未税 USD 单价）、`declaredUnitPriceUsd`（申报 USD 单价）、`purchaseOrderQuantity`（关联采购下单数量合计）、`purchasePriceNote`（取价口径或无法计算原因）。均由后端计算为十进制字符串，前端不计算。`originalPrice` 兼容字段为同一采购未税 USD 单价，`originalPriceUnit` 显示对应母采购明细单位，多个不同母采购单位按出现顺序去重展示；`originalQuantity` 仍保留报关行原始数量。`originalUnitPriceCny` 返回新采购未税人民币比较价，旧 `combinedPurchaseUnitPrice` 仅作旧快照读取别名。
 
-算法版本为 `review-v15`，部署重启自动从本地来源重建快照。补算中隐藏旧采购单价、幅度及自动审核结果；也可执行 `node scripts/python.mjs -m backend.manage rebuild-review`。无需新增迁移。历史采购未同步税率的，先在 `NETSUITE_PL_LOOKUP.purchase_line.storage_fields` 配置 `tax_rate`（NS `custrecord_swc_subpo_item_tax`）并重新同步；补齐前如实显示无法计算，不伪造成功。
+算法版本为 `review-v17`，部署重启自动从本地来源重建快照，更新旧子采购单位校验及原始口径校验的结果。补算中隐藏旧采购单价、幅度及自动审核结果；也可执行 `node scripts/python.mjs -m backend.manage rebuild-review`。无需新增迁移。母采购证据只有 `units` 编号且缺少明确单位名称时，需重新同步报关单或关联子采购单以补齐 `parentLines.unitname`。历史采购未同步税率的，先在 `NETSUITE_PL_LOOKUP.purchase_line.storage_fields` 配置 `tax_rate`（NS `custrecord_swc_subpo_item_tax`）并重新同步；补齐前如实显示无法计算，不伪造成功。
 
 验证：`test_review_purchase_price.py`、`test_review_declared_purchase.py`、`test_review_tolerance.py`、`test_review_calculations.py`、`test_review_original_caliber.py`、`test_declared_price.py` 和前端 `pl-comparison.test.mjs`。
 
@@ -165,7 +165,7 @@ npm.cmd run dev:api
 
 ## 数量校验与双单价规则（2026-10-30）
 
-报关数量校验继续保留；采购取价以当前 `review-v15` 规则为准。审核冻结和子采购展示仍使用各自原有字段。
+报关数量校验继续保留；采购取价及幅度校验以当前 `review-v17` 规则为准。审核冻结和子采购展示仍使用各自原有字段。
 
 ## 海关回执与报关单比对（2026-11-12）
 

@@ -252,6 +252,75 @@ def test_v6_purchase_snapshot_is_hidden_then_rebuilt_with_customs_prices(review,
     assert rows(engine, "SELECT id FROM review_records") == []
 
 
+def test_v15_original_unit_mismatch_rebuilds_with_actual_purchase_units(review, ns, engine):
+    declaration = customs("870")
+    for _, source in declaration[2]:
+        source.update(custrecord_swc_unit="千克", custrecord_swc_quantity=Decimal("5"))
+    save(ns, engine, bundle([purchase()], [declaration]))
+    calculations = CalculationService(review)
+    calculations.rebuild()
+    snapshot = rows(engine, "SELECT id,payload FROM review_declaration_snapshots")[0]
+    payload = json.loads(snapshot["payload"])
+    for line in payload["customsLines"]:
+        line.update(
+            margin="",
+            marginStatus="unit_mismatch",
+            marginNote="原始单位“千克”与报关单位“个”不一致，不计算申报幅度",
+        )
+    payload["unitMismatch"] = True
+    with engine.begin() as connection:
+        connection.execute(
+            text("UPDATE review_declaration_snapshots SET payload=:p WHERE id=:i"),
+            {"p": json.dumps(payload), "i": snapshot["id"]},
+        )
+        connection.execute(text("UPDATE review_calculation_jobs SET calculation_key='review-v15:cny=0.10'"))
+    stale = review.browse(query())
+    assert stale.groups[0].calculationStatus == "pending"
+    assert stale.counts["unitMismatch"] == stale.counts["autoApprovable"] == 0
+    calculations.initialize()
+    CalculationWorker(calculations).run_once()
+    refreshed = review.browse(query())
+    fresh = refreshed.groups[0]
+    assert fresh.calculationStatus == "ready" and fresh.autoReview.eligible
+    assert not fresh.unitMismatch and not fresh.quantityMismatch
+    assert fresh.contentSha256 == payload["contentSha256"]
+    assert all(line.marginStatus == "ok" and line.margin for line in fresh.customsLines)
+    assert refreshed.counts["unitMismatch"] == 0
+    assert rows(engine, "SELECT id FROM review_records") == []
+    assert rows(engine, "SELECT id FROM review_lines") == []
+
+
+def test_v16_child_unit_snapshot_rebuilds_with_parent_purchase_unit(review, ns, engine):
+    data = bundle([purchase()], [customs("870")])
+    for parent in data["relation_evidence"]["870"]["parentLines"]:
+        parent["unitname"] = "包"
+    save(ns, engine, data)
+    calculations = CalculationService(review)
+    calculations.rebuild()
+    snapshot = rows(engine, "SELECT id,payload FROM review_declaration_snapshots")[0]
+    payload = json.loads(snapshot["payload"])
+    for line in payload["customsLines"]:
+        line.update(originalPriceUnit="个", margin="10.00%", marginStatus="ok", marginNote="")
+    payload["unitMismatch"] = False
+    with engine.begin() as connection:
+        connection.execute(
+            text("UPDATE review_declaration_snapshots SET payload=:p WHERE id=:i"),
+            {"p": json.dumps(payload), "i": snapshot["id"]},
+        )
+        connection.execute(text("UPDATE review_calculation_jobs SET calculation_key='review-v16:cny=0.10'"))
+    stale = review.browse(query())
+    assert stale.groups[0].calculationStatus == "pending" and stale.counts["autoApprovable"] == 0
+    calculations.initialize()
+    CalculationWorker(calculations).run_once()
+    fresh = review.browse(query()).groups[0]
+    assert fresh.calculationStatus == "ready" and fresh.unitMismatch and not fresh.autoReview.eligible
+    assert all(
+        line.originalPriceUnit == "包" and line.marginStatus == "unit_mismatch" for line in fresh.customsLines
+    )
+    assert fresh.contentSha256 == payload["contentSha256"]
+    assert rows(engine, "SELECT id FROM review_records") == []
+
+
 def test_v9_snapshot_rebuilds_purchase_price_without_changing_review_basis(review, ns, engine):
     order = purchase()
     for _, row in order[2]:

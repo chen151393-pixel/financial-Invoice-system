@@ -147,7 +147,17 @@ def evidence(customs_id="870", status="matched"):
                 "custrecord_swc_sublist_purchasesource": "10",
             }
         )
-        parents.append({"transaction": "100", "id": key, "item": key, "mainline": "F", "taxline": "F"})
+        parents.append(
+            {
+                "transaction": "100",
+                "id": key,
+                "item": key,
+                "mainline": "F",
+                "taxline": "F",
+                "units": "18",
+                "unitname": "个",
+            }
+        )
         links.append(
             {
                 "nextdoc": "100",

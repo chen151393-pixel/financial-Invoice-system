@@ -25,6 +25,7 @@ def purchase(quantity="100", declared="1525", amount="8113", price="81.13"):
         "source_line_key": "line-1",
         "quantity": Decimal(quantity),
         "unit": "卷",
+        "parent_purchase_unit": "卷",
         "declared_quantity": Decimal(declared),
         "declared_unit": "平方米",
         "unit_price": Decimal(price),
@@ -49,7 +50,7 @@ ORDER = {
     "sales_order_id": 9,
 }
 SALES = {9: {"id": 9, "order_no": "SO1", "currency": "USD", "exchange_rate": Decimal("7.1")}}
-# 2026-11-09 起原始口径与报关口径单位或数量不同即不计算幅度；比价用例取两套口径一致的数据
+# 比价使用采购下单单位；报关行的原始单位和数量保留供追溯。
 CUSTOMS = {
     "quantity": Decimal("1525"),
     "unit": "平方米",
@@ -162,14 +163,17 @@ def test_saved_source_and_materialized_page_preserve_both_quantity_bases(ns, eng
         )
     for _, row in declaration[2]:
         row.update(
-            # 原始口径与报关口径一致，才计算申报幅度
+            # 保留报关原始字段；本用例的实际采购单位“卷”与报关单位不同。
             custrecord_swc_quantity=Decimal("1525"),
             custrecord_swc_unit="平方米",
             custrecord_swc_delare_quantity=Decimal("1525"),
             custrecord_swc_delare_unit="平方米",
             custrecord_swc_grossamountzj=Decimal("0.8"),
         )
-    save(ns, engine, bundle([order], [declaration]))
+    data = bundle([order], [declaration])
+    for parent in data["relation_evidence"]["870"]["parentLines"]:
+        parent["unitname"] = "卷"
+    save(ns, engine, data)
     result = group(service, "CD870")
     assert not result.unlinkedLines
     for line in result.customsLines:
@@ -215,7 +219,7 @@ def test_display_price_rounds_half_up_and_preserves_two_decimal_places(amount, q
 )
 def test_existing_prices_require_valid_matching_declared_quantity(quantity):
     row = purchase(amount="999999")
-    # 原始数量留空：本用例只验证报关行与子采购报关数量的核对
+    # 原始数量留空，数量校验仍使用报关数量及子采购报关数量合计。
     result = declared_margin(
         {**CUSTOMS, "quantity": None, "declared_quantity": quantity}, [row], {1: ORDER}, {}
     )
@@ -238,7 +242,7 @@ def test_invalid_customs_original_price_does_not_block_purchase_price(price):
 def test_invalid_present_declared_price_does_not_trigger_estimate(price):
     result = declared_margin(
         {**CUSTOMS, "declared_unit_price": price, "amount": Decimal("8113")},
-        [{**purchase(), "unit": "平方米"}],
+        [{**purchase(), "unit": "平方米", "parent_purchase_unit": "平方米"}],
         {1: ORDER},
         SALES,
     )
@@ -249,6 +253,7 @@ def test_cd000849_uses_linked_purchase_amounts_instead_of_customs_original_price
     first = purchase("1625", "1625", "29575", "18.2")
     second = {**purchase("5375", "5375", "83425", "15.52"), "purchase_order_id": 2, "id": 2}
     first["unit"] = second["unit"] = first["declared_unit"] = second["declared_unit"] = "个"
+    first["parent_purchase_unit"] = second["parent_purchase_unit"] = "个"
     customs_row = {
         **CUSTOMS,
         "unit": "个",
@@ -316,8 +321,8 @@ def test_cd000954_child_total_mismatch_sets_quantity_label_and_blocks_auto_revie
     ]
 
 
-def test_cd000835_caliber_mismatch_takes_priority_over_quantity_and_prices():
-    # 2026-11-09 起先比同一报关行原始口径与报关口径：包对千克为单位不一致，需人工核对
+def test_cd000835_checks_linked_declared_quantity_even_when_original_unit_differs():
+    # 原始单位为包，报关为千克，仍核对实际关联的子采购报关数量。
     customs_row = {
         **CUSTOMS,
         "unit": "包",
@@ -331,10 +336,10 @@ def test_cd000835_caliber_mismatch_takes_priority_over_quantity_and_prices():
         {**purchase(declared="21260"), "declared_unit": "千克"},
     ]
     result = declared_margin(customs_row, children, {1: ORDER}, SALES)
-    assert result["note"] == "原始单位“包”与报关单位“千克”不一致，不计算申报幅度"
-    assert result["status"] == "unit_mismatch" and result["margin"] is None
+    assert result["note"] == "数量不一致（报关行 24965.5，子采购报关合计 41260）"
+    assert result["status"] == "quantity_mismatch" and result["margin"] is None
     assert not margin_alert([result])
-    # 两套口径一致时，报关数量与子采购合计不符仍按原规则提示
+    # 改变原始单位及数量，实际关联的报关数量校验结果相同。
     same = {**customs_row, "unit": "千克", "quantity": Decimal("24965.5")}
     result = declared_margin(same, children, {1: ORDER}, SALES)
     assert result["note"] == "数量不一致（报关行 24965.5，子采购报关合计 41260）"

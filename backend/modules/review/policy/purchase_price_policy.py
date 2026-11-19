@@ -2,7 +2,7 @@
 
 from decimal import ROUND_HALF_UP, Decimal
 
-from backend.modules.source.public import pick_sales_order, unit_label
+from backend.modules.source.public import pick_sales_order
 
 CENT = Decimal("0.01")
 
@@ -19,7 +19,9 @@ def purchase_price(customs_row, rows, orders, sales_orders, unit_names=None, bas
     if any(quantity is None or quantity <= 0 for quantity in quantities):
         return {**result, "note": "采购下单数量缺失或非正数，无法计算采购单价"}
     result["quantity"] = sum(quantities, Decimal(0))
-    result["unit"] = "、".join(dict.fromkeys(unit_label(row.get("unit"), unit_names) for row in rows))
+    result["unit"] = "、".join(
+        dict.fromkeys(unit for row in rows if (unit := str(row.get("parent_purchase_unit") or "").strip()))
+    )
     candidates = [sales_orders.get(orders[row["purchase_order_id"]].get("sales_order_id")) for row in rows]
     sales, reason = pick_sales_order(customs_row.get("sales_order_no"), candidates)
     if sales is None:

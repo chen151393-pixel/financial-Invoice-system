@@ -16,38 +16,12 @@ CENT = Decimal("0.01")
 DEFAULT_UNIT_PRICE_TOLERANCE_CNY = Decimal("0.10")
 
 
-# 报关行原始／报关口径或关联子采购报关数量不一致；需要人工核对
+# 母采购对应明细单位与报关单位、或关联子采购报关数量不一致；需要人工核对。
 MISMATCH = ("unit_mismatch", "quantity_mismatch")
 
 
 def unavailable(note, status="unavailable"):
     return {"status": status, "margin": None, "declared": None, "original": None, "note": note}
-
-
-def _number(value):
-    return format(value.normalize(), "f")
-
-
-def caliber_mismatch(customs_row, unit_names=None):
-    """同一报关行原始口径对报关口径；一致或无法比较时返回 None。"""
-    original_unit = unit_label(customs_row.get("unit"), unit_names).strip()
-    declared_unit = unit_label(customs_row.get("declared_unit"), unit_names).strip()
-    if not original_unit or not declared_unit:
-        return None
-    if original_unit != declared_unit:
-        return unavailable(
-            f"原始单位“{original_unit}”与报关单位“{declared_unit}”不一致，不计算申报幅度", "unit_mismatch"
-        )
-    quantity, declared_quantity = customs_row.get("quantity"), customs_row.get("declared_quantity")
-    # 数量缺失或非正数交给 quantity_issue 提示“数量口径待核对”
-    if quantity is None or declared_quantity is None or quantity <= 0 or declared_quantity <= 0:
-        return None
-    if quantity == declared_quantity:
-        return None
-    return unavailable(
-        f"原始数量 {_number(quantity)} 与报关数量 {_number(declared_quantity)} 不一致，不计算申报幅度",
-        "quantity_mismatch",
-    )
 
 
 def declared_margin(
@@ -65,21 +39,26 @@ def declared_margin(
     def blocked(note, status="unavailable"):
         return {**unavailable(note, status), "purchase": purchase, "declared_usd": None}
 
-    mismatch = caliber_mismatch(customs_row, unit_names)
-    if mismatch:
-        return {**mismatch, "purchase": purchase, "declared_usd": None}
     issue = quantity_issue(customs_row, purchase_rows, unit_names)
     if issue:
         status, note = issue
         return blocked(note, status)
     if purchase["usd"] is None:
         return blocked(purchase["note"])
-    purchase_units = [unit_label(row.get("unit"), unit_names).strip() for row in purchase_rows]
+    purchase_units = [str(row.get("parent_purchase_unit") or "").strip() for row in purchase_rows]
     declared_unit = unit_label(customs_row.get("declared_unit"), unit_names).strip()
     if not all(purchase_units):
-        return blocked("采购单位缺失，无法比较申报幅度")
+        reason = next(
+            (
+                row["parent_purchase_unit_issue"]
+                for row, unit in zip(purchase_rows, purchase_units)
+                if not unit and row.get("parent_purchase_unit_issue")
+            ),
+            "母采购对应明细的采购单位缺失，请重新同步母采购行依据",
+        )
+        return blocked(reason)
     if any(unit != declared_unit for unit in purchase_units):
-        return blocked("采购下单单位与报关单位不一致，不计算申报幅度", "unit_mismatch")
+        return blocked("母采购单对应明细的采购单位与报关单位不一致，不计算申报幅度", "unit_mismatch")
     source_price, _ = declared_unit_price(customs_row)
     if source_price is None:
         return blocked("报关单价缺失，且报关金额缺失或报关数量无效，无法试算")

@@ -32,6 +32,7 @@ def row(identity=1, order=1, quantity="9000", gross="68400", tax="0.13"):
         "purchase_order_id": order,
         "quantity": D(quantity),
         "unit": "个",
+        "parent_purchase_unit": "个",
         "declared_quantity": D(quantity),
         "declared_unit": "个",
         "amount": D(gross),
@@ -78,9 +79,9 @@ def test_mixed_tax_rates_are_removed_per_line_before_summing():
     assert price["quantity"] == 5
 
 
-def test_original_purchase_unit_mismatch_blocks_only_margin():
+def test_parent_purchase_unit_mismatch_blocks_only_margin():
     rows = [row(quantity="15000", gross="113000")]
-    rows[0]["unit"] = "盒"
+    rows[0]["parent_purchase_unit"] = "盒"
     result = declared_margin(CUSTOMS, rows, ORDERS, SALES)
     assert result["status"] == "unit_mismatch" and result["margin"] is None
     assert result["purchase"]["quantity"] == 15000
@@ -158,7 +159,7 @@ def test_saved_purchase_rows_feed_usd_fields_without_changing_invoice_basis(ns, 
         source["custrecord_swc_subpo_item_qty"] = D(quantity)
         source["custrecord_swc_subpo_item_bgqty"] = D(quantity)
         source["custrecord_swc_subpo_item_bgunit"] = "个"
-    data = bundle([order], [customs()])
+    data = deepcopy(bundle([order], [customs()]))
     data["sales_orders"]["90"]["exchangerate"] = "6.70"
     save(ns, engine, data)
     reader = DeclarationService(engine)

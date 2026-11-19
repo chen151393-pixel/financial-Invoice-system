@@ -52,7 +52,7 @@ def test_sales_order_choice_and_cny_conversion():
 
 @pytest.mark.parametrize("currency", ["USD", "US Dollar", "美元", " us dollar "])
 def test_margin_uses_purchase_amount_and_original_order_quantity(currency):
-    # 2026-11-09 起原始口径与报关口径须单位、数量一致才计算幅度
+    # 参与取价的采购单位与报关单位一致，关联子采购报关数量合计与报关数量一致。
     customs_row = {
         "quantity": Decimal("10"),
         "unit": "个",
@@ -75,6 +75,7 @@ def test_margin_uses_purchase_amount_and_original_order_quantity(currency):
         "unit": "个",
         "declared_quantity": Decimal("10"),
         "declared_unit": "个",
+        "parent_purchase_unit": "个",
     }
     before = dict(customs_row)
     result = declared_margin(customs_row, [line], orders, sales)
@@ -144,6 +145,7 @@ def test_margin_does_not_display_negative_zero():
                 "quantity": Decimal("1"),
                 "tax_rate": Decimal("0"),
                 "unit": "片",
+                "parent_purchase_unit": "片",
                 "declared_quantity": Decimal("1"),
                 "purchase_order_id": 1,
             }

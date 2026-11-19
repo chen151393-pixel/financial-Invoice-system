@@ -42,6 +42,7 @@ def test_unit_price_tolerance_boundary(difference, status):
             {
                 "id": 1,
                 "unit": "片",
+                "parent_purchase_unit": "片",
                 "quantity": quantity,
                 "tax_rate": Decimal(0),
                 "declared_unit": "片",
@@ -90,6 +91,7 @@ def test_purchase_cny_cost_is_not_multiplied_by_sales_rate_again():
             "declared_unit": "个",
             "declared_quantity": Decimal("1"),
             "unit": "个",
+            "parent_purchase_unit": "个",
             "quantity": Decimal("1"),
             "amount": Decimal("4.12"),
             "tax_rate": Decimal(0),

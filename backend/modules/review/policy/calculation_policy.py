@@ -1,6 +1,6 @@
 """查询投影版本与失效提示。金额规则变化时提升版本，启动后补算。"""
 
-CALCULATION_VERSION = "review-v15"  # 关联采购未税金额 / 下单数量，再按对应销售汇率折 USD。
+CALCULATION_VERSION = "review-v17"  # 幅度按母采购对应明细单位校验，启动后补算旧结果。
 PENDING_REASON = "来源或审核已更新，后台计算中，请稍后刷新"
 FAILED_REASON = "后台计算失败，系统将自动重试，请稍后刷新"
 
