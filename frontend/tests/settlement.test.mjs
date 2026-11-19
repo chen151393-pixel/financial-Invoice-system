@@ -193,7 +193,7 @@ test("应收汇概况只展示后端汇总：按路径分卡，香港中转另�
   );
   assert.match(html, /直接收汇应收汇（USD）[\s\S]*345,300\.00[\s\S]*8 票 · 进直接收汇明细/);
   assert.match(html, /报关应收汇（总）（USD）[\s\S]*776,450\.00[\s\S]*14 票 · 香港中转 \+ 直接收汇/);
-  assert.match(html, /香港中转应收汇（USD）[\s\S]*431,150\.00[\s\S]*6 票 · 登记回款建批次/);
+  assert.match(html, /香港中转应收汇（USD）[\s\S]*431,150\.00[\s\S]*6 票 · 进香港中转批次登记/);
   assert.match(html, /香港中转待登记回款（USD）[\s\S]*231,600\.00[\s\S]*3 票尚未建批次/);
   assert.match(html, /直接收汇待收金额（USD）[\s\S]*22,350\.00/);
   assert.equal(
@@ -382,4 +382,74 @@ test("收汇路径表展示后端全量汇总、独立币种及带客户筛选�
   assert.match(html, /香港汇回境内不再次增加实收汇金额/);
   assert.match(html, /href="\/settlement\/hk-transit\?consignee=ACME\+%26\+CO"/);
   assert.match(html, /href="\/settlement\/direct\?consignee=ACME\+%26\+CO"/);
+});
+
+test("报关应收页不再登记回款；香港待登记页提供勾选与登记入口", async () => {
+  const { CandidatePanel } = await server.ssrLoadModule(
+    "/src/modules/settlement/components/CandidatePanel.tsx",
+  );
+  const { SettlementHkTransitPage } = await server.ssrLoadModule(
+    "/src/modules/settlement/pages/SettlementHkTransitPage.tsx",
+  );
+  const browse = renderToStaticMarkup(inRouter(createElement(CandidatePanel, { mode: "receivables" })));
+  assert.doesNotMatch(browse, /登记回款并建批次|name="targetAmount"/);
+  assert.match(browse, /进入香港中转登记/);
+  assert.match(browse, /tab=receipts/);
+  const registration = renderToStaticMarkup(
+    createElement(
+      MemoryRouter,
+      {
+        initialEntries: ["/settlement/hk-transit?tab=receipts&consignee=HK"],
+      },
+      createElement(SettlementHkTransitPage),
+    ),
+  );
+  assert.match(registration, /待登记回款/);
+  assert.match(registration, /已建批次/);
+  assert.match(registration, /登记回款并建批次/);
+  assert.match(registration, /name="targetAmount"/);
+  assert.match(registration, /value="HK"/);
+  assert.doesNotMatch(registration, /name="route"/);
+});
+
+test("报关单明细只在登记区域允许勾选，并保留后端不可选原因", async () => {
+  const { CandidateTable } = await server.ssrLoadModule(
+    "/src/modules/settlement/components/CandidateTable.tsx",
+  );
+  const hk = {
+    declarationNo: "REAL1",
+    recordNo: "CD1",
+    salesOrders: ["SO1"],
+    consignee: "HK & CO",
+    exportDate: "2026-11-01",
+    route: "hk_transit",
+    routeLabel: "香港中转",
+    routeBasis: "香港公司",
+    handling: "batch",
+    amount: "100.00",
+    currency: "USD",
+    blockedReason: "",
+    batchNo: "",
+  };
+  const rows = [
+    hk,
+    { ...hk, declarationNo: "REAL2", blockedReason: "已在有效批次中" },
+    { ...hk, declarationNo: "DIRECT1", route: "direct", routeLabel: "直接收汇", handling: "ledger" },
+  ];
+  const browse = renderToStaticMarkup(inRouter(createElement(CandidateTable, { rows })));
+  assert.doesNotMatch(browse, /type="checkbox"/);
+  assert.match(browse, /tab=receipts/);
+  assert.match(browse, /consignee=HK\+%26\+CO/);
+  const registration = renderToStaticMarkup(
+    inRouter(
+      createElement(CandidateTable, {
+        rows,
+        selection: { selected: ["REAL1"], onToggle: () => undefined },
+      }),
+    ),
+  );
+  assert.equal((registration.match(/type="checkbox"/g) || []).length, 2);
+  assert.match(registration, /选择报关单 REAL2[^>]*disabled/);
+  assert.match(registration, /已在有效批次中/);
+  assert.match(registration, /可登记回款/);
 });

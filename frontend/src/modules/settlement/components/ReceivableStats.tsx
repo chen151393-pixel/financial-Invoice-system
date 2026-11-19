@@ -35,7 +35,7 @@ export function ReceivableStats({
           tone={total.route === "hk_transit" ? "primary" : "neutral"}
           label={`${total.routeLabel}应收汇（${total.currency}）`}
           value={money(total.amount)}
-          note={`${total.count} 票 · ${total.route === "hk_transit" ? "登记回款建批次" : "进直接收汇明细"}`}
+          note={`${total.count} 票 · ${total.route === "hk_transit" ? "进香港中转批次登记" : "进直接收汇明细"}`}
         />
       ))}
       {pending.map((total) => (

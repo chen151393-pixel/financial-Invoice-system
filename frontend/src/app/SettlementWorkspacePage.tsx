@@ -1,6 +1,6 @@
 import { Link, useLocation } from "react-router";
 import { SettlementBankReceiptsPage } from "../modules/settlement/pages/SettlementBankReceiptsPage";
-import { SettlementBatchesPage } from "../modules/settlement/pages/SettlementBatchesPage";
+import { SettlementHkTransitPage } from "../modules/settlement/pages/SettlementHkTransitPage";
 import { SettlementDeclarationsPage } from "../modules/settlement/pages/SettlementDeclarationsPage";
 import { SettlementLedgerPage } from "../modules/settlement/pages/SettlementLedgerPage";
 import { SettlementOverviewPage } from "../modules/settlement/pages/SettlementOverviewPage";
@@ -20,7 +20,7 @@ const PAGES = {
   declarations: {
     child: "settlement-declarations",
     title: "报关应收汇",
-    description: "按海关回执汇总应收汇并判定回款路径：香港中转登记回款建批次，非香港中转进直接收汇明细。",
+    description: "按海关回执查看应收汇与回款路径；香港回款在香港中转批次登记，非香港中转进入直接收汇明细。",
     source: "海关回执（出口日期、成交总价）",
   },
   bank: {
@@ -80,7 +80,7 @@ export default function SettlementWorkspacePage() {
       {key === "overview" && <SettlementOverviewPage />}
       {key === "declarations" && <SettlementDeclarationsPage />}
       {key === "bank" && <SettlementBankReceiptsPage />}
-      {key === "hk" && <SettlementBatchesPage key={search} route="hk_transit" />}
+      {key === "hk" && <SettlementHkTransitPage key={search} />}
       {key === "direct" && <SettlementLedgerPage key={search} />}
       {key === "parties" && <SettlementPartiesPage />}
     </AppFrame>

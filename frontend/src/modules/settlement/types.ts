@@ -78,6 +78,7 @@ export interface CandidateList {
 }
 
 export interface CandidateQuery {
+  batchStatus?: "all" | "unbatched";
   consignee: string;
   declarationNo: string;
   route: RouteFilter;

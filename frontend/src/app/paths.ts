@@ -50,6 +50,8 @@ function withQuery(path: string, filters: Record<string, string>) {
   return query.size ? `${path}?${query}` : path;
 }
 export const reviewListPath = (filters: { status?: string }) => withQuery(paths.review, filters);
+export const settlementReceiptPath = (consignee = "") =>
+  withQuery(paths.settlementHk, { tab: "receipts", consignee });
 export const settlementBatchListPath = (consignee: string) => withQuery(paths.settlementHk, { consignee });
 export const settlementLedgerPath = (consignee: string) => withQuery(paths.settlementDirect, { consignee });
 export const financeDeclarationPath = (exactDeclarationNo: string) =>

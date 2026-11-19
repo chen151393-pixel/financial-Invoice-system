@@ -35,6 +35,7 @@ class CandidateQuery(StrictModel):
     consignee: Text200 = ""
     declarationNo: Text200 = ""
     route: Literal["all", "hk_transit", "direct"] = "all"
+    batchStatus: Literal["all", "unbatched"] = "all"
     exportFrom: date | None = Field(default=None, strict=False)
     exportTo: date | None = Field(default=None, strict=False)
     # 填写后按“到账 + 手续费”推荐金额恰好吻合的香港中转报关单组合

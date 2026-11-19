@@ -99,6 +99,8 @@ class CandidateService:
             rows = [row for row in rows if row["export_date"] and row["export_date"] >= body.exportFrom]
         if body.exportTo:
             rows = [row for row in rows if row["export_date"] and row["export_date"] <= body.exportTo]
+        if body.batchStatus == "unbatched":
+            rows = [row for row in rows if not row["batch_no"]]
         open_rows = [row for row in rows if not row["blocked"]]
         # 只有香港中转的报关单可以选入批次
         batchable = [row for row in open_rows if row["handling"] == "batch"]

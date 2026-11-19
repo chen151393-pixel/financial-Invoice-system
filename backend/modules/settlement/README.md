@@ -130,3 +130,6 @@
 ```bash
 python -m pytest backend/tests/settlement
 ```
+
+
+香港待登记回款（2026-11-19）：`/candidates/query` 新增 `batchStatus=unbatched`，仅返回尚未被有效批次占用的报关单，默认 `all` 保持原查询。香港登记页同时提交 `route=hk_transit`。筛选在全量汇总和 500 张展示截断之前完成；作废释放后重新进入待登记。建批次仍复用原接口及同收货人、同币种、占用和金额校验。

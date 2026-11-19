@@ -45,7 +45,7 @@ const TITLES: Record<Route, { title: string; description: string; empty: string 
   hk_transit: {
     title: "香港中转批次",
     description: "香港已收 → 资料已出 → 汇回对平后已结汇。",
-    empty: "在“报关应收汇”勾选香港中转的报关单并登记回款即可建批次。",
+    empty: "切换到“待登记回款”，勾选报关单并登记香港到账即可建批次。",
   },
   direct: {
     title: "直接收汇批次",
