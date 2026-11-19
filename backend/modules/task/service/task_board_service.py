@@ -13,7 +13,9 @@ from backend.core.errors import ApiError
 from ..dao import notification_dao, task_dao
 from ..mapper import task_mapper
 from ..policy.board_policy import NODE_HINTS, NODE_LABELS, NODES, next_action
+from ..policy.notification_policy import batch_record_block
 from ..policy.task_policy import OPEN_STATUSES
+from ..vo.capability import Capability
 from ..vo.task_vo import BoardItem, BoardNode, TaskBoard
 from .board_facts import board_facts
 from .task_service import READ_ERROR
@@ -114,6 +116,8 @@ class TaskBoardService:
 
     def _item(self, row, fact, names, contact):
         node = fact["node"]
+        # 来源变化的任务不能登记；未决企微通知等其余条件在提交时逐个复核
+        record_block = fact["blocked"] or batch_record_block(row["status"], fact["notice_status"])
         return BoardItem(
             task=task_mapper.summary(row, fact["lines"], names, contact),
             steps=fact["steps"],
@@ -122,4 +126,7 @@ class TaskBoardService:
             nextAction=next_action(node, fact["missing"]),
             blockedReason=fact["blocked"],
             missing=fact["missing"],
+            notifyRecord=Capability(
+                allowed=not record_block, reason=record_block or "线下通知供应商后可勾选批量登记。"
+            ),
         )

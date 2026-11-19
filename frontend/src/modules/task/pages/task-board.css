@@ -21,6 +21,68 @@
   padding: 16px 20px;
 }
 
+/* 批量登记已通知：全选、已选数量与提交按钮；只在本页有可登记任务时出现。 */
+.tb-select {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-small) 16px;
+  padding: 10px 14px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-control);
+  background: var(--color-primary-soft);
+}
+.tb-select__all {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-small);
+  font-weight: 600;
+  cursor: pointer;
+}
+.tb-select__hint {
+  flex: 1;
+  min-width: 160px;
+  color: var(--color-muted);
+  font-size: 12px;
+}
+.tb-select input,
+.tb-item__check {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  accent-color: var(--color-primary);
+  cursor: pointer;
+}
+.tb-batch {
+  display: grid;
+  gap: var(--space-control);
+  min-width: 0;
+  padding-top: var(--space-small);
+}
+.tb-batch__help {
+  margin: 0;
+  color: var(--color-muted);
+  font-size: 12px;
+  line-height: 1.7;
+}
+.tb-batch__note {
+  display: grid;
+  gap: 4px;
+  font-size: 13px;
+}
+.tb-batch__note textarea {
+  padding: 8px 10px;
+  border: 1px solid var(--color-input-border);
+  border-radius: var(--radius-control);
+  font: inherit;
+  resize: vertical;
+}
+.tb-batch__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-small);
+}
+
 /* 任务卡片：摘要常驻，流程按需展开。 */
 .tb-item {
   display: grid;
