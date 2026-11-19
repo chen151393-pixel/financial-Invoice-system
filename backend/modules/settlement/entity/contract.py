@@ -4,7 +4,19 @@
 重新生成时整批替换本表记录，文件本体保存在结汇资料目录。
 """
 
-from sqlalchemy import CHAR, JSON, Column, Date, ForeignKey, Integer, Numeric, String, Table, UniqueConstraint
+from sqlalchemy import (
+    CHAR,
+    JSON,
+    CheckConstraint,
+    Column,
+    Date,
+    ForeignKey,
+    Integer,
+    Numeric,
+    String,
+    Table,
+    UniqueConstraint,
+)
 
 from backend.core.schema import ID, TIMESTAMP, identifier, schema_metadata, table_options, timestamps
 
@@ -16,9 +28,10 @@ settlement_contracts = Table(
         "batch_id",
         ID,
         ForeignKey("settlement_batches.id", name="fk_settlement_contract_batch"),
-        nullable=False,
+        nullable=True,
         comment="所属结汇批次，指向 settlement_batches.id",
     ),
+    Column("direct_declaration_no", identifier(150), comment="直接收汇资料所属报关单；与批次二选一"),
     Column("contract_no", identifier(100), nullable=False, comment="合同编号，即海关回执的出口合同号"),
     Column("contract_date", Date, nullable=False, comment="签订日期：最早出口日期往前推配置的天数"),
     Column("declaration_nos", JSON, nullable=False, comment="该合同覆盖的报关单号列表"),
@@ -42,6 +55,11 @@ settlement_contracts = Table(
     Column("generated_at", TIMESTAMP, nullable=False, comment="生成时间，UTC"),
     *timestamps(),
     UniqueConstraint("batch_id", "contract_no", name="uq_settlement_contract_batch_no"),
+    CheckConstraint(
+        "(batch_id IS NOT NULL AND direct_declaration_no IS NULL) OR (batch_id IS NULL AND direct_declaration_no IS NOT NULL)",
+        name="ck_settlement_contract_source",
+    ),
+    UniqueConstraint("direct_declaration_no", "contract_no", name="uq_settlement_contract_direct_no"),
     comment="结汇批次按模板生成的销售合同 PDF 及其生成依据",
     **table_options,
 )

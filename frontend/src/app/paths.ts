@@ -53,6 +53,8 @@ export const reviewListPath = (filters: { status?: string }) => withQuery(paths.
 export const settlementReceiptPath = (consignee = "") =>
   withQuery(paths.settlementHk, { tab: "receipts", consignee });
 export const settlementBatchListPath = (consignee: string) => withQuery(paths.settlementHk, { consignee });
+export const settlementDirectDocumentsPath = (consignee = "", declarationNo = "") =>
+  withQuery(paths.settlementDirect, { tab: "documents", consignee, declarationNo });
 export const settlementLedgerPath = (consignee: string) => withQuery(paths.settlementDirect, { consignee });
 export const financeDeclarationPath = (exactDeclarationNo: string) =>
   withQuery(paths.review, { exactDeclarationNo });

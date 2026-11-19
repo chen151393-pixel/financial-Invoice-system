@@ -247,8 +247,39 @@ export interface DeclarationFile {
   fileNames: string[];
 }
 
+/** 数字为香港批次 ID，字符串为直接收汇报关单号；API 命名空间分别处理。 */
+export type DocumentTarget = number | string;
+
+export interface DirectDocumentRow {
+  declarationNo: string;
+  recordNo: string;
+  salesOrders: string[];
+  consignee: string;
+  exportCompany: string;
+  currency: string;
+  amount: string;
+  billLabel: string;
+  contractLabel: string;
+  status: string;
+  statusLabel: string;
+  edit: Action;
+}
+export interface DirectDocumentQuery {
+  keyword: string;
+  consignee: string;
+  status: "all" | "pending_bill" | "pending_contract" | "stale" | "complete";
+  page: number;
+  pageSize: number;
+}
+export interface DirectDocumentList {
+  items: DirectDocumentRow[];
+  total: number;
+  page: number;
+  pageSize: number;
+}
+
 export interface BatchDocuments {
-  batchId: number;
+  batchId: number | null;
   declarationNos: string[];
   bills: Bill[];
   planned: PlannedContract[];

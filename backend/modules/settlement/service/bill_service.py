@@ -13,11 +13,12 @@ from backend.core import write_lock
 from backend.core.errors import ApiError
 
 from ..dao import bill_dao
+from ..dao.document_scope import values as scope_values
 from ..dto.bill_dto import MAX_BILL_BYTES
 from ..policy.bill_layout_policy import agreed, parse_words
 from ..policy.bill_parse_policy import missing_fields, parse_bill
 from .bill_text import extract_text
-from .document_service import edit_reason, load
+from .document_service import edit_reason
 
 
 def _now():
@@ -41,14 +42,15 @@ def decode(content, limit, label):
     return data
 
 
-def _numbers(requested, items):
+def _numbers(requested, items, reference=None):
     """提单对应的报关单须属于本批次；未指定时对应全部。"""
     allowed = [item["declaration_no"] for item in items]
     if not requested:
         return allowed
     unknown = [number for number in requested if number not in allowed]
     if unknown:
-        raise ApiError(422, f"以下报关单不在本批次中：{'、'.join(unknown)}")
+        label = "本次资料范围" if isinstance(reference, str) else "本批次"
+        raise ApiError(422, f"以下报关单不在{label}中：{'、'.join(unknown)}")
     return sorted(set(requested), key=allowed.index)
 
 
@@ -86,11 +88,11 @@ class BillService:
             with write_lock.transaction(self.engine, "settlement") as connection:
                 batch, items = self._editable(connection, batch_id)
                 if any(row["sha256"] == sha256 for row in bill_dao.active(connection, batch_id)):
-                    raise ApiError(409, "该提单文件已上传到本批次")
+                    raise ApiError(409, "该提单文件已上传到本次资料")
                 bill_dao.insert_bill(
                     connection,
                     {
-                        "batch_id": batch_id,
+                        **scope_values(batch_id),
                         "file_id": file_id,
                         "file_name": body.fileName,
                         "sha256": sha256,
@@ -99,7 +101,7 @@ class BillService:
                         "port_of_loading": parsed["port_of_loading"] or None,
                         "port_of_discharge": parsed["port_of_discharge"] or None,
                         "on_board_date": parsed["on_board_date"],
-                        "declaration_nos": _numbers(body.declarationNos, items),
+                        "declaration_nos": _numbers(body.declarationNos, items, batch_id),
                         "parse_note": note,
                         "uploaded_by": owner,
                         "uploaded_at": now,
@@ -128,7 +130,7 @@ class BillService:
                     "port_of_loading": body.portOfLoading.upper() or None,
                     "port_of_discharge": body.portOfDischarge.upper() or None,
                     "on_board_date": body.onBoardDate,
-                    "declaration_nos": _numbers(body.declarationNos, items),
+                    "declaration_nos": _numbers(body.declarationNos, items, batch_id),
                     "confirmed_by": owner,
                     # 人工保存即视为已核对，清除自动解析留下的提示
                     "parse_note": None,
@@ -151,11 +153,12 @@ class BillService:
     def file(self, batch_id, bill_id):
         """返回 (文件名, PDF 字节)。"""
         with self.engine.connect() as connection:
+            self.documents.load(connection, batch_id)
             row = self._active(connection, batch_id, bill_id)
         return row["file_name"], self.store.read(row["file_id"], "pdf")
 
     def _editable(self, connection, batch_id):
-        batch, items = load(connection, batch_id, lock=True)
+        batch, items = self.documents.load(connection, batch_id, lock=True)
         reason = edit_reason(batch)
         if reason:
             raise ApiError(409, reason)

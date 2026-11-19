@@ -245,37 +245,39 @@ test("直接收汇明细末列显示各笔累计余额，保留来源单据", ()
     ...overrides,
   });
   const html = renderToStaticMarkup(
-    createElement(LedgerGroupTable, {
-      group: {
-        consignee: "ACME LTD",
-        currency: "USD",
-        exportTotal: "56900.00",
-        receiptTotal: "62000.00",
-        balance: "-5100.00",
-        status: "overpaid",
-        statusLabel: "超收",
-        entries: [
-          entry({
-            exportCompany: "上海毅烁",
-            exportDate: "2026-10-13",
-            exportAmount: "56900.00",
-            sourceNo: "223120260002291375",
-            balance: "56900.00",
-          }),
-          entry({
-            kind: "receipt",
-            kindLabel: "收汇",
-            receiptCompany: "上海毅烁",
-            receiptDate: "2026-10-27",
-            receiptAmount: "62000.00",
-            sourceNo: "FT2610270009871",
-            balance: "-5100.00",
-            thirdParty: true,
-            payerName: "HANSA PAY SERVICES LTD",
-          }),
-        ],
-      },
-    }),
+    inRouter(
+      createElement(LedgerGroupTable, {
+        group: {
+          consignee: "ACME LTD",
+          currency: "USD",
+          exportTotal: "56900.00",
+          receiptTotal: "62000.00",
+          balance: "-5100.00",
+          status: "overpaid",
+          statusLabel: "超收",
+          entries: [
+            entry({
+              exportCompany: "上海毅烁",
+              exportDate: "2026-10-13",
+              exportAmount: "56900.00",
+              sourceNo: "223120260002291375",
+              balance: "56900.00",
+            }),
+            entry({
+              kind: "receipt",
+              kindLabel: "收汇",
+              receiptCompany: "上海毅烁",
+              receiptDate: "2026-10-27",
+              receiptAmount: "62000.00",
+              sourceNo: "FT2610270009871",
+              balance: "-5100.00",
+              thirdParty: true,
+              payerName: "HANSA PAY SERVICES LTD",
+            }),
+          ],
+        },
+      }),
+    ),
   );
   for (const header of [
     "事务类型",
@@ -298,9 +300,10 @@ test("直接收汇明细末列显示各笔累计余额，保留来源单据", ()
   // 出口行的收汇金额单元格留空，不显示占位符或 0
   const exportRow = html.slice(html.indexOf("<tbody>"), html.indexOf("</tr>", html.indexOf("<tbody>")));
   assert.equal((exportRow.match(/<td[^>]*><\/td>/g) ?? []).length, 3);
-  assert.match(html, /<th[^>]*>余额<\/th><\/tr><\/thead>/);
-  assert.match(exportRow, /<strong>56,900\.00<\/strong><\/td>$/);
-  assert.match(html, /<strong>-5,100\.00<\/strong><\/td><\/tr>/);
+  assert.match(html, /<th[^>]*>资料<\/th><\/tr><\/thead>/);
+  assert.match(exportRow, /<strong>56,900\.00<\/strong><\/td>/);
+  assert.match(exportRow, /tab=documents&amp;consignee=ACME\+LTD&amp;declarationNo=223120260002291375/);
+  assert.match(html, /<strong>-5,100\.00<\/strong><\/td><td>—<\/td><\/tr>/);
   assert.doesNotMatch(html, /协议|待匹配金额|收汇匹配|期末余额/);
 });
 
@@ -318,7 +321,7 @@ test("直接收汇默认按收货人和币种显示汇总，逐笔流水默认�
     entries: [{ sourceNo: "FT2610270009871" }],
   };
   const html = renderToStaticMarkup(
-    createElement(LedgerSummaryTable, { groups: [group, { ...group, currency: "EUR" }] }),
+    inRouter(createElement(LedgerSummaryTable, { groups: [group, { ...group, currency: "EUR" }] })),
   );
   for (const title of [
     "境外收货人",
@@ -452,4 +455,25 @@ test("报关单明细只在登记区域允许勾选，并保留后端不可选�
   assert.match(registration, /选择报关单 REAL2[^>]*disabled/);
   assert.match(registration, /已在有效批次中/);
   assert.match(registration, /可登记回款/);
+});
+
+test("直接收汇保留客户总账，报关资料可通过 URL 定位同一复用资料组件", async () => {
+  const { SettlementLedgerPage } = await server.ssrLoadModule(
+    "/src/modules/settlement/pages/SettlementLedgerPage.tsx",
+  );
+  function renderAt(url) {
+    return renderToStaticMarkup(
+      createElement(MemoryRouter, { initialEntries: [url] }, createElement(SettlementLedgerPage)),
+    );
+  }
+  const ledger = renderAt("/settlement/direct");
+  assert.match(ledger, /客户总账/);
+  assert.match(ledger, /报关资料/);
+  assert.match(ledger, /正在读取直接收汇明细/);
+  const docs = renderAt("/settlement/direct?tab=documents&consignee=ACME&declarationNo=REAL872");
+  assert.match(docs, /报关资料清单/);
+  assert.match(docs, /办理资料 · REAL872/);
+  assert.match(docs, /当前客户范围：ACME/);
+  assert.match(docs, /正在读取结汇资料/);
+  assert.doesNotMatch(docs, /登记回款并建批次|name="receivedAmount"/);
 });

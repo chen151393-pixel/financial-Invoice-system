@@ -12,6 +12,9 @@ import type {
   CandidateList,
   CandidateQuery,
   CreateBatchBody,
+  DocumentTarget,
+  DirectDocumentList,
+  DirectDocumentQuery,
   GenerateContractsBody,
   LedgerList,
   LedgerQuery,
@@ -57,26 +60,34 @@ export const cancelBatch = (id: number, reason: string) =>
 
 // ---- 结汇资料：文件只读取字节后提交，格式、解析与齐全度由后端负责 ----
 
-export const getDocuments = (batchId: number, signal?: AbortSignal) =>
-  http<BatchDocuments>(`/settlement/batches/${batchId}/documents`, "GET", undefined, signal);
+const documentPath = (target: DocumentTarget) =>
+  typeof target === "number"
+    ? `/settlement/batches/${target}`
+    : `/settlement/direct-documents/${encodeURIComponent(target)}`;
 
-export async function uploadBill(batchId: number, file: File) {
+export const queryDirectDocuments = (query: DirectDocumentQuery, signal?: AbortSignal) =>
+  http<DirectDocumentList>("/settlement/direct-documents/query", "POST", query, signal);
+
+export const getDocuments = (batchId: DocumentTarget, signal?: AbortSignal) =>
+  http<BatchDocuments>(`${documentPath(batchId)}/documents`, "GET", undefined, signal);
+
+export async function uploadBill(batchId: DocumentTarget, file: File) {
   const { filename, content } = await readImportFile(file);
-  return http<BatchDocuments>(`/settlement/batches/${batchId}/bills`, "POST", {
+  return http<BatchDocuments>(`${documentPath(batchId)}/bills`, "POST", {
     fileName: filename,
     content,
     declarationNos: [],
   });
 }
 
-export const updateBill = (batchId: number, billId: number, body: BillFields) =>
-  http<BatchDocuments>(`/settlement/batches/${batchId}/bills/${billId}`, "POST", body);
+export const updateBill = (batchId: DocumentTarget, billId: number, body: BillFields) =>
+  http<BatchDocuments>(`${documentPath(batchId)}/bills/${billId}`, "POST", body);
 
-export const removeBill = (batchId: number, billId: number) =>
-  http<BatchDocuments>(`/settlement/batches/${batchId}/bills/${billId}/remove`, "POST", {});
+export const removeBill = (batchId: DocumentTarget, billId: number) =>
+  http<BatchDocuments>(`${documentPath(batchId)}/bills/${billId}/remove`, "POST", {});
 
-export const generateContracts = (batchId: number, body: GenerateContractsBody) =>
-  http<BatchDocuments>(`/settlement/batches/${batchId}/contracts/generate`, "POST", body);
+export const generateContracts = (batchId: DocumentTarget, body: GenerateContractsBody) =>
+  http<BatchDocuments>(`${documentPath(batchId)}/contracts/generate`, "POST", body);
 
 export const queryParties = (signal?: AbortSignal) =>
   http<{ items: Party[] }>("/settlement/parties/query", "POST", {}, signal);

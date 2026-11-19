@@ -14,7 +14,7 @@ from backend.core.errors import ApiError
 from ..dao import contract_dao, party_dao
 from ..policy.contract_policy import digest
 from .contract_pdf import render
-from .document_service import edit_reason, load
+from .document_service import edit_reason
 
 
 def _now():
@@ -63,7 +63,7 @@ class ContractService:
                     [self._row(draft, terms, batch, file, owner, now) for draft, *file in files],
                     now,
                 )
-                _, items = load(connection, batch_id)
+                _, items = self.documents.load(connection, batch_id)
                 view = self.documents.view(connection, batch, items)
         except ApiError:
             self._discard(files)
@@ -78,13 +78,14 @@ class ContractService:
     def file(self, batch_id, contract_id):
         """返回 (文件名, PDF 字节)。"""
         with self.engine.connect() as connection:
+            self.documents.load(connection, batch_id)
             row = contract_dao.get(connection, batch_id, contract_id)
         if row is None:
             raise ApiError(404, "销售合同不存在，可能已重新生成，请刷新")
         return f"销售合同{row['contract_no']}.pdf", self.store.read(row["file_id"], "pdf")
 
     def _drafts(self, connection, batch_id, seller_id, terms, *, lock=False):
-        batch, items = load(connection, batch_id, lock=lock)
+        batch, items = self.documents.load(connection, batch_id, lock=lock)
         reason = edit_reason(batch)
         if reason:
             raise ApiError(409, reason)
@@ -99,7 +100,7 @@ class ContractService:
         if seller["id"] == buyer["id"]:
             raise ApiError(422, "卖方不能与买方相同")
         if not state["planned"]:
-            raise ApiError(409, "批次内没有可生成销售合同的明细")
+            raise ApiError(409, "没有可生成销售合同的明细")
         return batch, [
             {
                 "contract": contract,

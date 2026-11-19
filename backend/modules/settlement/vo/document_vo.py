@@ -68,7 +68,7 @@ class DeclarationFile(StrictModel):
 
 
 class BatchDocuments(StrictModel):
-    batchId: int
+    batchId: int | None
     declarationNos: list[str]
     bills: list[Bill]
     planned: list[PlannedContract]
