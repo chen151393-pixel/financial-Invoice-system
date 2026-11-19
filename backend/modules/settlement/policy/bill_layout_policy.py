@@ -36,7 +36,7 @@ def _same_row(a, b, height):
 
 def _find_label(words, tokens, height):
     """返回标签外框 {left, right, top, bottom}；标签各词须在同一行且相邻。"""
-    for word in words:
+    for word in sorted(words, key=lambda item: (item["top"], item["left"])):
         if _key(word["text"]) != tokens[0]:
             continue
         chain = [word]
@@ -88,10 +88,16 @@ def _join(words):
 
 
 def _port(words, tokens, height):
-    label = _find_label(words, tokens, height)
+    headings = [word for word in words if _key(word["text"]) != "PORT" or word["text"][:1].isupper()]
+    label = _find_label(headings, tokens, height)
     if not label:
         return ""
-    value = re.sub(r"\s*,\s*", ", ", _column(words, label, height)[1].upper())
+    return port_value(_column(words, label, height)[1])
+
+
+def port_value(text):
+    """仅接受口岸文字，不接受相邻栏标签或含数字的噪声。"""
+    value = re.sub(r"\s*,\s*", ", ", text.upper())
     value = re.sub(r"\s+", " ", value).strip(" ,.-/*")
     if not _PORT.fullmatch(value) or _LABEL_WORDS.search(value):
         return ""
@@ -106,8 +112,45 @@ def _is_bl(value, low, high):
     return bool(re.fullmatch(rf"[A-Z0-9]{{{low},{high}}}", value)) and any(char.isdigit() for char in value)
 
 
+def _bl_label(words, height):
+    return _find_label(words, ["B/L", "NO"], height) or _find_label(
+        words, ["BILL", "OF", "LADING", "NO"], height
+    )
+
+
+def bl_value_words(readings):
+    """定位多次识别中同一提单号词框，供局部复识；不使用订舱号或跨栏的文字。"""
+    targets = []
+    for words in readings:
+        if not words:
+            return []
+        height = median(word["bottom"] - word["top"] for word in words)
+        label = _bl_label(words, height)
+        if not label:
+            return []
+        row = sorted(
+            (
+                word
+                for word in words
+                if _same_row(word, label, height) and word["left"] >= label["right"] and _key(word["text"])
+            ),
+            key=lambda word: word["left"],
+        )
+        if not row or row[0]["left"] - label["right"] > 12 * height:
+            return []
+        target = row[0]
+        if not _is_bl(_number(target["text"]), 8, 20):
+            return []
+        if targets and any(
+            abs(target[key] - targets[0][key]) > height for key in ("left", "top", "right", "bottom")
+        ):
+            return []
+        targets.append(target)
+    return targets if len(targets) >= 2 else []
+
+
 def _bl_no(words, height):
-    label = _find_label(words, ["B/L", "NO"], height)
+    label = _bl_label(words, height)
     if not label:
         return ""
     beside, under = (_number(part) for part in _column(words, label, height))
@@ -139,7 +182,25 @@ def _on_board_date(words, height):
     if not label:
         return None
     beside, under = _column(words, label, height)
-    printed = parse_date(beside) or parse_date(under)
+    # 同行日期与标签之间可能有较大留白，不能把日期本身误作下一栏标签。
+    row = sorted(
+        (
+            word
+            for word in words
+            if _same_row(word, label, height) and word["left"] >= label["right"] and _key(word["text"])
+        ),
+        key=lambda word: word["left"],
+    )
+    inline = None
+    if row:
+        token = row[0]["text"].upper()
+        # 只在明确日期的日字段修复 O/0，绝不替换提单号中的字母。
+        if re.fullmatch(r"[0-9O]{1,2}-[A-Z]{3}-[0-9]{4}", token):
+            day, month, year = token.split("-")
+            inline = parse_date(f"{day.replace('O', '0')}-{month}-{year}")
+        elif re.fullmatch(r"[0-9]{4}[-/.][0-9]{1,2}[-/.][0-9]{1,2}", token):
+            inline = parse_date(token)
+    printed = inline or parse_date(beside) or parse_date(under)
     # 英文序数写法只在标签附近的几行内查找，避免取到签发日期等其他日期
     nearby = [word for word in words if 0 <= word["top"] - label["top"] < 6 * height]
     worded = _worded_date(nearby)
@@ -170,3 +231,25 @@ def agreed(results):
         same = bool(values) and all(value == values[0] for value in values)
         merged[field] = values[0] if same and values[0] else ("" if field != "on_board_date" else None)
     return merged
+
+
+def cell_labels(readings):
+    """待局部复识的栏位标签；排除正文中的小写 port of loading 等合同条款。"""
+    tokens = {
+        "port_of_loading": ["PORT", "OF", "LOADING"],
+        "port_of_discharge": ["PORT", "OF", "DISCHARGE"],
+        "on_board_date": ["ON", "BOARD", "DATE"],
+    }
+    candidates = []
+    for words in readings:
+        if not words:
+            continue
+        height = median(word["bottom"] - word["top"] for word in words)
+        headings = [
+            word for word in words if word["text"][:1].isupper() or _key(word["text"]) not in ("PORT", "ON")
+        ]
+        for field, label_tokens in tokens.items():
+            label = _find_label(headings, label_tokens, height)
+            if label:
+                candidates.append((field, label, height, words))
+    return candidates
