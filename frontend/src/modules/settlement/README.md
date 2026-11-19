@@ -44,3 +44,10 @@
 
 
 2026-11-19 回款入口迁移：报关应收汇移除勾选、到账组合推荐及登记弹窗，保留只读报关明细与香港登记跳转。香港中转 `/settlement/hk-transit?tab=receipts` 为待登记回款，默认地址为已建批次；支持携带 `consignee`。待登记查询固定 `route=hk_transit`、`batchStatus=unbatched`，筛选在后端完成；金额或币制有问题的单据仍显示不可选原因。建好批次立即打开详情，关闭后切到已建批次。`CandidateTable` 只在传入 selection 时显示选择列，`CandidatePanel` 复用查询和登记流程。
+
+
+## 直接收汇办理资料（2026-11-19）
+
+保留直接收汇总账，新增“客户总账 / 报关资料”页签。`/settlement/direct?tab=documents` 为资料清单，`consignee` 可限定客户，`declarationNo` 可直接定位资料。客户行“报关资料”、出口流水行“办理资料”均跳转到同一入口。
+
+`DirectDocumentsPanel.tsx` 展示后端资料状态、筛选与分页，选中报关单后复用 `BatchDocuments.tsx` 上传提单、人工核对、生成销售合同并下载资料包。该组件的 `target` 数字代表香港批次，字符串代表直接收汇报关单，API 按命名空间分流。资料操作不创建直接收款批次，不改变总账金额。

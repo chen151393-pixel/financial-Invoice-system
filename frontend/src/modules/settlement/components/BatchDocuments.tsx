@@ -11,7 +11,14 @@ import {
 } from "../../../shared/components/ui";
 import { money } from "../../../shared/format/money";
 import { generateContracts, getDocuments, removeBill, updateBill, uploadBill } from "../api";
-import type { BatchDocuments as Documents, Bill, Contract, DeclarationFile, PlannedContract } from "../types";
+import type {
+  BatchDocuments as Documents,
+  DocumentTarget,
+  Bill,
+  Contract,
+  DeclarationFile,
+  PlannedContract,
+} from "../types";
 import { BillEditForm } from "./BillEditForm";
 import { ContractGenerateForm } from "./ContractGenerateForm";
 
@@ -37,8 +44,8 @@ function contractRows(documents: Documents): ContractRow[] {
   return rows;
 }
 
-/** 香港中转批次的结汇资料：提单、销售合同（形式发票）、报关单、资料包。齐全度、缺项与能否操作全部来自后端。 */
-export function BatchDocuments({ batchId, onChanged }: { batchId: number; onChanged: () => void }) {
+/** 香港中转与直接收汇共用的资料：提单、销售合同（形式发票）、报关单、资料包。齐全度、缺项与能否操作全部来自后端。 */
+export function BatchDocuments({ target, onChanged }: { target: DocumentTarget; onChanged: () => void }) {
   const [state, setState] = useState<State>({ kind: "loading" });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -49,14 +56,16 @@ export function BatchDocuments({ batchId, onChanged }: { batchId: number; onChan
 
   useEffect(() => {
     const controller = new AbortController();
-    getDocuments(batchId, controller.signal)
-      .then((documents) => setState({ kind: "ready", documents }))
+    getDocuments(target, controller.signal)
+      .then((documents) => {
+        if (!controller.signal.aborted) setState({ kind: "ready", documents });
+      })
       .catch((reason: unknown) => {
         if (reason instanceof Error && reason.name === "AbortError") return;
         setState({ kind: "error", message: reason instanceof Error ? reason.message : "加载失败" });
       });
     return () => controller.abort();
-  }, [batchId, refresh]);
+  }, [target, refresh]);
 
   async function run(action: () => Promise<Documents>) {
     setBusy(true);
@@ -79,7 +88,7 @@ export function BatchDocuments({ batchId, onChanged }: { batchId: number; onChan
     const failed: string[] = [];
     for (const file of files) {
       try {
-        setState({ kind: "ready", documents: await uploadBill(batchId, file) });
+        setState({ kind: "ready", documents: await uploadBill(target, file) });
       } catch (reason) {
         failed.push(`${file.name}：${reason instanceof Error ? reason.message : "上传失败"}`);
       }
@@ -154,7 +163,7 @@ export function BatchDocuments({ batchId, onChanged }: { batchId: number; onChan
               disabled={busy}
               onClick={() => {
                 if (window.confirm(`移除提单 ${bill.blNo || bill.fileName}？`)) {
-                  void run(() => removeBill(batchId, bill.id));
+                  void run(() => removeBill(target, bill.id));
                 }
               }}
             >
@@ -307,7 +316,7 @@ export function BatchDocuments({ batchId, onChanged }: { batchId: number; onChan
           declarationNos={documents.declarationNos}
           busy={busy}
           onCancel={() => setEditing(null)}
-          onSubmit={(fields) => void run(() => updateBill(batchId, editingBill.id, fields))}
+          onSubmit={(fields) => void run(() => updateBill(target, editingBill.id, fields))}
         />
       )}
 
@@ -356,7 +365,7 @@ export function BatchDocuments({ batchId, onChanged }: { batchId: number; onChan
           documents={documents}
           busy={busy}
           onCancel={() => setGenerating(false)}
-          onSubmit={(body) => void run(() => generateContracts(batchId, body))}
+          onSubmit={(body) => void run(() => generateContracts(target, body))}
         />
       )}
 

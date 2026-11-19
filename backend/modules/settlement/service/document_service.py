@@ -17,6 +17,8 @@ def _action(reason):
 
 def edit_reason(batch):
     """资料只在香港中转批次“香港已收”阶段可修改；确认资料已出后只读。"""
+    if batch.get("document_kind") == "direct":
+        return batch["document_issue"]
     if batch["route"] != HK_TRANSIT:
         return "仅香港中转批次需要资料包"
     if batch["status"] != "collected":
@@ -32,15 +34,23 @@ def load(connection, batch_id, *, lock=False):
 
 
 class DocumentService:
-    def __init__(self, engine, reader):
+    def __init__(self, engine, reader, source=None):
         self.engine = engine
         self.reader = reader
+        self.source = source
+
+    def load(self, connection, reference, *, lock=False):
+        return (
+            self.source.load(connection, reference, lock=lock)
+            if self.source
+            else load(connection, reference, lock=lock)
+        )
 
     def get(self, batch_id):
         if self.engine is None:
             raise ApiError(503, "业务数据库未配置")
         with self.engine.connect() as connection:
-            batch, items = load(connection, batch_id)
+            batch, items = self.load(connection, batch_id)
             return self.view(connection, batch, items)
 
     def view(self, connection, batch, items):
@@ -62,12 +72,12 @@ class DocumentService:
         package = ""
         if batch["status"] == "cancelled":
             package = "批次已作废"
-        elif batch["route"] != HK_TRANSIT:
+        elif batch["route"] != HK_TRANSIT and batch.get("document_kind") != "direct":
             package = "仅香港中转批次需要资料包"
         elif state["issues"]:
             package = f"资料未齐，还有 {len(state['issues'])} 项待处理"
         return BatchDocuments(
-            batchId=batch["id"],
+            batchId=batch["id"] if not self.source else None,
             declarationNos=[item["declaration_no"] for item in items],
             bills=[mapper.bill(row) for row in state["bills"]],
             planned=[mapper.planned(item, batch["currency"]) for item in state["planned"]],
@@ -90,5 +100,5 @@ class DocumentService:
             edit=_action(editable),
             generate=_action(generate),
             package=_action(package),
-            packageUrl=f"{mapper.BASE}/batches/{batch['id']}/package",
+            packageUrl=f"{mapper.document_base(batch)}/package",
         )

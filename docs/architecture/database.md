@@ -1175,3 +1175,8 @@ API 发票默认版使用 `source=lemon_open2`、`lemon_account=open2:` 加 `SHA
 迁移 `0043_task_supplier_owners` 归属 task 模块，仅新增 `task_supplier_owners` 一表九字段：id、supplier_id、company_id、member_id、member_name、effective_date、reason、actor、created_at。每次人员调整追加一行，当前归属取已到生效日期的最新记录；同日取较大 ID。关联内最新 ID 同时作为并发校验值，不另存 revision、当前关系或 updated_at。跨 source/identity 仅存本地 ID，不建跨模块外键。
 
 任务生成时在既有创建事件的 `details.owner` 保存人员 ID、姓名及分工记录 ID；显式交接仅向既有 `task_events` 追加 `owner_transferred` 事件，不再增加任务归属表。按业务发生时间读取人员事件即可追溯当时归属。旧任务无人员事件时明确未知，不按当前关系倒填；已完成任务不参与交接。未来生效日按北京时间解释。此扩展不定义 KPI 指标或分数，人员历史已有数据时禁止自动降级删除。
+
+
+## 直接收汇资料（2026-11-19，迁移 0050）
+
+结汇模块的 `settlement_bills`、`settlement_contracts` 增加可空 `direct_declaration_no`，原 `batch_id` 改为可空；数据库检查约束要求二者恰有一个非空。直接收汇资料按当前有效海关回执关联的真实报关单保存，不新建收款批次、不影响总账；香港资料继续按批次保存。直接合同按 `(direct_declaration_no, contract_no)` 唯一。已有香港资料保留，有直接资料时拒绝丢失关联的降级。见[结汇模块说明](../../backend/modules/settlement/README.md#直接收汇资料2026-11-19)。

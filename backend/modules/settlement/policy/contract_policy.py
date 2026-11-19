@@ -91,6 +91,8 @@ def plan(batch, items, lines_by_declaration, bills, *, lead_days):
         )
     total = sum((contract["amount"] for contract in contracts), Decimal(0))
     if not issues and money(total) != money(batch["declared_total"]):
+        if batch.get("document_kind") == "direct":
+            return contracts, ["海关回执当前明细合计与报关应收不一致，请核对回执后重新生成"]
         issues.append(
             f"海关回执当前成交总价合计 {money(total)} 与建批次时的报关合计 {money(batch['declared_total'])} "
             "不一致（回执已更新），请作废批次后重新建批次"

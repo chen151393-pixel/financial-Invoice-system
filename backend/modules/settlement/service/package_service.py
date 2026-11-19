@@ -20,27 +20,38 @@ def safe_name(value):
 
 
 class PackageService:
-    def __init__(self, engine, store, reader):
+    def __init__(self, engine, store, reader, documents=None):
         self.engine, self.store, self.reader = engine, store, reader
+        self.documents = documents
 
     def build(self, batch_id):
         """返回 (zip 文件名, zip 字节)。"""
         with self.engine.connect() as connection:
-            batch, items = load(connection, batch_id)
-            if batch["route"] != HK_TRANSIT:
+            batch, items = (
+                self.documents.load(connection, batch_id) if self.documents else load(connection, batch_id)
+            )
+            direct = batch.get("document_kind") == "direct"
+            if batch["route"] != HK_TRANSIT and not direct:
                 raise ApiError(409, "仅香港中转批次需要资料包")
             if batch["status"] == "cancelled":
                 raise ApiError(409, "批次已作废，不能下载资料包")
             state = self.reader.state(connection, batch, items)
         if state["issues"]:
             raise ApiError(409, "资料未齐，不能打包：" + "；".join(state["issues"][:3]))
-        root = safe_name(
-            f"{batch['received_on']}_{batch['batch_no']}_{batch['currency']}{money(batch['declared_total'])}"
+        direct = batch.get("document_kind") == "direct"
+        root = (
+            safe_name(f"直接收汇_{batch['id']}_{batch['currency']}{money(batch['declared_total'])}")
+            if direct
+            else safe_name(
+                f"{batch['received_on']}_{batch['batch_no']}_{batch['currency']}{money(batch['declared_total'])}"
+            )
         )
         listing = [
-            f"结汇批次 {batch['batch_no']}",
+            f"直接收汇报关单 {batch['id']}" if direct else f"结汇批次 {batch['batch_no']}",
             f"境外收货人：{batch['consignee']}",
-            f"香港到账日期：{batch['received_on']}　报关合计：{batch['currency']} {money(batch['declared_total'])}",
+            f"报关合计：{batch['currency']} {money(batch['declared_total'])}"
+            if direct
+            else f"香港到账日期：{batch['received_on']}　报关合计：{batch['currency']} {money(batch['declared_total'])}",
             "",
         ]
         buffer = io.BytesIO()

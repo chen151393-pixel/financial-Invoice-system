@@ -77,6 +77,10 @@ from .modules.settlement.service.bill_service import BillService as SettlementBi
 from .modules.settlement.service.candidate_service import CandidateService as SettlementCandidateService
 from .modules.settlement.service.contract_service import ContractService as SettlementContractService
 from .modules.settlement.service.declaration_files import DeclarationFiles as SettlementDeclarationFiles
+from .modules.settlement.service.direct_document_service import (
+    DirectDocumentService as SettlementDirectDocuments,
+)
+from .modules.settlement.service.direct_document_source import DirectDocumentSource as SettlementDirectSource
 from .modules.settlement.service.document_reader import DocumentReader as SettlementDocumentReader
 from .modules.settlement.service.document_service import DocumentService as SettlementDocumentService
 from .modules.settlement.service.document_store import DocumentStore as SettlementDocumentStore
@@ -366,6 +370,26 @@ def _register_business(app, settings, ns, contract_ns, wecom, engine, lemon_invo
                 font_path=settings.settlement_pdf_font,
             ),
             SettlementPackageService(engine, settlement_store, settlement_reader),
+        )
+    )
+    direct_views = SettlementDocumentService(
+        engine, settlement_reader, SettlementDirectSource(settlement_candidates)
+    )
+    app.include_router(
+        settlement_documents.create_router(
+            direct_views,
+            SettlementBillService(
+                engine, settlement_store, direct_views, SettlementBillOcr(settings.settlement_ocr_command)
+            ),
+            SettlementContractService(
+                engine,
+                settlement_store,
+                settlement_reader,
+                direct_views,
+                font_path=settings.settlement_pdf_font,
+            ),
+            SettlementPackageService(engine, settlement_store, settlement_reader, direct_views),
+            direct_list=SettlementDirectDocuments(engine, settlement_candidates, settlement_reader),
         )
     )
     app.include_router(settlement_parties.create_router(SettlementPartyService(engine, settlement_store)))

@@ -15,9 +15,11 @@ import {
   Skeleton,
   StatCard,
   StatGrid,
+  Tabs,
 } from "../../../shared/components/ui";
 import { money } from "../../../shared/format/money";
 import { queryLedger } from "../api";
+import { DirectDocumentsPanel } from "../components/DirectDocumentsPanel";
 import { LedgerSummaryTable } from "../components/LedgerGroupTable";
 import type { LedgerList, LedgerQuery, LedgerStatusFilter } from "../types";
 import "../components/settlement.css";
@@ -37,7 +39,36 @@ const INITIAL: LedgerQuery = {
  * 直接收汇明细（总账）：按境外收货人、收款人和币种汇总对账期间金额。
  * 余额、状态与合计全部来自后端；本页不做任何金额计算。
  */
+const VIEWS = [
+  { key: "ledger", label: "客户总账" },
+  { key: "documents", label: "报关资料" },
+] as const;
+
 export function SettlementLedgerPage() {
+  const [params, setParams] = useSearchParams();
+  const view = params.get("tab") === "documents" ? "documents" : "ledger";
+  return (
+    <div className="settlement-page">
+      <Tabs
+        label="直接收汇工作区"
+        items={VIEWS}
+        value={view}
+        onChange={(next) => {
+          const values = new URLSearchParams(params);
+          if (next === "documents") values.set("tab", "documents");
+          else {
+            values.delete("tab");
+            values.delete("declarationNo");
+          }
+          setParams(values);
+        }}
+      />
+      {view === "documents" ? <DirectDocumentsPanel /> : <CustomerLedger />}
+    </div>
+  );
+}
+
+function CustomerLedger() {
   const [params] = useSearchParams();
   const [query, setQuery] = useState<LedgerQuery>(() => ({
     ...INITIAL,
