@@ -1,13 +1,4 @@
-"""申报幅度：同一报关行的含税采购单价除以 1.13 后与报关单价比较。
-
-保留两套数量、单位及原始单价，不按数量比例重算已有单价。仅当报关单价缺失时，
-复用 source 的总价 / 报关数量试算。子采购关联用于数量校验及定位销售单汇率，不提供比较价格。
-幅度按原币不含税采购单价计算；两价按同一销售单汇率折人民币后，沿用固定人民币差额容差。
-
-2026-11-09 用户确认：先比同一报关行的原始口径（NS 数量、单位）与报关口径（报关数量、报关单位）。
-单位不同标“单位不一致”，单位相同数量不同标“数量不一致”，两种都不计算申报幅度，按需人工核对处理；
-任一口径缺少单位或数量时不做此项比较。两套单位不同时两个单价不可直接相比。
-"""
+"""申报幅度使用关联采购未税单价；采购下单数量和销售汇率独立于报关口径校验。"""
 
 from decimal import ROUND_HALF_UP, Decimal
 
@@ -18,11 +9,11 @@ from backend.modules.source.public import (
     unit_label,
 )
 
+from .purchase_price_policy import purchase_price
 from .quantity_policy import quantity_issue
 
 CENT = Decimal("0.01")
 DEFAULT_UNIT_PRICE_TOLERANCE_CNY = Decimal("0.10")
-PURCHASE_TAX_FACTOR = Decimal("1.13")
 
 
 # 报关行原始／报关口径或关联子采购报关数量不一致；需要人工核对
@@ -66,27 +57,34 @@ def declared_margin(
     sales_orders,
     unit_names=None,
     tolerance=DEFAULT_UNIT_PRICE_TOLERANCE_CNY,
+    bases=None,
 ):
-    """先比原始口径与报关口径，再核对报关数量，价格仍仅取 customs_row 的两个单价字段。"""
+    """采购价始终单独返回；数量或单位待核对时，只阻止幅度与自动审核。"""
+    purchase = purchase_price(customs_row, purchase_rows, orders, sales_orders, unit_names, bases)
+
+    def blocked(note, status="unavailable"):
+        return {**unavailable(note, status), "purchase": purchase, "declared_usd": None}
+
     mismatch = caliber_mismatch(customs_row, unit_names)
     if mismatch:
-        return mismatch
+        return {**mismatch, "purchase": purchase, "declared_usd": None}
     issue = quantity_issue(customs_row, purchase_rows, unit_names)
     if issue:
         status, note = issue
-        return unavailable(note, status)
-    original_price = customs_row["unit_price"]
-    if original_price is None:
-        return unavailable("采购单价缺失，无法计算申报幅度")
-    if original_price <= 0:
-        return unavailable("采购单价须大于 0，无法计算申报幅度")
-    # 仅转换申报幅度的比较基准，保留来源含税价及审核冻结金额；中途不按展示精度舍入。
-    original_price = original_price / PURCHASE_TAX_FACTOR
+        return blocked(note, status)
+    if purchase["usd"] is None:
+        return blocked(purchase["note"])
+    purchase_units = [unit_label(row.get("unit"), unit_names).strip() for row in purchase_rows]
+    declared_unit = unit_label(customs_row.get("declared_unit"), unit_names).strip()
+    if not all(purchase_units):
+        return blocked("采购单位缺失，无法比较申报幅度")
+    if any(unit != declared_unit for unit in purchase_units):
+        return blocked("采购下单单位与报关单位不一致，不计算申报幅度", "unit_mismatch")
     source_price, _ = declared_unit_price(customs_row)
     if source_price is None:
-        return unavailable("报关单价缺失，且报关金额缺失或报关数量无效，无法试算")
+        return blocked("报关单价缺失，且报关金额缺失或报关数量无效，无法试算")
     if source_price <= 0:
-        return unavailable("报关单价须大于 0，无法计算")
+        return blocked("报关单价须大于 0，无法计算")
     candidates = [
         sales_orders.get(orders[row["purchase_order_id"]].get("sales_order_id")) for row in purchase_rows
     ]
@@ -95,9 +93,9 @@ def declared_margin(
         source_price, customs_row["currency"], sales_order, sales_reason
     )
     if declared is None:
-        return unavailable(f"{reason}，无法计算")
-    original, _ = declared_unit_price_cny(original_price, customs_row["currency"], sales_order, sales_reason)
-    margin = ((source_price - original_price) / source_price * 100).quantize(CENT, rounding=ROUND_HALF_UP)
+        return blocked(f"{reason}，无法计算")
+    original = purchase["cny"]
+    margin = ((declared - original) / declared * 100).quantize(CENT, rounding=ROUND_HALF_UP)
     if margin == 0:
         margin = margin.copy_abs()
     # 按未舍入的人民币单价差额判断，避免把刚超出阈值的差额舍入后放行。
@@ -115,4 +113,6 @@ def declared_margin(
         "declared": declared,
         "original": original,
         "note": note,
+        "purchase": purchase,
+        "declared_usd": declared / purchase["rate"],
     }

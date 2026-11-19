@@ -62,7 +62,7 @@ def test_review_page_shows_original_price_and_mismatch(ns, engine, service):
     save(ns, engine, bundle([purchase()], [customs("870", original=(Decimal("5"), "千克"))]))
     result = group(service, "CD870")
     line = result.customsLines[0]
-    assert (line.originalQuantity, line.originalPriceUnit, line.originalPrice) == ("5", "千克", "3")
+    assert (line.originalQuantity, line.originalPriceUnit, line.originalPrice) == ("5", "个", "1.252676")
     assert (line.quantity, line.unit) == ("10", "个")
     assert line.marginStatus == "unit_mismatch" and line.margin == ""
     assert result.unitMismatch and not result.marginAlert and not result.autoReview.eligible

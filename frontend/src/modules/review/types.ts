@@ -7,13 +7,17 @@ export type ReviewStatus = "pending" | "approved" | "unshipped";
 // unit_mismatch：含单位不一致报关行的待审核单据，与幅度异常独立分类
 export type ReviewFilter = "all" | "pending" | "approved" | "margin_alert" | "unit_mismatch" | "auto";
 export interface UnitPriceMargin {
-  // 后端比较同一报关行的 NS 单价与报关单价；两价折人民币后判断固定容差。
+  // 后端按关联采购未税金额 / 采购下单数量计算，折 USD 展示；人民币差额判断容差。
   margin?: string;
   // unit_mismatch / quantity_mismatch：报关行原始口径与报关口径单位或数量不一致，后端不计算幅度
   marginStatus?: "ok" | "negative" | "unavailable" | "unit_mismatch" | "quantity_mismatch";
   marginNote?: string;
   declaredUnitPriceCny?: string;
   originalUnitPriceCny?: string;
+  purchaseUnitPriceUsd?: string;
+  declaredUnitPriceUsd?: string;
+  purchasePriceNote?: string;
+  purchaseOrderQuantity?: string;
   originalPriceUnit?: string;
   declaredPriceUnit?: string;
 }
@@ -48,7 +52,7 @@ export interface CustomsLine extends UnitPriceMargin {
   price: string;
   // NS 未填申报单价时 price 为后端按报关金额 ÷ 报关数量的试算值，页面标注“试算”
   priceEstimated?: boolean;
-  // 报关行原始口径（NS 数量、单价；单位见 originalPriceUnit），页面列名“采购单价”
+  // originalQuantity 保留报关行原始数量；originalPrice 为后端计算的采购未税 USD 单价。
   originalQuantity?: string;
   originalPrice?: string;
   amount: string;

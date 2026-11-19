@@ -19,7 +19,11 @@ class UnitPriceMargin(StrictModel):
     )
     marginNote: str = ""
     declaredUnitPriceCny: str = ""
-    # 报关行含税采购单价 ÷ 1.13 后折人民币；兼容旧键仅用于读取旧快照并显示“后台计算中”。
+    purchaseUnitPriceUsd: str = ""
+    declaredUnitPriceUsd: str = ""
+    purchasePriceNote: str = ""
+    purchaseOrderQuantity: str = ""
+    # 关联采购未税金额 / 采购下单数量的人民币单价；旧键仅兼容升级期间快照读取。
     originalUnitPriceCny: str = Field(
         default="", validation_alias=AliasChoices("originalUnitPriceCny", "combinedPurchaseUnitPrice")
     )
@@ -62,7 +66,7 @@ class CustomsLine(UnitPriceMargin):
     price: str
     # NS 未填申报单价时 price 为报关金额 ÷ 报关数量的试算值，页面标注“试算”
     priceEstimated: bool = False
-    # 报关行原始口径（NS 数量、单价，单位见 originalPriceUnit），页面列名“采购单价”；旧快照缺省为空
+    # originalQuantity 保留 NS 原始数量；originalPrice 改为采购未税 USD 单价，单位为采购单位。
     originalQuantity: str = ""
     originalPrice: str = ""
     amount: str

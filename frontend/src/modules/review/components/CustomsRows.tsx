@@ -1,6 +1,7 @@
 import { Alert, Badge, Button, DataTable, EmptyState, type Column } from "../../../shared/components/ui";
 import type { ComparisonGroup, CustomsLine, PurchaseLine } from "../types";
 import { UnitPriceMargin } from "./UnitPriceMargin";
+import { formatUnitPrice } from "./price-format";
 import "./review-levels.css";
 
 type ComparisonRow =
@@ -33,7 +34,7 @@ export function CustomsRows({
     {
       key: "parent",
       header: "母采购单号",
-      width: "15%",
+      width: "14%",
       render: (row) =>
         row.kind === "customs" ? (
           <span
@@ -58,7 +59,7 @@ export function CustomsRows({
     {
       key: "child",
       header: "子采购单号",
-      width: "15%",
+      width: "14%",
       render: (row) =>
         row.kind === "purchase" ? (
           <span className="fr-order-no">
@@ -119,17 +120,17 @@ export function CustomsRows({
           // NS 未填申报单价时，后端按报关金额 ÷ 报关数量试算；前端只标注，不重算。
           <span
             className="fr-price-estimated"
-            aria-label={`申报单价 ${row.line.price}，NS 未填写，按报关金额除以报关数量试算`}
+            aria-label={`申报单价 ${formatUnitPrice(row.line.price)}，NS 未填写，按报关金额除以报关数量试算`}
             title="NS 未填写申报单价，按报关金额 ÷ 报关数量试算"
           >
-            {row.line.price}
+            {formatUnitPrice(row.line.price)}
             <Badge tone="info" dot={false}>
               试算
             </Badge>
           </span>
         ) : (
           <span aria-label={row.kind === "customs" ? "申报单价" : "采购含税单价"}>
-            {row.line.price || "未提供"}
+            {formatUnitPrice(row.line.price)}
             {row.kind === "purchase" && row.line.scope === "declared" && (
               <small> / {row.line.unit || "报关单位未提供"}</small>
             )}
@@ -153,16 +154,27 @@ export function CustomsRows({
       ),
     },
     {
+      key: "purchaseQuantity",
+      header: "采购数量",
+      width: "6%",
+      align: "right",
+      render: (row) => (
+        <span aria-label={row.kind === "customs" ? "关联采购下单数量合计" : "采购下单数量"}>
+          {(row.kind === "customs" ? row.line.purchaseOrderQuantity : row.line.purchaseQuantity) || "未提供"}
+        </span>
+      ),
+    },
+    {
       key: "original",
-      header: "采购单价（含税）",
+      header: "未含税采购单价",
       width: "7%",
       align: "right",
-      // 报关行原始口径（NS 数量、单位、单价）；与报关口径不一致时后端在申报幅度列提示
+      // 金额、下单数量、汇率及结果均来自后端；报关单位变化不改变采购单价分母。
       render: (row) =>
         row.kind === "customs" ? (
-          <span aria-label="原始口径含税采购单价">
-            {row.line.originalPrice || "未提供"}
-            <small> / {row.line.originalPriceUnit || "单位未提供"}</small>
+          <span aria-label="未含税采购单价，美元" title={row.line.purchasePriceNote}>
+            {formatUnitPrice(row.line.purchaseUnitPriceUsd)}
+            {!row.line.purchaseUnitPriceUsd && <small>{row.line.purchasePriceNote || "等待后台计算"}</small>}
           </span>
         ) : (
           "—"
@@ -170,8 +182,8 @@ export function CustomsRows({
     },
     {
       key: "action",
-      header: "申报幅度（单价）/ 操作",
-      width: "11%",
+      header: "申报幅度",
+      width: "7%",
       align: "right",
       render: (row) => (
         <>

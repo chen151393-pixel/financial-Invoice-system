@@ -139,7 +139,7 @@ def test_dirty_results_cannot_advertise_auto_review(review, ns, engine):
     calculations = CalculationService(review)
     calculations.rebuild()
     assert review.browse(query()).groups[0].autoReview.eligible
-    save(ns, engine, bundle([purchase()], [customs("870", original="3")]))
+    save(ns, engine, bundle([purchase(amounts=("226", "20"))], [customs("870", original="3")]))
     dirty = review.browse(query())
     assert dirty.notices and dirty.counts["autoApprovable"] == 0
     group = dirty.groups[0]
@@ -162,7 +162,7 @@ def test_update_during_calculation_discards_old_generation(review, ns, engine, m
 
     def concurrent_update(account):
         result = build(account)
-        save(ns, engine, bundle([purchase()], [customs("870", original="3")]))
+        save(ns, engine, bundle([purchase(amounts=("226", "20"))], [customs("870", original="3")]))
         return result
 
     monkeypatch.setattr(calculations, "build", concurrent_update)
@@ -198,7 +198,10 @@ def test_changed_tolerance_rebuilds_and_hides_old_precheck(review, ns, engine):
     save(
         ns,
         engine,
-        bundle([purchase()], [customs("870", original="12.1475", declared="10.65", currency="CNY")]),
+        bundle(
+            [purchase(amounts=("121.475", "20.00"))],
+            [customs("870", original="12.1475", declared="10.65", currency="CNY")],
+        ),
     )
     CalculationService(review).rebuild()
     assert review.browse(query()).groups[0].autoReview.eligible
@@ -232,6 +235,8 @@ def test_v6_purchase_snapshot_is_hidden_then_rebuilt_with_customs_prices(review,
     assert stale.counts["marginAlert"] == 0
     line = stale.groups[0].customsLines[0]
     assert line.marginStatus == "unavailable" and line.margin == line.originalUnitPriceCny == ""
+    assert line.originalPrice == line.purchaseUnitPriceUsd == line.declaredUnitPriceUsd == ""
+    assert "后台计算中" in line.purchasePriceNote
     calculations.initialize()
     CalculationWorker(calculations).run_once()
     fresh = review.browse(query()).groups[0]
@@ -239,8 +244,8 @@ def test_v6_purchase_snapshot_is_hidden_then_rebuilt_with_customs_prices(review,
     assert fresh.contentSha256 == payload["contentSha256"]
     line = fresh.customsLines[0]
     assert (
-        line.margin == "11.50%"
-        and line.originalUnitPriceCny == "9.424779"
+        line.margin == "16.49%"
+        and line.originalUnitPriceCny == "8.894"
         and line.declaredUnitPriceCny == "10.65"
     )
     assert "combinedPurchaseUnitPrice" not in line.model_dump()
@@ -278,7 +283,14 @@ def test_v9_snapshot_rebuilds_purchase_price_without_changing_review_basis(revie
 
 
 def test_v12_tax_inclusive_snapshot_rebuilds_margin_counts_and_keeps_approval(review, ns, engine):
-    save(ns, engine, bundle([purchase()], [customs("870", original="113", declared="100", currency="CNY")]))
+    save(
+        ns,
+        engine,
+        bundle(
+            [purchase(amounts=("1130", "1130"))],
+            [customs("870", original="113", declared="100", currency="CNY")],
+        ),
+    )
     calculations = CalculationService(review)
     calculations.rebuild()
     initial = review.browse(query()).groups[0]
@@ -309,7 +321,7 @@ def test_v12_tax_inclusive_snapshot_rebuilds_margin_counts_and_keeps_approval(re
     assert fresh.contentSha256 == initial.contentSha256 and not fresh.marginAlert
     assert refreshed.counts["marginAlert"] == 0
     for line in fresh.customsLines:
-        assert line.originalPrice == "113"
+        assert line.originalPrice == "14.084507"
         assert line.originalUnitPriceCny == line.declaredUnitPriceCny == "100"
         assert line.margin == "0.00%" and line.marginStatus == "ok" and line.marginNote == ""
     assert review.browse(query(status="margin_alert")).total == 0
@@ -422,8 +434,8 @@ def test_v8_unmatched_prefix_snapshot_rebuilds_without_resync(review, ns, engine
     fresh = review.browse(query()).groups[0]
     assert fresh.calculationStatus == "ready" and fresh.contentSha256 == payload["contentSha256"]
     for line in fresh.customsLines:
-        assert line.marginStatus == "ok" and line.margin == "11.50%" and line.marginNote == ""
-        assert line.originalUnitPriceCny == "9.424779" and line.declaredUnitPriceCny == "10.65"
+        assert line.marginStatus == "ok" and line.marginNote == ""
+        assert line.originalUnitPriceCny in {"8.894", "1.77"} and line.declaredUnitPriceCny == "10.65"
     assert rows(engine, "SELECT id FROM review_records") == []
 
 
@@ -516,7 +528,9 @@ def test_split_bulk_search_uses_snapshot_fields_and_filtered_counts(review, ns, 
 
 def test_declarant_filter_uses_header_company_before_counts_and_paging(review, ns, engine, monkeypatch):
     orders, declarations = [], []
-    for index, name in enumerate(("上海毅鑫实业有限公司", "上海毅鑫实业有限公司", "上海绎视数码科技有限公司")):
+    for index, name in enumerate(
+        ("上海毅鑫实业有限公司", "上海毅鑫实业有限公司", "上海绎视数码科技有限公司")
+    ):
         identity = str(870 + index)
         head = customs(identity)
         for _, line in head[2]:
