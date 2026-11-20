@@ -25,11 +25,7 @@ export function SettlementHkTransitPage() {
     <div className="settlement-page">
       <Tabs label="香港中转工作区" items={VIEWS} value={view} onChange={changeView} />
       {view === "receipts" ? (
-        <CandidatePanel
-          mode="registration"
-          consignee={params.get("consignee") || ""}
-          onCreated={setCreated}
-        />
+        <CandidatePanel consignee={params.get("consignee") || ""} onCreated={setCreated} />
       ) : (
         <SettlementBatchesPage route="hk_transit" />
       )}

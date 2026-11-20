@@ -164,80 +164,134 @@ test("客户收汇明细按回款路径进入对应客户列表，不提供登�
   assert.doesNotMatch(html, /登记回款|确认结汇|确认资料已出/);
 });
 
-const total = (overrides) => ({
+const customer = (overrides) => ({
   consignee: "ACME LTD",
   currency: "USD",
   route: "direct",
   routeLabel: "直接收汇",
   routeBasis: "境外收货人非集团香港公司",
   handling: "ledger",
-  handlingLabel: "进直接收汇明细",
   exportCompanies: ["上海毅烁"],
   count: 2,
+  issueCount: 0,
   firstExportDate: "2026-10-13",
   lastExportDate: "2026-11-06",
   amount: "99200.00",
+  receivedAmount: "12000.00",
+  outstandingAmount: "87200.00",
+  overpaidAmount: "0.00",
+  receivedPercent: 12,
+  receivedPercentText: "12%",
+  stages: [
+    { stage: "unpaid", label: "未收汇", count: 1 },
+    { stage: "partial", label: "部分收汇", count: 1 },
+  ],
+  oldestAgingDays: 38,
   batchedCount: 0,
   pendingCount: 0,
-  issueCount: 0,
+  alertCount: 0,
+  documentIssueCount: 0,
+  documentNote: "留存 0/2 齐 · 不影响结汇",
   ...overrides,
 });
 
-test("按境外收货人汇总：香港中转指向批次并显示建批次进度，直接收汇指向直接收汇明细", () => {
-  const html = renderToStaticMarkup(
-    inRouter(
-      createElement(ConsigneeSummary, {
-        rows: [
-          total({
-            consignee: "HONGKONG VISION",
-            route: "hk_transit",
-            routeLabel: "香港中转",
-            routeBasis: "境外收货人为集团香港公司",
-            handling: "batch",
-            count: 3,
-            amount: "256850.00",
-            batchedCount: 1,
-            pendingCount: 2,
-            issueCount: 1,
-          }),
-          total({}),
-        ],
+test("按境外收货人汇总：展示后端已收、未收、阶段与资料，并按路径给出处理入口", () => {
+  const drilled = [];
+  const element = createElement(ConsigneeSummary, {
+    rows: [
+      customer({
+        consignee: "HONGKONG VISION",
+        route: "hk_transit",
+        routeLabel: "香港中转",
+        routeBasis: "境外收货人为集团香港公司",
+        handling: "batch",
+        count: 5,
+        amount: "370150.00",
+        receivedAmount: "256850.00",
+        outstandingAmount: "113300.00",
+        receivedPercent: 69,
+        receivedPercentText: "69%",
+        stages: [{ stage: "unregistered", label: "待登记回款", count: 2 }],
+        batchedCount: 3,
+        pendingCount: 2,
+        alertCount: 1,
+        issueCount: 1,
+        documentIssueCount: 1,
+        documentNote: "1 票资料未齐 · 2 票登记回款后办理",
       }),
-    ),
+      customer({ overpaidAmount: "5100.00" }),
+    ],
+    onDrill: (row) => drilled.push(row.consignee),
+  });
+  const html = renderToStaticMarkup(inRouter(element));
+  assert.match(
+    html,
+    /href="\/settlement\/hk-transit\?tab=receipts&amp;consignee=HONGKONG\+VISION"[^>]*>去登记回款/,
   );
-  assert.match(html, /href="\/settlement\/hk-transit"[^>]*>香港中转批次/);
-  assert.match(html, /1 票已建批次 · 2 票待登记回款/);
+  assert.match(html, /已建批次 3 · 待登记 2/);
+  assert.match(html, /1 票香港滞留超期/);
   assert.match(html, /1 张金额缺失未计入/);
-  assert.match(html, /USD 256,850\.00/);
-  assert.match(html, /href="\/settlement\/direct"[^>]*>直接收汇明细/);
+  assert.match(html, /USD 370,150\.00/);
+  assert.match(html, /aria-valuetext="69%"/);
+  assert.match(html, /已登记到账 256,850\.00 · 未收 113,300\.00/);
+  assert.match(html, /1 票待处理/);
+  assert.match(html, /待登记回款 2/);
+  assert.match(html, /href="\/settlement\/direct\?consignee=ACME\+LTD"[^>]*>客户总账/);
+  assert.match(html, /推算已收 12,000\.00 · 未收 87,200\.00/);
+  assert.match(html, /客户超收 5,100\.00/);
+  assert.match(html, /留存 0\/2 齐 · 不影响结汇/);
   assert.match(html, /2026-10-13 至 2026-11-06/);
-  assert.match(html, /境外收货人非集团香港公司/);
+  assert.match(html, /未结汇最久 38 天/);
+  assert.match(html, /看 5 票明细/);
 });
 
-test("应收汇概况只展示后端汇总：按路径分卡，香港中转另列待登记回款", () => {
+const routeTotal = (route, overrides) => ({
+  route,
+  routeLabel: { all: "合计", hk_transit: "香港中转", direct: "直接收汇" }[route],
+  currency: "USD",
+  count: 0,
+  amount: "0.00",
+  receivedAmount: "0.00",
+  outstandingAmount: "0.00",
+  overpaidAmount: "0.00",
+  pendingCount: 0,
+  pendingAmount: "0.00",
+  ...overrides,
+});
+
+test("应收汇概况只展示后端合计：总应收、两条路径、待登记回款与直接收汇待收", () => {
   const html = renderToStaticMarkup(
     createElement(ReceivableStats, {
-      combinedTotals: [{ count: 14, currency: "USD", amount: "776450.00" }],
       totals: [
-        { route: "direct", routeLabel: "直接收汇", count: 8, currency: "USD", amount: "345300.00" },
-        { route: "hk_transit", routeLabel: "香港中转", count: 6, currency: "USD", amount: "431150.00" },
+        routeTotal("all", {
+          count: 13,
+          amount: "715450.00",
+          receivedAmount: "496350.00",
+          outstandingAmount: "219100.00",
+        }),
+        routeTotal("hk_transit", {
+          count: 5,
+          amount: "370150.00",
+          receivedAmount: "256850.00",
+          pendingCount: 2,
+          pendingAmount: "113300.00",
+        }),
+        routeTotal("direct", {
+          count: 8,
+          amount: "345300.00",
+          receivedAmount: "239500.00",
+          outstandingAmount: "105800.00",
+          overpaidAmount: "5100.00",
+        }),
       ],
-      unsettled: [
-        { route: "direct", routeLabel: "直接收汇", count: 8, currency: "USD", amount: "345300.00" },
-        { route: "hk_transit", routeLabel: "香港中转", count: 3, currency: "USD", amount: "231600.00" },
-      ],
-      directTotals: [{ currency: "USD", outstanding: "22350.00", balance: "-435725.67" }],
     }),
   );
-  assert.match(html, /直接收汇应收汇（USD）[\s\S]*345,300\.00[\s\S]*8 票 · 进直接收汇明细/);
-  assert.match(html, /报关应收汇（总）（USD）[\s\S]*776,450\.00[\s\S]*14 票 · 香港中转 \+ 直接收汇/);
-  assert.match(html, /香港中转应收汇（USD）[\s\S]*431,150\.00[\s\S]*6 票 · 进香港中转批次登记/);
-  assert.match(html, /香港中转待登记回款（USD）[\s\S]*231,600\.00[\s\S]*3 票尚未建批次/);
-  assert.match(html, /直接收汇待收金额（USD）[\s\S]*22,350\.00/);
-  assert.equal(
-    renderToStaticMarkup(createElement(ReceivableStats, { totals: [], combinedTotals: [], unsettled: [] })),
-    "",
-  );
+  assert.match(html, /报关应收汇（总）（USD）[\s\S]*715,450\.00[\s\S]*13 票 · 未收 219,100\.00/);
+  assert.match(html, /香港中转应收汇（USD）[\s\S]*370,150\.00[\s\S]*已到账 256,850\.00/);
+  assert.match(html, /直接收汇应收汇（USD）[\s\S]*345,300\.00[\s\S]*已收 239,500\.00（推算）/);
+  assert.match(html, /香港中转待登记回款（USD）[\s\S]*113,300\.00[\s\S]*2 票尚未建批次/);
+  assert.match(html, /直接收汇待收金额（USD）[\s\S]*105,800\.00[\s\S]*另有超收 5,100\.00/);
+  assert.equal(renderToStaticMarkup(createElement(ReceivableStats, { totals: [] })), "");
 });
 
 test("银行收汇按三个收款抬头出卡片，零金额不省略，其他抬头单独展示", () => {
@@ -426,10 +480,10 @@ test("收汇路径表展示后端全量汇总、独立币种及带客户筛选�
 });
 
 test("报关应收汇默认按客户汇总，报关单明细位于右侧并共用一个查询区", async () => {
-  const { CandidatePanel } = await server.ssrLoadModule(
-    "/src/modules/settlement/components/CandidatePanel.tsx",
+  const { ReceivablePanel } = await server.ssrLoadModule(
+    "/src/modules/settlement/components/ReceivablePanel.tsx",
   );
-  const html = renderToStaticMarkup(inRouter(createElement(CandidatePanel, { mode: "receivables" })));
+  const html = renderToStaticMarkup(inRouter(createElement(ReceivablePanel)));
   assert.match(html, /aria-label="报关应收汇展示方式"/);
   assert.match(html, /aria-pressed="true">按客户汇总<\/button><button[^>]*aria-pressed="false">报关单明细/);
   assert.equal((html.match(/<form/g) || []).length, 1);
@@ -439,19 +493,15 @@ test("报关应收汇默认按客户汇总，报关单明细位于右侧并共�
 });
 
 test("报关明细视图与已提交筛选可从地址恢复，非法展示方式回到客户汇总", async () => {
-  const { CandidatePanel } = await server.ssrLoadModule(
-    "/src/modules/settlement/components/CandidatePanel.tsx",
+  const { ReceivablePanel } = await server.ssrLoadModule(
+    "/src/modules/settlement/components/ReceivablePanel.tsx",
   );
   const render = (entry) =>
     renderToStaticMarkup(
-      createElement(
-        MemoryRouter,
-        { initialEntries: [entry] },
-        createElement(CandidatePanel, { mode: "receivables" }),
-      ),
+      createElement(MemoryRouter, { initialEntries: [entry] }, createElement(ReceivablePanel)),
     );
   const html = render(
-    "/settlement?view=declarations&consignee=HK+%26+CO&declarationNo=31012026&route=hk_transit&exportFrom=2026-11-01&exportTo=2026-11-19",
+    "/settlement?view=declarations&consignee=HK+%26+CO&declarationNo=31012026&route=hk_transit&stage=remit&exportFrom=2026-11-01&exportTo=2026-11-19",
   );
   assert.match(html, /aria-pressed="false">按客户汇总<\/button><button[^>]*aria-pressed="true">报关单明细/);
   assert.match(html, /name="consignee"[^>]*value="HK &amp; CO"/);
@@ -460,19 +510,19 @@ test("报关明细视图与已提交筛选可从地址恢复，非法展示方�
   assert.match(html, /name="exportFrom"[^>]*value="2026-11-01"/);
   assert.match(html, /name="exportTo"[^>]*value="2026-11-19"/);
   assert.match(html, /正在读取报关单明细/);
-  const fallback = render("/settlement?view=unknown&route=unknown");
+  const fallback = render("/settlement?view=unknown&route=unknown&stage=unknown");
   assert.match(fallback, /aria-pressed="true">按客户汇总/);
   assert.match(fallback, /option value="all" selected=""/);
 });
 
 test("报关应收页不再登记回款；香港待登记页提供勾选与登记入口", async () => {
-  const { CandidatePanel } = await server.ssrLoadModule(
-    "/src/modules/settlement/components/CandidatePanel.tsx",
+  const { ReceivablePanel } = await server.ssrLoadModule(
+    "/src/modules/settlement/components/ReceivablePanel.tsx",
   );
   const { SettlementHkTransitPage } = await server.ssrLoadModule(
     "/src/modules/settlement/pages/SettlementHkTransitPage.tsx",
   );
-  const browse = renderToStaticMarkup(inRouter(createElement(CandidatePanel, { mode: "receivables" })));
+  const browse = renderToStaticMarkup(inRouter(createElement(ReceivablePanel)));
   assert.doesNotMatch(browse, /登记回款并建批次|name="targetAmount"/);
   assert.match(browse, /进入香港中转登记/);
   assert.match(browse, /tab=receipts/);
@@ -494,7 +544,108 @@ test("报关应收页不再登记回款；香港待登记页提供勾选与登�
   assert.doesNotMatch(registration, /报关应收汇展示方式|按客户汇总/);
 });
 
-test("报关单明细只在登记区域允许勾选，并保留后端不可选原因", async () => {
+const receivable = (overrides) => ({
+  declarationNo: "REAL1",
+  recordNo: "CD1",
+  consignee: "HK & CO",
+  exportCompany: "上海毅鑫实业有限公司",
+  exportDate: "2026-10-15",
+  salesOrders: ["SO1"],
+  currency: "USD",
+  amount: "118300.00",
+  route: "hk_transit",
+  routeLabel: "香港中转",
+  routeBasis: "境外收货人为集团香港公司",
+  receivedAmount: "118300.00",
+  outstandingAmount: "0.00",
+  receivedBasis: "已登记香港到账（到账 + 手续费）",
+  receivedPercent: 100,
+  receivedPercentText: "100%",
+  stage: "collected",
+  stageLabel: "香港已收·办资料",
+  agingDays: 35,
+  alert: "",
+  issue: "",
+  batchId: 12,
+  batchNo: "SB20261110-00012",
+  documentStatus: "pending",
+  documentLabel: "资料未齐",
+  documentNote: "出口合同号 YX-034 未生成合同",
+  ...overrides,
+});
+
+test("报关单明细逐单显示后端收款、资料、结汇状态，并指向所在批次或客户总账", async () => {
+  const { ReceivableTable } = await server.ssrLoadModule(
+    "/src/modules/settlement/components/ReceivableTable.tsx",
+  );
+  const html = renderToStaticMarkup(
+    inRouter(
+      createElement(ReceivableTable, {
+        rows: [
+          receivable(),
+          receivable({
+            declarationNo: "REAL2",
+            stage: "remit",
+            stageLabel: "资料已出·待汇回",
+            alert: "香港滞留 40 天",
+            documentStatus: "ready",
+            documentLabel: "资料已出",
+            documentNote: "",
+          }),
+          receivable({
+            declarationNo: "REAL3",
+            batchId: null,
+            batchNo: "",
+            stage: "unregistered",
+            stageLabel: "待登记回款",
+            receivedAmount: "0.00",
+            outstandingAmount: "64800.00",
+            receivedPercent: 0,
+            receivedPercentText: "0%",
+            documentStatus: "after_batch",
+            documentLabel: "登记回款后办理",
+            documentNote: "",
+          }),
+          receivable({
+            declarationNo: "DIRECT1",
+            consignee: "SAKURA",
+            route: "direct",
+            routeLabel: "直接收汇",
+            batchId: null,
+            batchNo: "",
+            stage: "partial",
+            stageLabel: "部分收汇",
+            receivedAmount: "8800.00",
+            outstandingAmount: "18600.00",
+            receivedPercent: 32,
+            receivedPercentText: "32%",
+            documentStatus: "none",
+            documentLabel: "未办理",
+            documentNote: "",
+          }),
+        ],
+      }),
+    ),
+  );
+  assert.match(html, /href="\/settlement\/hk-transit\?batchNo=SB20261110-00012"[^>]*>去批次办资料/);
+  assert.match(html, />去批次登记汇回</);
+  assert.match(html, /香港滞留 40 天/);
+  assert.match(html, /出口合同号 YX-034 未生成合同/);
+  assert.match(
+    html,
+    /href="\/settlement\/hk-transit\?tab=receipts&amp;consignee=HK\+%26\+CO"[^>]*>去登记回款/,
+  );
+  assert.match(html, /推算已收 8,800\.00 · 未收 18,600\.00/);
+  assert.match(html, /href="\/settlement\/direct\?consignee=SAKURA"[^>]*>客户总账/);
+  assert.match(
+    html,
+    /href="\/settlement\/direct\?tab=documents&amp;consignee=SAKURA&amp;declarationNo=DIRECT1"/,
+  );
+  assert.match(html, /aria-valuetext="32%"/);
+  assert.match(html, /35 天/);
+});
+
+test("待登记回款只允许勾选香港中转报关单，并保留后端不可选原因", async () => {
   const { CandidateTable } = await server.ssrLoadModule(
     "/src/modules/settlement/components/CandidateTable.tsx",
   );
@@ -518,10 +669,6 @@ test("报关单明细只在登记区域允许勾选，并保留后端不可选�
     { ...hk, declarationNo: "REAL2", blockedReason: "已在有效批次中" },
     { ...hk, declarationNo: "DIRECT1", route: "direct", routeLabel: "直接收汇", handling: "ledger" },
   ];
-  const browse = renderToStaticMarkup(inRouter(createElement(CandidateTable, { rows })));
-  assert.doesNotMatch(browse, /type="checkbox"/);
-  assert.match(browse, /tab=receipts/);
-  assert.match(browse, /consignee=HK\+%26\+CO/);
   const registration = renderToStaticMarkup(
     inRouter(
       createElement(CandidateTable, {

@@ -472,3 +472,108 @@ export interface LedgerQuery {
   page: number;
   pageSize: number;
 }
+
+// 报关应收汇：已收、未收、阶段、账龄、资料状态与汇总全部由后端计算
+export type ReceivableStage =
+  | "unregistered"
+  | "collected"
+  | "remit"
+  | "unpaid"
+  | "partial"
+  | "settled"
+  | "issue";
+export type ReceivableStageFilter = "all" | "alert" | ReceivableStage;
+
+export interface ReceivableQuery {
+  consignee: string;
+  declarationNo: string;
+  route: RouteFilter;
+  stage: ReceivableStageFilter;
+  exportFrom: string | null;
+  exportTo: string | null;
+}
+
+export interface ReceivableStageCount {
+  stage: ReceivableStageFilter;
+  label: string;
+  count: number;
+}
+
+export interface ReceivableItem {
+  declarationNo: string;
+  recordNo: string;
+  consignee: string;
+  exportCompany: string;
+  exportDate: string;
+  salesOrders: string[];
+  currency: string;
+  amount: string;
+  route: Route;
+  routeLabel: string;
+  routeBasis: string;
+  receivedAmount: string;
+  outstandingAmount: string;
+  receivedBasis: string;
+  receivedPercent: number;
+  receivedPercentText: string;
+  stage: ReceivableStage;
+  stageLabel: string;
+  agingDays: number | null;
+  alert: string;
+  issue: string;
+  batchId: number | null;
+  batchNo: string;
+  documentStatus: string;
+  documentLabel: string;
+  documentNote: string;
+}
+
+export interface ReceivableCustomer {
+  consignee: string;
+  currency: string;
+  route: Route;
+  routeLabel: string;
+  routeBasis: string;
+  handling: Handling;
+  exportCompanies: string[];
+  count: number;
+  issueCount: number;
+  firstExportDate: string;
+  lastExportDate: string;
+  amount: string;
+  receivedAmount: string;
+  outstandingAmount: string;
+  overpaidAmount: string;
+  receivedPercent: number;
+  receivedPercentText: string;
+  stages: ReceivableStageCount[];
+  oldestAgingDays: number | null;
+  batchedCount: number;
+  pendingCount: number;
+  alertCount: number;
+  documentIssueCount: number;
+  documentNote: string;
+}
+
+export interface ReceivableTotal {
+  route: "all" | Route;
+  routeLabel: string;
+  currency: string;
+  count: number;
+  amount: string;
+  receivedAmount: string;
+  outstandingAmount: string;
+  overpaidAmount: string;
+  pendingCount: number;
+  pendingAmount: string;
+}
+
+export interface ReceivableList {
+  items: ReceivableItem[];
+  total: number;
+  truncated: boolean;
+  stages: ReceivableStageCount[];
+  customers: ReceivableCustomer[];
+  totals: ReceivableTotal[];
+  asOf: string;
+}

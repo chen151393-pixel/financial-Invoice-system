@@ -5,7 +5,7 @@
 | 子页面       | 路由                        | 内容                                                                       |
 | ------------ | --------------------------- | -------------------------------------------------------------------------- |
 | 收汇总览     | `/settlement/overview`       | 三项累计合计及香港中转 / 直接收汇拆分、客户收汇明细；只读，不重复计入香港汇回 |
-| 报关应收汇   | `/settlement`               | 按境外收货人汇总应收汇、显示回款路径；只读查看；回款登记在香港中转批次办理 |
+| 报关应收汇   | `/settlement`               | 按境外收货人汇总与逐张报关单查看已收、未收、结汇阶段、账龄与资料状态；只读，办理入口跳到香港批次或客户总账 |
 | 银行收汇明细 | `/settlement/bank-receipts` | 导入银行 .xlsx、查询收汇记录、实际客户与三方代付标记 |
 | 香港中转批次 | `/settlement/hk-transit`    | 待登记回款勾选建批次；已建批次跟进资料与汇回结汇                         |
 | 直接收汇明细 | `/settlement/direct`        | 非香港中转的总账：按境外收货人、收款人和币种汇总差额，可展开查看出口与收汇流水             |
@@ -29,8 +29,9 @@
 | `pages/SettlementBatchesPage.tsx`                                   | 批次列表（目前只挂载香港中转；状态筛选按路径给出）                                                       |
 | `pages/SettlementBankReceiptsPage.tsx`、`components/BankReceiptImportDialog.tsx` | 银行流水导入、导入结果、收汇抬头汇总、列表与筛选 |
 | `pages/SettlementLedgerPage.tsx`、`components/LedgerGroupTable.tsx` | 直接收汇明细：按境外收货人、收款人和币种汇总，可展开查看流水、单据编号及每笔后的累计余额 |
-| `components/CandidatePanel.tsx`                                     | 报关应收汇双视图与共享查询；香港待登记页复用勾选、到账组合推荐和登记流程                                 |
-| `components/ReceivableStats.tsx`、`ConsigneeSummary.tsx`            | 按回款路径的应收汇概况卡；按境外收货人汇总表（路径、出口抬头、张数、金额、处理方式）                     |
+| `components/ReceivablePanel.tsx`、`ReceivableTable.tsx`、`receivable-tones.ts` | 报关应收汇双视图、共享查询与结汇状态页签；逐单收款进度、资料状态、结汇状态与下一步入口；阶段 / 资料状态到徽标颜色的映射 |
+| `components/CandidatePanel.tsx`、`CandidateTable.tsx`               | 香港中转待登记回款：查询、勾选、到账组合推荐和登记建批次                                                  |
+| `components/ReceivableStats.tsx`、`ConsigneeSummary.tsx`            | 应收汇概况卡（总应收、两条路径、待登记回款、直接收汇待收）；按境外收货人汇总表（阶段分布、应收 / 已收 / 未收、资料、处理方式） |
 | `components/CreateBatchDialog.tsx`                                  | 登记回款建批次（到账、手续费、付款方、账户、流水号）                                                     |
 | `components/BatchDetailDialog.tsx`                                  | 批次详情：到账 / 汇回核对、确认资料已出、登记汇回、确认结汇、作废                                        |
 | `components/BatchDocuments.tsx`                                     | 香港中转批次详情中的资料区：提单上传 / 修改 / 移除、销售合同（形式发票）生成、报关单归档状态、资料包下载 |
@@ -54,3 +55,11 @@
 
 
 2026-11-19 合同双方取值：`ContractGenerateForm` 按每个出口合同展示“买方（境外收货人）／卖方（NS 申报抬头）”及关联报关单，取消卖方下拉，不提交手选卖方 ID。资料合同表也展示双方。取值、来源冲突和能否生成均由后端返回；英文地址、印章等仍在“合同抬头”维护。
+
+## 报关应收汇逐单状态（2026-11-20）
+
+报关应收汇改用 `POST /api/settlement/receivables/query`（`ReceivablePanel`），香港待登记页继续用 `candidates/query`（`CandidatePanel` 只保留登记流程，`CandidateTable` 必须传入勾选）。
+
+- 概况卡、客户汇总、逐单已收 / 未收、收款进度宽度与百分比文本、阶段计数、资料状态全部来自后端，前端不加总、不算百分比。
+- 客户汇总：境外收货人下列出各结汇阶段票数与未结汇最久天数；“应收 / 已收 / 未收”一列带进度条，直接收汇标“推算”并显示客户超收；资料列显示待处理票数与说明；香港中转有待登记时入口为“去登记回款”，否则为香港中转批次；直接收汇入口为客户总账。“看 N 票明细”切到报关单明细并按该客户筛选。
+- 报关单明细：上方按结汇状态页签筛选（`stage` 保存在 URL，`alert` 为需要关注），列表按等待天数从长到短；每行给出下一步：去登记回款、去批次办资料 / 登记汇回（链接 `/settlement/hk-transit?batchNo=…`，批次列表据此筛选并包含已结汇）、客户总账与留存资料。
