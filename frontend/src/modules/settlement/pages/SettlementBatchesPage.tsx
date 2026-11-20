@@ -115,8 +115,9 @@ export function SettlementBatchesPage({ route }: { route: Route }) {
     ...INITIAL,
     route,
     consignee: params.get("consignee") || "",
-    // 从总览查看客户时包含已结汇批次，避免实收有金额而列表为空。
-    status: params.get("consignee") ? "all" : INITIAL.status,
+    batchNo: params.get("batchNo") || "",
+    // 从总览、报关应收汇查看客户或批次时包含已结汇批次，避免实收有金额而列表为空。
+    status: params.get("consignee") || params.get("batchNo") ? "all" : INITIAL.status,
   }));
   const text = TITLES[route];
   const [state, setState] = useState<State>({ kind: "loading" });

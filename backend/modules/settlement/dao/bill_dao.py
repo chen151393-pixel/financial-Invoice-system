@@ -12,6 +12,16 @@ def active(connection, batch_id):
     return [dict(row) for row in connection.execute(query).mappings()]
 
 
+def direct_owners(connection, numbers):
+    """已有未移除提单的直接收汇报关单号集合。"""
+    if not numbers:
+        return set()
+    query = select(bills.c.direct_declaration_no).where(
+        bills.c.direct_declaration_no.in_(numbers), bills.c.removed_at.is_(None)
+    )
+    return {row[0] for row in connection.execute(query)}
+
+
 def get(connection, batch_id, bill_id):
     query = select(bills).where(bills.c.id == bill_id, condition(bills, batch_id))
     row = connection.execute(query).mappings().first()

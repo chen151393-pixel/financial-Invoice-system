@@ -13,6 +13,11 @@
   padding: var(--space-control) 20px 0;
 }
 
+/* 报关单明细的结汇状态筛选，位于查询栏下方、表格上方 */
+.settlement-receivables__stages {
+  padding: var(--space-control) 20px 0;
+}
+
 @media (max-width: 640px) {
   .settlement-receivables > .ui-card__header {
     flex-wrap: wrap;

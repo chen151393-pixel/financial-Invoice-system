@@ -20,12 +20,18 @@ import type {
   LedgerQuery,
   Party,
   PartyBody,
+  ReceivableList,
+  ReceivableQuery,
   RemittanceBody,
 } from "./types";
 
 // 结汇接口：路径判定、金额核对与可操作判断全部在后端，前端只提交输入并展示结果。
 export const queryCandidates = (query: CandidateQuery, signal?: AbortSignal) =>
   http<CandidateList>("/settlement/candidates/query", "POST", query, signal);
+
+// 报关应收汇：逐单已收、阶段、资料状态与客户汇总由后端计算。
+export const queryReceivables = (query: ReceivableQuery, signal?: AbortSignal) =>
+  http<ReceivableList>("/settlement/receivables/query", "POST", query, signal);
 
 // 银行收汇明细与直接收汇明细（总账）：总账差额与合计由后端计算。
 export const queryBankReceipts = (query: BankReceiptQuery, signal?: AbortSignal) =>

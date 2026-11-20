@@ -1,39 +1,33 @@
-import { Link } from "react-router";
-import { paths, settlementReceiptPath } from "../../../app/paths";
 import { Badge, DataTable, type Column } from "../../../shared/components/ui";
 import { money } from "../../../shared/format/money";
 import type { Candidate } from "../types";
 
-/** 应收页只读；香港待登记页传入 selection 后才显示勾选。 */
+/** 香港中转待登记回款的报关单：勾选后登记一条香港到账流水建批次。 */
 export function CandidateTable({
   rows,
   selection,
 }: {
   rows: Candidate[];
-  selection?: { selected: string[]; onToggle: (row: Candidate) => void };
+  selection: { selected: string[]; onToggle: (row: Candidate) => void };
 }) {
   const columns: Column<Candidate>[] = [
-    ...(selection
-      ? [
-          {
-            key: "pick",
-            header: "选择",
-            width: "56px",
-            render: (row) =>
-              row.handling === "batch" ? (
-                <input
-                  type="checkbox"
-                  aria-label={`选择报关单 ${row.declarationNo}`}
-                  checked={selection.selected.includes(row.declarationNo)}
-                  disabled={Boolean(row.blockedReason)}
-                  onChange={() => selection.onToggle(row)}
-                />
-              ) : (
-                "—"
-              ),
-          } satisfies Column<Candidate>,
-        ]
-      : []),
+    {
+      key: "pick",
+      header: "选择",
+      width: "56px",
+      render: (row) =>
+        row.handling === "batch" ? (
+          <input
+            type="checkbox"
+            aria-label={`选择报关单 ${row.declarationNo}`}
+            checked={selection.selected.includes(row.declarationNo)}
+            disabled={Boolean(row.blockedReason)}
+            onChange={() => selection.onToggle(row)}
+          />
+        ) : (
+          "—"
+        ),
+    },
     {
       key: "number",
       header: "报关单号 / CD",
@@ -77,12 +71,8 @@ export function CandidateTable({
       render: (row) =>
         row.blockedReason ? (
           <Badge tone="warning">{row.blockedReason}</Badge>
-        ) : row.handling === "ledger" ? (
-          <Link to={paths.settlementDirect}>已进直接收汇明细</Link>
-        ) : selection ? (
-          <Badge tone="success">可登记回款</Badge>
         ) : (
-          <Link to={settlementReceiptPath(row.consignee)}>去香港中转登记</Link>
+          <Badge tone="success">可登记回款</Badge>
         ),
     },
   ];
@@ -93,7 +83,7 @@ export function CandidateTable({
       columns={columns}
       rows={rows}
       rowKey={(row) => row.declarationNo}
-      rowTone={(row) => (selection?.selected.includes(row.declarationNo) ? "accent" : undefined)}
+      rowTone={(row) => (selection.selected.includes(row.declarationNo) ? "accent" : undefined)}
       minWidth={1240}
     />
   );

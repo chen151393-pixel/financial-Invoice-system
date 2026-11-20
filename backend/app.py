@@ -67,6 +67,7 @@ from .modules.settlement.controller import document_controller as settlement_doc
 from .modules.settlement.controller import ledger_controller as settlement_ledger
 from .modules.settlement.controller import overview_controller as settlement_overview
 from .modules.settlement.controller import party_controller as settlement_parties
+from .modules.settlement.controller import receivable_controller as settlement_receivables
 from .modules.settlement.controller.batch_controller import create_router as settlement_router
 from .modules.settlement.service.bank_receipt_service import (
     BankReceiptService as SettlementBankReceiptService,
@@ -88,6 +89,7 @@ from .modules.settlement.service.ledger_service import LedgerService as Settleme
 from .modules.settlement.service.overview_service import OverviewService as SettlementOverviewService
 from .modules.settlement.service.package_service import PackageService as SettlementPackageService
 from .modules.settlement.service.party_service import PartyService as SettlementPartyService
+from .modules.settlement.service.receivable_service import ReceivableService as SettlementReceivableService
 from .modules.source.controller.pl_comparison_controller import create_router as source_pl_router
 from .modules.source.controller.relation_rebuild_controller import create_router as source_relation_router
 from .modules.source.controller.vendor_bill_controller import create_router as vendor_bill_router
@@ -401,6 +403,11 @@ def _register_business(app, settings, ns, contract_ns, wecom, engine, lemon_invo
     )
     app.include_router(
         settlement_overview.create_router(SettlementOverviewService(engine, settlement_candidates))
+    )
+    app.include_router(
+        settlement_receivables.create_router(
+            SettlementReceivableService(engine, settlement_candidates, settlement_reader)
+        )
     )
     directory = SourceDirectory(engine)
     app.include_router(
