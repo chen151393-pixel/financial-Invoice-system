@@ -130,3 +130,6 @@ npm.cmd run db:business:check
 
 
 纯 MySQL 8.0 手动版：[settlement-upgrade-0051-0055-mysql80.sql](settlement-upgrade-0051-0055-mysql80.sql)，不使用存储过程或 DELIMITER。先单独核对版本；完整运行要求当前版本为 0050。0051～0054 从下一段继续，0055 不再执行。该版本不自动跳过，执行器遇错必须停止，不可忽略失败后继续更新版本号。
+
+
+目标库仍为 0049 时，先使用 [settlement-upgrade-0049-0050-mysql80.sql](settlement-upgrade-0049-0050-mysql80.sql) 补齐前置；如曾执行部分升级，先用 [settlement-upgrade-check-mysql80.sql](settlement-upgrade-check-mysql80.sql) 只读核对版本、字段、索引和约束。不要删除已存在的资料组表，也不要仅把版本号改为 0055；纯 SQL 若遇错停止，后续从确认过的结构继续。
