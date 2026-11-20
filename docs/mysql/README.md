@@ -133,3 +133,14 @@ npm.cmd run db:business:check
 
 
 目标库仍为 0049 时，先使用 [settlement-upgrade-0049-0050-mysql80.sql](settlement-upgrade-0049-0050-mysql80.sql) 补齐前置；如曾执行部分升级，先用 [settlement-upgrade-check-mysql80.sql](settlement-upgrade-check-mysql80.sql) 只读核对版本、字段、索引和约束。不要删除已存在的资料组表，也不要仅把版本号改为 0055；纯 SQL 若遇错停止，后续从确认过的结构继续。
+
+
+### 部分执行后的结汇结构修复（2026-11-20）
+
+[settlement-repair-partial-0050-to-0055-mysql80.sql](settlement-repair-partial-0050-to-0055-mysql80.sql) 针对已确认的 `financial_invoice_business`：版本登记为 `0050_settlement_direct_documents`，但资料组、成员表和 `basis_history` 已提前创建，提单与合同仍缺资料组归属字段、香港水单表尚未创建。不要重跑一次性建表脚本，也不要单独修改版本号。
+
+先停止 app 容器并备份业务库，在新的 Navicat 查询连接中完整运行该修复文件，开启遇错停止。脚本保留已有表和记录，按对象是否存在补齐规范迁移，使用与 Alembic 相同的数据库迁移锁；最后执行 51 项字段、备注、索引、外键和三选一约束核验，全部通过才更新版本。报错时停止并断开该查询连接，保留错误及 `failed_check` 结果，不忽略错误继续操作。该文件固定库名，要求自动提交与 MySQL 8.0.16+，不适用于低于 0050 的库。
+
+请查看最后一个结果中的 `version_FINAL`、`failed_checks`、`result_FINAL`。只有版本为 `0055_settlement_group_basis`、失败数为 0，且显示“修复完成，可以启动应用”或“结构已完整，版本已是0055”时，再执行 `docker compose up -d app` 和 `docker compose logs --tail=80 app`；第一个结果显示的是执行前版本。
+
+验证范围：在独立启动、仅监听本机的 MySQL 8.4.9 测试实例上，以真实 Alembic 迁移构造 0050，复现上述部分结构并执行成功；现有资料组、成员和来源 JSON 保持不变。重复执行、干净 0050、索引不匹配拒绝登记版本、迁移锁冲突拒绝登记版本均已验证；补齐后通过应用的数据库启动版本校验。未连接或执行服务器业务库，MySQL 8.0 的目标环境仍须实际执行后确认。
