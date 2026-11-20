@@ -1,5 +1,9 @@
 import { useEffect, useState } from "react";
-import { useSearchParams } from "react-router";
+import { Navigate, useSearchParams } from "react-router";
+import { directDocumentGroupPath } from "../../../app/paths";
+import { DirectDocumentGroupsPanel } from "../components/DirectDocumentGroupsPanel";
+import { DirectDocumentEntry } from "../components/DirectDocumentEntry";
+import { useNavigate } from "react-router";
 import {
   Alert,
   Button,
@@ -42,11 +46,21 @@ const INITIAL: LedgerQuery = {
 const VIEWS = [
   { key: "ledger", label: "客户总账" },
   { key: "documents", label: "报关资料" },
+  { key: "groups", label: "多票资料组" },
 ] as const;
 
 export function SettlementLedgerPage() {
   const [params, setParams] = useSearchParams();
-  const view = params.get("tab") === "documents" ? "documents" : "ledger";
+  const navigate = useNavigate();
+  const view =
+    params.get("tab") === "groups" ||
+    (params.get("tab") === "documents" && params.get("documentView") === "groups")
+      ? "groups"
+      : params.get("tab") === "documents"
+        ? "documents"
+        : "ledger";
+  const legacyGroupId = Number(params.get("groupId")) || null;
+  const entryNumber = params.get("declarationNo") || "";
   const [query, setQuery] = useState<LedgerQuery>(() => ({
     ...INITIAL,
     consignee: params.get("consignee") || "",
@@ -107,15 +121,24 @@ export function SettlementLedgerPage() {
         value={view}
         onChange={(next) => {
           const values = new URLSearchParams(params);
-          if (next === "documents") values.set("tab", "documents");
-          else {
-            values.delete("tab");
-            values.delete("declarationNo");
-          }
+          values.delete("declarationNo");
+          values.delete("groupId");
+          values.delete("documentView");
+          if (next === "ledger") values.delete("tab");
+          else values.set("tab", next);
           setParams(values);
         }}
       />
-      {view === "documents" && <DirectDocumentsPanel />}
+      {legacyGroupId && <Navigate to={directDocumentGroupPath(legacyGroupId)} replace />}
+      {view === "documents" &&
+        (entryNumber ? <DirectDocumentEntry number={entryNumber} /> : <DirectDocumentsPanel />)}
+      {view === "groups" && (
+        <DirectDocumentGroupsPanel
+          consignee={params.get("consignee") || ""}
+          refresh={0}
+          onSelect={(id) => navigate(directDocumentGroupPath(id))}
+        />
+      )}
       <div hidden={view !== "ledger"}>
         <Card>
           <CardHeader

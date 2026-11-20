@@ -41,6 +41,14 @@
   align-items: center;
 }
 
+/* 提单表格与资料组卡片共用操作，间距独立于状态标签。 */
+.settlement-bill-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-control);
+}
+
 .settlement-form {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
@@ -117,6 +125,26 @@
   gap: var(--space-control);
   padding-top: var(--space-control);
   border-top: 1px solid var(--color-border);
+}
+
+.settlement-docs__notice summary {
+  cursor: pointer;
+}
+.settlement-docs__notice summary strong {
+  display: inline;
+}
+.settlement-docs__notice summary:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 3px;
+}
+.settlement-docs__notice-expand,
+.settlement-docs__notice-collapse {
+  margin-left: 10px;
+  font-weight: 400;
+}
+.settlement-docs__notice:not([open]) .settlement-docs__notice-collapse,
+.settlement-docs__notice[open] .settlement-docs__notice-expand {
+  display: none;
 }
 
 .settlement-docs__list {

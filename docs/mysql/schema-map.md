@@ -3,7 +3,7 @@
 > 本文件由 `npm.cmd run db:map` 根据迁移链离线 MySQL DDL、实体定义和字段字典生成，请勿手工修改；迁移或实体变化后重新生成，`backend/tests/test_schema_map.py` 会检查是否过期。
 > “修改”含加列、改列、索引与中文备注；数据回填仅在线执行，不在离线 DDL 中体现。
 
-当前最新迁移：`0050_settlement_direct_documents`；共 50 个迁移、74 张实体表。
+当前最新迁移：`0055_settlement_group_basis`；共 55 个迁移、77 张实体表。
 
 ## 1. 按模块查表
 
@@ -124,9 +124,12 @@
 | `settlement_bank_receipts` | 银行收汇明细：境内美金账户收汇记录及其对应的实际客户（境外收货人） | `0047` | `0048` | [查看](current-data-dictionary.md#settlement_bank_receipts银行收汇明细) |
 | `settlement_batch_items` | 结汇批次包含的报关单，金额按建批次时的海关回执冻结 | `0045` | — | [查看](current-data-dictionary.md#settlement_batch_items结汇批次明细) |
 | `settlement_batches` | 结汇批次：一笔回款及其对应的报关单合计、手续费与汇回记录 | `0045` | — | [查看](current-data-dictionary.md#settlement_batches结汇批次) |
-| `settlement_bills` | 结汇批次的提单文件及装运口岸、目的口岸、装船日期 | `0046` | `0050` | [查看](current-data-dictionary.md#settlement_bills结汇批次提单) |
-| `settlement_contracts` | 结汇批次按模板生成的销售合同 PDF 及其生成依据 | `0046` | `0050` | [查看](current-data-dictionary.md#settlement_contracts结汇批次销售合同) |
+| `settlement_bills` | 结汇批次的提单文件及装运口岸、目的口岸、装船日期 | `0046` | `0050`、`0051` | [查看](current-data-dictionary.md#settlement_bills结汇批次提单) |
+| `settlement_contracts` | 结汇批次按模板生成的销售合同 PDF 及其生成依据 | `0046` | `0050`、`0051`、`0052` | [查看](current-data-dictionary.md#settlement_contracts结汇批次销售合同) |
 | `settlement_direct_allocations` | （无实体定义，代码不读写；说明见字段字典） | `0049` | — | [查看](current-data-dictionary.md#settlement_direct_allocations直接收汇历史分配) |
+| `settlement_document_group_items` | 直接收汇资料组成员，一张报关单只属于一组 | `0051` | `0052` | [查看](current-data-dictionary.md#settlement_document_group_items直接收汇资料组成员) |
+| `settlement_document_groups` | 直接收汇资料组，同收货人同币种，可含不同申报抬头 | `0051` | `0052`、`0053`、`0055` | [查看](current-data-dictionary.md#settlement_document_groups直接收汇资料组) |
+| `settlement_hk_slips` | 香港到账银行水单原件，随批次留存不写 NS | `0054` | — | [查看](current-data-dictionary.md#settlement_hk_slips香港到账水单原件0054) |
 | `settlement_parties` | 销售合同买卖双方抬头与印章 | `0046` | — | [查看](current-data-dictionary.md#settlement_parties销售合同抬头) |
 
 ## 2. 按迁移查表
@@ -183,3 +186,8 @@
 | [`0048_settlement_receipt_import`](../../backend/migrations/versions/0048_settlement_receipt_import.py) | — | `settlement_bank_receipts` | settlement：保存银行交易时间及流水导入去重摘要。 |
 | [`0049_settlement_direct_allocations`](../../backend/migrations/versions/0049_settlement_direct_allocations.py) | `settlement_direct_allocations` | — | 保存直接收汇的确认分配。 |
 | [`0050_settlement_direct_documents`](../../backend/migrations/versions/0050_settlement_direct_documents.py) | — | `settlement_bills`、`settlement_contracts` | 直接收汇资料按报关单保存，与香港收款批次独立，保留已有资料。 |
+| [`0051_settlement_document_groups`](../../backend/migrations/versions/0051_settlement_document_groups.py) | `settlement_document_group_items`、`settlement_document_groups` | `settlement_bills`、`settlement_contracts` | 直接收汇资料组：保留已有单票与香港资料，新增跨抬头共用提单范围。 |
+| [`0052_settlement_group_comments`](../../backend/migrations/versions/0052_settlement_group_comments.py) | — | `settlement_contracts`、`settlement_document_group_items`、`settlement_document_groups` | settlement：补齐资料组中文备注；只改元数据，保留既有资料。 |
+| [`0053_settlement_group_merge`](../../backend/migrations/versions/0053_settlement_group_merge.py) | — | `settlement_document_groups` | settlement：单票资料组合并的后继关系与原始范围，不删除旧组或文件。 |
+| [`0054_settlement_hk_slips`](../../backend/migrations/versions/0054_settlement_hk_slips.py) | `settlement_hk_slips` | — | settlement：香港到账银行水单原件。 |
+| [`0055_settlement_group_basis`](../../backend/migrations/versions/0055_settlement_group_basis.py) | — | `settlement_document_groups` | settlement：资料组人工更新来源的前后依据和操作者留痕。 |

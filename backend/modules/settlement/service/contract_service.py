@@ -12,7 +12,7 @@ from backend.core import write_lock
 from backend.core.errors import ApiError
 
 from ..dao import contract_dao
-from ..policy.contract_policy import digest
+from ..policy.contract_policy import digest, document_key
 from .contract_pdf import render
 from .document_service import edit_reason
 
@@ -41,6 +41,8 @@ class ContractService:
         }
         with self.engine.connect() as connection:
             batch, drafts = self._drafts(connection, batch_id, body.sellerPartyId, terms)
+            if batch["id"] != batch_id:
+                raise ApiError(409, "资料组已合并，请刷新后在新组生成合同")
         files = []
         try:
             for draft in drafts:
@@ -83,8 +85,8 @@ class ContractService:
     def file(self, batch_id, contract_id):
         """返回 (文件名, PDF 字节)。"""
         with self.engine.connect() as connection:
-            self.documents.load(connection, batch_id)
-            row = contract_dao.get(connection, batch_id, contract_id)
+            context, _ = self.documents.load(connection, batch_id)
+            row = contract_dao.get(connection, context["id"], contract_id)
         if row is None:
             raise ApiError(404, "销售合同不存在，可能已重新生成，请刷新")
         return f"销售合同{row['contract_no']}.pdf", self.store.read(row["file_id"], "pdf")
@@ -103,7 +105,7 @@ class ContractService:
             raise ApiError(409, "没有可生成销售合同的明细")
         drafts = []
         for contract in state["planned"]:
-            binding = state["contract_parties"][contract["contract_no"]]
+            binding = state["contract_parties"][document_key(contract)]
             buyer, seller = binding["buyer"], binding["seller"]
             # 旧客户端仍可传卖方 ID，但不能覆盖当前 NS 申报抬头的匹配结果。
             if seller_id == buyer["id"]:
@@ -137,6 +139,7 @@ class ContractService:
         contract = draft["contract"]
         return {
             "contract_no": contract["contract_no"],
+            "document_key": contract.get("document_key"),
             "contract_date": contract["contract_date"],
             "declaration_nos": contract["declaration_nos"],
             "buyer_party_id": draft["buyer"]["id"],

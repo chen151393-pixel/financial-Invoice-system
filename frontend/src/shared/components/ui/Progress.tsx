@@ -9,14 +9,16 @@ export function Progress({
   text,
   label,
   tone = "info",
+  fluid = false,
 }: {
   width: string | number;
   text?: string;
   label: string;
   tone?: Extract<Tone, "info" | "success" | "progress" | "warning">;
+  fluid?: boolean;
 }) {
   return (
-    <span className="ui-progress" data-tone={tone}>
+    <span className={fluid ? "ui-progress ui-progress--fluid" : "ui-progress"} data-tone={tone}>
       <span
         className="ui-progress__track"
         role="progressbar"

@@ -3,6 +3,7 @@
 from urllib.parse import quote
 
 from ..policy.bill_parse_policy import missing_fields
+from ..policy.contract_policy import document_key
 from ..vo.document_vo import Bill, Contract, DeclarationFile, PartyOption, PlannedContract
 from ..vo.party_vo import Party
 from .batch_mapper import amount, stamp, text
@@ -11,6 +12,8 @@ BASE = "/api/settlement"
 
 
 def document_base(row):
+    if row.get("document_group_id"):
+        return f"{BASE}/direct-document-groups/{row['document_group_id']}"
     if row.get("direct_declaration_no"):
         return f"{BASE}/direct-documents/{quote(row['direct_declaration_no'], safe='')}"
     return f"{BASE}/batches/{row['batch_id'] if 'batch_id' in row else row['id']}"
@@ -38,6 +41,7 @@ def contract(row, parties, stale):
     buyer = parties.get(row["buyer_party_id"])
     return Contract(
         id=row["id"],
+        key=document_key(row),
         contractNo=row["contract_no"],
         fileUrl=f"{document_base(row)}/contracts/{row['id']}/file",
         contractDate=text(row["contract_date"]),
@@ -49,7 +53,7 @@ def contract(row, parties, stale):
         tradeTerm=row["trade_term"],
         portOfLoading=row["port_of_loading"],
         portOfDestination=row["port_of_destination"],
-        stale=row["contract_no"] in stale,
+        stale=document_key(row) in stale,
         stampNote=text(row["stamp_note"]),
         generatedBy=row["generated_by"],
         generatedAt=stamp(row["generated_at"]),
@@ -58,7 +62,11 @@ def contract(row, parties, stale):
 
 def planned(item, currency, binding):
     return PlannedContract(
+        key=document_key(item),
         contractNo=item["contract_no"],
+        contractDate=text(item["contract_date"]),
+        portOfLoading=text(item["port_of_loading"]),
+        portOfDestination=text(item["port_of_destination"]),
         buyerName=binding["buyer_name"],
         sellerName=binding["seller_name"],
         currency=currency,

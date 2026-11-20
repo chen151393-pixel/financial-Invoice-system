@@ -21,6 +21,7 @@ class Bill(StrictModel):
 
 
 class Contract(StrictModel):
+    key: str = ""
     id: int
     contractNo: str
     fileUrl: str
@@ -40,7 +41,11 @@ class Contract(StrictModel):
 
 
 class PlannedContract(StrictModel):
+    key: str = ""
     contractNo: str
+    contractDate: str
+    portOfLoading: str
+    portOfDestination: str
     buyerName: str
     sellerName: str
     currency: str

@@ -5,6 +5,7 @@ from backend.core.errors import ApiError
 from ..dao import batch_dao, batch_item_dao
 from ..mapper import document_mapper as mapper
 from ..policy.batch_state_policy import status_label
+from ..policy.contract_policy import document_key
 from ..policy.route_policy import HK_TRANSIT
 from ..vo.batch_vo import Action
 from ..vo.document_vo import BatchDocuments, ContractDefaults
@@ -82,7 +83,7 @@ class DocumentService:
             declarationNos=[item["declaration_no"] for item in items],
             bills=[mapper.bill(row) for row in state["bills"]],
             planned=[
-                mapper.planned(item, batch["currency"], state["contract_parties"][item["contract_no"]])
+                mapper.planned(item, batch["currency"], state["contract_parties"][document_key(item)])
                 for item in state["planned"]
             ],
             contracts=[mapper.contract(row, state["parties"], state["stale"]) for row in state["contracts"]],

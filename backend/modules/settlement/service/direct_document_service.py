@@ -3,11 +3,13 @@
 from backend.core.errors import ApiError
 from backend.core.names import normalize_name
 
+from ..dao import document_group_dao
 from ..policy.amount_policy import money
 from ..policy.route_policy import DIRECT
 from ..vo.batch_vo import Action
 from ..vo.direct_document_vo import DirectDocumentList, DirectDocumentRow
 from .direct_document_source import DirectDocumentSource
+from .document_group_source import DocumentGroupSource
 
 
 def progress(state):
@@ -46,17 +48,45 @@ class DirectDocumentService:
                 if keyword and keyword not in normalize_name(search):
                     continue
                 candidates.append(row)
+            grouped = document_group_dao.by_numbers(connection, [r["declaration_no"] for r in candidates])
+            states = {}
+            counts = document_group_dao.member_counts(connection, {g["id"] for g in grouped.values()})
+            if body.grouping != "all":
+                candidates = [
+                    r
+                    for r in candidates
+                    if (
+                        "multiple"
+                        if r["declaration_no"] in grouped
+                        and counts.get(grouped[r["declaration_no"]]["id"], 0) > 1
+                        else "single"
+                    )
+                    == body.grouping
+                ]
             total = len(candidates)
             selected = candidates[start : start + body.pageSize] if body.status == "all" else candidates
             for row in selected:
-                context, linked = DirectDocumentSource.context(row)
-                state = self.reader.state(connection, context, linked)
+                group = grouped.get(row["declaration_no"])
+                if group:
+                    context, linked = DocumentGroupSource(self.candidates).load(connection, group["id"])
+                    if group["id"] not in states:
+                        states[group["id"]] = self.reader.state(connection, context, linked)
+                    state = states[group["id"]]
+                else:
+                    context, linked = DirectDocumentSource.context(row)
+                    state = self.reader.state(connection, context, linked)
                 status, label = progress(state)
                 if body.status != "all" and body.status != status:
                     continue
                 reason = context["document_issue"]
                 items.append(
                     DirectDocumentRow(
+                        groupId=group["id"] if group else None,
+                        groupNo=group["group_no"] if group else "",
+                        createGroup=Action(
+                            allowed=not group and not reason,
+                            reason=f"已在资料组 {group['group_no']}" if group else reason,
+                        ),
                         declarationNo=row["declaration_no"],
                         recordNo=row["record_no"],
                         salesOrders=row["sales_orders"],

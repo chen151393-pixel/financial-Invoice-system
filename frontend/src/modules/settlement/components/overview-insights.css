@@ -1,0 +1,112 @@
+.settlement-overview-insights {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-layout);
+}
+
+.settlement-overview-aging {
+  display: grid;
+  gap: 16px;
+  margin: 0;
+}
+
+.settlement-overview-aging > div {
+  display: grid;
+  grid-template-columns: 76px minmax(40px, 1fr) 144px;
+  align-items: center;
+  gap: var(--space-control);
+}
+
+.settlement-overview-aging dt {
+  font-size: 13px;
+}
+.settlement-overview-aging dd {
+  margin: 0;
+  min-width: 0;
+}
+.settlement-overview-aging dd:last-child {
+  display: flex;
+  justify-content: flex-end;
+  align-items: baseline;
+  gap: 6px;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.settlement-overview-aging small {
+  color: var(--color-muted);
+  font-size: 12px;
+}
+.settlement-overview-insight-note {
+  color: var(--color-muted);
+  font-size: 12px;
+  margin: 16px 0 0;
+}
+.settlement-overview-actions {
+  list-style: none;
+  display: grid;
+  gap: var(--space-control);
+  margin: 0;
+  padding: 0;
+}
+.settlement-overview-action {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--space-control);
+  padding: var(--space-control);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-control);
+  color: var(--color-text);
+  text-decoration: none;
+}
+.settlement-overview-action[data-tone="danger"] {
+  border-color: #f4d3c7;
+  background: var(--color-danger-surface);
+}
+.settlement-overview-action > span {
+  display: grid;
+  justify-items: start;
+  gap: 4px;
+  min-width: 0;
+}
+.settlement-overview-action small {
+  color: var(--color-muted);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+.settlement-overview-action > strong {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.settlement-overview-action:hover {
+  border-color: var(--color-primary);
+}
+.settlement-overview-action:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 3px;
+}
+.settlement-overview-amount[data-tone="warning"] {
+  color: var(--color-feedback);
+}
+.settlement-overview-amount[data-tone="info"] {
+  color: var(--color-primary);
+}
+.settlement-overview-progress {
+  min-width: 180px;
+}
+
+@media (max-width: 1100px) {
+  .settlement-overview-insights {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 600px) {
+  .settlement-overview-aging > div {
+    grid-template-columns: 64px minmax(20px, 1fr) 128px;
+    gap: var(--space-small);
+  }
+  .settlement-overview-action {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

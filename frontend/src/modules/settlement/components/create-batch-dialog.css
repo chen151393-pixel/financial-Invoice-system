@@ -128,3 +128,23 @@
     font-size: 16px;
   }
 }
+
+.settlement-create__selected-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-control);
+  padding: var(--space-small) 0;
+}
+.settlement-create__selected-row > span {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+.settlement-create__selected-row small {
+  color: var(--color-muted);
+  overflow-wrap: anywhere;
+}
+.settlement-create__preview {
+  grid-column: 1 / -1;
+}

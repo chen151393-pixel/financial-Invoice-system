@@ -16,6 +16,7 @@ import { queryParties, uploadStamp } from "../api";
 import { PartyDialog } from "../components/PartyDialog";
 import type { Party } from "../types";
 import "../components/settlement.css";
+import "../components/parties.css";
 
 type State = { kind: "loading" } | { kind: "ready"; items: Party[] } | { kind: "error"; message: string };
 
@@ -60,6 +61,7 @@ export function SettlementPartiesPage() {
     {
       key: "name",
       header: "匹配名称",
+      width: "22%",
       render: (party) => (
         <div className="settlement-cell">
           <strong>{party.name}</strong>
@@ -70,6 +72,7 @@ export function SettlementPartiesPage() {
     {
       key: "contract",
       header: "合同名称",
+      width: "24%",
       render: (party) => (
         <div className="settlement-cell">
           {party.nameEn}
@@ -83,13 +86,15 @@ export function SettlementPartiesPage() {
       render: (party) => (
         <div className="settlement-cell">
           {party.addressEn}
-          <span>{[party.addressCn, party.phone].filter(Boolean).join(" · ") || "—"}</span>
+          {party.addressCn && <span>{party.addressCn}</span>}
+          <span>电话：{party.phone || "未填写"}</span>
         </div>
       ),
     },
     {
       key: "stamp",
       header: "印章",
+      width: "90px",
       render: (party) =>
         party.hasStamp ? (
           <a href={party.stampUrl} target="_blank" rel="noreferrer" aria-label={`查看 ${party.name} 的印章`}>
@@ -102,14 +107,14 @@ export function SettlementPartiesPage() {
     {
       key: "actions",
       header: "操作",
+      width: "196px",
       render: (party) => (
-        <div className="settlement-badges">
+        <div className="settlement-party-actions">
           <Button size="sm" disabled={busy} onClick={() => setDialog({ party })}>
             修改
           </Button>
           <Button
             size="sm"
-            variant="ghost"
             disabled={busy}
             onClick={() => {
               stampTarget.current = party.id;
@@ -124,13 +129,13 @@ export function SettlementPartiesPage() {
   ];
 
   return (
-    <div className="settlement-page">
+    <div className="settlement-page settlement-parties">
       <Card>
         <CardHeader
           title="合同抬头与印章"
-          description="生成销售合同时按境外收货人匹配买方、由经办人选择卖方。印章建议使用透明底 PNG，更换印章后已生成的合同需重新生成。"
+          description="买方匹配海关回执的境外收货人，卖方匹配 NS 申报抬头。印章建议使用透明底 PNG；资料变更后，已有合同需重新生成。"
           actions={
-            <Button variant="primary" onClick={() => setDialog({ party: null })}>
+            <Button variant="primary" size="sm" disabled={busy} onClick={() => setDialog({ party: null })}>
               新增抬头
             </Button>
           }
@@ -168,12 +173,12 @@ export function SettlementPartiesPage() {
                 columns={columns}
                 rows={state.items}
                 rowKey={(party) => String(party.id)}
-                minWidth={900}
+                minWidth={1040}
               />
             ) : (
               <EmptyState
                 title="还没有合同抬头"
-                description="先添加买方（香港公司）和卖方（境内发货人），才能生成销售合同。"
+                description="添加对应境外收货人与 NS 申报抬头的名称、地址，供系统匹配销售合同买卖方。"
               />
             ))}
         </CardContent>

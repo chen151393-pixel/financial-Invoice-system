@@ -6,7 +6,7 @@ from ..dao import bill_dao, contract_dao, party_dao
 from ..policy.contract_policy import plan
 from ..policy.document_policy import checklist
 from ..policy.route_policy import HK_TRANSIT
-from .contract_party_reader import resolve
+from .contract_party_reader import resolve, source_facts
 
 
 class DocumentReader:
@@ -15,18 +15,43 @@ class DocumentReader:
         # 报关单文件现状（DeclarationFiles）；未提供时不展示、不打包报关单
         self.declaration_files = declaration_files
 
-    def state(self, connection, batch, items):
+    def state(self, connection, batch, items, *, snapshot=None):
         """返回提单、合同计划、双方来源绑定、当前文件与齐全度；不写主数据。"""
-        bills = bill_dao.active(connection, batch["id"])
-        lines = settlement_declaration_lines(connection, [item["declaration_no"] for item in items])
+        group_id = batch.get("document_group_id")
+        bills = snapshot["bills"][group_id] if snapshot else bill_dao.active(connection, batch["id"])
+        lines = (
+            snapshot["lines"]
+            if snapshot
+            else settlement_declaration_lines(connection, [item["declaration_no"] for item in items])
+        )
         planned, plan_issues = plan(batch, items, lines, bills, lead_days=self.lead_days)
-        contracts = contract_dao.of_batch(connection, batch["id"])
-        bindings, party_issues = resolve(connection, items, planned)
-        parties = party_dao.by_ids(
-            connection, {row[key] for row in contracts for key in ("seller_party_id", "buyer_party_id")}
+        if batch.get("document_issue"):
+            plan_issues.append(batch["document_issue"])
+        contracts = (
+            snapshot["contracts"][group_id] if snapshot else contract_dao.of_batch(connection, batch["id"])
+        )
+        bindings, party_issues = resolve(
+            connection, items, planned, facts=snapshot["facts"] if snapshot else None
+        )
+        parties = (
+            snapshot["parties"]
+            if snapshot
+            else party_dao.by_ids(
+                connection, {row[key] for row in contracts for key in ("seller_party_id", "buyer_party_id")}
+            )
         )
         result = checklist(items, bills, planned, plan_issues, contracts, bindings, party_issues)
-        files = self.declaration_files.state(connection, items) if self.declaration_files else []
+        files = (
+            [
+                snapshot["files"][item["declaration_no"]]
+                for item in items
+                if item["declaration_no"] in snapshot["files"]
+            ]
+            if snapshot
+            else self.declaration_files.state(connection, items)
+            if self.declaration_files
+            else []
+        )
         # 报关单文件未归档只提示，不阻止确认资料已出
         result["warnings"] = result["warnings"] + [row["note"] for row in files if row["note"]]
         return {
@@ -39,6 +64,29 @@ class DocumentReader:
             "party_issues": party_issues,
             "declaration_files": files,
             **result,
+        }
+
+    def group_states(self, connection, contexts):
+        """一次请求批量读取选中组的资料依据，不随组数重复查询。"""
+        if not contexts:
+            return {}
+        ids = list(contexts)
+        items = [item for _, rows in contexts.values() for item in rows]
+        facts = source_facts(connection, items)
+        snapshot = dict(
+            bills=bill_dao.by_groups(connection, ids),
+            contracts=contract_dao.by_groups(connection, ids),
+            lines=settlement_declaration_lines(connection, [item["declaration_no"] for item in items]),
+            facts=facts,
+            parties={party["id"]: party for party in facts["parties"].values()},
+            files={
+                row["declaration_no"]: row
+                for row in (self.declaration_files.state(connection, items) if self.declaration_files else [])
+            },
+        )
+        return {
+            group_id: self.state(connection, context, rows, snapshot=snapshot)
+            for group_id, (context, rows) in contexts.items()
         }
 
     def blocking_reason(self, connection, batch, items):

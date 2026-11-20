@@ -42,7 +42,7 @@ def test_first_hk_receipt_and_direct_bank_receipts_count_once(seeded):
     hk, direct = total.routes
     assert (hk.declaredTotal, hk.receivedTotal, hk.outstanding) == ("1000.50", "585.00", "415.50")
     assert (direct.declaredTotal, direct.receivedTotal, direct.outstanding) == ("1000.00", "250.00", "750.00")
-    assert [(row.consignee, row.declarationCount) for row in result.items] == [(HK, 2), ("ACME LTD", 1)]
+    assert [(row.consignee, row.declarationCount) for row in result.items] == [("ACME LTD", 1), (HK, 2)]
     # 资料已出、汇回结汇后，客户实收仍然只有首次到账，不随批次阶段累加。
     for status in ("documents_ready", "settled"):
         with seeded.begin() as connection:

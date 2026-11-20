@@ -1,0 +1,187 @@
+/* 阶段金额条形图：直接标注金额和票数，同币种统一刻度。 */
+.settlement-progress .ui-card__content {
+  display: grid;
+  gap: 24px;
+}
+.settlement-progress__completion {
+  display: grid;
+  grid-template-columns: minmax(200px, 0.65fr) minmax(0, 1.5fr);
+  gap: 32px;
+  align-items: center;
+  padding-bottom: 20px;
+  border-bottom: 1px solid var(--color-border);
+}
+.settlement-progress__completion > div:first-child {
+  display: grid;
+  gap: 4px;
+}
+.settlement-progress__completion > div:first-child > strong {
+  font-size: 24px;
+  color: var(--color-success-text);
+  font-variant-numeric: tabular-nums;
+}
+.settlement-progress__completion small {
+  font-size: 12px;
+  font-weight: 400;
+}
+.settlement-progress__completion span,
+.settlement-progress__caption {
+  color: var(--color-muted);
+  font-size: 12px;
+}
+.settlement-progress__overall > div {
+  display: flex;
+  gap: 16px;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: 8px;
+}
+.settlement-progress__overall > div > strong {
+  color: var(--color-success-text);
+  font-size: 20px;
+}
+.settlement-progress .ui-progress,
+.settlement-progress .ui-progress__track {
+  width: 100%;
+}
+.settlement-progress .ui-progress__track {
+  height: 8px;
+}
+.settlement-progress .ui-progress__text {
+  display: none;
+}
+.settlement-progress__routes {
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 40px;
+}
+.settlement-progress__route {
+  min-width: 0;
+}
+.settlement-progress__routes::before {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 50%;
+  border-left: 1px solid var(--color-border);
+}
+.settlement-progress__route > header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+.settlement-progress__route h4 {
+  margin: 0 0 4px;
+  font-size: 15px;
+}
+.settlement-progress__route p {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--color-muted);
+}
+.settlement-progress__route > header > div:last-child {
+  text-align: right;
+  flex-shrink: 0;
+}
+.settlement-progress__route > header strong {
+  font-variant-numeric: tabular-nums;
+  font-size: 15px;
+}
+.settlement-progress__route > header small {
+  display: block;
+  color: var(--color-muted);
+  font-size: 12px;
+}
+.settlement-progress__stages {
+  list-style: none;
+  display: grid;
+  gap: 4px;
+  padding: 0;
+  margin: 0;
+}
+.settlement-progress__stage {
+  display: grid;
+  gap: 6px;
+  padding: 10px 8px;
+  border-radius: var(--radius-control);
+  text-decoration: none;
+  color: var(--color-text);
+}
+.settlement-progress__stage:hover,
+.settlement-progress__stage:focus-visible {
+  background: var(--color-primary-soft);
+  text-decoration: none;
+}
+.settlement-progress__stage[aria-disabled="true"] {
+  background: none;
+}
+.settlement-progress__stage-title {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+  font-size: 13px;
+}
+.settlement-progress__stage-title > span:last-child {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.settlement-progress__stage-title small,
+.settlement-progress__stage-note {
+  color: var(--color-muted);
+  font-size: 12px;
+}
+.settlement-progress__stage-note {
+  min-height: 18px;
+  overflow-wrap: anywhere;
+}
+.settlement-progress__caption {
+  margin: 0;
+  line-height: 1.7;
+}
+@media (max-width: 1000px) {
+  .settlement-progress__routes {
+    gap: 20px;
+  }
+  .settlement-progress__route > header {
+    flex-direction: column;
+  }
+  .settlement-progress__route > header > div:last-child {
+    text-align: left;
+  }
+}
+@media (max-width: 760px) {
+  .settlement-progress .ui-card__header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+  .settlement-progress__routes::before {
+    display: none;
+  }
+  .settlement-progress__completion,
+  .settlement-progress__routes {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 20px;
+  }
+  .settlement-progress__route + .settlement-progress__route {
+    border-left: 0;
+    border-top: 1px solid var(--color-border);
+    padding: 20px 0 0;
+  }
+  .settlement-progress__overall > div {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .settlement-progress__stage-title {
+    flex-wrap: wrap;
+    gap: 4px 12px;
+  }
+}

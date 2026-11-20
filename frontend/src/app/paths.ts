@@ -11,8 +11,11 @@ export const paths = {
   settlementOverview: "/settlement/overview",
   settlementBank: "/settlement/bank-receipts",
   settlementHk: "/settlement/hk-transit",
+  settlementHkRegister: "/settlement/hk-transit/register",
   // 非香港中转的总账（2026-11-18 起取代“直接收汇批次”列表）
   settlementDirect: "/settlement/direct",
+  settlementDocumentGroups: "/settlement/direct/document-groups",
+  settlementDocumentMerge: "/settlement/direct/document-groups/merge",
   // 销售合同买卖双方抬头与印章
   settlementParties: "/settlement/parties",
   tasks: "/tasks",
@@ -78,6 +81,10 @@ export const writebackRequestPath = (id: string) => `${paths.writeback}/${encode
 export const matchingInvoicePath = (invoiceId: string) =>
   `${paths.matching}/${encodeURIComponent(invoiceId)}`;
 
+export const directDocumentGroupPath = (id: number) => `${paths.settlementDocumentGroups}/${id}`;
+export const directDocumentMergePath = (declarationNo: string) =>
+  withQuery(paths.settlementDocumentMerge, { declarationNo });
+
 // 侧栏菜单项与页面路径的对应。
 export type View =
   | "workbench"
@@ -138,4 +145,47 @@ export function homePath(pages: readonly string[] = []): string {
   if (pages.includes("workbench")) return paths.workbench;
   const first = pages.find((code): code is View => Object.hasOwn(viewPaths, code));
   return first ? viewPaths[first] : paths.forbidden;
+}
+
+// 侧栏详情保持当前结汇子页面与筛选，直接访问时默认落在报关单明细。
+export function settlementDeclarationDetailPath(
+  number: string,
+  pathname: string = paths.settlement,
+  search = "",
+) {
+  const query = new URLSearchParams(search);
+  query.set("detail", number);
+  return `${pathname}?${query}`;
+}
+
+// 总览阶段金额图跳转报关单明细；筛选条件保留在 URL。
+export const settlementStagePath = (filters: {
+  route: string;
+  stage: string;
+  currency: string;
+  consignee: string;
+}) => withQuery(paths.settlement, { view: "declarations", ...filters });
+
+export function settlementHkRegistrationPath(numbers: readonly string[], draftId: string) {
+  const params = new URLSearchParams({ draft: draftId });
+  numbers.forEach((number) => params.append("declarationNo", number));
+  return `${paths.settlementHkRegister}?${params}`;
+}
+
+// 总览待办入口：只携带展示范围，不在前端推断业务是否可办理。
+export function settlementOverviewActionPath(
+  action: {
+    target: "declarations" | "hk" | "receipts" | "ledger";
+    consignee: string;
+    route: string;
+    stage: string;
+    batchNo: string;
+  },
+  currency: string,
+) {
+  const common = { consignee: action.consignee, currency };
+  if (action.target === "hk") return withQuery(paths.settlementHk, { ...common, batchNo: action.batchNo });
+  if (action.target === "receipts") return withQuery(paths.settlementHk, { ...common, tab: "receipts" });
+  if (action.target === "ledger") return withQuery(paths.settlementDirect, common);
+  return settlementStagePath({ ...common, route: action.route, stage: action.stage });
 }

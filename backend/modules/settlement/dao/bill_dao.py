@@ -35,3 +35,16 @@ def insert_bill(connection, values, now):
 
 def update_bill(connection, bill_id, values, now):
     connection.execute(update(bills).where(bills.c.id == bill_id).values(**values, updated_at=now))
+
+
+def by_groups(connection, group_ids):
+    result = {group_id: [] for group_id in group_ids}
+    if group_ids:
+        query = (
+            select(bills)
+            .where(bills.c.document_group_id.in_(group_ids), bills.c.removed_at.is_(None))
+            .order_by(bills.c.id)
+        )
+        for row in connection.execute(query).mappings():
+            result[row["document_group_id"]].append(dict(row))
+    return result

@@ -1,4 +1,9 @@
-import { Link, useLocation } from "react-router";
+import { SettlementHkReceiptPage } from "../modules/settlement/pages/SettlementHkReceiptPage";
+import { useCallback, useState } from "react";
+import { DirectDocumentGroupWorkspace } from "../modules/settlement/components/DirectDocumentGroupWorkspace";
+import { DirectDocumentMergeWorkspace } from "../modules/settlement/components/DirectDocumentMergeWorkspace";
+import { DeclarationDetailHost } from "../modules/settlement/components/DeclarationDetailDrawer";
+import { Link, useLocation, useParams } from "react-router";
 import { SettlementBankReceiptsPage } from "../modules/settlement/pages/SettlementBankReceiptsPage";
 import { SettlementHkTransitPage } from "../modules/settlement/pages/SettlementHkTransitPage";
 import { SettlementDeclarationsPage } from "../modules/settlement/pages/SettlementDeclarationsPage";
@@ -7,7 +12,7 @@ import { SettlementOverviewPage } from "../modules/settlement/pages/SettlementOv
 import { SettlementPartiesPage } from "../modules/settlement/pages/SettlementPartiesPage";
 import { AppFrame } from "./WorkspaceFrame";
 import { navigation } from "./navigation";
-import { paths, type SubView } from "./paths";
+import { paths, settlementDirectDocumentsPath, type SubView } from "./paths";
 import { useViewNavigate } from "./useViewNavigate";
 
 const PAGES = {
@@ -31,9 +36,15 @@ const PAGES = {
   },
   hk: {
     child: "settlement-hk",
-    title: "香港中转批次",
+    title: "香港中转",
     description: "贸易国为香港：香港账户收款 → 提单与销售合同齐全后出资料包 → 汇回境内，汇回对平后结汇。",
     source: "银行水单登记（香港到账、境内汇回）",
+  },
+  "hk-register": {
+    child: "settlement-hk",
+    title: "登记香港回款",
+    description: "将已选报关单登记到同一条香港到账流水，金额对平后提交并建立批次。",
+    source: "银行水单 + 海关回执",
   },
   direct: {
     child: "settlement-direct",
@@ -41,6 +52,18 @@ const PAGES = {
     description:
       "非香港中转的境外收货人总账：出口取自报关单，收汇取自银行收汇明细，按境外收货人和收款人汇总差额。",
     source: "海关回执 + 银行收汇明细",
+  },
+  "direct-group": {
+    child: "settlement-direct",
+    title: "直接收汇资料组",
+    description: "在资料组统一上传提单、生成销售合同；报关单详情只读展示资料。",
+    source: "海关回执 + 提单与销售合同",
+  },
+  "direct-merge": {
+    child: "settlement-direct",
+    title: "合并办理资料",
+    description: "一张提单覆盖多票直接收汇报关单时，将单票资料组合并办理。",
+    source: "当前报关依据 + 已有资料",
   },
   parties: {
     child: "settlement-parties",
@@ -54,6 +77,7 @@ const KEYS: Record<string, keyof typeof PAGES> = {
   [paths.settlementOverview]: "overview",
   [paths.settlementBank]: "bank",
   [paths.settlementHk]: "hk",
+  [paths.settlementHkRegister]: "hk-register",
   [paths.settlementDirect]: "direct",
   [paths.settlementParties]: "parties",
 };
@@ -62,7 +86,19 @@ const KEYS: Record<string, keyof typeof PAGES> = {
 export default function SettlementWorkspacePage() {
   const { pathname, search } = useLocation();
   const navigateView = useViewNavigate();
-  const key = KEYS[pathname] ?? "declarations";
+  const { groupId } = useParams();
+  const [groupHeading, setGroupHeading] = useState({ id: 0, label: "" });
+  const loadedGroup = useCallback(
+    (id: number, label: string) =>
+      setGroupHeading((current) => (current.id === id && current.label === label ? current : { id, label })),
+    [],
+  );
+  const key =
+    pathname === paths.settlementDocumentMerge
+      ? "direct-merge"
+      : groupId
+        ? "direct-group"
+        : (KEYS[pathname] ?? "declarations");
   const current = PAGES[key];
   return (
     <AppFrame
@@ -70,18 +106,41 @@ export default function SettlementWorkspacePage() {
       activeId="settlement"
       activeChildId={current.child}
       onNavigate={navigateView}
-      title={current.title}
+      title={
+        key === "direct-group" && groupHeading.id === Number(groupId)
+          ? `资料组 ${groupHeading.label}`
+          : current.title
+      }
       breadcrumb={
-        key === "overview" ? <span>结汇对账</span> : <Link to={paths.settlementOverview}>结汇对账</Link>
+        key === "hk-register" ? (
+          <Link to={paths.settlementHk}>香港中转</Link>
+        ) : key === "direct-group" || key === "direct-merge" ? (
+          <Link to={settlementDirectDocumentsPath()}>直接收汇明细</Link>
+        ) : key === "overview" ? (
+          <span>结汇对账</span>
+        ) : (
+          <Link to={paths.settlementOverview}>结汇对账</Link>
+        )
       }
       description={current.description}
       meta={[{ label: "数据来源", value: current.source }]}
     >
+      <DeclarationDetailHost />
       {key === "overview" && <SettlementOverviewPage />}
       {key === "declarations" && <SettlementDeclarationsPage />}
       {key === "bank" && <SettlementBankReceiptsPage />}
-      {key === "hk" && <SettlementHkTransitPage key={search} />}
+      {key === "hk" && <SettlementHkTransitPage />}
+      {key === "hk-register" && <SettlementHkReceiptPage />}
       {key === "direct" && <SettlementLedgerPage key={new URLSearchParams(search).get("consignee") || ""} />}
+      {key === "direct-group" && (
+        <DirectDocumentGroupWorkspace key={groupId} id={Number(groupId)} onLoaded={loadedGroup} />
+      )}
+      {key === "direct-merge" && (
+        <DirectDocumentMergeWorkspace
+          key={new URLSearchParams(search).get("declarationNo") || ""}
+          source={new URLSearchParams(search).get("declarationNo") || ""}
+        />
+      )}
       {key === "parties" && <SettlementPartiesPage />}
     </AppFrame>
   );

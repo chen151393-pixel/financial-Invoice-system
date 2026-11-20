@@ -6,6 +6,9 @@ from .batch_vo import Action
 
 
 class DirectDocumentRow(StrictModel):
+    groupId: int | None = None
+    groupNo: str = ""
+    createGroup: Action = Action(allowed=True, reason="")
     declarationNo: str
     recordNo: str
     salesOrders: list[str]

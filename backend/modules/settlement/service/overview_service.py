@@ -11,6 +11,7 @@ from backend.core.errors import ApiError
 from backend.core.names import normalize_name
 
 from ..dao import bank_receipt_dao, batch_dao
+from ..policy import overview_insight_policy as insights
 from ..policy.amount_policy import money
 from ..policy.route_policy import DIRECT, HK_TRANSIT, ROUTE_LABELS
 from ..vo.ledger_vo import LedgerSkipped
@@ -63,9 +64,10 @@ def _totals(groups):
 
 
 class OverviewService:
-    def __init__(self, engine, candidates):
+    def __init__(self, engine, candidates, receivables=None):
         self.engine = engine
         self.candidates = candidates
+        self.receivables = receivables
 
     def query(self, body):
         if self.engine is None:
@@ -74,13 +76,27 @@ class OverviewService:
             declarations = self.candidates.load(connection, limit=None)
             receipts = bank_receipt_dao.all_receipts(connection)
             batches = batch_dao.customer_receipts(connection)
+            snapshot, as_of = [], ""
+            if self.receivables is not None:
+                snapshot, _, _, heads, items, today = self.receivables.snapshot(connection)
+                as_of = str(today)
+                wanted = normalize_name(body.consignee)
+                snapshot = [
+                    row
+                    for row in snapshot
+                    if (not wanted or wanted in normalize_name(row["consignee"]))
+                    and (not body.currency or body.currency.upper() == row["currency"])
+                ]
+                # 仅核对当前范围内待办香港批次的资料，不读取直接收汇留存文件。
+                pending_docs = [row for row in snapshot if row["stage"] == "collected"]
+                self.receivables._documents(connection, pending_docs, heads, items)
 
         groups, skipped = {}, []
         wanted = normalize_name(body.consignee)
 
         def matches(name, currency):
             return (not wanted or wanted in normalize_name(name)) and (
-                not body.currency or body.currency == currency
+                not body.currency or body.currency.upper() == currency
             )
 
         for row in declarations:
@@ -113,10 +129,20 @@ class OverviewService:
 
         currencies = sorted({group["currency"] for group in groups.values()})
         selected = [g for g in groups.values() if matches(g["consignee"], g["currency"])]
-        selected.sort(key=lambda g: (g["currency"], -g["declared"], normalize_name(g["consignee"])))
+        selected.sort(
+            key=lambda g: (g["currency"], -(g["declared"] - g["received"]), normalize_name(g["consignee"]))
+        )
         total = len(selected)
         page = min(body.page, max(1, math.ceil(total / body.pageSize)))
         shown = selected[(page - 1) * body.pageSize : page * body.pageSize]
+        totals = _totals(selected)
+        if self.receivables is not None:
+            for total_row in totals:
+                members = [row for row in snapshot if row["usable"] and row["currency"] == total_row.currency]
+                settled = [row for row in members if row["stage"] == "settled"]
+                total_row.settledAmount = str(money(sum((row["amount"] for row in settled), Decimal(0))))
+                total_row.settledCount = len(settled)
+                total_row.declarationCount = len(members)
         return OverviewList(
             items=[
                 OverviewCustomer(
@@ -126,13 +152,18 @@ class OverviewService:
                     routeLabel=ROUTE_LABELS[group["route"]],
                     declarationCount=group["count"],
                     **_amounts(group),
+                    **insights.customer_fields(group, snapshot),
                 )
                 for group in shown
             ],
             total=total,
             page=page,
             pageSize=body.pageSize,
-            totals=_totals(selected),
+            totals=totals,
+            insights=insights.describe(snapshot, selected, body.consignee)
+            if self.receivables is not None
+            else [],
+            asOf=as_of,
             currencies=currencies,
             skipped=skipped,
         )

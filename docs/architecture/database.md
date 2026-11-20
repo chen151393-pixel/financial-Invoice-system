@@ -1180,3 +1180,19 @@ API 发票默认版使用 `source=lemon_open2`、`lemon_account=open2:` 加 `SHA
 ## 直接收汇资料（2026-11-19，迁移 0050）
 
 结汇模块的 `settlement_bills`、`settlement_contracts` 增加可空 `direct_declaration_no`，原 `batch_id` 改为可空；数据库检查约束要求二者恰有一个非空。直接收汇资料按当前有效海关回执关联的真实报关单保存，不新建收款批次、不影响总账；香港资料继续按批次保存。直接合同按 `(direct_declaration_no, contract_no)` 唯一。已有香港资料保留，有直接资料时拒绝丢失关联的降级。见[结汇模块说明](../../backend/modules/settlement/README.md#直接收汇资料2026-11-19)。
+
+
+## 直接收汇资料组增量（2026-11-20，0051）
+
+settlement 模块拥有 `settlement_document_groups`（组号、创建幂等请求、客户与币种）和 `settlement_document_group_items`（组内报关单，报关单号全局唯一）。成员只存本模块业务编号，通过 source/review 门面读取当前依据，不跨模块建外键。提单和合同的 `document_group_id` 指向本模块资料组，与 `batch_id`、`direct_declaration_no` 三选一。合同新增 `document_key` 区分资料组内不同申报抬头的同号出口合同；组与 key 联合唯一。旧香港和单票资料保留，不自动批量建组，不修改收款、分配和批次金额表。具体约束及接口见 settlement 模块 README。
+
+资料组注释由增量迁移 `0052_settlement_group_comments` 补齐，保持已执行迁移不可修改。
+
+
+资料组后继关系（0053）：组头 `initial_declaration_nos JSON` 保存创建时范围；`merged_into_id` 为本模块资料组自引用外键，配套 UTC 合并时间与认证操作者。合并时仅单票组可加入新组，旧头保留，成员与资料移动，新组成为当前归属。旧合同清除分组键并保留 PDF，待按新范围显式重生成；不删除旧组或修改任何收款事实。
+
+
+香港回款水单（0054）：settlement 模块新增 `settlement_hk_slips`，以本模块批次 `batch_id` 为主键和外键，一批次留存一份水单；记录原文件名、服务端生成文件标识、SHA-256 和认证操作人。金额、日期均由人工登记到原批次字段，附件不参与识别；不访问或写入 NS。已有原件记录时拒绝降级。
+
+
+资料组来源恢复（0055）：`settlement_document_groups.basis_history JSON` 为可空更新历史，记录每次人工确认的原客户/币种、当前客户/币种、成员回执版本、UTC 时间与认证操作者。更新依据只在全部当前成员仍为同客户同币种的直接收汇时执行，不更改成员、提单、收款及批次事实。有更新历史时拒绝降级删除该列。

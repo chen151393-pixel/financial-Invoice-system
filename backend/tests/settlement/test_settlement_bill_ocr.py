@@ -7,6 +7,7 @@ from datetime import date
 from types import SimpleNamespace
 
 import pytest
+from backend.core.errors import ApiError
 from backend.modules.settlement.dto.bill_dto import UpdateBillRequest
 from backend.modules.settlement.policy.bill_layout_policy import agreed, parse_words
 from backend.modules.settlement.service.bill_ocr import BillOcr, page_image, words_from_tsv
@@ -223,3 +224,56 @@ def test_focused_ocr_failure_preserves_original_readings(monkeypatch):
     # 只有订舱号、没有提单号标签时不进行局部复识。
     booking = words([(100, 100, "Booking No. OTHER98765432")])
     assert refine_bl(Image.new("L", (1000, 1200)), [booking, booking], "tesseract") == [booking, booking]
+
+
+@pytest.mark.parametrize("direct", [False, True])
+def test_upload_same_scan_retries_missing_fields_without_replacing_manual_values(seeded, tmp_path, direct):
+    if direct:
+        from backend.tests.settlement.test_direct_documents import direct_documents
+
+        documents = direct_documents(seeded, tmp_path)
+        target = "REAL872"
+    else:
+        _, batches = services(seeded)
+        target = create(batches, ["REAL870", "REAL871"], "985.50", fee="15.00").id
+        documents = Documents(seeded, tmp_path)
+    incomplete = words(replace={"SHATEST58231": "", "NOV. 12, 2026": "", "(OBD: NOVEMBER TWELFTH, 2026)": ""})
+    ocr = FakeOcr([incomplete, incomplete])
+    documents.bills.ocr = ocr
+    content = scanned_bill_pdf(LAYOUT)
+    first = documents.upload(target, content=content).bills[0]
+    assert first.missing == ["提单号", "装船日期"]
+    originals = set(documents.store.root.glob("*.pdf"))
+    with pytest.raises(ApiError, match="仍未识别"):
+        documents.upload(target, content=content)
+    assert set(documents.store.root.glob("*.pdf")) == originals
+    # 经办人已保存的口岸必须保留，重新识别只填空项。
+    documents.bills.update(
+        target,
+        first.id,
+        UpdateBillRequest(
+            blNo="",
+            portOfLoading="MANUAL PORT",
+            portOfDischarge="",
+            onBoardDate=None,
+            declarationNos=first.declarationNos,
+        ),
+        "finance-user",
+    )
+    ocr.result = [words(), words()]
+    retried = documents.upload(target, content=content)
+    assert len(retried.bills) == 1
+    bill = retried.bills[0]
+    assert bill.id == first.id and bill.fileUrl == first.fileUrl and bill.missing == []
+    assert (bill.blNo, bill.portOfLoading, bill.portOfDischarge, bill.onBoardDate) == (
+        EXPECTED["bl_no"],
+        "MANUAL PORT",
+        EXPECTED["port_of_discharge"],
+        "2026-11-12",
+    )
+    assert "未能自动识别" not in bill.parseNote and "对照原件核对" in bill.parseNote
+    assert bill.declarationNos == first.declarationNos and bill.uploadedAt == first.uploadedAt
+    assert set(documents.store.root.glob("*.pdf")) == originals
+    assert documents.bills.file(target, first.id)[1] == content
+    with pytest.raises(ApiError, match="已上传"):
+        documents.upload(target, content=content)

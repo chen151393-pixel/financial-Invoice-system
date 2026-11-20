@@ -1,0 +1,13 @@
+.settlement-parties .settlement-cell {
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+  line-height: 1.6;
+}
+.settlement-party-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-small);
+}
+.settlement-party-actions .ui-button {
+  flex: 0 0 80px;
+}

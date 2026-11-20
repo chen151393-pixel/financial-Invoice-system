@@ -1,6 +1,6 @@
 import { Link } from "react-router";
-import { settlementBatchListPath, settlementLedgerPath } from "../../../app/paths";
-import { Badge, DataTable, type Column } from "../../../shared/components/ui";
+import { settlementBatchListPath, settlementLedgerPath, settlementStagePath } from "../../../app/paths";
+import { Badge, DataTable, Progress, type Column } from "../../../shared/components/ui";
 import { money } from "../../../shared/format/money";
 import type { OverviewCustomer } from "../types/overview";
 
@@ -11,7 +11,16 @@ const COLUMNS: Column<OverviewCustomer>[] = [
     width: "28%",
     render: (row) => (
       <div className="settlement-cell">
-        <strong>{row.consignee}</strong>
+        <Link
+          to={settlementStagePath({
+            consignee: row.consignee,
+            currency: row.currency,
+            route: row.route,
+            stage: "all",
+          })}
+        >
+          {row.consignee}
+        </Link>
         <span>{row.declarationCount} 张报关单</span>
       </div>
     ),
@@ -28,8 +37,28 @@ const COLUMNS: Column<OverviewCustomer>[] = [
     key: "outstanding",
     header: "未收汇金额",
     align: "right",
-    render: (row) => <strong>{money(row.outstanding)}</strong>,
+    render: (row) => (
+      <strong className="settlement-overview-amount" data-tone={row.outstandingTone}>
+        {money(row.outstanding)}
+      </strong>
+    ),
   },
+  {
+    key: "progress",
+    header: "收款进度",
+    render: (row) => (
+      <span className="settlement-overview-progress">
+        <Progress
+          fluid
+          width={row.receivedPercent ?? 0}
+          text={row.receivedPercentText ?? "—"}
+          label={`${row.consignee}收款进度`}
+          tone="success"
+        />
+      </span>
+    ),
+  },
+  { key: "oldest", header: "最久未结汇", render: (row) => row.oldestPendingText ?? "—" },
   { key: "fee", header: "已登记手续费", align: "right", render: (row) => money(row.receivedFee) },
   {
     key: "details",

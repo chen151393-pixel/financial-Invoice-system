@@ -129,6 +129,8 @@ export interface BatchItem {
 }
 
 export interface BatchDetail extends BatchSummary {
+  receivedSlipName?: string;
+  receivedSlipUrl?: string;
   payer: string;
   receivingAccount: string;
   receivedReference: string;
@@ -207,6 +209,7 @@ export interface Bill {
 }
 
 export interface Contract {
+  key?: string;
   id: number;
   contractNo: string;
   fileUrl: string;
@@ -226,7 +229,11 @@ export interface Contract {
 }
 
 export interface PlannedContract {
+  key?: string;
   contractNo: string;
+  contractDate: string;
+  portOfLoading: string;
+  portOfDestination: string;
   buyerName: string;
   sellerName: string;
   currency: string;
@@ -250,10 +257,13 @@ export interface DeclarationFile {
   fileNames: string[];
 }
 
-/** 数字为香港批次 ID，字符串为直接收汇报关单号；API 命名空间分别处理。 */
-export type DocumentTarget = number | string;
+/** 数字为香港批次 ID，字符串为直接收汇报关单号，对象为直接资料组；API 命名空间分别处理。 */
+export type DocumentTarget = number | string | { groupId: number };
 
 export interface DirectDocumentRow {
+  groupId?: number | null;
+  groupNo?: string;
+  createGroup?: Action;
   declarationNo: string;
   recordNo: string;
   salesOrders: string[];
@@ -268,6 +278,7 @@ export interface DirectDocumentRow {
   edit: Action;
 }
 export interface DirectDocumentQuery {
+  grouping?: "all" | "single" | "multiple";
   keyword: string;
   consignee: string;
   status: "all" | "pending_bill" | "pending_contract" | "stale" | "complete";
@@ -485,6 +496,7 @@ export type ReceivableStage =
 export type ReceivableStageFilter = "all" | "alert" | ReceivableStage;
 
 export interface ReceivableQuery {
+  currency?: string;
   consignee: string;
   declarationNo: string;
   route: RouteFilter;

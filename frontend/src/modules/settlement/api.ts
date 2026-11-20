@@ -67,9 +67,11 @@ export const cancelBatch = (id: number, reason: string) =>
 // ---- 结汇资料：文件只读取字节后提交，格式、解析与齐全度由后端负责 ----
 
 const documentPath = (target: DocumentTarget) =>
-  typeof target === "number"
-    ? `/settlement/batches/${target}`
-    : `/settlement/direct-documents/${encodeURIComponent(target)}`;
+  typeof target === "object"
+    ? `/settlement/direct-document-groups/${target.groupId}`
+    : typeof target === "number"
+      ? `/settlement/batches/${target}`
+      : `/settlement/direct-documents/${encodeURIComponent(target)}`;
 
 export const queryDirectDocuments = (query: DirectDocumentQuery, signal?: AbortSignal) =>
   http<DirectDocumentList>("/settlement/direct-documents/query", "POST", query, signal);

@@ -1,3 +1,4 @@
+import { SettlementProgressPanel } from "../components/SettlementProgressPanel";
 import { useMemo, useState } from "react";
 import { useSearchParams } from "react-router";
 import {
@@ -14,6 +15,8 @@ import {
   Pagination,
   Skeleton,
 } from "../../../shared/components/ui";
+import { OverviewInsights } from "../components/OverviewInsights";
+import "../components/overview-insights.css";
 import { OverviewCustomers } from "../components/OverviewCustomers";
 import { OverviewMetrics } from "../components/OverviewMetrics";
 import { OverviewRoutes } from "../components/OverviewRoutes";
@@ -91,7 +94,7 @@ export function SettlementOverviewPage() {
     }),
     [params],
   );
-  const { state, reload } = useSettlementOverview(query);
+  const { state, reload, revision } = useSettlementOverview(query);
   function update(next: OverviewQuery) {
     const values = new URLSearchParams();
     if (next.consignee) values.set("consignee", next.consignee);
@@ -112,13 +115,18 @@ export function SettlementOverviewPage() {
         busy={state.kind === "loading"}
         onQuery={update}
       />
+      <SettlementProgressPanel consignee={query.consignee} currency={query.currency} revision={revision} />
       {state.kind === "ready" && state.result.totals.length > 0 && (
         <OverviewRoutes totals={state.result.totals} consignee={query.consignee} />
       )}
+      {state.kind === "ready" &&
+        state.result.insights?.map((data) => (
+          <OverviewInsights key={data.currency} data={data} asOf={state.result.asOf ?? ""} />
+        ))}
       <Card>
         <CardHeader
-          title="客户未收汇明细"
-          description="累计应收与实收，按境外收货人、回款路径和币种汇总；未收汇金额 = 报关应收汇 − 实收汇金额。"
+          title="未收最多的客户"
+          description="按币种分别统计，按未收差额从高到低排序；点击客户名称查看该客户报关单。手续费单列，负数表示超收。"
         />
         <CardContent flush>
           {state.kind === "loading" && <Skeleton rows={5} label="正在读取收汇总览" />}

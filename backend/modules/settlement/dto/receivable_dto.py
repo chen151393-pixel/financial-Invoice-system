@@ -14,6 +14,7 @@ Stage = Literal["all", "unregistered", "collected", "remit", "unpaid", "partial"
 class ReceivableQuery(StrictModel):
     consignee: Text200 = ""
     declarationNo: Text200 = ""
+    currency: Annotated[str, StringConstraints(strip_whitespace=True, max_length=20)] = ""
     route: Literal["all", "hk_transit", "direct"] = "all"
     # 结汇阶段；alert 为需要关注（香港滞留超期）。阶段只筛选报关单明细，客户汇总与合计不受影响
     stage: Stage = "all"

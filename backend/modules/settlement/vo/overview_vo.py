@@ -5,6 +5,7 @@ from typing import Literal
 from backend.core.dto import StrictModel
 
 from .ledger_vo import LedgerSkipped
+from .overview_insight_vo import OverviewInsight
 
 
 class OverviewAmounts(StrictModel):
@@ -23,12 +24,19 @@ class OverviewRoute(OverviewAmounts):
 class OverviewTotal(OverviewAmounts):
     currency: str
     routes: list[OverviewRoute]
+    settledAmount: str | None = None
+    settledCount: int = 0
+    declarationCount: int = 0
 
 
 class OverviewCustomer(OverviewRoute):
     consignee: str
     currency: str
     declarationCount: int
+    receivedPercent: int = 0
+    receivedPercentText: str = "—"
+    outstandingTone: Literal["warning", "info", "neutral"] = "neutral"
+    oldestPendingText: str = "—"
 
 
 class OverviewList(StrictModel):
@@ -40,3 +48,5 @@ class OverviewList(StrictModel):
     totals: list[OverviewTotal]
     currencies: list[str]
     skipped: list[LedgerSkipped]
+    insights: list[OverviewInsight] = []
+    asOf: str = ""

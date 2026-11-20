@@ -8,6 +8,8 @@ from sqlalchemy import CHAR, JSON, CheckConstraint, Column, Date, ForeignKey, In
 
 from backend.core.schema import ID, TIMESTAMP, identifier, schema_metadata, table_options, timestamps
 
+from .document_group import settlement_document_groups
+
 settlement_bills = Table(
     "settlement_bills",
     schema_metadata,
@@ -18,6 +20,9 @@ settlement_bills = Table(
         ForeignKey("settlement_batches.id", name="fk_settlement_bill_batch"),
         nullable=True,
         comment="所属结汇批次，指向 settlement_batches.id",
+    ),
+    Column(
+        "document_group_id", ID, ForeignKey(settlement_document_groups.c.id), comment="所属直接收汇资料组"
     ),
     Column("direct_declaration_no", identifier(150), comment="直接收汇资料所属报关单；与批次二选一"),
     Column("file_id", identifier(36), nullable=False, comment="资料目录中的文件标识（服务端生成的 UUID）"),
@@ -38,9 +43,10 @@ settlement_bills = Table(
     *timestamps(),
     Index("ix_settlement_bill_batch", "batch_id", "removed_at"),
     CheckConstraint(
-        "(batch_id IS NOT NULL AND direct_declaration_no IS NULL) OR (batch_id IS NULL AND direct_declaration_no IS NOT NULL)",
+        "(CASE WHEN batch_id IS NOT NULL THEN 1 ELSE 0 END + CASE WHEN direct_declaration_no IS NOT NULL THEN 1 ELSE 0 END + CASE WHEN document_group_id IS NOT NULL THEN 1 ELSE 0 END) = 1",
         name="ck_settlement_bill_source",
     ),
+    Index("ix_settlement_bill_group", "document_group_id", "removed_at"),
     Index("ix_settlement_bill_direct", "direct_declaration_no", "removed_at"),
     comment="结汇批次的提单文件及装运口岸、目的口岸、装船日期",
     **table_options,

@@ -46,7 +46,7 @@ const STAGES: readonly ReceivableStageFilter[] = [
   "issue",
   "alert",
 ];
-const FILTER_NAMES = ["consignee", "declarationNo", "route", "exportFrom", "exportTo"] as const;
+const FILTER_NAMES = ["consignee", "declarationNo", "currency", "route", "exportFrom", "exportTo"] as const;
 const EMPTY: ReceivableQuery = {
   consignee: "",
   declarationNo: "",
@@ -62,6 +62,7 @@ function readQuery(params: URLSearchParams): ReceivableQuery {
   const stage = params.get("stage") as ReceivableStageFilter | null;
   return {
     consignee: params.get("consignee") || "",
+    currency: params.get("currency") || "",
     declarationNo: params.get("declarationNo") || "",
     route: route === "hk_transit" || route === "direct" ? route : "all",
     stage: stage && STAGES.includes(stage) ? stage : "all",
@@ -79,6 +80,7 @@ export function ReceivablePanel() {
   const view = params.get("view") === "declarations" ? "declarations" : "customers";
   const filterParams = new URLSearchParams(params);
   filterParams.delete("view");
+  filterParams.delete("detail");
   const filterKey = filterParams.toString();
   // 汇总/明细切换不重发请求；筛选和阶段变化以地址为准。
   const query = useMemo(() => readQuery(new URLSearchParams(filterKey)), [filterKey]);
@@ -166,6 +168,7 @@ export function ReceivablePanel() {
               consignee: String(data.get("consignee") || "").trim(),
               declarationNo: String(data.get("declarationNo") || "").trim(),
               route: String(data.get("route") || "all") as RouteFilter,
+              currency: String(data.get("currency") || "").trim(),
               exportFrom: String(data.get("exportFrom") || "") || null,
               exportTo: String(data.get("exportTo") || "") || null,
             });
@@ -186,6 +189,9 @@ export function ReceivablePanel() {
           </Field>
           <Field label="报关单号" grow>
             <input name="declarationNo" defaultValue={query.declarationNo} />
+          </Field>
+          <Field label="币种">
+            <input name="currency" defaultValue={query.currency || ""} placeholder="如 USD" />
           </Field>
           <Field label="回款路径">
             <select name="route" defaultValue={query.route}>

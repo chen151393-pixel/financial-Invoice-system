@@ -20,6 +20,8 @@ from sqlalchemy import (
 
 from backend.core.schema import ID, TIMESTAMP, identifier, schema_metadata, table_options, timestamps
 
+from .document_group import settlement_document_groups
+
 settlement_contracts = Table(
     "settlement_contracts",
     schema_metadata,
@@ -31,7 +33,11 @@ settlement_contracts = Table(
         nullable=True,
         comment="所属结汇批次，指向 settlement_batches.id",
     ),
+    Column(
+        "document_group_id", ID, ForeignKey(settlement_document_groups.c.id), comment="所属直接收汇资料组"
+    ),
     Column("direct_declaration_no", identifier(150), comment="直接收汇资料所属报关单；与批次二选一"),
+    Column("document_key", identifier(64), comment="资料组内申报抬头与出口合同号的稳定标识"),
     Column("contract_no", identifier(100), nullable=False, comment="合同编号，即海关回执的出口合同号"),
     Column("contract_date", Date, nullable=False, comment="签订日期：最早出口日期往前推配置的天数"),
     Column("declaration_nos", JSON, nullable=False, comment="该合同覆盖的报关单号列表"),
@@ -56,10 +62,11 @@ settlement_contracts = Table(
     *timestamps(),
     UniqueConstraint("batch_id", "contract_no", name="uq_settlement_contract_batch_no"),
     CheckConstraint(
-        "(batch_id IS NOT NULL AND direct_declaration_no IS NULL) OR (batch_id IS NULL AND direct_declaration_no IS NOT NULL)",
+        "(CASE WHEN batch_id IS NOT NULL THEN 1 ELSE 0 END + CASE WHEN direct_declaration_no IS NOT NULL THEN 1 ELSE 0 END + CASE WHEN document_group_id IS NOT NULL THEN 1 ELSE 0 END) = 1",
         name="ck_settlement_contract_source",
     ),
     UniqueConstraint("direct_declaration_no", "contract_no", name="uq_settlement_contract_direct_no"),
+    UniqueConstraint("document_group_id", "document_key", name="uq_settlement_contract_group_key"),
     comment="结汇批次按模板生成的销售合同 PDF 及其生成依据",
     **table_options,
 )

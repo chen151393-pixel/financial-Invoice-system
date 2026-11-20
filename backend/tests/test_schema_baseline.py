@@ -16,6 +16,9 @@ from sqlalchemy.engine import make_url
 from sqlalchemy.exc import IntegrityError, OperationalError
 
 TABLES = {
+    "settlement_hk_slips",
+    "settlement_document_groups",
+    "settlement_document_group_items",
     "task_supplier_owners",
     "writeback_tasks",
     "writeback_plans",
@@ -328,6 +331,9 @@ def test_downgrade_refuses_to_erase_version_evidence(tmp_path):
             # 0039 的只读目录可由企微重建、0040 的空计划表、0041 的未配置角色页面与 0042 的空海关回执表无数据，允许回退；
             # 供应商绑定和业务版本证据必须保留。
             evidence_tables = TABLES - {
+                "settlement_hk_slips",
+                "settlement_document_groups",
+                "settlement_document_group_items",
                 "task_supplier_owners",
                 "task_wecom_directories",
                 "task_wecom_directory_groups",

@@ -1,6 +1,6 @@
 import type { CSSProperties, ReactNode } from "react";
 
-export type StatTone = "neutral" | "warning" | "primary";
+export type StatTone = "neutral" | "warning" | "primary" | "progress" | "info" | "success";
 
 /**
  * 概况卡：一个字的图块 + 标签 + 数值 + 一句说明（财务核对、开票跟进等页顶部的概况）。

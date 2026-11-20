@@ -161,7 +161,7 @@ def test_hk_transit_batch_two_stage_reconciliation(seeded, tmp_path):
     batch = create(batches, ["REAL870", "REAL871"], "985.50", fee="15.00", payer="Brazil Buyer")
     assert (batch.route, batch.status, batch.statusLabel) == ("hk_transit", "collected", "香港已收")
     assert batch.declaredTotal == "1000.50" and batch.balances[0].balanced
-    assert batch.batchNo.startswith("SB") and [i.recordNo for i in batch.items] == ["CD870", "CD871"]
+    assert batch.batchNo.startswith("HK") and [i.recordNo for i in batch.items] == ["CD870", "CD871"]
     # 金额已对平，但提单与销售合同未齐，不能确认资料已出
     assert not batch.actions.documentsReady.allowed and not batch.actions.settle.allowed
     assert batch.actions.documentsReady.reason.startswith("资料未齐")
@@ -250,7 +250,10 @@ def test_legacy_direct_batch_still_settles(seeded):
     assert batches.settle(again, "finance-user").statusLabel == "已结汇"
 
 
-def test_create_is_idempotent_and_service_identity_is_read_only(seeded):
+def test_create_is_idempotent_and_service_identity_is_read_only(seeded, monkeypatch):
+    monkeypatch.setattr(
+        "backend.modules.settlement.service.batch_service._now", lambda: datetime(2026, 11, 20, 12)
+    )
     _, batches = services(seeded)
     body = CreateBatchRequest.model_validate(
         {
@@ -261,7 +264,14 @@ def test_create_is_idempotent_and_service_identity_is_read_only(seeded):
         }
     )
     first = batches.create(body, "finance-user")
+    assert first.batchNo == f"HK20261120-{first.id:05d}"
     assert batches.create(body, "finance-user").id == first.id
+    # 历史 SB 批次在查询和幂等重试中原样保留，不随新前缀重编号。
+    legacy_number = first.batchNo.replace("HK", "SB", 1)
+    with seeded.begin() as connection:
+        batch_dao.update_batch(connection, first.id, {"batch_no": legacy_number}, datetime(2026, 11, 20, 12))
+    assert batches.get(first.id).batchNo == legacy_number
+    assert batches.create(body, "finance-user").batchNo == legacy_number
     with pytest.raises(ApiError, match="服务身份只读"):
         batches.create(body, "service:robot")
     with pytest.raises(ValueError, match="最多两位小数"):

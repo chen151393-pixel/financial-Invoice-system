@@ -41,7 +41,7 @@ export function ContractGenerateForm({
           columns={[
             {
               key: "contract",
-              header: "出口合同号 / 对应报关单",
+              header: "销售订单 / 对应报关单",
               render: (row) => (
                 <div className="settlement-cell">
                   <strong>{row.contractNo}</strong>
@@ -53,7 +53,7 @@ export function ContractGenerateForm({
             { key: "seller", header: "卖方（NS 申报抬头）", render: (row) => row.sellerName || "待核对" },
           ]}
           rows={documents.planned}
-          rowKey={(row) => row.contractNo}
+          rowKey={(row) => row.key || row.contractNo}
           density="compact"
           minWidth={640}
         />

@@ -28,5 +28,5 @@ export function useSettlementOverview(query: OverviewQuery) {
     return () => controller.abort();
   }, [query, refresh]);
 
-  return { state, reload: () => setRefresh((value) => value + 1) };
+  return { state, reload: () => setRefresh((value) => value + 1), revision: refresh };
 }

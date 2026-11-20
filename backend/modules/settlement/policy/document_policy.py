@@ -5,7 +5,7 @@
 """
 
 from .bill_parse_policy import missing_fields
-from .contract_policy import digest
+from .contract_policy import contract_label, digest, document_key
 
 
 def checklist(items, bills, planned, plan_issues, contract_rows, bindings, party_issues):
@@ -21,14 +21,14 @@ def checklist(items, bills, planned, plan_issues, contract_rows, bindings, party
             issues.append(f"提单 {bill['bl_no'] or bill['file_name']} 待补：{'、'.join(missing)}")
     issues.extend(plan_issues)
     issues.extend(party_issues)
-    rows = {row["contract_no"]: row for row in contract_rows}
+    rows = {document_key(row): row for row in contract_rows}
     stale = set()
     for contract in planned:
-        row = rows.get(contract["contract_no"])
+        row = rows.get(document_key(contract))
         if row is None:
-            issues.append(f"销售合同 {contract['contract_no']} 尚未生成")
+            issues.append(f"销售合同 {contract_label(contract)} 尚未生成")
             continue
-        binding = bindings[contract["contract_no"]]
+        binding = bindings[document_key(contract)]
         buyer, seller = binding["buyer"], binding["seller"]
         terms = contract_terms(row)
         current = (
@@ -40,13 +40,13 @@ def checklist(items, bills, planned, plan_issues, contract_rows, bindings, party
             and row["seller_party_id"] == seller["id"]
         )
         if not current or digest(contract, buyer, seller, terms) != row["source_digest"]:
-            stale.add(row["contract_no"])
+            stale.add(document_key(row))
             issues.append(f"销售合同 {row['contract_no']} 的生成依据已变化，需重新生成")
         elif row["stamp_note"]:
             warnings.append(f"销售合同 {row['contract_no']}：{row['stamp_note']}")
-    for contract_no in rows.keys() - {contract["contract_no"] for contract in planned}:
+    for contract_no in rows.keys() - {document_key(contract) for contract in planned}:
         stale.add(contract_no)
-        issues.append(f"销售合同 {contract_no} 已不在批次的出口合同号中，需重新生成")
+        issues.append(f"销售合同 {rows[contract_no]['contract_no']} 的分组或覆盖范围已变化，需重新生成")
     return {"issues": issues, "warnings": warnings, "stale": stale}
 
 

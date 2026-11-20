@@ -8,12 +8,14 @@ export function Dialog({
   children,
   busy = false,
   className = "",
+  placement = "center",
 }: {
   title: string;
   onClose: () => void;
   children: ReactNode;
   busy?: boolean;
   className?: string;
+  placement?: "center" | "right";
 }) {
   const ref = useRef<HTMLDialogElement>(null);
   const titleId = useId();
@@ -30,6 +32,7 @@ export function Dialog({
     <dialog
       ref={ref}
       className={`ui-dialog ${className}`.trim()}
+      data-placement={placement}
       aria-labelledby={titleId}
       onCancel={(event) => {
         if (busy) event.preventDefault();

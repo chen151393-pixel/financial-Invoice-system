@@ -271,3 +271,43 @@ def test_package_includes_archived_customs_declarations(seeded, tmp_path):
     outside.write_bytes(b"x")
     file = {"filename": "a.pdf", "sha256": hashlib.sha256(b"x").hexdigest(), "path": str(outside)}
     assert documents.reader.declaration_files.read(file) == (None, "归档路径不在共享盘目录内")
+
+
+def test_uncreated_contract_basis_tracks_bill_changes_without_party_headers(seeded, tmp_path):
+    _, batches = services(seeded)
+    batch = create(batches, ["REAL870", "REAL871"], "985.50", fee="15.00")
+    documents = Documents(seeded, tmp_path)
+    empty = documents.views.get(batch.id).planned[0]
+    assert (empty.contractDate, empty.portOfLoading, empty.portOfDestination) == ("2026-10-01", "", "")
+    uploaded = documents.upload(batch.id)
+    assert uploaded.contracts == [] and not uploaded.generate.allowed
+    planned = uploaded.planned[0]
+    assert (planned.contractDate, planned.portOfLoading, planned.portOfDestination) == (
+        "2026-10-01",
+        "YANTIAN, CHINA",
+        "LOS ANGELES, CA",
+    )
+    changed = documents.bills.update(
+        batch.id,
+        uploaded.bills[0].id,
+        UpdateBillRequest(
+            blNo=uploaded.bills[0].blNo,
+            portOfLoading="SHANGHAI",
+            portOfDischarge="TOKYO",
+            onBoardDate="2026-07-01",
+            declarationNos=["REAL870", "REAL871"],
+        ),
+        "finance-user",
+    )
+    assert changed.contracts == [] and not changed.generate.allowed
+    assert (
+        changed.planned[0].contractDate,
+        changed.planned[0].portOfLoading,
+        changed.planned[0].portOfDestination,
+    ) == ("2026-10-01", "SHANGHAI", "TOKYO")
+    removed = documents.bills.remove(batch.id, uploaded.bills[0].id, "finance-user")
+    assert (
+        removed.planned[0].contractDate,
+        removed.planned[0].portOfLoading,
+        removed.planned[0].portOfDestination,
+    ) == ("2026-10-01", "", "")

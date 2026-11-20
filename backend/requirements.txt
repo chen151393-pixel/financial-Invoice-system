@@ -41,3 +41,5 @@ pypdf==7.1.0
 reportlab==5.1.0
 pillow==13.0.0
 charset-normalizer==3.5.2
+# Windows 等环境的 IANA 时区数据，供上海时区日期计算使用
+tzdata==2026.6

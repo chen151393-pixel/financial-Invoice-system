@@ -31,6 +31,14 @@ export function OverviewMetrics({ total }: { total: OverviewTotal }) {
           }
         />
       ))}
+      {total.settledAmount != null && (
+        <MetricCard
+          label="已结汇"
+          value={money(total.settledAmount)}
+          unit={total.currency}
+          hint={`${total.settledCount} / ${total.declarationCount} 票 · 按报关金额统计`}
+        />
+      )}
     </MetricGrid>
   );
 }

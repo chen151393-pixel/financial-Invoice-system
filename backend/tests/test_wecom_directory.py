@@ -228,6 +228,9 @@ def test_directory_migration_can_downgrade_and_upgrade_without_touching_other_ta
     before = set(inspect(engine).get_table_names())
     command.downgrade(config, "0038_source_purchase_line_tax_rate")
     assert set(inspect(engine).get_table_names()) == before - {
+        "settlement_document_groups",  # 0051 的空资料组表允许回退；有组时保护拒绝
+        "settlement_document_group_items",
+        "settlement_direct_allocations",  # 0049 的已退役空分配表随之回退
         "task_wecom_directories",
         "task_wecom_directory_groups",
         "sync_ns_plans",  # 0040 在没有计划数据时随之回退

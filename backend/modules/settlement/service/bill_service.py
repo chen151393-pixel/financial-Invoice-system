@@ -16,9 +16,10 @@ from ..dao import bill_dao
 from ..dao.document_scope import values as scope_values
 from ..dto.bill_dto import MAX_BILL_BYTES
 from ..policy.bill_layout_policy import agreed, parse_words
-from ..policy.bill_parse_policy import missing_fields, parse_bill
+from ..policy.bill_parse_policy import missing_fields, parse_bill, retry_values
 from .bill_text import extract_text
 from .document_service import edit_reason
+from .pdf_file import validate_pdf
 
 
 def _now():
@@ -79,42 +80,62 @@ class BillService:
     def upload(self, batch_id, body, owner):
         _require_operator(owner)
         content = decode(body.content, MAX_BILL_BYTES, "提单")
-        if not content.startswith(b"%PDF-"):
-            raise ApiError(422, "提单须为 PDF 文件")
+        validate_pdf(content, "提单")
         parsed, note = self._parse(content)
         file_id, sha256 = self.store.save(content, "pdf")
         now = _now()
         try:
             with write_lock.transaction(self.engine, "settlement") as connection:
                 batch, items = self._editable(connection, batch_id)
-                if any(row["sha256"] == sha256 for row in bill_dao.active(connection, batch_id)):
-                    raise ApiError(409, "该提单文件已上传到本次资料")
-                bill_dao.insert_bill(
-                    connection,
-                    {
-                        **scope_values(batch_id),
-                        "file_id": file_id,
-                        "file_name": body.fileName,
-                        "sha256": sha256,
-                        "size_bytes": len(content),
-                        "bl_no": parsed["bl_no"] or None,
-                        "port_of_loading": parsed["port_of_loading"] or None,
-                        "port_of_discharge": parsed["port_of_discharge"] or None,
-                        "on_board_date": parsed["on_board_date"],
-                        "declaration_nos": _numbers(body.declarationNos, items, batch_id),
-                        "parse_note": note,
-                        "uploaded_by": owner,
-                        "uploaded_at": now,
-                    },
-                    now,
+                duplicate = next(
+                    (row for row in bill_dao.active(connection, batch_id) if row["sha256"] == sha256),
+                    None,
                 )
-                return self.documents.view(connection, batch, items)
+                if duplicate:
+                    self._retry(connection, duplicate, parsed, note, now)
+                else:
+                    bill_dao.insert_bill(
+                        connection,
+                        {
+                            **scope_values(batch_id),
+                            "file_id": file_id,
+                            "file_name": body.fileName,
+                            "sha256": sha256,
+                            "size_bytes": len(content),
+                            "bl_no": parsed["bl_no"] or None,
+                            "port_of_loading": parsed["port_of_loading"] or None,
+                            "port_of_discharge": parsed["port_of_discharge"] or None,
+                            "on_board_date": parsed["on_board_date"],
+                            "declaration_nos": _numbers(body.declarationNos, items, batch_id),
+                            "parse_note": note,
+                            "uploaded_by": owner,
+                            "uploaded_at": now,
+                        },
+                        now,
+                    )
+                view = self.documents.view(connection, batch, items)
+            if duplicate:
+                self.store.remove(file_id, "pdf")
+            return view
         except ApiError:
             self.store.remove(file_id, "pdf")
             raise
         except SQLAlchemyError:
             self.store.remove(file_id, "pdf")
             raise ApiError(503, "提单保存失败，请检查业务数据库及迁移状态") from None
+
+    def _retry(self, connection, saved, parsed, note, now):
+        """复用上传入口重识别旧文件，事务内按最新字段补空，不改变原文件或关联。"""
+        values = retry_values(saved, parsed)
+        if not values:
+            if missing_fields(saved):
+                raise ApiError(409, "该提单文件已上传，本次仍未识别出缺失字段，请点击“修改”补填")
+            raise ApiError(409, "该提单文件已上传到本次资料")
+        missing = missing_fields({**saved, **values})
+        notes = [f"未能自动识别：{'、'.join(missing)}，请人工填写"] if missing else []
+        if OCR_NOTE in (note or "") or OCR_NOTE in (saved["parse_note"] or ""):
+            notes.append(OCR_NOTE)
+        bill_dao.update_bill(connection, saved["id"], {**values, "parse_note": "；".join(notes) or None}, now)
 
     def update(self, batch_id, bill_id, body, owner):
         """人工确认或修正提单字段及其对应的报关单。"""
@@ -153,8 +174,8 @@ class BillService:
     def file(self, batch_id, bill_id):
         """返回 (文件名, PDF 字节)。"""
         with self.engine.connect() as connection:
-            self.documents.load(connection, batch_id)
-            row = self._active(connection, batch_id, bill_id)
+            context, _ = self.documents.load(connection, batch_id)
+            row = self._active(connection, context["id"], bill_id)
         return row["file_name"], self.store.read(row["file_id"], "pdf")
 
     def _editable(self, connection, batch_id):

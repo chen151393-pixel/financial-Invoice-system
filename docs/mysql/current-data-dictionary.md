@@ -2120,3 +2120,52 @@ NS 来源按批后台保存记录与结果，不保存令牌。
 ### settlement_direct_allocations｜直接收汇历史分配
 
 已退役的逐笔匹配表，由迁移 `0049_settlement_direct_allocations` 保留在库中。应用不读写此表。
+
+
+### settlement_document_groups｜直接收汇资料组
+
+`0051_settlement_document_groups` 新增，`0052_settlement_group_comments` 补中文备注。同一境外收货人、同币种可跨 NS 申报抬头组织提单与销售合同，不登记收款。
+
+| 字段 | 类型 | 可空 | 说明 |
+| --- | --- | --- | --- |
+| id | BIGINT | 否 | 自增主键 |
+| group_no | VARCHAR(40) | 否 | 自动资料组编号，唯一 |
+| request_id | VARCHAR(36) | 否 | UUID 幂等请求，唯一 |
+| consignee / currency | VARCHAR(200) / VARCHAR(10) | 否 | 创建时客户与币种，当前依据变化时阻止生成资料 |
+| created_by | VARCHAR(190) | 否 | 认证创建人 |
+| created_at / updated_at | DATETIME(6) | 否 | UTC 创建及更新时间 |
+
+### settlement_document_group_items｜直接收汇资料组成员
+
+| 字段 | 类型 | 可空 | 说明 |
+| --- | --- | --- | --- |
+| id | BIGINT | 否 | 自增主键 |
+| group_id | BIGINT | 否 | 本模块外键，所属资料组 |
+| declaration_no | VARCHAR(150) | 否 | 报关单号，唯一，一票只能属于一组 |
+| created_at | DATETIME(6) | 否 | UTC 归组时间 |
+
+资料归属增量：`settlement_bills`、`settlement_contracts` 的 `batch_id` 已允许为空；`direct_declaration_no VARCHAR(150)` 表示旧单票资料，`document_group_id BIGINT` 表示直接资料组，与批次归属三选一。`settlement_contracts.document_key VARCHAR(64)` 为资料组内“申报抬头＋出口合同号”的稳定摘要，与组 ID 联合唯一；原 `contract_no` 保持来源编号。历史单票和香港资料不会自动改归属，手动建组时保留所选单票的已有资料。
+
+
+资料组后继字段（`0053_settlement_group_merge`，补充 `settlement_document_groups`）：
+
+| 字段 | 类型 | 可空 | 说明 |
+| --- | --- | --- | --- |
+| initial_declaration_nos | JSON | 是 | 创建时成员快照，旧组首次合并时补齐，不丢失原始范围 |
+| merged_into_id | BIGINT | 是 | 后继资料组，本模块自引用外键；非空的旧组不再参与当前列表 |
+| merged_at / merged_by | DATETIME(6) / VARCHAR(190) | 是 | UTC 合并时间和认证操作人 |
+| basis_history | JSON | 是 | 0055：人工确认来源更新的前后依据、成员回执版本、UTC 时间和认证操作者；已有历史时拒绝降级 |
+
+
+### settlement_hk_slips｜香港到账水单原件（0054）
+
+香港到账人工登记的可选银行水单原件，不存识别字段；所属模块为 settlement。
+
+| 字段 | 类型 | 可空 | 说明 |
+| --- | --- | --- | --- |
+| batch_id | BIGINT | 否 | 主键，本模块 settlement_batches 外键，一批次一份水单 |
+| file_name | VARCHAR(255) | 否 | 银行水单原文件名 |
+| file_id | VARCHAR(36) | 否 | 服务端生成的 PDF 存储标识 |
+| sha256 | VARCHAR(64) | 否 | 原件完整性校验摘要 |
+| uploaded_by | VARCHAR(190) | 否 | 来自认证身份的登记人 |
+| created_at / updated_at | DATETIME(6) | 否 | UTC 创建与更新时间 |

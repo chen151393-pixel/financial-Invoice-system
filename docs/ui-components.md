@@ -86,3 +86,15 @@ import { Card, CardHeader, CardContent, MetricCard, MetricGrid, Badge } from "..
 ### SearchInput 批量查询输入
 
 `SearchInput` 复用查询栏原生输入样式，使用 `value` / `onValueChange` 管理草稿；粘贴换行或制表符时转换为分号保留条目边界，后端负责拆分、去重和数量限制。配合 `<Field label="供应商" grow>` 使用，上方显示标签、框内提示多条输入方式。当前用于供应商档案和财务报关单搜索；输入框回车提交所属 `FilterBar`。
+
+
+2026-11-20：`StatCard` 的 `tone` 在原有 `neutral / primary / warning` 基础上增加 `info / progress / success`，供香港中转阶段卡展示信息、资料准备和已完成状态；颜色复用统一语义变量，其他页面的既有样式保持不变。
+
+
+`Dialog` 支持 `placement="right"`，用于保留列表背景的只读详情侧栏；默认仍为居中。右侧模式占满可用高度，小屏全宽，延用原有模态焦点、Escape 和关闭后焦点恢复。
+
+
+`Progress` 可选 `fluid` 使条形填满所在列（如总览账龄和客户收款进度），默认仍为原有固定宽度；不改变后端百分比或其他调用方。
+
+
+`Field` 控件样式同时覆盖 `input`、`select` 和 `textarea`；多行输入沿用边框、圆角、焦点环和字体，最小高度 64px，允许纵向调整。业务表单通过 Field 提供中文标签，帮助说明与后端错误在字段内通过 aria-describedby 关联。

@@ -1,8 +1,10 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import {
   Alert,
   Badge,
   Button,
+  Card,
+  CardContent,
   DataTable,
   ErrorState,
   SectionTitle,
@@ -26,26 +28,47 @@ type State =
   | { kind: "loading" }
   | { kind: "ready"; documents: Documents }
   | { kind: "error"; message: string };
-type ContractRow = { planned: PlannedContract | null; contract: Contract | null; contractNo: string };
+type ContractRow = {
+  planned: PlannedContract | null;
+  contract: Contract | null;
+  contractNo: string;
+  key: string;
+};
 
 function contractRows(documents: Documents): ContractRow[] {
-  const generated = new Map(documents.contracts.map((contract) => [contract.contractNo, contract]));
+  const generated = new Map(
+    documents.contracts.map((contract) => [contract.key || contract.contractNo, contract]),
+  );
   const rows: ContractRow[] = documents.planned.map((planned) => ({
     planned,
-    contract: generated.get(planned.contractNo) ?? null,
+    contract: generated.get(planned.key || planned.contractNo) ?? null,
     contractNo: planned.contractNo,
+    key: planned.key || planned.contractNo,
   }));
-  const plannedNos = new Set(documents.planned.map((planned) => planned.contractNo));
+  const plannedNos = new Set(documents.planned.map((planned) => planned.key || planned.contractNo));
   for (const contract of documents.contracts) {
-    if (!plannedNos.has(contract.contractNo)) {
-      rows.push({ planned: null, contract, contractNo: contract.contractNo });
+    if (!plannedNos.has(contract.key || contract.contractNo)) {
+      rows.push({
+        planned: null,
+        contract,
+        contractNo: contract.contractNo,
+        key: `${contract.key || contract.contractNo}-${contract.id}`,
+      });
     }
   }
   return rows;
 }
 
 /** 香港中转与直接收汇共用的资料：提单、销售合同（形式发票）、报关单、资料包。齐全度、缺项与能否操作全部来自后端。 */
-export function BatchDocuments({ target, onChanged }: { target: DocumentTarget; onChanged: () => void }) {
+export function BatchDocuments({
+  target,
+  onChanged,
+  overview,
+}: {
+  target: DocumentTarget;
+  onChanged: () => void;
+  overview?: (documents: Documents) => ReactNode;
+}) {
   const [state, setState] = useState<State>({ kind: "loading" });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -110,6 +133,11 @@ export function BatchDocuments({ target, onChanged }: { target: DocumentTarget; 
   }
   const documents = state.documents;
   const editable = documents.edit.allowed;
+  const noticeTitle = documents.complete
+    ? "提单与销售合同已齐全"
+    : `资料未齐，还有 ${documents.issues.length} 项待处理`;
+  const hasNoticeDetails = documents.issues.length > 0 || documents.warnings.length > 0;
+
   const editingBill = documents.bills.find((bill) => bill.id === editing);
 
   const billColumns: Column<Bill>[] = [
@@ -153,9 +181,13 @@ export function BatchDocuments({ target, onChanged }: { target: DocumentTarget; 
       header: "操作",
       render: (bill) =>
         editable ? (
-          <div className="settlement-badges">
+          <div
+            className="settlement-bill-actions"
+            role="group"
+            aria-label={`提单 ${bill.blNo || bill.fileName} 操作`}
+          >
             <Button size="sm" disabled={busy} onClick={() => setEditing(bill.id)}>
-              修改
+              {bill.missing.length ? "补全信息" : bill.parseNote ? "核对信息" : "编辑信息"}
             </Button>
             <Button
               size="sm"
@@ -204,7 +236,7 @@ export function BatchDocuments({ target, onChanged }: { target: DocumentTarget; 
   const contractColumns: Column<ContractRow>[] = [
     {
       key: "no",
-      header: "合同编号",
+      header: "销售订单",
       render: (row) =>
         row.contract ? (
           <a href={row.contract.fileUrl} target="_blank" rel="noreferrer">
@@ -238,12 +270,23 @@ export function BatchDocuments({ target, onChanged }: { target: DocumentTarget; 
         return source ? `${source.currency} ${money(source.amount)}` : "";
       },
     },
-    { key: "date", header: "签订日期", render: (row) => row.contract?.contractDate || "—" },
+    {
+      key: "date",
+      header: "签订日期",
+      render: (row) => {
+        const date = (row.contract ?? row.planned)?.contractDate;
+        return date ? `${date}${row.contract ? "" : "（拟）"}` : "—";
+      },
+    },
     {
       key: "ports",
       header: "装运口岸 → 目的口岸",
-      render: (row) =>
-        row.contract ? `${row.contract.portOfLoading} → ${row.contract.portOfDestination}` : "—",
+      render: (row) => {
+        const source = row.contract ?? row.planned;
+        return source && (source.portOfLoading || source.portOfDestination)
+          ? `${source.portOfLoading || "—"} → ${source.portOfDestination || "—"}`
+          : "—";
+      },
     },
     {
       key: "state",
@@ -261,24 +304,8 @@ export function BatchDocuments({ target, onChanged }: { target: DocumentTarget; 
     },
   ];
 
-  return (
-    <section className="settlement-docs" aria-label="结汇资料">
-      <Alert
-        tone={documents.complete ? (documents.warnings.length ? "warning" : "success") : "warning"}
-        title={
-          documents.complete ? "提单与销售合同已齐全" : `资料未齐，还有 ${documents.issues.length} 项待处理`
-        }
-      >
-        {(documents.issues.length > 0 || documents.warnings.length > 0) && (
-          <ul className="settlement-docs__list">
-            {[...documents.issues, ...documents.warnings].map((item) => (
-              <li key={item}>{item}</li>
-            ))}
-          </ul>
-        )}
-        {!editable && <span> {documents.edit.reason}。</span>}
-      </Alert>
-
+  const billContent = (
+    <>
       <SectionTitle
         title="提单"
         count={documents.bills.length}
@@ -306,14 +333,39 @@ export function BatchDocuments({ target, onChanged }: { target: DocumentTarget; 
         }
       />
       {documents.bills.length ? (
-        <DataTable
-          label="提单"
-          columns={billColumns}
-          rows={documents.bills}
-          rowKey={(bill) => String(bill.id)}
-          density="compact"
-          minWidth={640}
-        />
+        overview ? (
+          <div className="settlement-group-bills">
+            {documents.bills.map((bill) => (
+              <article className="settlement-group-bill" key={bill.id}>
+                <div className="settlement-group-bill__body">
+                  <a href={bill.fileUrl} target="_blank" rel="noreferrer">
+                    <strong>{bill.blNo || "提单编号待补"}</strong>
+                  </a>
+                  <p>
+                    {bill.portOfLoading || "装运口岸待补"} → {bill.portOfDischarge || "目的口岸待补"} · 装船{" "}
+                    {bill.onBoardDate || "日期待补"}
+                  </p>
+                  <p>覆盖：{bill.declarationNos.join("、")}</p>
+                  {billColumns.find((column) => column.key === "state")?.render(bill)}
+                </div>
+                {editable && (
+                  <div className="settlement-group-bill__actions">
+                    {billColumns.find((column) => column.key === "actions")?.render(bill)}
+                  </div>
+                )}
+              </article>
+            ))}
+          </div>
+        ) : (
+          <DataTable
+            label="提单"
+            columns={billColumns}
+            rows={documents.bills}
+            rowKey={(bill) => String(bill.id)}
+            density="compact"
+            minWidth={640}
+          />
+        )
       ) : (
         <p className="settlement-form__hint">
           还没有提单。上传后系统自动识别提单号、口岸与装船日期，识别不到的可人工填写。
@@ -329,7 +381,10 @@ export function BatchDocuments({ target, onChanged }: { target: DocumentTarget; 
           onSubmit={(fields) => void run(() => updateBill(target, editingBill.id, fields))}
         />
       )}
-
+    </>
+  );
+  const contractContent = (
+    <>
       <SectionTitle
         title="销售合同（形式发票）"
         count={`${documents.contracts.length} / ${documents.planned.length}`}
@@ -354,10 +409,53 @@ export function BatchDocuments({ target, onChanged }: { target: DocumentTarget; 
         label="销售合同（形式发票）"
         columns={contractColumns}
         rows={contractRows(documents)}
-        rowKey={(row) => row.contractNo}
+        rowKey={(row) => row.key}
         density="compact"
         minWidth={640}
       />
+    </>
+  );
+
+  return (
+    <section className="settlement-docs" aria-label="结汇资料">
+      <Alert
+        tone={documents.complete ? (documents.warnings.length ? "warning" : "success") : "warning"}
+        title={hasNoticeDetails ? undefined : noticeTitle}
+      >
+        {hasNoticeDetails && (
+          <details className="settlement-docs__notice">
+            <summary>
+              <strong>{noticeTitle}</strong> <span className="settlement-docs__notice-expand">展开明细</span>
+              <span className="settlement-docs__notice-collapse">收起明细</span>
+            </summary>
+            <ul className="settlement-docs__list">
+              {[...documents.issues, ...documents.warnings].map((item, index) => (
+                <li key={`${index}-${item}`}>{item}</li>
+              ))}
+            </ul>
+          </details>
+        )}
+        {!editable && <span> {documents.edit.reason}。</span>}
+      </Alert>
+
+      {overview ? (
+        <div className="settlement-docs__split">
+          {overview(documents)}
+          <Card>
+            <CardContent>{billContent}</CardContent>
+          </Card>
+        </div>
+      ) : (
+        billContent
+      )}
+
+      {overview ? (
+        <Card>
+          <CardContent>{contractContent}</CardContent>
+        </Card>
+      ) : (
+        contractContent
+      )}
       <SectionTitle title="报关单" count={documents.declarationFiles.length} />
       <p className="settlement-form__hint">
         取“开票跟进”从 NS 下载并归档的报关单原件；未归档时请到对应开票任务的详情中下载。

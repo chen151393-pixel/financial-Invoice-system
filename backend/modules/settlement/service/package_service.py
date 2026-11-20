@@ -12,6 +12,7 @@ from backend.core.errors import ApiError
 from ..policy.amount_policy import money
 from ..policy.route_policy import HK_TRANSIT
 from .document_service import load
+from .pdf_file import validate_pdf
 
 
 def safe_name(value):
@@ -40,14 +41,18 @@ class PackageService:
             raise ApiError(409, "资料未齐，不能打包：" + "；".join(state["issues"][:3]))
         direct = batch.get("document_kind") == "direct"
         root = (
-            safe_name(f"直接收汇_{batch['id']}_{batch['currency']}{money(batch['declared_total'])}")
+            safe_name(
+                f"直接收汇_{batch.get('group_no', batch['id'])}_{batch['currency']}{money(batch['declared_total'])}"
+            )
             if direct
             else safe_name(
                 f"{batch['received_on']}_{batch['batch_no']}_{batch['currency']}{money(batch['declared_total'])}"
             )
         )
         listing = [
-            f"直接收汇报关单 {batch['id']}" if direct else f"结汇批次 {batch['batch_no']}",
+            f"直接收汇资料 {batch.get('group_no', batch['id'])}"
+            if direct
+            else f"结汇批次 {batch['batch_no']}",
             f"境外收货人：{batch['consignee']}",
             f"报关合计：{batch['currency']} {money(batch['declared_total'])}"
             if direct
@@ -56,8 +61,28 @@ class PackageService:
         ]
         buffer = io.BytesIO()
         with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as archive:
+            if batch.get("document_group_id"):
+                seen = set()
+                for bill in state["bills"]:
+                    if bill["sha256"] in seen:
+                        continue
+                    seen.add(bill["sha256"])
+                    name = f"提单{safe_name(bill['bl_no'])}_{bill['id']}.pdf"
+                    content = self.store.read(bill["file_id"], "pdf")
+                    validate_pdf(content, "提单")
+                    archive.writestr(f"{root}/共用提单/{name}", content)
+                    covered = sorted(
+                        {
+                            number
+                            for same in state["bills"]
+                            if same["sha256"] == bill["sha256"]
+                            for number in same["declaration_nos"] or []
+                        }
+                    )
+                    listing.append(f"共用提单/{name}　覆盖报关单：{'、'.join(covered)}")
             for contract in state["contracts"]:
-                folder = f"{root}/{safe_name(contract['contract_no'])}"
+                suffix = f"_申报抬头{contract['seller_party_id']}" if batch.get("document_group_id") else ""
+                folder = f"{root}/{safe_name(contract['contract_no'])}{suffix}"
                 listing.append(
                     f"[{contract['contract_no']}] 报关单：{'、'.join(contract['declaration_nos'])}　"
                     f"合同金额：{contract['currency']} {money(contract['amount'])}"
@@ -69,7 +94,7 @@ class PackageService:
                 )
                 numbers = set(contract["declaration_nos"])
                 for bill in state["bills"]:
-                    if numbers & set(bill["declaration_nos"] or []):
+                    if not batch.get("document_group_id") and numbers & set(bill["declaration_nos"] or []):
                         name = f"提单{safe_name(bill['bl_no'])}.pdf"
                         archive.writestr(f"{folder}/{name}", self.store.read(bill["file_id"], "pdf"))
                         listing.append(

@@ -96,3 +96,9 @@ def english_date(value):
     """合同签订日期写法：9th Apr 2026。"""
     suffix = "th" if 10 <= value.day % 100 <= 20 else {1: "st", 2: "nd", 3: "rd"}.get(value.day % 10, "th")
     return f"{value.day}{suffix} {datetime(value.year, value.month, 1):%b} {value.year}"
+
+
+def retry_values(saved, parsed):
+    """重复上传相同提单时仅补空字段，保留已有识别值及人工核对结果。"""
+    fields = ("bl_no", "port_of_loading", "port_of_discharge", "on_board_date")
+    return {field: parsed[field] for field in fields if not saved[field] and parsed[field]}

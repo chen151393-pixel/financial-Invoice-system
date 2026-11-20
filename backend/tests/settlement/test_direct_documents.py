@@ -138,7 +138,7 @@ def test_migration_preserves_hk_documents_and_refuses_lossy_downgrade(seeded, tm
     bill = docs.upload(hk.id).bills[0]
     cfg = _config(SCHEMA_INI, seeded.url.render_as_string(hide_password=False))
     command.downgrade(cfg, "0049_settlement_direct_allocations")
-    command.upgrade(cfg, "0050_settlement_direct_documents")
+    command.upgrade(cfg, "head")
     assert docs.views.get(hk.id).bills[0] == bill
     direct = direct_documents(seeded, tmp_path)
     direct.upload("REAL872")

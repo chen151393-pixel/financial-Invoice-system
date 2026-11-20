@@ -1,3 +1,4 @@
+import { DeclarationDetailLink } from "./DeclarationDetailLink";
 import { Link } from "react-router";
 import {
   settlementBatchListPath,
@@ -43,7 +44,9 @@ const COLUMNS: Column<ReceivableItem>[] = [
     width: "190px",
     render: (row) => (
       <div className="settlement-cell">
-        <strong>{row.declarationNo}</strong>
+        <strong>
+          <DeclarationDetailLink number={row.declarationNo} />
+        </strong>
         <span>{row.recordNo || "—"}</span>
       </div>
     ),

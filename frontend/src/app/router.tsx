@@ -80,12 +80,24 @@ export const router = createBrowserRouter([
             element: page("settlement", "香港中转批次", <SettlementWorkspacePage />),
           },
           {
+            path: paths.settlementHkRegister,
+            element: page("settlement", "登记香港回款", <SettlementWorkspacePage />),
+          },
+          {
             path: paths.settlementParties,
             element: page("settlement", "合同抬头", <SettlementWorkspacePage />),
           },
           {
             path: paths.settlementDirect,
             element: page("settlement", "直接收汇明细", <SettlementWorkspacePage />),
+          },
+          {
+            path: paths.settlementDocumentMerge,
+            element: page("settlement", "合并办理资料", <SettlementWorkspacePage />),
+          },
+          {
+            path: `${paths.settlementDocumentGroups}/:groupId`,
+            element: page("settlement", "直接收汇资料组", <SettlementWorkspacePage />),
           },
           { path: legacyPaths.finance, element: <Navigate to={paths.review} replace /> },
           { path: paths.tasks, element: page("invoice-followup", "开票跟进", <TaskWorkspacePage />) },

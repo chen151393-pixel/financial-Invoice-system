@@ -1,0 +1,204 @@
+.settlement-group-selection {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2, 8px);
+}
+
+.settlement-direct-group-detail {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.settlement-group-workspace {
+  min-width: 0;
+}
+.settlement-group-workspace__identity {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.settlement-docs__split {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 20px;
+}
+.settlement-group-members {
+  display: grid;
+}
+.settlement-group-member {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--color-border);
+}
+.settlement-group-member p {
+  margin: 4px 0 0;
+  color: var(--color-muted);
+  font-size: 12px;
+}
+.settlement-group-member > div {
+  min-width: 0;
+}
+.settlement-group-member > div:last-child {
+  display: grid;
+  justify-items: end;
+  align-content: start;
+  gap: 8px;
+  flex-shrink: 0;
+}
+.settlement-merge {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 320px;
+  gap: 20px;
+  align-items: start;
+}
+.settlement-merge__main {
+  display: grid;
+  gap: 20px;
+  min-width: 0;
+}
+.settlement-merge__aside {
+  position: sticky;
+  top: 20px;
+  min-width: 0;
+}
+.settlement-merge__aside .ui-card__content {
+  display: grid;
+  gap: 16px;
+}
+.settlement-merge__choices {
+  display: grid;
+  gap: 12px;
+}
+.settlement-merge-choice {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-control);
+  padding: 16px;
+  cursor: pointer;
+}
+.settlement-merge-choice[data-selected="true"] {
+  border-color: var(--color-primary);
+  background: var(--color-canvas);
+}
+.settlement-merge-choice__body {
+  display: grid;
+  gap: 6px;
+  flex: 1;
+  min-width: 0;
+}
+.settlement-merge-choice__title {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  flex-wrap: wrap;
+  overflow-wrap: anywhere;
+}
+.settlement-merge-choice__amount {
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.settlement-merge__total {
+  display: grid;
+  gap: 6px;
+  font-variant-numeric: tabular-nums;
+}
+.settlement-merge__checks {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  gap: 14px;
+}
+.settlement-merge__checks li {
+  display: flex;
+  gap: 10px;
+  align-items: start;
+}
+.settlement-merge__checks p {
+  color: var(--color-muted);
+  font-size: 12px;
+  margin: 4px 0 0;
+}
+@media (max-width: 1050px) {
+  .settlement-merge {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .settlement-merge__aside {
+    position: static;
+  }
+  .settlement-docs__split {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+@media (max-width: 560px) {
+  .settlement-merge-choice {
+    flex-wrap: wrap;
+    padding: 12px;
+  }
+  .settlement-merge-choice__amount {
+    margin-left: 28px;
+  }
+  .settlement-group-member {
+    padding: 12px;
+    flex-wrap: wrap;
+  }
+}
+
+.settlement-group-bills {
+  display: grid;
+  gap: var(--space-layout);
+  margin-top: var(--space-control);
+}
+.settlement-group-bill {
+  display: grid;
+  gap: var(--space-control);
+  min-width: 0;
+}
+.settlement-group-bill__body {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.settlement-group-bill__body .ui-badge {
+  max-width: 100%;
+  white-space: normal;
+}
+.settlement-group-bill p {
+  margin: 4px 0;
+  color: var(--color-muted);
+  font-size: 12px;
+}
+.settlement-group-bill__actions {
+  display: flex;
+  justify-content: flex-end;
+  padding-top: var(--space-control);
+  border-top: 1px solid var(--color-border);
+}
+@media (max-width: 560px) {
+  .settlement-merge-choice {
+    display: grid;
+    grid-template-columns: 18px minmax(0, 1fr);
+    align-items: start;
+  }
+  .settlement-merge-choice__amount {
+    grid-column: 2;
+    justify-self: end;
+    margin-left: 0;
+  }
+  .settlement-merge .ui-filter-bar {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .settlement-merge .ui-field {
+    min-width: 0;
+    width: 100%;
+  }
+  .settlement-merge .ui-field input {
+    max-width: 100%;
+    width: 100%;
+  }
+}

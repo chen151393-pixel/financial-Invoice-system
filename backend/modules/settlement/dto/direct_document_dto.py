@@ -10,6 +10,7 @@ from .batch_dto import Text200
 
 
 class DirectDocumentQuery(StrictModel):
+    grouping: Literal["all", "single", "multiple"] = "all"
     keyword: Text200 = ""
     consignee: Text200 = ""
     status: Literal["all", "pending_bill", "pending_contract", "stale", "complete"] = "all"

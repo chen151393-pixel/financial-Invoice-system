@@ -5,13 +5,14 @@ from backend.modules.review.public import settlement_declarations
 from backend.modules.source.public import declarant_names_by_number, declaration_refs_by_number
 
 from ..dao import party_dao
+from ..policy.contract_policy import document_key
 
 
 def _unique(names):
     return {normalize_name(name): name for name in names if normalize_name(name)}
 
 
-def resolve(connection, items, planned):
+def source_facts(connection, items):
     numbers = [item["declaration_no"] for item in items]
     receipts = {
         row["declaration_no"]: row for row in settlement_declarations(connection, numbers=numbers, limit=None)
@@ -19,6 +20,14 @@ def resolve(connection, items, planned):
     refs = declaration_refs_by_number(connection, numbers)
     declarants = declarant_names_by_number(connection, numbers)
     parties = {row["name_key"]: row for row in party_dao.all_parties(connection)}
+    return dict(receipts=receipts, refs=refs, declarants=declarants, parties=parties)
+
+
+def resolve(connection, items, planned, *, facts=None):
+    facts = facts if facts is not None else source_facts(connection, items)
+    receipts, refs, declarants, parties = (
+        facts[key] for key in ("receipts", "refs", "declarants", "parties")
+    )
     bindings, issues = {}, []
     for contract in planned:
         linked = contract["declaration_nos"]
@@ -49,7 +58,7 @@ def resolve(connection, items, planned):
         if buyer and seller and buyer["id"] == seller["id"]:
             problems.append("买卖方不能相同，请核对境外收货人与 NS 申报抬头")
         messages = [prefix + problem for problem in problems]
-        bindings[contract["contract_no"]] = {
+        bindings[document_key(contract)] = {
             "buyer": buyer,
             "seller": seller,
             "buyer_name": "、".join(buyers.values()),

@@ -34,3 +34,16 @@ def replace(connection, batch_id, rows, now):
             insert(contracts),
             [{**row, **scope_values(batch_id), "created_at": now, "updated_at": now} for row in rows],
         )
+
+
+def by_groups(connection, group_ids):
+    result = {group_id: [] for group_id in group_ids}
+    if group_ids:
+        query = (
+            select(contracts)
+            .where(contracts.c.document_group_id.in_(group_ids))
+            .order_by(contracts.c.contract_no)
+        )
+        for row in connection.execute(query).mappings():
+            result[row["document_group_id"]].append(dict(row))
+    return result

@@ -3,6 +3,9 @@ import { HttpError } from "../../../shared/api/http";
 import { Alert, Button, Dialog, Field } from "../../../shared/components/ui";
 import { createBatch } from "../api";
 import "./create-batch-dialog.css";
+import { useHkReceiptPreview } from "../hooks/useHkReceiptPreview";
+import { money } from "../../../shared/format/money";
+import type { HkPending } from "../types/hk-workbench";
 
 /** 登记一笔回款：金额、手续费按银行水单填写；报关合计与差额由后端核对后在批次详情中展示。 */
 export function CreateBatchDialog({
@@ -10,11 +13,15 @@ export function CreateBatchDialog({
   defaultAmount,
   onClose,
   onCreated,
+  selectedRows,
+  onRemove,
 }: {
   declarationNos: string[];
   defaultAmount: string;
   onClose: () => void;
   onCreated: (id: number) => void;
+  selectedRows?: HkPending[];
+  onRemove?: (number: string) => void;
 }) {
   // 同一次弹窗内重复提交使用同一幂等号，后端返回同一批次
   const requestId = useRef(crypto.randomUUID());
@@ -23,6 +30,10 @@ export function CreateBatchDialog({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [fieldErrors, setFieldErrors] = useState<Readonly<Record<string, string>>>({});
+
+  const [amountText, setAmountText] = useState(defaultAmount);
+  const [feeText, setFeeText] = useState("0");
+  const preview = useHkReceiptPreview(declarationNos, amountText, feeText);
 
   async function submit(form: HTMLFormElement) {
     if (submitting.current) return;
@@ -75,7 +86,29 @@ export function CreateBatchDialog({
           <summary>已选 {declarationNos.length} 张报关单</summary>
           <ul>
             {declarationNos.map((number) => (
-              <li key={number}>{number}</li>
+              <li key={number} className="settlement-create__selected-row">
+                <span>
+                  <strong>{number}</strong>
+                  {selectedRows?.find((row) => row.declarationNo === number) && (
+                    <small>
+                      {selectedRows.find((row) => row.declarationNo === number)?.consignee} ·{" "}
+                      {selectedRows.find((row) => row.declarationNo === number)?.exportDate} ·{" "}
+                      {selectedRows.find((row) => row.declarationNo === number)?.currency}{" "}
+                      {selectedRows.find((row) => row.declarationNo === number)?.amount}
+                    </small>
+                  )}
+                </span>
+                {onRemove && (
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    disabled={busy || declarationNos.length <= 1}
+                    onClick={() => onRemove(number)}
+                  >
+                    移除
+                  </Button>
+                )}
+              </li>
             ))}
           </ul>
         </details>
@@ -94,6 +127,7 @@ export function CreateBatchDialog({
               inputMode="decimal"
               required
               defaultValue={defaultAmount}
+              onChange={(event) => setAmountText(event.target.value)}
               placeholder="如 10,002.59"
               aria-invalid={!!fieldErrors.receivedAmount || undefined}
               aria-describedby={`${id}-amount-hint${fieldErrors.receivedAmount ? ` ${id}-amount-error` : ""}`}
@@ -107,6 +141,7 @@ export function CreateBatchDialog({
           <Field label="银行手续费">
             <input
               name="receivedFee"
+              onChange={(event) => setFeeText(event.target.value)}
               inputMode="decimal"
               defaultValue="0"
               aria-invalid={!!fieldErrors.receivedFee || undefined}
@@ -138,6 +173,25 @@ export function CreateBatchDialog({
             </Field>
           </div>
         </fieldset>
+        <div className="settlement-create__preview" aria-live="polite">
+          {preview.loading ? (
+            <p>正在核对已选报关金额与香港到账…</p>
+          ) : preview.result ? (
+            <Alert
+              tone={preview.result.balanced ? "success" : "warning"}
+              title={preview.result.balanced ? "香港到账已对平" : "香港到账待核对"}
+            >
+              已选报关合计 {preview.result.currency} {money(preview.result.declaredTotal)} · 到账 + 手续费{" "}
+              {money(preview.result.arrivedTotal)} · 差额 {money(preview.result.difference)}
+              {!preview.result.balanced && <p>可先登记实际到账，金额未对平时不能确认资料已出。</p>}
+              {preview.result.warnings.map((warning) => (
+                <p key={warning}>{warning}</p>
+              ))}
+            </Alert>
+          ) : (
+            <Alert tone="danger">{preview.error}</Alert>
+          )}
+        </div>
         {error && (
           <Alert tone="danger" title="登记未完成，填写内容已保留">
             {error}
@@ -147,7 +201,11 @@ export function CreateBatchDialog({
           <Button type="button" variant="ghost" onClick={onClose} disabled={busy}>
             取消
           </Button>
-          <Button type="submit" variant="primary" disabled={busy}>
+          <Button
+            type="submit"
+            variant="primary"
+            disabled={busy || preview.loading || !preview.result?.submit.allowed}
+          >
             {busy ? "正在登记…" : "登记并建批次"}
           </Button>
         </div>

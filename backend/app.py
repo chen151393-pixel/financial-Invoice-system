@@ -64,11 +64,18 @@ from .modules.review.service.review_service import ReviewService
 from .modules.review.service.task_release_service import on_finance_approved
 from .modules.settlement.controller import bank_receipt_controller as settlement_bank_receipts
 from .modules.settlement.controller import document_controller as settlement_documents
+from .modules.settlement.controller import hk_receipt_controller as settlement_hk_receipt
 from .modules.settlement.controller import ledger_controller as settlement_ledger
 from .modules.settlement.controller import overview_controller as settlement_overview
 from .modules.settlement.controller import party_controller as settlement_parties
 from .modules.settlement.controller import receivable_controller as settlement_receivables
 from .modules.settlement.controller.batch_controller import create_router as settlement_router
+from .modules.settlement.controller.document_group_controller import (
+    create_router as settlement_document_groups_router,
+)
+from .modules.settlement.controller.hk_workbench_controller import (
+    create_router as settlement_hk_workbench_router,
+)
 from .modules.settlement.service.bank_receipt_service import (
     BankReceiptService as SettlementBankReceiptService,
 )
@@ -77,14 +84,26 @@ from .modules.settlement.service.bill_ocr import BillOcr as SettlementBillOcr
 from .modules.settlement.service.bill_service import BillService as SettlementBillService
 from .modules.settlement.service.candidate_service import CandidateService as SettlementCandidateService
 from .modules.settlement.service.contract_service import ContractService as SettlementContractService
+from .modules.settlement.service.declaration_detail_service import (
+    DeclarationDetailService as SettlementDeclarationDetail,
+)
 from .modules.settlement.service.declaration_files import DeclarationFiles as SettlementDeclarationFiles
 from .modules.settlement.service.direct_document_service import (
     DirectDocumentService as SettlementDirectDocuments,
 )
 from .modules.settlement.service.direct_document_source import DirectDocumentSource as SettlementDirectSource
+from .modules.settlement.service.document_group_service import (
+    DocumentGroupService as SettlementDocumentGroups,
+)
+from .modules.settlement.service.document_group_source import DocumentGroupSource as SettlementGroupSource
+from .modules.settlement.service.document_merge_service import DocumentMergeService as SettlementDocumentMerge
 from .modules.settlement.service.document_reader import DocumentReader as SettlementDocumentReader
 from .modules.settlement.service.document_service import DocumentService as SettlementDocumentService
 from .modules.settlement.service.document_store import DocumentStore as SettlementDocumentStore
+from .modules.settlement.service.hk_receipt_service import HkReceiptService as SettlementHkReceiptService
+from .modules.settlement.service.hk_workbench_service import (
+    HkWorkbenchService as SettlementHkWorkbenchService,
+)
 from .modules.settlement.service.ledger_service import LedgerService as SettlementLedgerService
 from .modules.settlement.service.overview_service import OverviewService as SettlementOverviewService
 from .modules.settlement.service.package_service import PackageService as SettlementPackageService
@@ -247,6 +266,7 @@ def create_app(settings=None, ns=None, engine=None, wecom=None, lemon=None, lemo
         json_body_limits={
             **JSON_BODY_LIMITS,
             **settlement_documents.JSON_BODY_LIMITS,
+            **settlement_hk_receipt.JSON_BODY_LIMITS,
             **settlement_parties.JSON_BODY_LIMITS,
             **settlement_bank_receipts.JSON_BODY_LIMITS,
         },
@@ -348,15 +368,29 @@ def _register_business(app, settings, ns, contract_ns, wecom, engine, lemon_invo
         lead_days=settings.settlement_contract_lead_days,
         declaration_files=SettlementDeclarationFiles(settings.subpo_archive_root),
     )
+    settlement_store = SettlementDocumentStore(settings.settlement_document_root)
+    settlement_batch_views = SettlementBatchService(
+        engine, settlement_candidates, settlement_reader, fee_alert=settings.settlement_fee_alert
+    )
+    app.include_router(settlement_router(settlement_candidates, settlement_batch_views))
     app.include_router(
-        settlement_router(
-            settlement_candidates,
-            SettlementBatchService(
-                engine, settlement_candidates, settlement_reader, fee_alert=settings.settlement_fee_alert
-            ),
+        settlement_hk_receipt.create_router(
+            SettlementHkReceiptService(
+                engine,
+                settlement_candidates,
+                settlement_batch_views,
+                settlement_store,
+                fee_alert=settings.settlement_fee_alert,
+            )
         )
     )
-    settlement_store = SettlementDocumentStore(settings.settlement_document_root)
+    app.include_router(
+        settlement_hk_workbench_router(
+            SettlementHkWorkbenchService(
+                engine, settlement_candidates, settlement_reader, fee_alert=settings.settlement_fee_alert
+            )
+        )
+    )
     settlement_views = SettlementDocumentService(engine, settlement_reader)
     app.include_router(
         settlement_documents.create_router(
@@ -394,6 +428,30 @@ def _register_business(app, settings, ns, contract_ns, wecom, engine, lemon_invo
             direct_list=SettlementDirectDocuments(engine, settlement_candidates, settlement_reader),
         )
     )
+    group_views = SettlementDocumentService(
+        engine, settlement_reader, SettlementGroupSource(settlement_candidates)
+    )
+    settlement_groups = SettlementDocumentGroups(engine, settlement_candidates, settlement_reader)
+    app.include_router(
+        settlement_document_groups_router(settlement_groups, SettlementDocumentMerge(settlement_groups))
+    )
+    app.include_router(
+        settlement_documents.create_router(
+            group_views,
+            SettlementBillService(
+                engine, settlement_store, group_views, SettlementBillOcr(settings.settlement_ocr_command)
+            ),
+            SettlementContractService(
+                engine,
+                settlement_store,
+                settlement_reader,
+                group_views,
+                font_path=settings.settlement_pdf_font,
+            ),
+            SettlementPackageService(engine, settlement_store, settlement_reader, group_views),
+            groups=True,
+        )
+    )
     app.include_router(settlement_parties.create_router(SettlementPartyService(engine, settlement_store)))
     app.include_router(
         settlement_bank_receipts.create_router(SettlementBankReceiptService(engine, settlement_candidates))
@@ -401,12 +459,18 @@ def _register_business(app, settings, ns, contract_ns, wecom, engine, lemon_invo
     app.include_router(
         settlement_ledger.create_router(SettlementLedgerService(engine, settlement_candidates))
     )
+    settlement_receivable_views = SettlementReceivableService(
+        engine, settlement_candidates, settlement_reader
+    )
     app.include_router(
-        settlement_overview.create_router(SettlementOverviewService(engine, settlement_candidates))
+        settlement_overview.create_router(
+            SettlementOverviewService(engine, settlement_candidates, settlement_receivable_views)
+        )
     )
     app.include_router(
         settlement_receivables.create_router(
-            SettlementReceivableService(engine, settlement_candidates, settlement_reader)
+            settlement_receivable_views,
+            SettlementDeclarationDetail(settlement_receivable_views, fee_alert=settings.settlement_fee_alert),
         )
     )
     directory = SourceDirectory(engine)

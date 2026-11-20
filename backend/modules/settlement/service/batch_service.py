@@ -16,10 +16,11 @@ from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 
 from backend.core import write_lock
 from backend.core.errors import ApiError
-from backend.core.names import normalize_name
 
-from ..dao import batch_dao, batch_item_dao
+from ..dao import batch_dao, batch_item_dao, hk_slip_dao
 from ..mapper.batch_mapper import balances, detail, summary
+from ..policy.amount_policy import balance_check
+from ..policy.batch_selection_policy import validate_selection
 from ..policy.batch_state_policy import STATUS_LABELS, can_transition, status_label
 from ..policy.route_policy import HK_TRANSIT, ROUTE_LABELS
 from ..vo.batch_vo import BatchList, StatusCount
@@ -34,33 +35,6 @@ def _now():
 def _require_operator(owner):
     if owner.startswith("service:"):
         raise ApiError(403, "服务身份只读，不能修改结汇批次")
-
-
-def _single(values, label):
-    distinct = {value for value in values}
-    if len(distinct) != 1:
-        raise ApiError(422, f"批次内报关单的{label}必须一致，当前有：{'、'.join(sorted(distinct))}")
-    return distinct.pop()
-
-
-def validate_selection(rows, numbers):
-    """建批次前的业务校验；返回 (路径, 境外收货人, 币种, 报关合计)。"""
-    found = {row["declaration_no"]: row for row in rows}
-    missing = [number for number in numbers if number not in found]
-    if missing:
-        raise ApiError(422, f"以下报关单没有可用的海关回执：{'、'.join(missing)}")
-    blocked = [f"{number}（{found[number]['blocked']}）" for number in numbers if found[number]["blocked"]]
-    if blocked:
-        raise ApiError(409, "以下报关单不能结汇：" + "；".join(blocked))
-    chosen = [found[number] for number in numbers]
-    ledger = [row["declaration_no"] for row in chosen if row["handling"] != "batch"]
-    if ledger:
-        raise ApiError(422, "直接收汇的报关单不建批次，请在“直接收汇明细”核对：" + "、".join(ledger))
-    route = _single((row["route"] for row in chosen), "回款路径")
-    _single((normalize_name(row["consignee"]) for row in chosen), "境外收货人")
-    currency = _single((row["currency"] for row in chosen), "币种")
-    total = sum((row["amount"] for row in chosen), Decimal(0))
-    return route, chosen[0]["consignee"], currency, total
 
 
 class BatchService:
@@ -117,7 +91,7 @@ class BatchService:
 
     # ---- 写入 ----
 
-    def create(self, body, owner):
+    def create(self, body, owner, *, require_balance=False, slip=None):
         """一笔回款建一个批次：报关单须为香港中转、同一境外收货人、同一币种，且未在其他有效批次中。"""
         _require_operator(owner)
         self._require_engine()
@@ -132,6 +106,13 @@ class BatchService:
                 batch_item_dao.active_by_numbers(connection, numbers, lock=True)
                 rows = self.candidates.load(connection, numbers=numbers)
                 route, consignee, currency, total = validate_selection(rows, numbers)
+                if (
+                    require_balance
+                    and not balance_check(total, body.receivedAmount, body.receivedFee, self.fee_alert)[
+                        "balanced"
+                    ]
+                ):
+                    raise ApiError(422, "到账金额加手续费须与已选报关合计对平，请核对后再登记")
                 batch_id = batch_dao.insert_batch(
                     connection,
                     {
@@ -153,8 +134,10 @@ class BatchService:
                     now,
                 )
                 batch_dao.update_batch(
-                    connection, batch_id, {"batch_no": f"SB{now:%Y%m%d}-{batch_id:05d}"}, now
+                    connection, batch_id, {"batch_no": f"HK{now:%Y%m%d}-{batch_id:05d}"}, now
                 )
+                if slip:
+                    hk_slip_dao.save(connection, batch_id, slip, owner, now)
                 found = {row["declaration_no"]: row for row in rows}
                 batch_item_dao.insert_items(
                     connection,
@@ -249,4 +232,9 @@ class BatchService:
         issue = ""
         if batch["status"] == "collected":
             issue = self.documents.blocking_reason(connection, batch, items)
-        return detail(batch, items, self.fee_alert, issue)
+        view = detail(batch, items, self.fee_alert, issue)
+        slip = hk_slip_dao.get(connection, batch_id)
+        if slip:
+            view.receivedSlipName = slip["file_name"]
+            view.receivedSlipUrl = f"/api/settlement/batches/{batch_id}/bank-slip/file"
+        return view

@@ -1,0 +1,66 @@
+/* 只布局合同抬头；控件、弹窗和按钮外观来自统一组件库。 */
+.ui-dialog.settlement-party-dialog {
+  width: min(760px, calc(100vw - 32px));
+  padding: 0;
+}
+.settlement-party-dialog > .ui-dialog__header {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  padding: 18px 24px;
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-surface);
+}
+.settlement-party-dialog__form {
+  margin: 0;
+}
+.settlement-party-dialog__fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-control);
+  min-width: 0;
+  margin: 0;
+  padding: 20px 24px;
+  border: 0;
+}
+.settlement-party-dialog__wide {
+  grid-column: 1 / -1;
+}
+.settlement-party-dialog .ui-field :is(input, textarea) {
+  width: 100%;
+}
+.settlement-party-dialog__hint {
+  color: var(--color-muted);
+  font-size: 12px;
+  line-height: 1.6;
+}
+.settlement-party-dialog__error {
+  color: var(--color-feedback);
+  font-size: 12px;
+}
+.settlement-party-dialog__feedback {
+  padding: 0 24px 16px;
+}
+.settlement-party-dialog__actions {
+  position: sticky;
+  bottom: 0;
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-small);
+  padding: 14px 24px;
+  border-top: 1px solid var(--color-border);
+  background: var(--color-surface);
+}
+@media (max-width: 600px) {
+  .settlement-party-dialog__fields {
+    grid-template-columns: minmax(0, 1fr);
+    padding: 16px;
+  }
+  .settlement-party-dialog > .ui-dialog__header,
+  .settlement-party-dialog__actions {
+    padding: 14px 16px;
+  }
+  .settlement-party-dialog__feedback {
+    padding: 0 16px 16px;
+  }
+}

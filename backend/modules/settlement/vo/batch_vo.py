@@ -136,6 +136,8 @@ class BatchSummary(StrictModel):
 
 
 class BatchDetail(BatchSummary):
+    receivedSlipName: str = ""
+    receivedSlipUrl: str = ""
     payer: str
     receivingAccount: str
     receivedReference: str

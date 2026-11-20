@@ -11,7 +11,7 @@ from zoneinfo import ZoneInfo
 from backend.core.errors import ApiError
 from backend.core.names import normalize_name
 
-from ..dao import bank_receipt_dao, batch_dao, batch_item_dao, bill_dao, contract_dao
+from ..dao import bank_receipt_dao, batch_dao, batch_item_dao, bill_dao, contract_dao, document_group_dao
 from ..policy import receivable_policy as rules
 from ..policy.amount_policy import money
 from ..policy.route_policy import DIRECT, HK_TRANSIT, ROUTE_LABELS
@@ -66,17 +66,7 @@ class ReceivableService:
         if self.engine is None:
             raise ApiError(503, "业务数据库未配置")
         with self.engine.connect() as connection:
-            declarations = self.candidates.load(connection, limit=None)
-            receipts = bank_receipt_dao.all_receipts(connection)
-            occupied = batch_item_dao.active_numbers(connection)
-            batch_ids = sorted(set(occupied.values()))
-            batches, items = {}, {}
-            if batch_ids:
-                _, heads = batch_dao.page(connection, {"ids": batch_ids}, 0, len(batch_ids))
-                batches = {head["id"]: head for head in heads}
-                items = batch_item_dao.of_batches(connection, batch_ids)
-            today = self.today()
-            rows, overpaid = self._describe(declarations, receipts, occupied, batches, items, today)
+            rows, overpaid, _, batches, items, today = self.snapshot(connection)
             selected = self._filter(rows, body)
             self._documents(connection, selected, batches, items)
 
@@ -91,6 +81,40 @@ class ReceivableService:
             totals=_totals(selected, overpaid),
             asOf=str(today),
         )
+
+    def progress(self, body):
+        """总览阶段分布复用完整收汇快照；不读取资料文件、不写入业务记录。"""
+        from ..policy.settlement_progress_policy import describe
+        from ..vo.progress_vo import SettlementProgress
+
+        if self.engine is None:
+            raise ApiError(503, "业务数据库未配置")
+        with self.engine.connect() as connection:
+            rows, _, _, _, _, today = self.snapshot(connection)
+        wanted = normalize_name(body.consignee)
+        selected = [
+            row
+            for row in rows
+            if (not wanted or wanted in normalize_name(row["consignee"]))
+            and (not body.currency or body.currency.upper() == row["currency"])
+        ]
+        currencies, excluded = describe(selected)
+        return SettlementProgress(currencies=currencies, excludedCount=excluded, asOf=str(today))
+
+    def snapshot(self, connection):
+        """列表与单票详情共用的完整历史快照；不受列表筛选和 500 条显示上限影响。"""
+        declarations = self.candidates.load(connection, limit=None)
+        receipts = bank_receipt_dao.all_receipts(connection)
+        occupied = batch_item_dao.active_numbers(connection)
+        batch_ids = sorted(set(occupied.values()))
+        batches, items = {}, {}
+        if batch_ids:
+            _, heads = batch_dao.page(connection, {"ids": batch_ids}, 0, len(batch_ids))
+            batches = {head["id"]: head for head in heads}
+            items = batch_item_dao.of_batches(connection, batch_ids)
+        today = self.today()
+        rows, overpaid = self._describe(declarations, receipts, occupied, batches, items, today)
+        return rows, overpaid, receipts, batches, items, today
 
     def _describe(self, declarations, receipts, occupied, batches, items, today):
         """全部报关单的已收、阶段、账龄；推算基于完整历史。返回（逐单结果, 直接收汇超收）。"""
@@ -141,6 +165,8 @@ class ReceivableService:
         for row in rows:
             if wanted and wanted not in normalize_name(row["consignee"]):
                 continue
+            if body.currency and body.currency.upper() != row["currency"]:
+                continue
             if body.declarationNo and body.declarationNo not in row["declaration_no"]:
                 continue
             if body.route != "all" and row["route"] != body.route:
@@ -161,6 +187,7 @@ class ReceivableService:
             states[batch_id] = self.reader.state(connection, batches[batch_id], items.get(batch_id, []))
         direct = [row["declaration_no"] for row in rows if row["route"] == DIRECT and row["usable"]]
         owners = bill_dao.direct_owners(connection, direct) | contract_dao.direct_owners(connection, direct)
+        owners |= set(document_group_dao.by_numbers(connection, direct))
         for row in rows:
             if row["route"] == HK_TRANSIT:
                 batch = row["batch"]
@@ -172,7 +199,7 @@ class ReceivableService:
                 owned = row["declaration_no"] in owners
                 state = None
                 if owned:
-                    context, linked = DirectDocumentSource.context(row)
+                    context, linked = DirectDocumentSource(self.candidates).for_row(connection, row)
                     state = self.reader.state(connection, context, linked)
                 row["document"] = rules.direct_document_status(owned, state)
 

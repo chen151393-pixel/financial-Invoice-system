@@ -36,6 +36,16 @@ def _ports(bills, numbers):
     return ready[0]["port_of_loading"], ready[0]["port_of_discharge"], min(dates, default=None), ""
 
 
+def contract_label(contract):
+    suffix = f"（{contract['seller_name']}）" if contract.get("seller_name") else ""
+    return contract["contract_no"] + suffix
+
+
+def document_key(contract):
+    """旧单票与香港按合同号；资料组按申报抬头与合同号区分。"""
+    return contract.get("document_key") or contract["contract_no"]
+
+
 def plan(batch, items, lines_by_declaration, bills, *, lead_days):
     """返回 (合同列表, 问题列表)。合同按合同号排序，每份含明细、金额、日期与口岸。"""
     issues, groups = [], {}
@@ -52,23 +62,49 @@ def plan(batch, items, lines_by_declaration, bills, *, lead_days):
             elif line["total"] is None or (line["currency"] or "").strip().upper() != batch["currency"]:
                 issues.append(f"报关单 {number} 第 {line['item_no']} 项成交总价或币制与批次不符")
             else:
-                group = groups.setdefault(contract_no, {"numbers": set(), "lines": [], "dates": []})
+                key = contract_no
+                if batch.get("document_group_id"):
+                    seller = normalize_name(item.get("export_company", ""))
+                    key = (contract_no, seller)
+                group = groups.setdefault(
+                    key, {"numbers": set(), "lines": [], "dates": [], "contract_no": contract_no}
+                )
                 group["numbers"].add(number)
                 group["lines"].append(line)
                 if item["export_date"]:
                     group["dates"].append(item["export_date"])
     contracts = []
-    for contract_no in sorted(groups):
-        group = groups[contract_no]
+    for key in sorted(groups):
+        group = groups[key]
+        contract_no = group["contract_no"]
+        seller_name = (
+            next(
+                (
+                    item.get("export_company", "")
+                    for item in items
+                    if item["declaration_no"] in group["numbers"]
+                ),
+                "",
+            )
+            if batch.get("document_group_id")
+            else ""
+        )
+        label = contract_no + (f"（{seller_name}）" if seller_name else "")
         numbers = sorted(group["numbers"])
         loading, destination, on_board, port_issue = _ports(bills, numbers)
         if port_issue:
-            issues.append(f"销售合同 {contract_no}：{port_issue}")
+            issues.append(f"销售合同 {label}：{port_issue}")
         if not group["dates"]:
-            issues.append(f"销售合同 {contract_no}：报关单缺少出口日期，无法确定签订日期")
+            issues.append(f"销售合同 {label}：报关单缺少出口日期，无法确定签订日期")
         contracts.append(
             {
                 "contract_no": contract_no,
+                **({"seller_name": seller_name} if batch.get("document_group_id") else {}),
+                **(
+                    {"document_key": hashlib.sha256(json.dumps(key, ensure_ascii=False).encode()).hexdigest()}
+                    if batch.get("document_group_id")
+                    else {}
+                ),
                 "declaration_nos": numbers,
                 "contract_date": min(group["dates"]) - timedelta(days=lead_days) if group["dates"] else None,
                 "port_of_loading": loading,
