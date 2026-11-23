@@ -18,6 +18,7 @@ SHARED = {
 }
 PREFIXES = (
     ("/api/task/supplier-owners", ("supplier-profiles",)),
+    ("/api/task/recovery", ("invoice-recovery",)),
     ("/api/identity", ("access",)),
     ("/api/matching/workbench", ("workbench",)),
     ("/api/tasks/supplier-groups", ("supplier-profiles",)),

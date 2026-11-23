@@ -318,3 +318,18 @@ MySQL 命名锁保证多实例单消费者，并对同一任务的同一子采�
 - 登记后与单个登记一致：通知版本为 `sent`、渠道 `manual`，任务转为 `awaiting_invoice` 并写入状态历史。重复提交按“已登记”跳过，不产生第二条记录。
 - 任务台 `BoardItem` 新增 `notifyRecord`（`allowed/reason`），前端只按它显示勾选框；未决企微通知在提交时复核，列表不预先判断。
 - 无表结构变化，无需迁移。验证：`tests/test_task_notification_batch.py`（默认日期、历史通知日期与真实审计时间、日期格式与未来日期拦截、草稿复用、逐任务跳过、服务身份与参数校验、任务台能力、HTTP 与未登录）。SQLite 隔离测试，未在 MySQL 上验证并发。
+
+## 应收看板（2026-11-23）
+
+只读审计页（页面代码 `invoice-recovery`，归“采购”），不改变任务、节点或通知；处理仍在开票跟进中进行。
+
+- 接口：`POST /api/task/recovery/query` 返回概况卡、近 4 个月回收、按采购员回收率、未收回金额集中度与分组清单；
+  `POST /api/task/recovery/export` 按同一条件导出全部任务（CSV，逐任务一行，单元格防公式）。
+- 通知月份：任务最早一次实际发送通知（`task_notifications.status = sent`）的中国日期所在月份，重发不改变归属；未通知的任务不进入看板。
+- 回收期限：通知月份的次月最后一天，当天仍算未逾期；默认月份为“本月到期”的上月通知，`month=all` 为全部月份。
+- 已收回：发票全部收齐，即任务进入 `documents_incomplete` 或 `completed`；部分收票仍算未收回，金额取未收部分（与跟进列表同一口径）。
+- 采购员：供应商 × 采购抬头当天已生效的最新负责人（`task_supplier_owners`），没有负责人为“未指定”（筛选值 `none`）。
+- 逾期卡不受通知月份限制：所有已过期限、仍未收齐的任务。
+- 金额：应开金额缺失的任务只计件数（`unknown`），不以 0 计入合计。
+- 回收率按任务数计算；任务金额、节点、供应商与子采购单号沿用 `workbench_tasks`，与开票跟进一致。
+- 口径集中在 `policy/recovery_policy.py`（纯函数），读取在 `service/recovery_service.py`。

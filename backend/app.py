@@ -146,6 +146,7 @@ from .modules.sync.service.sync_history_service import SyncHistoryService
 from .modules.task.controller.board_controller import create_router as task_board_router
 from .modules.task.controller.delivery_controller import create_router as delivery_router
 from .modules.task.controller.external_group_controller import create_router as external_group_router
+from .modules.task.controller.recovery_controller import create_router as task_recovery_router
 from .modules.task.controller.signed_contract_controller import create_router as signed_contract_router
 from .modules.task.controller.signed_upload_controller import JSON_BODY_LIMITS
 from .modules.task.controller.signed_upload_controller import create_router as signed_upload_router
@@ -165,6 +166,7 @@ from .modules.task.service.group_import_preview import GroupImportPreview
 from .modules.task.service.group_import_service import GroupImportService
 from .modules.task.service.notification_service import NotificationService
 from .modules.task.service.progress_service import on_allocation_changed
+from .modules.task.service.recovery_service import RecoveryService
 from .modules.task.service.signed_contract_service import SignedContractService
 from .modules.task.service.signed_upload_service import SignedUploadService
 from .modules.task.service.signed_upload_store import SignedUploadStore
@@ -516,6 +518,7 @@ def _register_business(app, settings, ns, contract_ns, wecom, engine, lemon_invo
         )
     )
     app.include_router(task_board_router(TaskBoardService(engine, directory, task_queries)))
+    app.include_router(task_recovery_router(RecoveryService(engine)))
     signed_contracts = SignedContractService(engine, directory, archive)
     app.include_router(signed_contract_router(signed_contracts))
     upload_store = SignedUploadStore(settings.signed_upload_root)

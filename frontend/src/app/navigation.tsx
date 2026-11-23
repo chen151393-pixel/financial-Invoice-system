@@ -75,6 +75,11 @@ export const navigation: readonly SidebarGroup<View>[] = [
     label: "采购",
     items: [
       {
+        id: "invoice-recovery",
+        label: "应收看板",
+        icon: <MenuIcon path="M4 20V10 M10 20V4 M16 20v-7 M22 20H2" />,
+      },
+      {
         id: "invoice-followup",
         label: "开票跟进",
         icon: <MenuIcon path="M4 4h4v16H4z M10 4h4v10h-4z M16 4h4v7h-4z" />,

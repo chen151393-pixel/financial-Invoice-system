@@ -20,6 +20,7 @@ const SyncNsBatchWorkspacePage = lazy(() => import("./SyncNsBatchWorkspacePage")
 const InvoiceWorkspacePage = lazy(() => import("./InvoiceWorkspacePage"));
 const MatchingWorkspacePage = lazy(() => import("./MatchingWorkspacePage"));
 const TaskWorkspacePage = lazy(() => import("./TaskWorkspacePage"));
+const RecoveryWorkspacePage = lazy(() => import("./RecoveryWorkspacePage"));
 const WritebackWorkspacePage = lazy(() => import("./WritebackWorkspacePage"));
 const RolePagesWorkspacePage = lazy(() => import("./RolePagesWorkspacePage"));
 const AccessDeniedWorkspacePage = lazy(() => import("./AccessDeniedWorkspacePage"));
@@ -101,6 +102,10 @@ export const router = createBrowserRouter([
           },
           { path: legacyPaths.finance, element: <Navigate to={paths.review} replace /> },
           { path: paths.tasks, element: page("invoice-followup", "开票跟进", <TaskWorkspacePage />) },
+          {
+            path: paths.invoiceRecovery,
+            element: page("invoice-recovery", "应收看板", <RecoveryWorkspacePage />),
+          },
           {
             path: paths.supplierOwners,
             element: page("supplier-profiles", "供应商人员关联", <TaskWorkspacePage />),

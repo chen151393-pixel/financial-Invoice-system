@@ -230,6 +230,7 @@ def test_feishu_login_issues_session_with_inherited_roles(app, context, feishu):
             "invoices",
             "match",
             "settlement",
+            "invoice-recovery",
             "invoice-followup",
             "supplier-profiles",
             "pl",

@@ -20,6 +20,8 @@ export const paths = {
   settlementParties: "/settlement/parties",
   tasks: "/tasks",
   taskWorkflowDemo: "/tasks/workflow-demo",
+  // 应收看板：按通知月份审计发票回收，只读
+  invoiceRecovery: "/invoice-recovery",
   supplierGroups: "/suppliers",
   supplierOwners: "/suppliers/owners",
   externalGroups: "/suppliers/external-groups",
@@ -96,6 +98,7 @@ export type View =
   | "customs-match"
   | "settlement"
   | "invoice-followup"
+  | "invoice-recovery"
   | "writeback"
   | "supplier-profiles"
   | "access";
@@ -110,6 +113,7 @@ const viewPaths: Record<View, string> = {
   "customs-match": paths.reviewCustoms,
   settlement: paths.settlementOverview,
   "invoice-followup": paths.tasks,
+  "invoice-recovery": paths.invoiceRecovery,
   writeback: paths.writeback,
   "supplier-profiles": paths.supplierGroups,
   access: paths.access,
