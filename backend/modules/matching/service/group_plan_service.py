@@ -10,6 +10,8 @@ from ..policy.order_group_policy import fit_all, order_parts, plan_groups, total
 
 # 按供应商召回（备注无可识别单号）时的最低门槛：销售方与供应商一致，或整单综合分不低于此值
 SUPPLIER_RECALL_MIN_SCORE = 50
+# 按供应商召回时，每个发票行至少须有一项硬指标与整单一致（2026-11-25）
+HARD_EVIDENCE = ("quantity", "amount")
 
 
 def recall_orders(invoice, task_contexts):
@@ -17,7 +19,8 @@ def recall_orders(invoice, task_contexts):
 
     - remark：备注中的可识别单号（子 / 母采购单号，或可分配子单关联的销售订单号）命中可分配子单，只在命中范围内比对；
     - missing：备注写了我方采购单号，但没有命中任何可分配子单（未入库、未审核或已不可分配），不按供应商找替代单；
-    - supplier：备注没有可识别单号，按销售方与供应商名称召回，生成建议还须过 SUPPLIER_RECALL_MIN_SCORE 门槛。
+    - supplier：备注没有可识别单号，按销售方与供应商名称召回，生成建议还须有硬指标（has_hard_evidence）
+      并过 SUPPLIER_RECALL_MIN_SCORE 门槛。
     """
     by_remark, by_supplier = set(), set()
     for line in task_contexts.values():
@@ -40,6 +43,19 @@ def seller_matched(option):
         for checks, _ in group["checks"].values()
         for check in checks
         if check["key"] == "seller"
+    )
+
+
+def has_hard_evidence(option):
+    """组合内每个发票行的数量或含税金额至少一项与整单一致。
+
+    只有供应商、品名、单位一致时，同供应商任意一张同品名开放子采购单都能凑到 45 分，
+    多是发票对应的单尚未生成任务时的误猜，不作为建议。
+    """
+    return all(
+        any(check["key"] in HARD_EVIDENCE and check["result"] == "match" for check in checks)
+        for group in option
+        for checks, _ in group["checks"].values()
     )
 
 
@@ -127,6 +143,9 @@ def plan(connection, invoice, items, task_lines):
     if best <= 0 or scores.count(best) != 1:
         return []
     chosen = options[scores.index(best)]
+    if mode == "supplier" and not has_hard_evidence(chosen):
+        # 备注无单号，数量和金额又都对不上，只凭供应商与品名猜的单不作为建议（仍可人工关联）
+        return []
     if mode == "supplier" and best < SUPPLIER_RECALL_MIN_SCORE and not seller_matched(chosen):
         # 备注无单号时按供应商猜的单，销售方又不一致且分数低，不作为建议（仍可手动关联）
         return []

@@ -23,7 +23,7 @@ def test_invoice_queue_groups_before_paging(engine, world, reviewed):
             invoice("26000000000000009901", [INK, FLUID], remark="SUB-200"),
             invoice("26000000000000009902", [INK, FLUID], seller=SIMILAR),
             invoice("26000000000000009903", [INK, FLUID], seller=SIMILAR),
-            invoice("26000000000000009904", [("其他商品", "箱", "1000", "100000", "0")]),
+            invoice("26000000000000009904", [("其他商品", "箱", "1000", "100000", "0")], remark="SUB-200"),
         ],
     )
     # 第四张票现在会生成低分待审建议；再降低第三张票的分数，覆盖低分多票分页。
@@ -126,7 +126,7 @@ def test_auto_view_lists_only_batchable_invoices(engine, world, reviewed):
         world,
         [
             invoice("26000000000000009931", [INK, FLUID], remark="SUB-200"),
-            invoice("26000000000000009932", [("其他商品", "箱", "1000", "100000", "0")]),
+            invoice("26000000000000009932", [("其他商品", "箱", "1000", "100000", "0")], remark="SUB-200"),
         ],
     )
     complete_buyer(engine, world, invoice_id(engine, "26000000000000009931"))

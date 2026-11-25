@@ -1,5 +1,12 @@
 # matching 模块：发票比对
 
+## 无单号时须数量或金额一致才建议（2026-11-25）
+
+- 背景：线上比对队列 132 条建议中 119 条为低置信度，绝大多数是备注无单号、按供应商召回的误猜：同供应商名下品名、单位相同的开放子采购单，数量、金额、税额全不一致也能得 45 分并生成建议，淹没真正需要处理的建议。
+- `service/group_plan_service.py` 的 `has_hard_evidence`：召回方式为 supplier 时，所选方案中每个发票行的数量或含税金额至少一项须为一致，否则不生成建议（仍可人工关联）。原 `SUPPLIER_RECALL_MIN_SCORE` 门槛保留。备注命中单号（remark）的建议不受影响，差异照常展示并要求说明。
+- 无迁移，不改已通过分配，不调用 NS。已有的旧低分建议不会自动消失：部署后在进项发票列表勾选发票点“批量重新匹配”（或详情页“重新生成建议”），按新规则不成立的旧待审建议会被驳回并保留快照。
+- 验证：`test_matching_confidence_suggestions.py` 的 `test_supplier_guess_without_quantity_or_amount_is_not_suggested`、`test_supplier_guess_with_matching_amount_is_still_suggested`。
+
 ## 子采购单被整单通过后其他建议自动失效（2026-11-10）
 
 - 背景：两张发票在任一张通过前都可能生成同一张子采购单的待审核建议（例如供应商相近召回的低置信度候选）。一张通过后，另一张的旧建议原先会一直显示“待审核整单”，虽然通过时会被“一张子采购单只能由一张发票开具”拦截，但仍留在队列中。
@@ -94,7 +101,7 @@
 
 ## 整票审核队列（2026-10-28）
 
-召回规则（2026-11-17，`service/group_plan_service.py` 的 `recall_orders`）：备注中的可识别单号（子 / 母采购单号，或可分配子单关联的销售订单号）命中可分配子单时，只在命中范围内比对，同供应商的其他子单不再参与；备注写了我方采购单号（`YE-` 开头，`policy/comparison_policy.py` 的 `remark_purchase_numbers`）却没有命中任何可分配子单时不生成建议、不按供应商找替代单（关联单不存在、未审核或已不可分配）；备注没有可识别单号时才按销售方召回，且最高分低于 `SUPPLIER_RECALL_MIN_SCORE`（50）时须销售方与供应商一致才生成建议。重新生成建议（`proposal_service.generate(refresh=True)`）时，按现行规则已无建议的发票行，其旧待审建议置为 rejected。测试：`test_matching_order_priority.py`、`test_matching_after_task.py` 的 `test_regenerate_retires_proposal_when_remark_number_no_longer_matches`。
+召回规则（2026-11-17，`service/group_plan_service.py` 的 `recall_orders`）：备注中的可识别单号（子 / 母采购单号，或可分配子单关联的销售订单号）命中可分配子单时，只在命中范围内比对，同供应商的其他子单不再参与；备注写了我方采购单号（`YE-` 开头，`policy/comparison_policy.py` 的 `remark_purchase_numbers`）却没有命中任何可分配子单时不生成建议、不按供应商找替代单（关联单不存在、未审核或已不可分配）；备注没有可识别单号时才按销售方召回，且最高分低于 `SUPPLIER_RECALL_MIN_SCORE`（50）时须销售方与供应商一致才生成建议（2026-11-25 起还须每个发票行数量或金额至少一项一致，见文首）。重新生成建议（`proposal_service.generate(refresh=True)`）时，按现行规则已无建议的发票行，其旧待审建议置为 rejected。测试：`test_matching_order_priority.py`、`test_matching_after_task.py` 的 `test_regenerate_retires_proposal_when_remark_number_no_longer_matches`。
 
 比对页概况（2026-11-17）：`QueueQuery` 新增 `view: pending | auto`（默认 pending）。`auto` 只列最低置信度为 100% 且 `batch.allowed` 的发票（整单比对中子采购单号占 15 分，100% 即备注已命中单号），`counts.all/high/medium/low` 为当前视图内的置信度分段；`counts.pending`、`counts.auto` 为概况卡张数。票面展示状态不是正常（红字、已被红冲、作废、未知）的发票不再进入审核队列。测试：`test_matching_invoice_queue.py` 的 `test_auto_view_lists_only_batchable_invoices`、`test_abnormal_face_invoices_leave_the_queue`。
 
