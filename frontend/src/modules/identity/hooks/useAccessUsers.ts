@@ -3,7 +3,11 @@ import { useSearchParams } from "react-router";
 import { queryAccessUsers, saveDepartmentRoles } from "../api";
 import type { UserList } from "../types";
 
-export function useAccessUsers(onSaved: () => Promise<void>, fixedDepartment?: number | null) {
+export function useAccessUsers(
+  onSaved: () => Promise<void>,
+  fixedDepartment?: number | null,
+  directoryGroup?: string,
+) {
   const [params, setParams] = useSearchParams();
   const query = params.get("member") ?? "";
   const department =
@@ -22,18 +26,18 @@ export function useAccessUsers(onSaved: () => Promise<void>, fixedDepartment?: n
     setLoading(true);
     setError("");
     try {
-      const result = await queryAccessUsers(query, department, page);
+      const result = await queryAccessUsers(query, department, page, directoryGroup);
       if (current === request.current) setData(result);
     } catch (e) {
       if (current === request.current) setError(e instanceof Error ? e.message : "人员读取失败");
     } finally {
       if (current === request.current) setLoading(false);
     }
-  }, [query, department, page]);
+  }, [query, department, page, directoryGroup]);
   useEffect(() => {
     const current = ++request.current;
     let cancelled = false;
-    queryAccessUsers(query, department, page)
+    queryAccessUsers(query, department, page, directoryGroup)
       .then((result) => {
         if (!cancelled && current === request.current) setData(result);
       })
@@ -47,7 +51,7 @@ export function useAccessUsers(onSaved: () => Promise<void>, fixedDepartment?: n
     return () => {
       cancelled = true;
     };
-  }, [query, department, page]);
+  }, [query, department, page, directoryGroup]);
   function filter(value: string, dept: string, nextPage = 1) {
     const targetDepartment = fixedDepartment === undefined ? dept : department;
     if (value === query && targetDepartment === department && nextPage === page) {

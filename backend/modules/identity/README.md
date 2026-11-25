@@ -53,6 +53,14 @@
 - **当前权限**：人员与权限管理按角色的 `access` 页面授权校验，授权可分配给财务主管等其他角色；柠檬云绑定、账套配置及同步任务继续使用既有管理员校验。同步入口由 `app.py` 注入 `IdentityService.require_admin`，复用实时人员状态与角色读取，不信任前端角色。其他业务操作按角色细分仍在第 2 期落实。
 - **审计**：登录成功与失败、同步范围、部门角色、个人角色变更写入 `identity_audit`。
 
+## 人员页部门分组（2026-11-25）
+
+`GET /api/identity/access` 新增 `directoryGroups`（`key/label/departmentIds`），只筛选采购、财务、智能化相关部门。实际部门按明确名称匹配：采购/采购部/采购组、财务/财务部、智能化部/数字与智能化部；包含下级，同组嵌套根部门不重复。导航标签直接取飞书原始部门名（如采购组、财务部、数字与智能化部），同组多个独立根部门并列原名；没有匹配部门时返回空 ID 列表并标注“未匹配”，不退回全部组织。
+
+`GET /api/identity/users` 新增可选 `directory_group=all|purchase|finance|intelligence`，`all` 为三个分组的并集；与姓名、原 `department_id` 条件取交集，在分页前过滤并去重。部门列仅保留范围内实际所属部门的飞书原名，下级成员也显示其实际部门名称，不改成分组简称。不传参数时保留原全量查询契约。筛选在计算真实角色之后执行，不修改部门、同步范围、个人角色、默认角色继承或登录资格；完整部门和成员详情照常提供。无需数据库迁移。
+
+验证覆盖跨部门重复、下级人员、隐藏部门的角色继承、缺少目标部门、非法分组及搜索分页。
+
 ## 配置
 
 `.env` 中配置 `FEISHU_APP_ID`、`FEISHU_APP_SECRET`（两项须同时填写），可选 `FEISHU_TENANT_KEY`、`ADMIN_PASSWORD_LOGIN_ENABLED`。飞书开放平台“重定向 URL”须登记 `APP_ORIGIN + /api/session/feishu/callback`，两者必须完全一致。

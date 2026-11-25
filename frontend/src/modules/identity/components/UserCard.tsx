@@ -27,14 +27,22 @@ export function UserCard({
   onSaved,
   selectedDepartment,
   embedded = false,
+  directoryGroup,
+  title,
 }: {
   departments: AccessDepartment[];
   roles: RoleItem[];
   onSaved: () => Promise<void>;
   selectedDepartment?: AccessDepartment;
   embedded?: boolean;
+  directoryGroup?: string;
+  title?: string;
 }) {
-  const list = useAccessUsers(onSaved, embedded ? (selectedDepartment?.id ?? null) : selectedDepartment?.id);
+  const list = useAccessUsers(
+    onSaved,
+    embedded ? (selectedDepartment?.id ?? null) : selectedDepartment?.id,
+    directoryGroup,
+  );
   const [editing, setEditing] = useState<AccessUser | null>(null);
   const [editingDepartment, setEditingDepartment] = useState<AccessDepartment | null>(null);
   const [editorBusy, setEditorBusy] = useState(false);
@@ -44,7 +52,7 @@ export function UserCard({
     <div className="identity-member-workspace" data-editing={editing !== null || undefined}>
       <Card>
         <CardHeader
-          title={selectedDepartment ? `${selectedDepartment.name} · 已导入员工` : "全部已导入员工"}
+          title={title ?? (selectedDepartment ? `${selectedDepartment.name} · 已导入员工` : "全部已导入员工")}
           description="选择成员，绑定角色并管理登录状态。"
           actions={current && <Button onClick={() => setEditingDepartment(current)}>设置部门默认角色</Button>}
         />

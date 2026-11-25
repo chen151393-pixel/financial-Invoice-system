@@ -108,8 +108,16 @@ export interface AccessOverview {
   departments: AccessDepartment[];
   /** 新后端返回有已导入员工的部门；旧版本缺失时兼容展示 departments。 */
   importedDepartments?: AccessDepartment[];
+  /** 后端提供人员页的采购、财务、智能化部分组；不影响真实组织或权限。 */
+  directoryGroups?: DirectoryGroup[];
   users: AccessUser[];
   lastSync: SyncRun | null;
+}
+
+export interface DirectoryGroup {
+  key: string;
+  label: string;
+  departmentIds: number[];
 }
 
 export interface DirectorySelection {

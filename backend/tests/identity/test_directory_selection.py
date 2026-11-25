@@ -15,6 +15,7 @@ from backend.tests.identity.test_feishu_login import (
     OTHER,
     PURCHASE,
     PURCHASE_A,
+    ROOT,
     FakeFeishu,
     admin_client,
     application_clients,
@@ -96,6 +97,69 @@ def test_imported_department_navigation_hides_empty_but_keeps_ancestors_and_disa
     # 隐藏只影响本地导航，不删除部门，也不缩减再次读取飞书的选择范围。
     response = client.post("/api/identity/directory/previews", json={}, headers=headers)
     assert {d["name"] for d in response.json()["departments"]} == {d["name"] for d in overview["departments"]}
+
+
+def test_focused_directory_filters_members_but_preserves_roles_and_real_organization(system):
+    _, client, feishu, headers = system
+    intelligence = "od-intelligence"
+    feishu.departments[intelligence] = {"name": "数字与智能化部", "parent_department_id": ROOT}
+    feishu.members[intelligence] = [feishu.person("u-it", "智能成员")]
+    # 同一成员兼属采购、财务及隐藏的行政部门，导航精简不能影响真实继承。
+    feishu.members[FINANCE].append(feishu.person("u-zhang", "张采购"))
+    feishu.members[OTHER].append(feishu.person("u-zhang", "张采购"))
+    assert submit(client, headers, preview(client, headers), departments=[ROOT]).status_code == 200
+    before = client.get("/api/identity/access").json()
+    other = next(d for d in before["departments"] if d["name"] == "行政部")
+    assert (
+        client.put(
+            f"/api/identity/departments/{other['id']}/roles", json={"roles": ["admin"]}, headers=headers
+        ).status_code
+        == 200
+    )
+    overview = client.get("/api/identity/access").json()
+    assert [group["label"] for group in overview["directoryGroups"]] == ["采购部", "财务部", "数字与智能化部"]
+    assert "行政部" in {d["name"] for d in overview["departments"]}
+    raw = next(u for u in overview["users"] if u["name"] == "张采购")
+    response = client.get("/api/identity/users?directory_group=all").json()
+    assert "周行政" not in {u["name"] for u in response["items"]}
+    member = [u for u in response["items"] if u["name"] == "张采购"]
+    assert len(member) == 1
+    assert member[0]["departments"] == ["采购部", "财务部"]
+    assert member[0]["roles"] == raw["roles"] == ["admin"]
+    assert not member[0]["enabled"]  # 展示变化不自动启用人员。
+    assert (
+        client.get("/api/identity/users?directory_group=intelligence").json()["items"][0]["name"]
+        == "智能成员"
+    )
+    assert "李采购" in {
+        u["name"] for u in client.get("/api/identity/users?directory_group=purchase").json()["items"]
+    }
+    purchase_people = client.get("/api/identity/users?directory_group=purchase").json()["items"]
+    assert next(u for u in purchase_people if u["name"] == "李采购")["departments"] == ["采购一组"]
+    assert "周行政" in {u["name"] for u in client.get("/api/identity/users").json()["items"]}
+    assert client.get("/api/identity/access").json() == overview
+
+
+def test_focused_directory_missing_department_and_invalid_group_never_expand_scope(system):
+    _, client, _, headers = system
+    assert submit(client, headers, preview(client, headers), departments=[ROOT]).status_code == 200
+    overview = client.get("/api/identity/access").json()
+    assert next(g for g in overview["directoryGroups"] if g["key"] == "intelligence")["departmentIds"] == []
+    assert client.get("/api/identity/users?directory_group=intelligence").json()["total"] == 0
+    assert client.get("/api/identity/users?directory_group=other").status_code == 400
+
+
+def test_focused_directory_search_and_pagination_are_after_group_filter(system):
+    _, client, feishu, headers = system
+    feishu.members[FINANCE] = [feishu.person(f"u-fin-{i:02}", f"财务成员{i:02}") for i in range(55)]
+    assert submit(client, headers, preview(client, headers), departments=[ROOT]).status_code == 200
+    first = client.get("/api/identity/users?directory_group=finance").json()
+    second = client.get("/api/identity/users?directory_group=finance&page=2").json()
+    assert first["total"] == second["total"] == 55
+    assert len(first["items"]) == 50 and len(second["items"]) == 5
+    assert not {u["id"] for u in first["items"]} & {u["id"] for u in second["items"]}
+    assert client.get("/api/identity/users?directory_group=finance&query=财务成员54").json()["total"] == 1
+    assert client.get("/api/identity/users?directory_group=purchase&query=财务成员54").json()["total"] == 0
 
 
 def test_whole_subtree_union_and_future_members(system, context):

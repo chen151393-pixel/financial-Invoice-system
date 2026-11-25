@@ -52,9 +52,14 @@ export const planDirectory = (id: string, selection: DirectorySelection) =>
   http<DirectoryPlan>(`/identity/directory/previews/${id}/plan`, "POST", selection);
 export const confirmDirectory = (id: string, selection: DirectorySelection) =>
   http<{ run: SyncRun; userIds: number[] }>(`/identity/directory/previews/${id}/sync`, "POST", selection);
-export const queryAccessUsers = (query: string, departmentId: string, page: number) =>
+export const queryAccessUsers = (
+  query: string,
+  departmentId: string,
+  page: number,
+  directoryGroup?: string,
+) =>
   http<UserList>(
-    `/identity/users?${new URLSearchParams({ query, page: String(page), ...(departmentId ? { department_id: departmentId } : {}) })}`,
+    `/identity/users?${new URLSearchParams({ query, page: String(page), ...(departmentId ? { department_id: departmentId } : {}), ...(directoryGroup ? { directory_group: directoryGroup } : {}) })}`,
   );
 export const saveUserAccess = (
   id: number,

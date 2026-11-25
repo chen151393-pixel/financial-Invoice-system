@@ -44,12 +44,19 @@ class SyncRun(StrictModel):
     finishedAt: str | None
 
 
+class DirectoryGroup(StrictModel):
+    key: str
+    label: str
+    departmentIds: list[int]
+
+
 class AccessOverview(StrictModel):
     feishuConfigured: bool
     roles: list[RoleItem]
     departments: list[DepartmentItem]
     # 本部门或下级部门有已导入员工；包含未启用、已停用账号，与人员列表口径一致。
     importedDepartments: list[DepartmentItem]
+    directoryGroups: list[DirectoryGroup]
     users: list[UserItem]
     lastSync: SyncRun | None
 

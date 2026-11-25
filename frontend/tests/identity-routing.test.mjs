@@ -99,6 +99,52 @@ test("新后端明确返回空部门列表时不退回完整部门，也不提�
   assert.match(markup, /全部已导入员工/);
 });
 
+test("人员页仅显示后端三个分组，隐藏完整组织上级且空分组仍可查询", () => {
+  const data = {
+    departments: [
+      { id: 1, openDepartmentId: "other", name: "总经办", path: "总经办", roles: [] },
+      { id: 2, openDepartmentId: "purchase", name: "采购组", path: "供应链部 / 采购组", roles: [] },
+    ],
+    directoryGroups: [
+      { key: "purchase", label: "采购组", departmentIds: [2] },
+      { key: "finance", label: "财务部", departmentIds: [] },
+      { key: "intelligence", label: "数字与智能化部", departmentIds: [] },
+    ],
+    roles: [],
+  };
+  const markup = renderToStaticMarkup(
+    createElement(
+      MemoryRouter,
+      null,
+      createElement(ImportedDirectory, {
+        data,
+        department: "purchase",
+        onSelect() {},
+        onSaved: async () => {},
+      }),
+    ),
+  );
+  assert.match(markup, /采购组 · 已导入员工/);
+  assert.match(markup, /全部成员/);
+  assert.match(markup, />财务部</);
+  assert.match(markup, />数字与智能化部</);
+  assert.doesNotMatch(markup, /总经办|供应链部/);
+  assert.match(markup, /设置部门默认角色/);
+});
+
+test("成员分组查询由后端筛选，包含查询词和分页而非前端过滤", async (t) => {
+  let request;
+  t.mock.method(globalThis, "fetch", async (url) => {
+    request = new URL(url, "https://example.invalid");
+    return Response.json({ items: [], total: 0, page: 2, pageSize: 50, pageCount: 1 });
+  });
+  await identityApi.queryAccessUsers("张", "", 2, "purchase");
+  assert.equal(request.searchParams.get("directory_group"), "purchase");
+  assert.equal(request.searchParams.get("query"), "张");
+  assert.equal(request.searchParams.get("page"), "2");
+  assert.equal(request.searchParams.has("department_id"), false);
+});
+
 const render = (overrides = {}) =>
   renderToStaticMarkup(
     createElement(

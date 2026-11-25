@@ -16,16 +16,27 @@ export function ImportedDirectory({
   onSaved: () => Promise<void>;
 }) {
   const departments = data.importedDepartments ?? data.departments;
-  const current = departments.find((item) => item.openDepartmentId === department);
-  const items = [
-    { id: "", name: "全部已导入员工", path: "全部已导入员工", depth: 0 },
-    ...departments.map((item) => ({
-      id: item.openDepartmentId,
-      name: item.name,
-      path: item.path,
-      depth: item.path.split(" / ").length - 1,
-    })),
-  ];
+  const groups = data.directoryGroups;
+  const currentGroup = groups?.find((item) => item.key === department);
+  const current = groups
+    ? currentGroup?.departmentIds.length === 1
+      ? data.departments.find((item) => item.id === currentGroup.departmentIds[0])
+      : undefined
+    : departments.find((item) => item.openDepartmentId === department);
+  const items = groups
+    ? [
+        { id: "", name: "全部成员", path: "所选部门的已导入成员", depth: 0 },
+        ...groups.map((group) => ({ id: group.key, name: group.label, path: group.label, depth: 0 })),
+      ]
+    : [
+        { id: "", name: "全部已导入员工", path: "全部已导入员工", depth: 0 },
+        ...departments.map((item) => ({
+          id: item.openDepartmentId,
+          name: item.name,
+          path: item.path,
+          depth: item.path.split(" / ").length - 1,
+        })),
+      ];
   return (
     <div className="identity-people-layout">
       {data.importedDepartments === undefined && (
@@ -38,21 +49,25 @@ export function ImportedDirectory({
       <Card>
         <DepartmentTree
           items={items}
-          selected={current?.openDepartmentId ?? ""}
+          selected={groups ? (currentGroup?.key ?? "") : (current?.openDepartmentId ?? "")}
           description={
-            data.importedDepartments === undefined
-              ? "已保存部门 · 点击查看对应员工"
-              : "仅显示有已导入员工的部门（含下级）"
+            groups
+              ? "按飞书部门名称显示（含下级）"
+              : data.importedDepartments === undefined
+                ? "已保存部门 · 点击查看对应员工"
+                : "仅显示有已导入员工的部门（含下级）"
           }
           onSelect={onSelect}
         />
       </Card>
       <section className="identity-directory-members" aria-label="已导入员工">
         <UserCard
-          key={current?.id ?? "all"}
-          departments={departments}
+          key={groups ? (currentGroup?.key ?? "all") : (current?.id ?? "all")}
+          departments={groups ? data.departments : departments}
           roles={data.roles}
           selectedDepartment={current}
+          directoryGroup={groups ? (currentGroup?.key ?? "all") : undefined}
+          title={groups ? `${currentGroup?.label ?? "全部成员"} · 已导入员工` : undefined}
           onSaved={onSaved}
           embedded
         />

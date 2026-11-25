@@ -1,5 +1,7 @@
 """权限管理接口：飞书同步、同步范围、部门默认角色、个人角色；按页面权限授权。"""
 
+from typing import Literal
+
 from fastapi import APIRouter, Query
 
 from backend.core.dependencies import Owner
@@ -23,8 +25,9 @@ def create_router(access, sync, identity, previews):
         query: str = Query(default="", max_length=100),
         department_id: int | None = None,
         page: int = Query(default=1, ge=1),
+        directory_group: Literal["all", "purchase", "finance", "intelligence"] | None = None,
     ):
-        return access.list_users(owner, query, department_id, page)
+        return access.list_users(owner, query, department_id, page, directory_group)
 
     @router.post("/sync", response_model=SyncRun | None)
     def run_sync(owner: Owner):

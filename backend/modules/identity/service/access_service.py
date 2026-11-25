@@ -13,6 +13,7 @@ from backend.core.write_lock import transaction
 from ..dao import audit_dao, department_dao, directory_preview_dao, sync_run_dao, user_dao
 from ..mapper.sync_run_mapper import sync_run, utc_text
 from ..policy.department_policy import ancestors, subtree
+from ..policy.directory_display_policy import directory_groups, display_group_users
 from ..policy.login_policy import feishu_user_id
 from ..policy.role_policy import ROLES, ordered, unknown_roles
 from ..vo.access_vo import AccessOverview
@@ -102,6 +103,7 @@ class AccessService:
             importedDepartments=[
                 item for item in departments if item["openDepartmentId"] in imported_department_ids
             ],
+            directoryGroups=directory_groups(index.by_id.values()),
             users=people,
             lastSync=sync_run(last_run),
         )
@@ -113,17 +115,20 @@ class AccessService:
         except SQLAlchemyError:
             raise ApiError(503, "同步记录读取失败，请检查业务数据库") from None
 
-    def list_users(self, actor, query, department_id, page):
+    def list_users(self, actor, query, department_id, page, directory_group=None):
         overview = self.overview(actor)
         users = overview.users
-        if department_id is not None:
+        if department_id is not None or directory_group is not None:
             with self.engine.connect() as connection:
                 index = load_index(connection)
                 root = index.by_id.get(department_id)
                 covered = subtree([root["open_department_id"]], index.parent_of) if root else set()
                 ids = {d["id"] for d in index.by_id.values() if d["open_department_id"] in covered}
                 memberships = user_dao.departments_by_user(connection)
-            users = [u for u in users if ids.intersection(memberships.get(u.id, set()))]
+            if directory_group is not None:
+                users = display_group_users(users, memberships, index.by_id.values(), directory_group)
+            if department_id is not None:
+                users = [u for u in users if ids.intersection(memberships.get(u.id, set()))]
         users = [u for u in users if query.strip().casefold() in u.name.casefold()]
         return {
             "items": users[(page - 1) * 50 : page * 50],
