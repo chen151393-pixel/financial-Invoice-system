@@ -16,6 +16,7 @@ from .integrations.contract_archive import ContractArchive
 from .integrations.feishu import FeishuClient
 from .integrations.lemon.existing_account import LemonExistingAccount
 from .integrations.lemon.invoice_client import LemonInvoiceClient
+from .integrations.model_extraction import create_extractor
 from .integrations.netsuite.client import NetSuite
 from .integrations.netsuite.subpo_contract import connection_settings
 from .integrations.wecom import WeComGroups
@@ -80,6 +81,7 @@ from .modules.settlement.service.bank_receipt_service import (
     BankReceiptService as SettlementBankReceiptService,
 )
 from .modules.settlement.service.batch_service import BatchService as SettlementBatchService
+from .modules.settlement.service.bill_model_reader import BillModelReader as SettlementBillModelReader
 from .modules.settlement.service.bill_ocr import BillOcr as SettlementBillOcr
 from .modules.settlement.service.bill_service import BillService as SettlementBillService
 from .modules.settlement.service.candidate_service import CandidateService as SettlementCandidateService
@@ -371,6 +373,16 @@ def _register_business(app, settings, ns, contract_ns, wecom, engine, lemon_invo
         declaration_files=SettlementDeclarationFiles(settings.subpo_archive_root),
     )
     settlement_store = SettlementDocumentStore(settings.settlement_document_root)
+    # 提单识别：本地规则（文字层正则 + tesseract）始终启用；配置了识别模型时再补规则留空的字段
+    settlement_bill_ocr = SettlementBillOcr(settings.settlement_ocr_command)
+    bill_extractor = create_extractor(
+        settings.settlement_bill_recognizer,
+        base_url=settings.settlement_bill_model_base_url,
+        api_key=settings.settlement_bill_model_api_key,
+        model=settings.settlement_bill_model_name,
+        timeout=settings.settlement_bill_model_timeout,
+    )
+    settlement_bill_model = SettlementBillModelReader(bill_extractor) if bill_extractor else None
     settlement_batch_views = SettlementBatchService(
         engine, settlement_candidates, settlement_reader, fee_alert=settings.settlement_fee_alert
     )
@@ -398,7 +410,7 @@ def _register_business(app, settings, ns, contract_ns, wecom, engine, lemon_invo
         settlement_documents.create_router(
             settlement_views,
             SettlementBillService(
-                engine, settlement_store, settlement_views, SettlementBillOcr(settings.settlement_ocr_command)
+                engine, settlement_store, settlement_views, settlement_bill_ocr, settlement_bill_model
             ),
             SettlementContractService(
                 engine,
@@ -417,7 +429,7 @@ def _register_business(app, settings, ns, contract_ns, wecom, engine, lemon_invo
         settlement_documents.create_router(
             direct_views,
             SettlementBillService(
-                engine, settlement_store, direct_views, SettlementBillOcr(settings.settlement_ocr_command)
+                engine, settlement_store, direct_views, settlement_bill_ocr, settlement_bill_model
             ),
             SettlementContractService(
                 engine,
@@ -441,7 +453,7 @@ def _register_business(app, settings, ns, contract_ns, wecom, engine, lemon_invo
         settlement_documents.create_router(
             group_views,
             SettlementBillService(
-                engine, settlement_store, group_views, SettlementBillOcr(settings.settlement_ocr_command)
+                engine, settlement_store, group_views, settlement_bill_ocr, settlement_bill_model
             ),
             SettlementContractService(
                 engine,

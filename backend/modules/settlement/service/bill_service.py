@@ -16,6 +16,7 @@ from ..dao import bill_dao
 from ..dao.document_scope import values as scope_values
 from ..dto.bill_dto import MAX_BILL_BYTES
 from ..policy.bill_layout_policy import agreed, parse_words
+from ..policy.bill_model_policy import merge
 from ..policy.bill_parse_policy import missing_fields, parse_bill, retry_values
 from .bill_text import extract_text
 from .document_service import edit_reason
@@ -56,14 +57,22 @@ def _numbers(requested, items, reference=None):
 
 
 OCR_NOTE = "扫描件由系统识别，可能有错字，请对照原件核对"
+MODEL_NOTE = "部分字段由识别模型给出，可能有误，请对照原件核对"
+# 需要人工对照原件的提示；重复上传补空时沿用
+CHECK_NOTES = (OCR_NOTE, MODEL_NOTE)
 
 
 class BillService:
-    def __init__(self, engine, store, documents, ocr=None):
+    def __init__(self, engine, store, documents, ocr=None, model=None):
         self.engine, self.store, self.documents, self.ocr = engine, store, documents, ocr
+        # 识别模型（可选，SETTLEMENT_BILL_RECOGNIZER）：只在本地规则有字段没识别出来时调用
+        self.model = model
 
     def _parse(self, content):
-        """返回 (字段, 说明)。有文字层按文字解析；否则按扫描件识别，多次识别一致的字段才采用。"""
+        """返回 (字段, 说明)。有文字层按文字解析；否则按扫描件识别，多次识别一致的字段才采用。
+
+        本地规则仍缺字段且配置了识别模型时，再请模型补空；两边不一致的字段留空（见 bill_model_policy）。
+        """
         text = extract_text(content)
         if text.strip() or self.ocr is None:
             parsed, scanned = parse_bill(text), False
@@ -71,10 +80,20 @@ class BillService:
             readings = self.ocr.readings(content)
             parsed = agreed([parse_words(words) for words in readings]) if readings else parse_bill("")
             scanned = bool(readings)
+        ocr_used = scanned and len(missing_fields(parsed)) < 4
+        taken, conflicts = [], []
+        if self.model is not None and missing_fields(parsed):
+            modeled = self.model.read(content, text)
+            if modeled is not None:
+                parsed, taken, conflicts = merge(parsed, modeled)
         missing = missing_fields(parsed)
         notes = [f"未能自动识别：{'、'.join(missing)}，请人工填写"] if missing else []
-        if scanned and len(missing) < 4:
+        if conflicts:
+            notes.append("系统规则与识别模型的结果不一致的字段已留空")
+        if ocr_used:
             notes.append(OCR_NOTE)
+        if taken:
+            notes.append(MODEL_NOTE)
         return parsed, "；".join(notes) or None
 
     def upload(self, batch_id, body, owner):
@@ -133,8 +152,9 @@ class BillService:
             raise ApiError(409, "该提单文件已上传到本次资料")
         missing = missing_fields({**saved, **values})
         notes = [f"未能自动识别：{'、'.join(missing)}，请人工填写"] if missing else []
-        if OCR_NOTE in (note or "") or OCR_NOTE in (saved["parse_note"] or ""):
-            notes.append(OCR_NOTE)
+        for check in CHECK_NOTES:
+            if check in (note or "") or check in (saved["parse_note"] or ""):
+                notes.append(check)
         bill_dao.update_bill(connection, saved["id"], {**values, "parse_note": "；".join(notes) or None}, now)
 
     def update(self, batch_id, bill_id, body, owner):

@@ -70,6 +70,12 @@ class Settings:
     settlement_pdf_font: Path | None = None
     # 提单扫描件识别用的 tesseract 命令；为空或未安装时扫描件由人工填写
     settlement_ocr_command: str = "tesseract"
+    # 提单识别方式：rules 只用本地规则；openai_compatible 在规则缺字段时再调用识别模型补空
+    settlement_bill_recognizer: str = "rules"
+    settlement_bill_model_base_url: str = ""
+    settlement_bill_model_api_key: str = field(default="", repr=False)
+    settlement_bill_model_name: str = ""
+    settlement_bill_model_timeout: int = 30
     wecom_corp_id: str = field(default="", repr=False)
     wecom_secret: str = field(default="", repr=False)
     wecom_connection_file: Path | None = field(default=None, repr=False)
@@ -134,6 +140,34 @@ def load_settings(source=None):
     lead_days = get("SETTLEMENT_CONTRACT_LEAD_DAYS", "28").strip()
     if not re.fullmatch(r"[0-9]{1,3}", lead_days):
         raise ValueError("SETTLEMENT_CONTRACT_LEAD_DAYS 须为 0–999 的整数")
+
+    bill_recognizer = get("SETTLEMENT_BILL_RECOGNIZER", "rules").strip().lower()
+    if bill_recognizer not in {"rules", "openai_compatible"}:
+        raise ValueError("SETTLEMENT_BILL_RECOGNIZER 须为 rules 或 openai_compatible")
+    bill_model_url = get("SETTLEMENT_BILL_MODEL_BASE_URL").strip().rstrip("/")
+    bill_model_key = get("SETTLEMENT_BILL_MODEL_API_KEY").strip()
+    bill_model_name = get("SETTLEMENT_BILL_MODEL_NAME").strip()
+    bill_model_timeout = get("SETTLEMENT_BILL_MODEL_TIMEOUT", "30").strip()
+    if not bill_model_timeout.isdigit() or not 5 <= int(bill_model_timeout) <= 120:
+        raise ValueError("SETTLEMENT_BILL_MODEL_TIMEOUT 须为 5 至 120 的整数（秒）")
+    if bill_recognizer != "rules":
+        if not (bill_model_url and bill_model_key and bill_model_name):
+            raise ValueError(
+                "启用提单识别模型须同时填写 SETTLEMENT_BILL_MODEL_BASE_URL、"
+                "SETTLEMENT_BILL_MODEL_API_KEY 和 SETTLEMENT_BILL_MODEL_NAME"
+            )
+        model_url = urlsplit(bill_model_url)
+        # 提单内容和密钥会发往该地址，只允许 HTTPS；本机部署的模型服务可用 HTTP
+        if (
+            model_url.scheme not in ("http", "https")
+            or not model_url.hostname
+            or model_url.username
+            or model_url.password
+            or model_url.query
+            or model_url.fragment
+            or (model_url.scheme != "https" and model_url.hostname not in ("localhost", "127.0.0.1", "::1"))
+        ):
+            raise ValueError("SETTLEMENT_BILL_MODEL_BASE_URL 须为 HTTPS 地址（本机模型服务可用 HTTP）")
 
     sync_date_format = get("NETSUITE_SYNC_DATE_FORMAT", "YYYY-MM-DD")
     if sync_date_format not in {"YYYY-MM-DD", "M/D/YYYY", "D/M/YYYY"}:
@@ -308,6 +342,11 @@ def load_settings(source=None):
         settlement_contract_lead_days=int(lead_days),
         settlement_pdf_font=(ROOT / get("SETTLEMENT_PDF_FONT")) if get("SETTLEMENT_PDF_FONT") else None,
         settlement_ocr_command=get("SETTLEMENT_OCR_COMMAND", "tesseract").strip(),
+        settlement_bill_recognizer=bill_recognizer,
+        settlement_bill_model_base_url=bill_model_url,
+        settlement_bill_model_api_key=bill_model_key,
+        settlement_bill_model_name=bill_model_name,
+        settlement_bill_model_timeout=int(bill_model_timeout),
         wecom_corp_id=get("WECOM_CORP_ID"),
         wecom_send_enabled=wecom_send == "true",
         wecom_group_daily_limit=int(wecom_limit),

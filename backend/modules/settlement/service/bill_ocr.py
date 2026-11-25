@@ -24,8 +24,8 @@ TIMEOUT_SECONDS = 40
 INK_THRESHOLD = 150
 
 
-def page_image(content):
-    """第一页中最大的图像，按页面旋转角转正并去底纹；不是扫描件时返回 None。"""
+def scan_image(content):
+    """第一页中最大的图像（彩色原样），按页面旋转角转正；不是扫描件时返回 None。"""
     try:
         page = PdfReader(io.BytesIO(content)).pages[0]
         images = [item.image for item in page.images]
@@ -48,6 +48,14 @@ def page_image(content):
         image = image.rotate(-rotation, expand=True)
     if max(image.size) > MAX_SIDE:
         image.thumbnail((MAX_SIDE, MAX_SIDE))
+    return image
+
+
+def page_image(content):
+    """scan_image 去掉彩色底纹后的黑白图像，供 tesseract 识别；不是扫描件时返回 None。"""
+    image = scan_image(content)
+    if image is None:
+        return None
     red, green, blue = image.split()
     brightest = ImageChops.lighter(ImageChops.lighter(red, green), blue)
     return brightest.point(lambda value: 255 if value > INK_THRESHOLD else 0)
