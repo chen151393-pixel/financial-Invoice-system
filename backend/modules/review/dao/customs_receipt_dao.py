@@ -1,6 +1,6 @@
 """海关回执头表与明细表的读写；不提交事务、不决定比对结果。"""
 
-from sqlalchemy import and_, func, insert, or_, select, update
+from sqlalchemy import and_, case, func, insert, or_, select, true, update
 
 from ..entity.customs_receipt import customs_receipt_lines as lines
 from ..entity.customs_receipt import customs_receipts as receipts
@@ -138,6 +138,15 @@ def status_counts(connection, filters):
     return {status: count for status, count in connection.execute(query)}
 
 
+def difference_counts(connection, filters, kinds):
+    """按差异类型计数（不含状态筛选）：{类型: 张数}；一张回执可计入多类。"""
+    query = select(*(func.sum(case((receipts.c[kind] == true(), 1), else_=0)) for kind in kinds)).where(
+        *_conditions(filters)
+    )
+    row = connection.execute(query).one()
+    return {kind: int(value or 0) for kind, value in zip(kinds, row, strict=True)}
+
+
 def item_count(connection, filters):
     """当前版本明细项数合计（不含状态筛选）。"""
     query = (
@@ -152,10 +161,12 @@ def item_count(connection, filters):
     return connection.execute(query).scalar_one()
 
 
-def page(connection, filters, statuses, offset, limit):
+def page(connection, filters, statuses, offset, limit, *, kind=None):
     conditions = _conditions(filters)
     if statuses:
         conditions.append(receipts.c.match_status.in_(statuses))
+    if kind:
+        conditions.append(receipts.c[kind] == true())
     total = connection.execute(select(func.count()).select_from(receipts).where(*conditions)).scalar_one()
     query = (
         select(receipts)

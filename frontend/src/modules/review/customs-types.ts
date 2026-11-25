@@ -2,6 +2,8 @@ import type { ApprovalProgress } from "./approval-progress";
 
 // 与后端 /api/review/customs-receipts 的响应一致；数量、金额为十进制字符串，前端不重算。
 export type CustomsMatchStatus = "matched" | "split_matched" | "different" | "ns_missing" | "ns_duplicate";
+// 差异类型：一张回执可同时属于多类，均为“有差异”的子集
+export type CustomsDifferenceKind = "quantity_mismatch" | "unit_mismatch" | "total_mismatch" | "line_missing";
 // matched 含拆行一致；ns_missing 含 NS 报关单重号（后端合并筛选）
 export type CustomsFilter = "all" | "matched" | "different" | "ns_missing";
 export type CustomsGroupStatus =
@@ -111,6 +113,11 @@ export interface CustomsCounts {
   splitMatched: number;
   different: number;
   nsMissing: number;
+  // 有差异按类型拆分（后端计数，可重叠）
+  quantityMismatch: number;
+  unitMismatch: number;
+  totalMismatch: number;
+  lineMissing: number;
 }
 
 export interface CustomsReceiptList {
@@ -128,6 +135,8 @@ export interface CustomsSearch {
   consignee: string;
   exportFrom: string;
   exportTo: string;
+  // 差异类型，与状态筛选同时生效；空为不限
+  difference: "" | CustomsDifferenceKind;
 }
 
 export interface CustomsReceiptQuery extends CustomsSearch {

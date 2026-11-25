@@ -16,7 +16,7 @@ from backend.modules.source.public import declarations_by_number
 
 from ..dao import customs_receipt_dao as dao
 from ..mapper.customs_receipt_mapper import consignee, receipt
-from ..policy.customs_match_policy import STATUS_LABELS, compare
+from ..policy.customs_match_policy import DIFFERENCE_KINDS, STATUS_LABELS, compare, difference_kinds
 from ..vo.customs_receipt_vo import (
     CustomsCounts,
     CustomsImportResult,
@@ -34,6 +34,8 @@ STATUS_FILTERS = {
     "different": ("different",),
     "ns_missing": ("ns_missing", "ns_duplicate"),
 }
+# 差异类型：数量、单位、总价不一致及品名缺行，一张回执可同时出现在多类中。
+KIND_FILTERS = tuple(DIFFERENCE_KINDS)
 RESULT_LABELS = {"created": "新增", "replaced": "已更新", "unchanged": "内容未变"}
 REMATCH_BATCH = 200
 
@@ -49,7 +51,50 @@ def _require_operator(owner):
 
 def _match_values(ns_by_number, number, items, now):
     status, ns_id, result = compare(ns_by_number.get(number, []), items)
-    return {"ns_declaration_id": ns_id, "match_status": status, "match_result": result, "matched_at": now}
+    return {
+        "ns_declaration_id": ns_id,
+        "match_status": status,
+        "match_result": result,
+        "matched_at": now,
+        **difference_kinds(result),
+    }
+
+
+def _changed(head, match):
+    """保存的比对结论与本次结果是否不同（比对时间不算变化）。"""
+    return any(head[key] != value for key, value in match.items() if key != "matched_at")
+
+
+def refresh_matches(engine):
+    """后台计算调用：按当前 NS 来源与比对规则刷新全部回执的保存结论，只写有变化的回执。
+
+    列表逐行实时比对，但概况计数与状态筛选读取保存的结论；NS 同步或规则升级后由此保持一致。
+    返回更新的回执张数。
+    """
+    with engine.connect() as connection:
+        targets = [row["id"] for row in dao.ids(connection)]
+    changed = 0
+    for start in range(0, len(targets), REMATCH_BATCH):
+        with write_lock.transaction(engine) as connection:
+            changed += _rematch_batch(
+                connection, targets[start : start + REMATCH_BATCH], _now(), only_changed=True
+            )
+    return changed
+
+
+def _rematch_batch(connection, receipt_ids, now, *, only_changed=False):
+    heads = dao.ids(connection, receipt_ids, lock=True)
+    full = dao.heads_by_numbers(connection, [head["declaration_no"] for head in heads])
+    lines = dao.current_lines(connection, [head["id"] for head in heads])
+    ns_by_number = declarations_by_number(connection, [head["declaration_no"] for head in heads])
+    changed = 0
+    for head in heads:
+        match = _match_values(ns_by_number, head["declaration_no"], lines[head["id"]], now)
+        if only_changed and not _changed(full[head["declaration_no"]], match):
+            continue
+        dao.update_head(connection, head["id"], match, now)
+        changed += 1
+    return changed
 
 
 class CustomsReceiptService:
@@ -146,6 +191,7 @@ class CustomsReceiptService:
                 if connection.dialect.name == "mysql":
                     connection = connection.execution_options(isolation_level="REPEATABLE READ")
                 counts = dao.status_counts(connection, filters)
+                kinds = dao.difference_counts(connection, filters, KIND_FILTERS)
                 items = dao.item_count(connection, filters)
                 total, heads = dao.page(
                     connection,
@@ -153,6 +199,7 @@ class CustomsReceiptService:
                     STATUS_FILTERS[query.status],
                     (query.page - 1) * query.pageSize,
                     query.pageSize,
+                    kind=query.difference or None,
                 )
                 lines = dao.current_lines(connection, [head["id"] for head in heads])
                 progress = read_progress(
@@ -184,6 +231,10 @@ class CustomsReceiptService:
                 splitMatched=counts.get("split_matched", 0),
                 different=counts.get("different", 0),
                 nsMissing=counts.get("ns_missing", 0) + counts.get("ns_duplicate", 0),
+                quantityMismatch=kinds["quantity_mismatch"],
+                unitMismatch=kinds["unit_mismatch"],
+                totalMismatch=kinds["total_mismatch"],
+                lineMissing=kinds["line_missing"],
             ),
             total=total,
             page=query.page,
@@ -204,15 +255,7 @@ class CustomsReceiptService:
             for start in range(0, len(targets), REMATCH_BATCH):
                 batch = [row["id"] for row in targets[start : start + REMATCH_BATCH]]
                 with write_lock.transaction(self.engine) as connection:
-                    self._rematch_batch(connection, batch, _now())
+                    _rematch_batch(connection, batch, _now())
         except SQLAlchemyError:
             raise ApiError(503, "重新匹配失败，请检查业务数据库及迁移状态") from None
         return RematchResult(rematched=len(targets))
-
-    def _rematch_batch(self, connection, receipt_ids, now):
-        heads = dao.ids(connection, receipt_ids, lock=True)
-        lines = dao.current_lines(connection, [head["id"] for head in heads])
-        ns_by_number = declarations_by_number(connection, [head["declaration_no"] for head in heads])
-        for head in heads:
-            match = _match_values(ns_by_number, head["declaration_no"], lines[head["id"]], now)
-            dao.update_head(connection, head["id"], match, now)

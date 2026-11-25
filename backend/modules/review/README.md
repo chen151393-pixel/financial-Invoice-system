@@ -240,3 +240,14 @@ npm.cmd run dev:api
 - 人工审核准入：已唯一匹配且来源摘要就绪即可人工审核；说明选填，含 `different`。每次审核在 `review_customs_approvals` 保存审核人认证身份 `approved_by`、方式 `method`、时间 `approved_at` 与可选说明，列表明细显示“操作人 · 时间 · 说明”，作为审核审计。
 - 列表、提交均按当前 NS 来源实时重比对，已导入回执刷新即按新规则展示。概况卡计数读取导入或重新匹配时保存的状态，部署后执行一次“全部重新匹配”使计数与新规则一致；已审核通过的记录不受影响。
 - 测试：`test_customs_receipts.py::test_auto_review_requires_one_to_one_rows_with_equal_totals`、`test_customs_approval.py::test_split_rows_and_total_mismatch_go_to_manual_review`。
+
+
+## 报关单比对按差异类型计数与筛选（2026-11-25，迁移 0056）
+
+问题：列表每行按当前 NS 来源实时比对，但概况卡与状态筛选读取导入或手动“重新匹配”时保存的结论。11-17 总价规则上线后、以及 NS 报关行修改后，若没有手动全部重新匹配，卡片会显示“有差异 0 张”而列表里已出现“总价不一致”。
+
+- **保存结论自动刷新**：`customs_receipt_service.refresh_matches(engine)` 按当前 NS 来源与比对规则重算全部回执，每批 200 张短事务（账本锁），只写结论（状态、NS 报关单、比对明细、差异标记）有变化的回执，比对时间不算变化。财务后台计算 `CalculationService.calculate` 在发布快照前调用；NS 同步（`SourceChanged`）、审核与算法版本变化都会触发。算法版本提升为 `review-v18`，部署重启后自动刷新旧结论，无需手工“全部重新匹配”。刷新失败时本次后台计算失败并按原退避重试。比对规则（`customs_match_policy`）变化时须同时提升 `CALCULATION_VERSION`。
+- **差异类型**：`policy.difference_kinds(result)` 由分组状态派生四类标记并保存到回执头：`quantity_mismatch` 数量不一致、`unit_mismatch` 单位不一致、`total_mismatch` 总价不一致、`line_missing` 品名缺行（NS 无对应行或海关无对应项）。一张回执可同时属于多类。
+- **接口**：`POST /api/review/customs-receipts/query` 新增 `difference`（`quantity_mismatch` / `unit_mismatch` / `total_mismatch` / `line_missing`，空为不限），与 `status` 同时生效，在数据库按标记筛选分页；`counts` 新增 `quantityMismatch`、`unitMismatch`、`totalMismatch`、`lineMissing`（随查询条件变化，不受状态筛选影响，可重叠，合计可能大于 `different`）。
+- **页面**：概况仍为四张卡（海关回执、明细一致、有差异、未找到 NS），第三张由“数量或单位不一致”更名为“有差异”；查询栏新增“差异类型”下拉，选项附各类张数，与状态切换条同时生效，列表标题写明所选类型。有差异回执的提示改为“不能自动审核，人工核对后可审核，差异说明选填”，与后端规则一致。
+- **验证**：`test_customs_receipts.py::test_counts_and_filters_split_differences_by_kind`、`::test_background_refresh_updates_stale_saved_conclusions`，`test_review_calculations.py::test_calculation_refreshes_saved_customs_conclusions`，前端 `pl-comparison.test.mjs` 的概况卡用例。

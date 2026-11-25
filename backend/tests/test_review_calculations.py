@@ -683,3 +683,25 @@ def test_creation_date_filter_validation(values):
 
     with pytest.raises(ValidationError):
         query(**values)
+
+
+def test_calculation_refreshes_saved_customs_conclusions(review, ns, engine):
+    from backend.modules.review.dto.customs_receipt_dto import CustomsImportRequest, CustomsReceiptQuery
+    from backend.modules.review.service.customs_receipt_service import CustomsReceiptService
+    from backend.tests.test_customs_receipts import row, xlsx
+
+    seed(ns, engine)
+    customs_receipts = CustomsReceiptService(engine)
+    content = xlsx([row("REAL870", "01", "墨水", "个", 9)])
+    customs_receipts.import_file(CustomsImportRequest(filename="回执.xlsx", content=content), "admin")
+    # 模拟规则升级前保存的旧结论：计数与筛选读取保存值，与逐行实时比对不一致
+    with engine.begin() as connection:
+        connection.execute(
+            text("UPDATE review_customs_receipts SET match_status = 'matched', quantity_mismatch = 0")
+        )
+    assert customs_receipts.browse(CustomsReceiptQuery()).counts.matched == 1
+
+    CalculationService(review).rebuild()
+    page = customs_receipts.browse(CustomsReceiptQuery())
+    assert page.items[0].status == "different"
+    assert (page.counts.matched, page.counts.different, page.counts.quantityMismatch) == (0, 1, 1)

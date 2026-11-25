@@ -125,6 +125,11 @@ class CustomsCounts(StrictModel):
     splitMatched: int
     different: int
     nsMissing: int
+    # 有差异按类型拆分，一张回执可计入多类，合计可能大于 different
+    quantityMismatch: int
+    unitMismatch: int
+    totalMismatch: int
+    lineMissing: int
 
 
 class CustomsReceiptList(StrictModel):

@@ -13,7 +13,10 @@ from backend.modules.review.dto.customs_receipt_dto import (
 )
 from backend.modules.review.policy.customs_match_policy import auto_review, compare, compare_lines
 from backend.modules.review.service.customs_receipt_parser import parse
-from backend.modules.review.service.customs_receipt_service import CustomsReceiptService
+from backend.modules.review.service.customs_receipt_service import (
+    CustomsReceiptService,
+    refresh_matches,
+)
 from backend.tests.test_schema_baseline import schema_engine as schema_engine
 from backend.tests.test_source_storage import bundle, customs, purchase, save
 from backend.tests.test_source_storage import ns as ns
@@ -418,3 +421,77 @@ def test_service_identity_cannot_import(schema_engine):
     with pytest.raises(ApiError) as error:
         service.import_file(CustomsImportRequest(filename="a.xlsx", content=xlsx([])), "service:sync")
     assert error.value.status == 403
+
+
+# ---------- 差异类型计数、筛选与后台刷新 ----------
+
+
+def _numbers(page):
+    return sorted(receipt.declarationNo for receipt in page.items)
+
+
+def test_counts_and_filters_split_differences_by_kind(schema_engine, ns):
+    engine = schema_engine
+    total_diff = customs("871")
+    total_diff[2][1][1]["custrecord_swc_grossamount"] = Decimal("16")
+    save(ns, engine, bundle([purchase("200", "870"), purchase("201", "871")], [customs("870"), total_diff]))
+    service = CustomsReceiptService(engine)
+    _import(
+        service,
+        [
+            # REAL870：墨水数量不一致、清洗液单位不一致
+            row("REAL870", "01", "墨水", "个", 9, total=15),
+            row("REAL870", "02", "清洗液", "套", 10, total=15),
+            # REAL871：清洗液 NS 总价 16、海关 15；另有 NS 没有的相纸（品名缺行）
+            row("REAL871", "01", "墨水", "个", 10, total=15),
+            row("REAL871", "02", "清洗液", "个", 10, total=15),
+            row("REAL871", "03", "相纸", "千克", 1, total=5),
+            row("REAL872", "01", "墨水", "个", 1),
+        ],
+    )
+    counts = service.browse(CustomsReceiptQuery()).counts
+    assert (counts.different, counts.nsMissing) == (2, 1)
+    assert (counts.quantityMismatch, counts.unitMismatch, counts.totalMismatch, counts.lineMissing) == (
+        1,
+        1,
+        1,
+        1,
+    )
+    assert _numbers(service.browse(CustomsReceiptQuery(difference="quantity_mismatch"))) == ["REAL870"]
+    assert _numbers(service.browse(CustomsReceiptQuery(difference="unit_mismatch"))) == ["REAL870"]
+    assert _numbers(service.browse(CustomsReceiptQuery(difference="total_mismatch"))) == ["REAL871"]
+    assert _numbers(service.browse(CustomsReceiptQuery(difference="line_missing"))) == ["REAL871"]
+    # 差异类型与状态同时生效：一致 + 总价不一致为空；类型计数随查询条件变化，不受状态与类型筛选影响
+    assert service.browse(CustomsReceiptQuery(status="matched", difference="total_mismatch")).total == 0
+    narrowed = service.browse(CustomsReceiptQuery(declarationNo="REAL870", difference="total_mismatch"))
+    assert (
+        narrowed.total == 0 and narrowed.counts.quantityMismatch == 1 and narrowed.counts.totalMismatch == 0
+    )
+
+
+def test_background_refresh_updates_stale_saved_conclusions(schema_engine, ns):
+    engine = schema_engine
+    save(ns, engine, bundle([purchase("200", "870")], [customs("870")]))
+    service = CustomsReceiptService(engine)
+    _import(
+        service,
+        [
+            row("REAL870", "01", "墨水", "个", 10, total=15),
+            row("REAL870", "02", "清洗液", "个", 10, total=15),
+        ],
+    )
+    assert service.browse(CustomsReceiptQuery()).counts.matched == 1
+
+    # NS 之后修改报关行总价：列表逐行实时比对已显示差异，但保存的结论仍是导入时的“一致”
+    changed = customs("870", modified="2026-09-03T10:00:00Z")
+    changed[2][1][1]["custrecord_swc_grossamount"] = Decimal("16")
+    save(ns, engine, bundle([purchase("200", "870")], [changed]))
+    stale = service.browse(CustomsReceiptQuery())
+    assert stale.items[0].status == "different" and stale.counts.matched == 1
+
+    assert refresh_matches(engine) == 1
+    fresh = service.browse(CustomsReceiptQuery())
+    assert (fresh.counts.matched, fresh.counts.different, fresh.counts.totalMismatch) == (0, 1, 1)
+    assert _numbers(service.browse(CustomsReceiptQuery(difference="total_mismatch"))) == ["REAL870"]
+    # 结论没有变化时不重复写入
+    assert refresh_matches(engine) == 0

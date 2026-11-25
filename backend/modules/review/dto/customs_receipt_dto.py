@@ -25,6 +25,8 @@ class CustomsReceiptQuery(StrictModel):
     exportTo: date | None = Field(default=None, strict=False)
     # matched 含拆行一致；ns_missing 含 NS 报关单重号
     status: Literal["all", "matched", "different", "ns_missing"] = "all"
+    # 差异类型，与 status 同时生效；空为不限。一张回执可同时属于多类
+    difference: Literal["", "quantity_mismatch", "unit_mismatch", "total_mismatch", "line_missing"] = ""
     page: int = Field(default=1, ge=1, le=100000)
     pageSize: int = Field(default=20, ge=1, le=50)
 

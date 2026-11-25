@@ -35,6 +35,19 @@ STATUS_LABELS = {
     "ns_missing": "未找到 NS 报关单",
     "ns_duplicate": "NS 报关单重号",
 }
+# 差异类型（回执头上的标记列）→ 归入该类的分组状态；一张回执可同时属于多类。
+DIFFERENCE_KINDS = {
+    "quantity_mismatch": ("quantity_mismatch",),
+    "unit_mismatch": ("unit_mismatch",),
+    "total_mismatch": ("total_mismatch",),
+    "line_missing": ("missing_in_ns", "missing_in_customs"),
+}
+
+
+def difference_kinds(result):
+    """由比对结果派生四类差异标记；未找到或重号的 NS 报关单没有分组，全部为 False。"""
+    statuses = {group["status"] for group in (result or {}).get("groups", [])}
+    return {kind: bool(statuses.intersection(groups)) for kind, groups in DIFFERENCE_KINDS.items()}
 
 
 def text(value):

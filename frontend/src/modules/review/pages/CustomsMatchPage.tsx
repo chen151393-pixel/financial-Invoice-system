@@ -14,7 +14,7 @@ import {
 import { CustomsApproveDialog } from "../components/CustomsApproveDialog";
 import { CustomsImportDialog } from "../components/CustomsImportDialog";
 import { CustomsReceiptRow } from "../components/CustomsReceiptRow";
-import { CustomsSearchForm, EMPTY_CUSTOMS_SEARCH } from "../components/CustomsSearchForm";
+import { CustomsSearchForm, DIFFERENCE_LABELS, EMPTY_CUSTOMS_SEARCH } from "../components/CustomsSearchForm";
 import { CustomsStats } from "../components/CustomsStats";
 import { ReviewListToolbar } from "../components/ReviewListToolbar";
 import { queryCustomsReceipts } from "../customs-api";
@@ -104,7 +104,11 @@ export function CustomsMatchPage({ links }: { links?: ReviewLinks }) {
       {counts && <CustomsStats counts={counts} value={query.status} onSelect={setStatus} />}
       <Card className="fr-panel">
         <CardHeader
-          title={TITLES[query.status]}
+          title={
+            query.difference
+              ? `${TITLES[query.status]} · ${DIFFERENCE_LABELS[query.difference]}`
+              : TITLES[query.status]
+          }
           actions={
             <div className="cm-actions">
               <Segmented
@@ -126,6 +130,7 @@ export function CustomsMatchPage({ links }: { links?: ReviewLinks }) {
         />
         <CustomsSearchForm
           busy={busy}
+          counts={counts}
           initial={{ ...EMPTY_CUSTOMS_SEARCH, declarationNo: exactDeclarationNo }}
           onSearch={(criteria) =>
             setQuery((current) => ({

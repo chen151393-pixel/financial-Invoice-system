@@ -157,7 +157,9 @@ export function CustomsReceiptRow({
                 showRelatedLink={false}
               />
               {receipt.status === "different" && receipt.approval.allowed && (
-                <Alert tone="warning">审核本张回执时需填写差异说明。</Alert>
+                <Alert tone="warning">
+                  明细有差异，不能自动审核；人工核对后可审核，差异说明选填，审核人与时间会留痕。
+                </Alert>
               )}
               {(receipt.status === "ns_missing" || receipt.status === "ns_duplicate") && (
                 <Alert tone="warning">

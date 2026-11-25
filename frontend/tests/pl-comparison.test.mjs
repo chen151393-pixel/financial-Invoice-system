@@ -1160,3 +1160,46 @@ test("海关人工审核说明独立成行，输入框关联标签与说明", as
   assert.match(html, /cm-approve__footer/);
   assert.match(html, /data-tone="success"/);
 });
+
+test("海关回执查询栏提供差异类型下拉，选项张数来自后端计数", async () => {
+  const { CustomsSearchForm, EMPTY_CUSTOMS_SEARCH } = await server.ssrLoadModule(
+    "/src/modules/review/components/CustomsSearchForm.tsx",
+  );
+  const counts = {
+    receipts: 11,
+    items: 23,
+    matched: 6,
+    splitMatched: 1,
+    different: 2,
+    nsMissing: 3,
+    quantityMismatch: 1,
+    unitMismatch: 0,
+    totalMismatch: 2,
+    lineMissing: 1,
+  };
+  const html = renderToStaticMarkup(
+    createElement(CustomsSearchForm, {
+      busy: false,
+      counts,
+      initial: { ...EMPTY_CUSTOMS_SEARCH, difference: "total_mismatch" },
+      onSearch: () => {},
+    }),
+  );
+  const select = html.slice(html.indexOf('<select name="difference"'), html.indexOf("</select>") + 9);
+  const options = [...select.matchAll(/<option value="([^"]*)"( selected="")?>([^<]+)<\/option>/g)].map(
+    (m) => [m[1], m[3], Boolean(m[2])],
+  );
+  assert.deepEqual(options, [
+    ["", "全部类型", false],
+    ["quantity_mismatch", "数量不一致（1 张）", false],
+    ["unit_mismatch", "单位不一致（0 张）", false],
+    ["total_mismatch", "总价不一致（2 张）", true],
+    ["line_missing", "品名缺行（1 张）", false],
+  ]);
+  const { CustomsStats } = await server.ssrLoadModule("/src/modules/review/components/CustomsStats.tsx");
+  const stats = renderToStaticMarkup(
+    createElement(CustomsStats, { counts, value: "all", onSelect: () => {} }),
+  );
+  assert.equal((stats.match(/ui-stat__label/g) ?? []).length, 4);
+  assert.match(stats, /有差异/);
+});

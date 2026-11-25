@@ -1196,3 +1196,6 @@ settlement 模块拥有 `settlement_document_groups`（组号、创建幂等请�
 
 
 资料组来源恢复（0055）：`settlement_document_groups.basis_history JSON` 为可空更新历史，记录每次人工确认的原客户/币种、当前客户/币种、成员回执版本、UTC 时间与认证操作者。更新依据只在全部当前成员仍为同客户同币种的直接收汇时执行，不更改成员、提单、收款及批次事实。有更新历史时拒绝降级删除该列。
+
+
+海关回执差异类型（0056）：`review_customs_receipts` 增加 `quantity_mismatch`、`unit_mismatch`、`total_mismatch`、`line_missing` 四个布尔列，由比对结果派生，供报关单比对页按类型计数和筛选。财务后台计算（算法版本 `review-v18`）在每次 NS 同步或规则升级后重新比对全部回执，只写结论有变化的回执；旧回执部署后自动补齐。标记可重算，回退时直接删除四列。

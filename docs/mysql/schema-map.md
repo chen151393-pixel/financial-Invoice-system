@@ -3,7 +3,7 @@
 > 本文件由 `npm.cmd run db:map` 根据迁移链离线 MySQL DDL、实体定义和字段字典生成，请勿手工修改；迁移或实体变化后重新生成，`backend/tests/test_schema_map.py` 会检查是否过期。
 > “修改”含加列、改列、索引与中文备注；数据回填仅在线执行，不在离线 DDL 中体现。
 
-当前最新迁移：`0055_settlement_group_basis`；共 55 个迁移、77 张实体表。
+当前最新迁移：`0056_review_customs_difference_kinds`；共 56 个迁移、77 张实体表。
 
 ## 1. 按模块查表
 
@@ -30,7 +30,7 @@
 | `review_calculation_jobs` | 财务后台计算队列，按账套合并请求并持久重试 | `0032` | — | [查看](current-data-dictionary.md#review_calculation_jobs) |
 | `review_customs_approvals` | 海关审核不可变版本 | `0044` | — | [查看](current-data-dictionary.md#review_customs_approvals海关审核不可变版本) |
 | `review_customs_receipt_lines` | 海关回执报关明细，按版本保留 | `0042` | — | [查看](current-data-dictionary.md#review_customs_receipt_lines) |
-| `review_customs_receipts` | 海关回执报关单头与比对结果 | `0042` | — | [查看](current-data-dictionary.md#review_customs_receipts) |
+| `review_customs_receipts` | 海关回执报关单头与比对结果 | `0042` | `0056` | [查看](current-data-dictionary.md#review_customs_receipts) |
 | `review_declaration_snapshots` | 财务报关单查询快照，后台计算后原子更新，列表只读取本表 | `0032` | — | [查看](current-data-dictionary.md#review_declaration_snapshots) |
 | `review_lines` | 审核冻结的子采购行范围，不可修改 | `0001` | `0006`、`0011` | [查看](current-data-dictionary.md#review_lines) |
 | `review_purchase_bases` | 全局开票依据版本 | `0006` | `0011` | [查看](current-data-dictionary.md#review_purchase_bases) |
@@ -191,3 +191,4 @@
 | [`0053_settlement_group_merge`](../../backend/migrations/versions/0053_settlement_group_merge.py) | — | `settlement_document_groups` | settlement：单票资料组合并的后继关系与原始范围，不删除旧组或文件。 |
 | [`0054_settlement_hk_slips`](../../backend/migrations/versions/0054_settlement_hk_slips.py) | `settlement_hk_slips` | — | settlement：香港到账银行水单原件。 |
 | [`0055_settlement_group_basis`](../../backend/migrations/versions/0055_settlement_group_basis.py) | — | `settlement_document_groups` | settlement：资料组人工更新来源的前后依据和操作者留痕。 |
+| [`0056_review_customs_difference_kinds`](../../backend/migrations/versions/0056_review_customs_difference_kinds.py) | — | `review_customs_receipts` | review：海关回执按差异类型计数与筛选（2026-11-25）。 |

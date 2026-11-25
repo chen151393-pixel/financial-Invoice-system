@@ -1917,10 +1917,15 @@ NS 来源按批后台保存记录与结果，不保存令牌。
 | match_status | VARCHAR(24) | 否 | 比对结果：matched 一致；split_matched 拆行/合并后一致；different 有差异；ns_missing 未找到 NS 报关单；ns_duplicate NS 有多张同号报关单 |
 | match_result | JSON | 是 | 比对明细（分组、NS 报关行快照与差异说明），用于展示 |
 | matched_at | DATETIME | 否 | 最近一次比对时间，UTC |
+| quantity_mismatch | BOOLEAN | 否 | 比对含数量不一致的分组（含 NS 报关数量缺失）；默认 0（0056） |
+| unit_mismatch | BOOLEAN | 否 | 比对含同品名单位不一致的分组；默认 0（0056） |
+| total_mismatch | BOOLEAN | 否 | 比对含一对一行数量一致但总价不同的分组；默认 0（0056） |
+| line_missing | BOOLEAN | 否 | 比对含单边缺行的分组（NS 无对应行或海关无对应项）；默认 0（0056） |
 | created_at | DATETIME | 否 | 本地记录创建时间，UTC |
 | updated_at | DATETIME | 否 | 本地记录最后更新时间，UTC；由 DAO 更新 |
 
 - 唯一约束 `uq_review_customs_receipt_no`：`(declaration_no)`。
+- 四个差异标记由比对结果派生（`customs_match_policy.difference_kinds`），可随时重算；一张回执可同时有多个标记。
 
 <a id="review_customs_receipt_lines"></a>
 

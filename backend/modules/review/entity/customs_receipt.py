@@ -7,6 +7,7 @@
 from sqlalchemy import (
     CHAR,
     JSON,
+    Boolean,
     CheckConstraint,
     Column,
     Date,
@@ -17,6 +18,7 @@ from sqlalchemy import (
     String,
     Table,
     UniqueConstraint,
+    text,
 )
 
 from backend.core.schema import ID, TIMESTAMP, identifier, schema_metadata, table_options, timestamps
@@ -51,6 +53,16 @@ customs_receipts = Table(
     ),
     Column("match_result", JSON, comment="比对明细（分组、NS 报关行快照与差异说明），用于展示"),
     Column("matched_at", TIMESTAMP, nullable=False, comment="最近一次比对时间，UTC"),
+    # 差异类型标记由比对结果派生（policy.difference_kinds），供概况计数与筛选；可随时重算。
+    *(
+        Column(name, Boolean, nullable=False, server_default=text("0"), comment=comment)
+        for name, comment in (
+            ("quantity_mismatch", "比对含数量不一致的分组（含 NS 报关数量缺失）"),
+            ("unit_mismatch", "比对含同品名单位不一致的分组"),
+            ("total_mismatch", "比对含一对一行数量一致但总价不同的分组"),
+            ("line_missing", "比对含单边缺行的分组（NS 无对应行或海关无对应项）"),
+        )
+    ),
     *timestamps(),
     UniqueConstraint("declaration_no", name="uq_review_customs_receipt_no"),
     Index("ix_review_customs_receipt_status", "match_status"),

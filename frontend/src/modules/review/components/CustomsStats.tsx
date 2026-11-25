@@ -35,9 +35,9 @@ export function CustomsStats({
       <StatCard
         glyph="差"
         tone={counts.different > 0 ? "warning" : "neutral"}
-        label="数量或单位不一致"
+        label="有差异"
         value={`${counts.different} 张`}
-        note="在 NS 修正并同步后核对"
+        note="可在查询栏按差异类型筛选"
         selected={value === "different"}
         onSelect={() => onSelect("different")}
       />

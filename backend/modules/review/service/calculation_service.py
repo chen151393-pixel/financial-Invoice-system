@@ -8,6 +8,7 @@ from ..dao import calculation_job_dao as jobs
 from ..dao import declaration_snapshot_dao as snapshots
 from ..mapper.snapshot_mapper import snapshot_rows
 from ..policy.calculation_policy import calculation_key
+from .customs_receipt_service import refresh_matches
 
 BUSY_RETRY_SECONDS = 5
 
@@ -55,6 +56,8 @@ class CalculationService:
             if job["calculation_key"] != self.key:
                 return False  # 其他版本进程不得覆盖当前版本的结果。
         rows, suppliers = self.build(account)
+        # 海关回执的保存结论依赖 NS 报关行与比对规则：在发布快照前刷新，失败则本次计算失败并重试。
+        refresh_matches(self.engine)
         with transaction(self.engine) as connection:
             current = jobs.get(connection, account, lock=True)
             if (

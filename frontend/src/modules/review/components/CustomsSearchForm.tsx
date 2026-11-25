@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Button, Field, FilterBar, SearchInput } from "../../../shared/components/ui";
-import type { CustomsSearch } from "../customs-types";
+import type { CustomsCounts, CustomsDifferenceKind, CustomsSearch } from "../customs-types";
 
 export const EMPTY_CUSTOMS_SEARCH: CustomsSearch = {
   declarationNo: "",
@@ -8,15 +8,34 @@ export const EMPTY_CUSTOMS_SEARCH: CustomsSearch = {
   consignee: "",
   exportFrom: "",
   exportTo: "",
+  difference: "",
 };
 
-/** 海关回执查询栏：条件提交给后端筛选，前端不过滤当前页。 */
+export const DIFFERENCE_LABELS: Record<CustomsDifferenceKind, string> = {
+  quantity_mismatch: "数量不一致",
+  unit_mismatch: "单位不一致",
+  total_mismatch: "总价不一致",
+  line_missing: "品名缺行",
+};
+const DIFFERENCE_COUNTS: Record<CustomsDifferenceKind, (counts: CustomsCounts) => number> = {
+  quantity_mismatch: (c) => c.quantityMismatch,
+  unit_mismatch: (c) => c.unitMismatch,
+  total_mismatch: (c) => c.totalMismatch,
+  line_missing: (c) => c.lineMissing,
+};
+
+/**
+ * 海关回执查询栏：条件提交给后端筛选，前端不过滤当前页。
+ * 差异类型下拉的张数来自后端 counts（随查询条件变化，一张回执可属多类）。
+ */
 export function CustomsSearchForm({
   busy,
+  counts,
   initial,
   onSearch,
 }: {
   busy: boolean;
+  counts: CustomsCounts | null;
   initial: CustomsSearch;
   onSearch: (criteria: CustomsSearch) => void;
 }) {
@@ -86,6 +105,23 @@ export function CustomsSearchForm({
           value={criteria.exportTo}
           onChange={(event) => set("exportTo", event.target.value)}
         />
+      </Field>
+      <Field label="差异类型">
+        <select
+          name="difference"
+          aria-label="差异类型"
+          value={criteria.difference}
+          onChange={(event) => set("difference", event.target.value)}
+        >
+          <option value="">全部类型</option>
+          {(Object.keys(DIFFERENCE_LABELS) as CustomsDifferenceKind[]).map((kind) => (
+            <option key={kind} value={kind}>
+              {counts
+                ? `${DIFFERENCE_LABELS[kind]}（${DIFFERENCE_COUNTS[kind](counts)} 张）`
+                : DIFFERENCE_LABELS[kind]}
+            </option>
+          ))}
+        </select>
       </Field>
     </FilterBar>
   );
