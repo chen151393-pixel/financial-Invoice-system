@@ -252,6 +252,42 @@ def test_v6_purchase_snapshot_is_hidden_then_rebuilt_with_customs_prices(review,
     assert rows(engine, "SELECT id FROM review_records") == []
 
 
+def test_v18_zero_amount_snapshot_rebuilds_with_zero_purchase_price(review, ns, engine):
+    save(ns, engine, bundle([purchase(amounts=("0", "0"))], [customs("870")]))
+    calculations = CalculationService(review)
+    calculations.rebuild()
+    snapshot = rows(engine, "SELECT id,payload FROM review_declaration_snapshots")[0]
+    payload = json.loads(snapshot["payload"])
+    for line in payload["customsLines"]:
+        line.update(
+            purchaseUnitPriceUsd="",
+            originalPrice="",
+            originalUnitPriceCny="",
+            purchasePriceNote="采购含税金额缺失或非正数，无法计算采购单价",
+            margin="",
+            marginStatus="unavailable",
+        )
+    with engine.begin() as connection:
+        connection.execute(
+            text("UPDATE review_declaration_snapshots SET payload=:p WHERE id=:i"),
+            {"p": json.dumps(payload), "i": snapshot["id"]},
+        )
+        connection.execute(text("UPDATE review_calculation_jobs SET calculation_key='review-v18:cny=0.10'"))
+    assert review.browse(query()).groups[0].calculationStatus == "pending"
+    calculations.initialize()
+    CalculationWorker(calculations).run_once()
+    fresh = review.browse(query()).groups[0]
+    assert fresh.calculationStatus == "ready" and fresh.contentSha256 == payload["contentSha256"]
+    for line in fresh.customsLines:
+        assert line.purchaseUnitPriceUsd == line.originalPrice == line.originalUnitPriceCny == "0"
+        assert line.marginStatus == "ok" and line.margin == "100.00%"
+    assert rows(engine, "SELECT id FROM review_records") == []
+    assert rows(engine, "SELECT amount FROM source_purchase_order_lines") == [
+        {"amount": 0},
+        {"amount": 0},
+    ]
+
+
 def test_v15_original_unit_mismatch_rebuilds_with_actual_purchase_units(review, ns, engine):
     declaration = customs("870")
     for _, source in declaration[2]:

@@ -35,10 +35,11 @@ def purchase_price(customs_row, rows, orders, sales_orders, unit_names=None, bas
     total = Decimal(0)
     for row in rows:
         amount, tax = row.get("amount"), row.get("tax_rate")
-        if amount is None or amount <= 0:
-            return {**result, "note": "采购含税金额缺失或非正数，无法计算采购单价"}
+        if amount is None or amount < 0:
+            return {**result, "note": "采购含税金额缺失或为负数，无法计算采购单价"}
         if tax is None or not Decimal(0) <= tax <= Decimal(1):
             return {**result, "note": "采购明细税率缺失或无效，无法计算采购未税金额"}
+        # 零金额明细的未税金额为零，其采购数量仍计入分母，不能当作缺失或跳过。
         # NS 金额以分保存；先逐行还原未税金额再相加，不能用平均税率统一除税。
         net = (amount / (Decimal(1) + tax)).quantize(CENT, rounding=ROUND_HALF_UP)
         basis = (bases or {}).get(row.get("id")) or {}

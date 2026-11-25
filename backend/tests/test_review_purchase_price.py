@@ -79,6 +79,31 @@ def test_mixed_tax_rates_are_removed_per_line_before_summing():
     assert price["quantity"] == 5
 
 
+def test_zero_amount_line_keeps_its_purchase_quantity_in_the_denominator():
+    rows = [row(quantity="2000", gross="280"), row(2, 2, "1000", "0", "0")]
+    before = deepcopy(rows)
+    customs = {**CUSTOMS, "declared_quantity": D("3000"), "declared_unit_price": D("0.01391")}
+    price = purchase_price(customs, rows, ORDERS, SALES)
+    assert price["quantity"] == D("3000")
+    assert price["cny"] == D("247.79") / D("3000")
+    assert price["usd"].quantize(D("0.000001")) == D("0.012328")
+    margin = declared_margin(customs, rows, ORDERS, SALES)
+    assert margin["status"] == "ok" and margin["margin"] == D("11.37")
+    assert margin["original"] == price["cny"]
+    assert rows == before
+
+
+@pytest.mark.parametrize("currency", ["CNY", "USD"])
+def test_all_zero_amounts_produce_zero_purchase_price_and_full_margin(currency):
+    rows = [row(quantity="10000", gross="0"), row(2, 2, "5000", "0", "0")]
+    orders = {key: {**order, "currency": currency} for key, order in ORDERS.items()}
+    price = purchase_price(CUSTOMS, rows, orders, SALES)
+    assert price["quantity"] == D("15000")
+    assert price["cny"] == price["usd"] == D("0")
+    margin = declared_margin(CUSTOMS, rows, orders, SALES)
+    assert margin["status"] == "ok" and margin["margin"] == D("100.00")
+
+
 def test_parent_purchase_unit_mismatch_blocks_only_margin():
     rows = [row(quantity="15000", gross="113000")]
     rows[0]["parent_purchase_unit"] = "盒"
@@ -95,7 +120,7 @@ def test_parent_purchase_unit_mismatch_blocks_only_margin():
         ("quantity", D("0"), "采购下单数量"),
         ("quantity", D("-1"), "采购下单数量"),
         ("amount", None, "采购含税金额"),
-        ("amount", D("0"), "采购含税金额"),
+        ("amount", D("-0.01"), "采购含税金额"),
         ("tax_rate", None, "税率"),
         ("tax_rate", D("-0.13"), "税率"),
     ],
@@ -153,30 +178,50 @@ def test_ambiguous_line_binding_does_not_choose_last_or_repeat_whole_amount():
     assert line_bindings({"links": links}) == {2: 20}
 
 
-def test_saved_purchase_rows_feed_usd_fields_without_changing_invoice_basis(ns, engine):
-    order = purchase(amounts=("68400", "38400"))
-    for (_, source), quantity in zip(order[2], ("9000", "6000"), strict=True):
+@pytest.mark.parametrize(
+    "amounts,quantities,taxes,expected_usd,expected_cny,expected_margin",
+    [
+        (("68400", "38400"), ("9000", "6000"), ("13%", "13%"), "0.940431", "6.300885", "11.28%"),
+        (("280", "0"), ("2000", "1000"), ("13%", "0%"), "0.012328", "0.082597", "98.84%"),
+        (("0", "0"), ("2000", "1000"), ("13%", "0%"), "0", "0", "100.00%"),
+    ],
+)
+def test_saved_purchase_rows_feed_usd_fields_without_changing_invoice_basis(
+    ns, engine, amounts, quantities, taxes, expected_usd, expected_cny, expected_margin
+):
+    order = purchase(amounts=amounts)
+    for (_, source), quantity, tax in zip(order[2], quantities, taxes, strict=True):
         source["custrecord_swc_subpo_item_qty"] = D(quantity)
         source["custrecord_swc_subpo_item_bgqty"] = D(quantity)
         source["custrecord_swc_subpo_item_bgunit"] = "个"
+        source["custrecord_swc_subpo_item_tax"] = tax
     data = deepcopy(bundle([order], [customs()]))
     data["sales_orders"]["90"]["exchangerate"] = "6.70"
     save(ns, engine, data)
     reader = DeclarationService(engine)
     content = reader.detail(reader.index(ns.settings.account, "")[0]["id"])
     first = content["customs_lines"][0]
-    content["customs_lines"] = [{**first, **CUSTOMS, "id": first["id"], "sales_order_no": "SO1"}]
+    total_quantity = sum(map(D, quantities))
+    content["customs_lines"] = [
+        {
+            **first,
+            **CUSTOMS,
+            "id": first["id"],
+            "sales_order_no": "SO1",
+            "declared_quantity": total_quantity,
+        }
+    ]
     content["customs_lines"][0]["declaration_name"] = "铝运动水壶"
     for link in content["links"]:
         if link["purchase_line_id"]:
             link["customs_line_id"] = first["id"]
     frozen = review_lines(content)
     shown = declaration(content, "pending", False, None, True, "").customsLines[0]
-    assert shown.purchaseCount == 2 and shown.purchaseOrderQuantity == "15000"
-    assert shown.originalPrice == shown.purchaseUnitPriceUsd == "0.940431"
-    assert shown.originalUnitPriceCny == "6.300885"
-    assert shown.declaredUnitPriceUsd == "1.06" and shown.margin == "11.28%"
+    assert shown.purchaseCount == 2 and D(shown.purchaseOrderQuantity) == total_quantity
+    assert shown.originalPrice == shown.purchaseUnitPriceUsd == expected_usd
+    assert shown.originalUnitPriceCny == expected_cny
+    assert shown.declaredUnitPriceUsd == "1.06" and shown.marginStatus == "ok"
+    assert shown.margin == expected_margin
     assert [(line["quantity"], line["amount"]) for line in frozen] == [
-        (D("9000"), D("68400")),
-        (D("6000"), D("38400")),
+        (D(quantity), D(amount)) for quantity, amount in zip(quantities, amounts, strict=True)
     ]
