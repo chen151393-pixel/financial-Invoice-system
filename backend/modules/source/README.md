@@ -74,7 +74,7 @@
 
 - 按 NS 账套 + NS 内部 ID 识别单据；来源修改时间早于已保存版本、或记录类型变化时拒绝覆盖，整页回滚。
 - 明细按稳定行键（`<NS 行记录类型>:<行 ID>`）更新；本次未返回的明细置为无效，不删除。
-- 字段映射沿用服务器配置 `NETSUITE_PL_LOOKUP` 的 `storage_fields` 键名，对应新表列见 `mapper/storage_mapper.py` 的 `FIELDS`；默认缺字段、超长、精度不符时拒绝整页；规格型号缺失、已核实无母单及单价展示精度例外见对应章节。
+- 字段映射沿用服务器配置 `NETSUITE_PL_LOOKUP` 的 `storage_fields` 键名，对应新表列见 `mapper/storage_mapper.py` 的 `FIELDS`；默认缺字段、超长、精度不符时拒绝整页；规格型号缺失、子采购含税单价缺失、已核实无母单及单价展示精度例外见对应章节。
 - **开票口径**：子采购行 `unit` / `quantity` 取配置键 `unit_name` / `quantity`。按 2026-10-10 的决定，`unit_name` 应映射到 NS `custrecord_swc_subpo_item_unit`（采购单位）；报关单位另存 `declared_unit`。
 - 供应商取子采购单上的 NS 供应商引用；采购公司取 `company_record_type` 记录（身份为 `类型:ID`）；申报主体记录类型未配置，身份前缀为 `declarant:`，与采购公司分开。
 - 原始数据（NS 单据正文、关联依据）存 `source_raw_records`，内容不变不重复保存。
@@ -212,7 +212,15 @@ docker compose exec -T app python -m backend.manage rebuild-source-links --recor
 
 `customrecord_swc_delare_detail` 的 `specification → custrecord_swc_huge` 是非关键展示字段，数据库本来允许 NULL。NS 明细响应未返回该字段时，现在保存为未知值（NULL），在 `storage.warnings` 中按报关单提示缺失条数及字段填写／可见性待核实。原始响应保留缺字段的事实，不补造型号，不保留上次型号冒充当前来源；型号变化继续参与原有摘要和审核失效判断。
 
-仅此已知记录类型及映射获准降级，映射配置本身仍须提供。拼错字段名、其他记录类型、品名／数量／单位／金额等已配置字段缺失仍整批失败；存在但格式或长度不合法的型号也仍报错。不会根据字段缺失推断 NS 中确实为空，也不会绕过来源权限或逐行关联校验。规则位于 `policy/optional_field_policy.py`，Mapper 按规则保存 NULL，StorageService 汇总提示；无数据库迁移及前端规则变化。
+规格型号仅此已知记录类型及映射获准降级，映射配置本身仍须提供。拼错字段名、其他记录类型、品名／数量／单位／金额等已配置字段缺失仍整批失败；存在但格式或长度不合法的型号也仍报错。不会根据字段缺失推断 NS 中确实为空，也不会绕过来源权限或逐行关联校验。规则位于 `policy/optional_field_policy.py`，Mapper 按规则保存 NULL，StorageService 汇总提示；无数据库迁移及前端规则变化。
+
+## 子采购含税单价缺失（2026-11-25）
+
+子采购明细 `customrecord_swc_subpo_item` 的 `tax_inclusive_price → custrecord_swc_subpo_item_ratewithrate` 未返回时，允许完整关联组保存，`unit_price` 为 NULL。显式 NULL 或空字符串同样保留为未知；`storage.warnings` 按子采购单提示缺失条数及字段填写／可见性待核实。不填零、不沿用旧单价，也不由行金额反算单价。原始快照保留本次字段缺失或空值的事实。
+
+仅放行上述明确记录类型和字段映射；错误映射、非法单价、缺少已配置的数量／单位／行金额、认证与读取失败仍沿用原拒绝规则。数量、来源行含税金额、单头总额和币种不变；人工审核及任务应开金额仍使用来源行金额。已有单价变为未知时继续触发原摘要与审核失效机制，已冻结任务不被同步静默重算。整页和部分保存、报关与子采购入口共用现有 Mapper 和可缺字段规则，无需迁移，不写 NS。
+
+验证：`test_source_missing_purchase_price.py` 使用隔离 SQLite 和合成 NS 数据覆盖批量／REST 明细读取、两种同步入口及保存模式、原始缺失与金额留存、审核任务链路、重复同步、旧单价清空与旧审核失效，以及错误映射／关键字段缺失保护；非法单价继续由 `test_source_unit_price.py` 和 `test_sync_partial_save.py` 验证。不代表线上已部署或截图中的单据已经重拉。
 
 
 ## 按完整关联组保存（2026-10-16）

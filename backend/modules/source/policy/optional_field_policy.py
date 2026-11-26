@@ -6,8 +6,12 @@ OPTIONAL_CUSTOMS_FIELDS = {
     "declared_unit_price": "custrecord_swc_grossamountzj",
 }
 
-# 子采购明细的税码可能未填写；缺失时税率为 NULL，发票比对的税额项显示“未校验”。
-OPTIONAL_PURCHASE_FIELDS = {"tax_rate": "custrecord_swc_subpo_item_tax"}
+# 子采购含税单价可能未返回；保留未知值，开票金额仍取来源行金额，不反算单价。
+# 税码可能未填写；缺失时税率为 NULL，发票比对的税额项显示“未校验”。
+OPTIONAL_PURCHASE_FIELDS = {
+    "tax_rate": "custrecord_swc_subpo_item_tax",
+    "tax_inclusive_price": "custrecord_swc_subpo_item_ratewithrate",
+}
 
 
 def allows_missing(kind, spec, key):
@@ -27,11 +31,22 @@ def allows_missing(kind, spec, key):
 
 
 def warnings(bundle, config):
+    result = []
+    purchase_spec = config.purchase_line
+    if allows_missing("purchase_line", purchase_spec, "tax_inclusive_price"):
+        field = purchase_spec.storage_fields["tax_inclusive_price"]
+        for identity, head, lines in bundle["purchases"]:
+            count = sum(record.get(field) in (None, "") for _, record in lines)
+            if count:
+                number = head.get(config.purchase.storage_fields["order_no"]) or identity
+                result.append(
+                    f"子采购单 {number} 有 {count} 条明细缺少含税单价（{field}），已按未知值保存；"
+                    "请核实 NS 字段填写或可见性。未填零、未沿用旧单价或反算单价。"
+                )
     spec = config.customs_line
     if not allows_missing("customs_line", spec, "specification"):
-        return []
+        return result
     field = spec.storage_fields["specification"]
-    result = []
     for identity, head, lines in bundle["customs"]:
         count = sum(field not in record for _, record in lines)
         if count:
