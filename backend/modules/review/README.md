@@ -185,7 +185,7 @@ npm.cmd run dev:api
 | 层 | 文件 | 说明 |
 | --- | --- | --- |
 | controller | `customs_receipt_controller.py` | `POST /api/review/customs-receipts/import`、`/query`、`/rematch` |
-| service | `customs_receipt_reader.py` | 读取 .xlsx / .xls / .csv 为原始文本行（限 4MB、6000 行，拒绝公式与错误值） |
+| service | `customs_receipt_reader.py` | 后台读取 .xlsx / .xls / .csv；忽略 XLSX 尾部空白格式，拒绝公式与错误值，资源边界见下文 |
 | | `customs_receipt_parser.py` | 表头别名识别（标题行可在前 10 行内）、逐行校验、按报关单号分组、内容摘要 |
 | | `customs_receipt_service.py` | 导入（解析在事务外，保存/换版与比对在账本锁事务内）、列表、重新匹配（每批 200 张短事务） |
 | policy | `customs_match_policy.py` | 比对规则（纯函数） |
@@ -202,6 +202,15 @@ npm.cmd run dev:api
 6. 展开明细显示 NS 报关行原始金额和币种。品名与单位已配对的一对一同币种组按原金额精度比较，`totalMismatch` 为 true（不同）、false（相同）或 null（未比对）。主行 `totalComparison` 反映全部一致、有差异、部分未比对或未比对。拆行、合并逐行展示金额。2026-11-17 起总价参与准入：一对一行数量一致但总价不同，组状态为 `total_mismatch`（“总价不一致”），整单 `different`，见下文“自动审核一对一按行比价”。
 
 ### 导入与换版
+
+2026-11-26：海关回执改为持久后台导入。`POST /api/review/customs-receipts/import` 接收原文件后返回 **202** 与 `pending` 作业，不表示已导入。`GET /api/review/customs-receipts/imports` 返回当前认证身份最近的作业和未完成状态；`pending` / `running` / `completed` / `failed` 分别表示排队、后台解析比对、入库成功、失败。失败原因持久保存；解析失败整份不入库，保存过程失败整份回滚。只有回执与作业结果在同一账本事务内提交后才显示成功。
+
+- `service/customs_import_service.py` 复用原解析、换版、比对规则；`customs_import_worker.py` 通过 MySQL 命名锁单消费者按上传顺序处理。进程中断后接续 `pending` / `running`，不要求页面保持打开。
+- `review_customs_import_jobs` 由迁移 `0057_review_customs_import_jobs` 创建。原文件暂存 `CUSTOMS_IMPORT_ROOT`（默认 `data/customs-imports`），文件名采用随机标识；完成或确认失败后清除暂存文件，数据库只保存元数据与结果。部署必须先升级数据库，并持久挂载该目录（默认已落在 Compose 的 `/app/data` 挂载内）。不执行线上迁移或补导入。
+- 支持用户提供的 24 列单一窗口原表；表头仍按既有别名识别，不增加要求列。XLSX 不依赖声明尺寸，尾部空白行、列和仅有格式的单元格不算明细；公式、错误单元格及非空超限数据仍会明确失败。原 4MB 业务限制与遗漏的 128KB 请求拦截已移除；异步接口专用传输资源上限为原文件 64MiB、JSON 90MiB、解压 256MiB，最多 100000 项，不放大其他模块的限制。
+- 上传/接收中断时显示“未确认成功”，查询进度失败提示先核实，不能据此宣称未入库或重复上传。后台明确失败时提示“本文件未导入，原有数据未被此文件替换”；关闭弹窗后页面继续显示记录并轮询，成功后自动刷新列表。
+
+验证：新增 `backend/tests/test_customs_import_jobs.py` 覆盖排队不解析、后台完成、失败不替换、事务回滚、重启恢复、权限、超过旧限制的 HTTP 请求及空白格式。前端状态覆盖见 `frontend/tests/customs-import.test.mjs`。
 
 - 同一文件按真实报关单号分组，组内按规范化项号去重。重复项的明细内容相同则保留首次出现的行，不同项号各自保留。`POST /api/review/customs-receipts/import` 返回的 `rows` 为去重后的明细行数。
 - 一个文件内任一行有误（缺必需列、长号码被存为数字、同号同项的明细内容冲突、出口日期或境外收货人前后不一致、数值格式或精度超限）时整份拒绝。

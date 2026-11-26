@@ -13,6 +13,8 @@ import {
 } from "../../../shared/components/ui";
 import { CustomsApproveDialog } from "../components/CustomsApproveDialog";
 import { CustomsImportDialog } from "../components/CustomsImportDialog";
+import { CustomsImportJobs } from "../components/CustomsImportJobs";
+import { useCustomsImports } from "../useCustomsImports";
 import { CustomsReceiptRow } from "../components/CustomsReceiptRow";
 import { CustomsSearchForm, DIFFERENCE_LABELS, EMPTY_CUSTOMS_SEARCH } from "../components/CustomsSearchForm";
 import { CustomsStats } from "../components/CustomsStats";
@@ -99,8 +101,10 @@ export function CustomsMatchPage({ links }: { links?: ReviewLinks }) {
   const chosen = selectable.filter((item) => selection.includes(item.id));
   const setStatus = (status: CustomsFilter) => setQuery((current) => ({ ...current, status, page: 1 }));
   const reload = () => setRefresh((value) => value + 1);
+  const imports = useCustomsImports(reload);
   return (
     <div className="fr-page cm-page">
+      {!importing && <CustomsImportJobs jobs={imports.jobs} error={imports.error} />}
       {counts && <CustomsStats counts={counts} value={query.status} onSelect={setStatus} />}
       <Card className="fr-panel">
         <CardHeader
@@ -251,10 +255,10 @@ export function CustomsMatchPage({ links }: { links?: ReviewLinks }) {
       {importing && (
         <CustomsImportDialog
           declarationNo={query.exactDeclarationNo}
-          onClose={(changed) => {
-            setImporting(false);
-            if (changed) reload();
-          }}
+          jobs={imports.jobs}
+          progressError={imports.error}
+          onQueued={imports.queued}
+          onClose={() => setImporting(false)}
         />
       )}
       {approval && (

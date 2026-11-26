@@ -2,7 +2,7 @@ import { http } from "../../shared/api/http";
 import { readImportFile } from "../../shared/api/import-file";
 import type {
   CustomsApproveResult,
-  CustomsImportResult,
+  CustomsImportJob,
   CustomsReceipt,
   CustomsReceiptList,
   CustomsReceiptQuery,
@@ -19,8 +19,11 @@ export const queryCustomsReceipts = (query: CustomsReceiptQuery, signal?: AbortS
 // 只上传原文件；列识别、校验、换版与比对全部在后端完成。
 export async function importCustomsReceipt(file: File) {
   const body = await readImportFile(file);
-  return http<CustomsImportResult>("/review/customs-receipts/import", "POST", body);
+  return http<CustomsImportJob>("/review/customs-receipts/import", "POST", body);
 }
+
+export const queryCustomsImports = (signal?: AbortSignal) =>
+  http<{ items: CustomsImportJob[] }>("/review/customs-receipts/imports", "GET", undefined, signal);
 
 export const approveCustomsReceipts = (items: CustomsReceipt[], note: string) =>
   http<CustomsApproveResult>("/review/customs-receipts/approve-batch", "POST", {

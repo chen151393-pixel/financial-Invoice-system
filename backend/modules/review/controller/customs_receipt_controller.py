@@ -10,24 +10,28 @@ from ..dto.customs_receipt_dto import (
     CustomsReceiptQuery,
     CustomsRematchRequest,
 )
+from ..vo.customs_import_vo import CustomsImportJob, CustomsImportJobs
 from ..vo.customs_receipt_vo import (
     CustomsApproveResult,
-    CustomsImportResult,
     CustomsReceiptList,
     RematchResult,
 )
 
 
-def create_router(service, approval):
+def create_router(service, approval, imports=None):
     router = APIRouter(prefix="/api/review/customs-receipts", tags=["海关报关单比对"])
 
     @router.post("/approve-batch", response_model=CustomsApproveResult)
     def approve_batch(body: CustomsApproveRequest, owner: Owner):
         return approval.approve_batch(body, owner)
 
-    @router.post("/import", response_model=CustomsImportResult)
+    @router.post("/import", response_model=CustomsImportJob, status_code=202)
     def import_file(body: CustomsImportRequest, owner: Owner):
-        return service.import_file(body, owner)
+        return imports.enqueue(body, owner)
+
+    @router.get("/imports", response_model=CustomsImportJobs)
+    def import_jobs(owner: Owner):
+        return imports.browse(owner)
 
     @router.post("/query", response_model=CustomsReceiptList)
     def query(body: CustomsReceiptQuery, owner: Owner):

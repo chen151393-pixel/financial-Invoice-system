@@ -166,3 +166,11 @@ export interface CustomsImportResult {
   unchanged: number;
   declarations: ImportedDeclaration[];
 }
+export type CustomsImportJob = {
+  id: string;
+  fileName: string;
+  status: "pending" | "running" | "completed" | "failed";
+  statusLabel: string;
+  error: string;
+  result: CustomsImportResult | null;
+};

@@ -42,6 +42,7 @@ TABLES = {
     "review_declaration_snapshots",
     "review_snapshot_suppliers",
     "review_customs_receipts",
+    "review_customs_import_jobs",
     "review_customs_receipt_lines",
     "review_customs_approvals",
     "settlement_batches",
@@ -329,7 +330,7 @@ def test_downgrade_refuses_to_erase_version_evidence(tmp_path):
             command.downgrade(_config(SCHEMA_INI, _url(engine)), "base")
         with engine.connect() as connection:
             # 0039 的只读目录可由企微重建、0040 的空计划表、0041 的未配置角色页面与 0042 的空海关回执表无数据，允许回退；
-            # 供应商绑定和业务版本证据必须保留。
+            # 0057 的空导入队列也允许回退；供应商绑定和业务版本证据必须保留。
             evidence_tables = TABLES - {
                 "settlement_hk_slips",
                 "settlement_document_groups",
@@ -340,6 +341,7 @@ def test_downgrade_refuses_to_erase_version_evidence(tmp_path):
                 "sync_ns_plans",
                 "identity_role_pages",
                 "review_customs_receipts",
+                "review_customs_import_jobs",
                 "review_customs_receipt_lines",
                 "review_customs_approvals",
                 "settlement_batches",

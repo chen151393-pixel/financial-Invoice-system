@@ -13,7 +13,7 @@ from xlrd.compdoc import CompDocError
 from backend.core.errors import ApiError
 from backend.core.xlsx_reader import Cell, number_text, read_xlsx_sheets
 
-MAX_ROWS = 6000
+MAX_ROWS = 100000
 MAX_COLUMNS = 80
 MAX_CELL = 1000
 
@@ -73,7 +73,13 @@ def read_sheets(filename, raw):
     """逐个工作表产出 (名称, [[Cell, ...], ...])；单元格过长时拒绝。"""
     lower = filename.lower()
     if lower.endswith(".xlsx"):
-        sheets = read_xlsx_sheets(raw, max_rows=MAX_ROWS + 20, max_columns=MAX_COLUMNS)
+        sheets = read_xlsx_sheets(
+            raw,
+            max_rows=MAX_ROWS + 20,
+            max_columns=MAX_COLUMNS,
+            allow_trailing_blank_rows=True,
+            max_uncompressed_bytes=256 * 1024 * 1024,
+        )
     elif lower.endswith(".xls"):
         sheets = _xls_sheets(raw)
     elif lower.endswith(".csv"):

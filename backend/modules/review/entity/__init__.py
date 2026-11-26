@@ -7,6 +7,7 @@ __all__ = ["lines", "records"]
 
 from .calculation_job import calculation_jobs as calculation_jobs
 from .customs_approval import customs_approvals as customs_approvals
+from .customs_import_job import customs_import_jobs as customs_import_jobs
 from .customs_receipt import customs_receipt_lines as customs_receipt_lines
 from .customs_receipt import customs_receipts as customs_receipts
 from .declaration_snapshot import declaration_snapshots as declaration_snapshots

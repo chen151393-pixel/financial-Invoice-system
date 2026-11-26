@@ -1,5 +1,21 @@
 # 当前表设计与字段字典
 
+### review_customs_import_jobs｜海关回执后台导入
+
+迁移 `0057_review_customs_import_jobs` 新建，归属 review。原文件只暂存磁盘，不进入数据库。
+
+| 字段 | 含义 |
+| --- | --- |
+| id | 自增导入作业主键 |
+| file_name / upload_key | 原文件名 / 服务器生成的随机暂存标识，不能作为任意路径 |
+| actor | 提交导入的认证身份，进度查询只返回当前身份记录 |
+| status | pending 排队、running 解析比对、completed 已保存、failed 失败；重启继续未完成作业 |
+| error_message | 失败原因，不回显原文件内容或服务器路径 |
+| result | 与回执在同一事务提交的统计、列识别及逐张结果 |
+| created_at / updated_at | 作业创建及最近状态变化时间，UTC |
+
+索引：`(status, id)` 消费队列；`(actor, id)` 查看当前身份的最近记录。非空队列或历史存在时禁止迁移自动回退删除。
+
 ### task_wecom_directories｜企微群目录同步
 
 迁移 `0039_task_wecom_directory` 新建，归属 task，和业务数据共用 MySQL。

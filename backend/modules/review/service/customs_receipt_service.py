@@ -113,12 +113,16 @@ class CustomsReceiptService:
         now = _now()
         try:
             with write_lock.transaction(self.engine) as connection:
-                outcomes = self._save(connection, parsed["declarations"], body.filename, owner, now)
+                return self.save_parsed(connection, parsed, body.filename, owner, now)
         except SQLAlchemyError:
             raise ApiError(503, "海关回执保存失败，请检查业务数据库及迁移状态") from None
+
+    def save_parsed(self, connection, parsed, filename, owner, now):
+        """复用同步入库规则；异步作业将回执与完成结果放在同一事务中提交。"""
+        outcomes = self._save(connection, parsed["declarations"], filename, owner, now)
         counts = {key: sum(1 for o in outcomes if o.result == key) for key in RESULT_LABELS}
         return CustomsImportResult(
-            fileName=body.filename,
+            fileName=filename,
             rows=parsed["rows"],
             columns=parsed["columns"],
             ignoredColumns=parsed["ignored"],

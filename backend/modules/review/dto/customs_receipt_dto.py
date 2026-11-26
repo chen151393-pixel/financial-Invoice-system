@@ -11,8 +11,8 @@ from backend.core.search_terms import SearchText
 
 class CustomsImportRequest(StrictModel):
     filename: str = Field(min_length=1, max_length=255)
-    # 4MB 原文件的 base64 长度上限
-    content: str = Field(min_length=1, max_length=5592408)
+    # 请求体由专用上传入口限量；解码后由 Service 返回明确的容量错误。
+    content: str = Field(min_length=1)
 
 
 class CustomsReceiptQuery(StrictModel):
