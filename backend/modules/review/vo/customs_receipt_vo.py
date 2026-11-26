@@ -125,6 +125,8 @@ class CustomsCounts(StrictModel):
     splitMatched: int
     different: int
     nsMissing: int
+    # 当前回执版本与当前唯一 NS 来源均与审核记录一致
+    approved: int
     # 有差异按类型拆分，一张回执可计入多类，合计可能大于 different
     quantityMismatch: int
     unitMismatch: int

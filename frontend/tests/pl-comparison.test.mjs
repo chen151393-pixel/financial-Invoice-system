@@ -1196,6 +1196,7 @@ test("海关回执查询栏提供差异类型下拉，选项张数来自后端�
     splitMatched: 1,
     different: 2,
     nsMissing: 3,
+    approved: 4,
     quantityMismatch: 1,
     unitMismatch: 0,
     totalMismatch: 2,
@@ -1224,6 +1225,46 @@ test("海关回执查询栏提供差异类型下拉，选项张数来自后端�
   const stats = renderToStaticMarkup(
     createElement(CustomsStats, { counts, value: "all", onSelect: () => {} }),
   );
-  assert.equal((stats.match(/ui-stat__label/g) ?? []).length, 4);
+  assert.equal((stats.match(/ui-stat__label/g) ?? []).length, 5);
   assert.match(stats, /有差异/);
+});
+
+test("海关已审核通过卡展示后端计数并提交筛选，保留查询条件", async (t) => {
+  const { CustomsStats } = await server.ssrLoadModule("/src/modules/review/components/CustomsStats.tsx");
+  let selected;
+  const tree = CustomsStats({
+    counts: { receipts: 15, items: 24, matched: 7, splitMatched: 0, different: 0, nsMissing: 8, approved: 5 },
+    value: "approved",
+    onSelect: (value) => {
+      selected = value;
+    },
+  });
+  const card = tree.props.children.find((child) => child.props.label === "已审核通过");
+  card.props.onSelect();
+  assert.equal(selected, "approved");
+  const html = renderToStaticMarkup(tree);
+  assert.match(html, /aria-pressed="true"[^]*?已审核通过[^]*?5 张/);
+  const calls = [];
+  t.mock.method(globalThis, "fetch", async (_url, options) => {
+    calls.push(JSON.parse(options.body));
+    return new Response(JSON.stringify({ items: [] }), {
+      headers: { "Content-Type": "application/json" },
+    });
+  });
+  const { queryCustomsReceipts } = await server.ssrLoadModule("/src/modules/review/customs-api.ts");
+  await queryCustomsReceipts({
+    status: selected,
+    declarationNo: "REAL870",
+    name: "墨水",
+    consignee: "客户甲",
+    exportFrom: "2026-10-01",
+    exportTo: "2026-10-31",
+    difference: "total_mismatch",
+    page: 1,
+    pageSize: 20,
+  });
+  assert.equal(calls[0].status, "approved");
+  assert.equal(calls[0].declarationNo, "REAL870");
+  assert.equal(calls[0].difference, "total_mismatch");
+  assert.equal(calls[0].exportFrom, "2026-10-01");
 });

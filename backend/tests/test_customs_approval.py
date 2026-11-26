@@ -218,8 +218,11 @@ def test_split_rows_and_total_mismatch_go_to_manual_review(world, rows_, reason)
 def test_stale_source_and_reimport_invalidate_approval(world, ns):
     original = current(world)
     approve(world, body(original))
+    assert world[2].browse(CustomsReceiptQuery(status="approved")).counts.approved == 1
     save(ns, world[0], bundle([purchase(amounts=("130", "20"))], [customs("870", "2026-09-03T10:00:00Z")]))
     assert not current(world).approval.approved
+    stale = world[2].browse(CustomsReceiptQuery(status="approved"))
+    assert stale.counts.approved == stale.total == 0 and stale.items == []
     assert current(world).approvalProgress.customs.status == "changed"
     assert "已变化" in approve(world, body(original)).skipped[0].reason
     finance(world)
@@ -234,8 +237,94 @@ def test_stale_source_and_reimport_invalidate_approval(world, ns):
     )
     assert "已变化" in approve(world, request).skipped[0].reason
     assert not current(world).approval.approved
+    assert world[2].browse(CustomsReceiptQuery(status="approved")).counts.approved == 0
     assert approve(world, body(current(world))).approved
+    assert world[2].browse(CustomsReceiptQuery(status="approved")).total == 1
     assert len(rows(world[0], "SELECT * FROM task_tasks")) == 1
+
+
+@pytest.mark.parametrize("method", ["auto", "manual"])
+def test_approved_filter_counts_only_current_approvals(world, method):
+    before = world[2].browse(CustomsReceiptQuery(status="approved"))
+    assert before.counts.receipts == before.counts.matched == 1
+    assert before.counts.approved == before.total == 0 and before.items == []
+    assert approve(world, body(current(world), method)).approved
+    approved = world[2].browse(CustomsReceiptQuery(status="approved"))
+    assert approved.counts.approved == approved.total == 1
+    assert approved.items[0].approval.approved
+    # 海关审核独立统计，不要求财务通过；原比对分类继续包含该回执。
+    assert approved.items[0].approvalProgress.finance.status != "approved"
+    assert world[2].browse(CustomsReceiptQuery(status="matched")).total == 1
+    assert world[2].browse(CustomsReceiptQuery()).counts.approved == 1
+
+
+def test_approved_filter_search_difference_and_database_pagination(world, ns):
+    save(
+        ns,
+        world[0],
+        bundle(
+            [purchase("201", "871"), purchase("202", "872")],
+            [customs("871"), customs("872")],
+        ),
+    )
+    _import(
+        world[2],
+        [
+            row("REAL871", "01", "墨水", "个", 10, "客户乙", total=16),
+            row("REAL871", "02", "清洗液", "个", 10, "客户乙", total=15),
+            row("REAL872", "01", "相纸", "个", 1, "待审核客户", total=15),
+            row("MISSING", "01", "相纸", "个", 1, total=15),
+        ],
+    )
+    for number in ("REAL870", "REAL871"):
+        item = world[2].browse(CustomsReceiptQuery(exactDeclarationNo=number)).items[0]
+        assert approve(world, body(item, "manual")).approved
+    first = world[2].browse(CustomsReceiptQuery(status="approved", pageSize=1))
+    second = world[2].browse(CustomsReceiptQuery(status="approved", pageSize=1, page=2))
+    assert first.total == second.total == first.counts.approved == 2
+    assert first.counts.receipts == 4 and first.pages == second.pages == 2
+    assert [item.declarationNo for item in first.items + second.items] == ["REAL871", "REAL870"]
+    assert all(item.approval.approved for item in first.items + second.items)
+    narrowed = world[2].browse(
+        CustomsReceiptQuery(
+            status="approved", name="墨水", consignee="客户乙", exportFrom="2026-10-29", exportTo="2026-10-29"
+        )
+    )
+    assert narrowed.total == narrowed.counts.approved == 1
+    assert narrowed.items[0].declarationNo == "REAL871"
+    different = world[2].browse(CustomsReceiptQuery(status="approved", difference="total_mismatch"))
+    assert different.total == 1 and different.items[0].declarationNo == "REAL871"
+    assert different.counts.approved == 2
+    assert world[2].browse(CustomsReceiptQuery(status="approved", difference="unit_mismatch")).total == 0
+    absent = world[2].browse(CustomsReceiptQuery(status="approved", declarationNo="MISSING"))
+    assert absent.counts.receipts == 1 and absent.counts.approved == absent.total == 0
+    assert world[2].browse(CustomsReceiptQuery(status="approved", page=3, pageSize=1)).items == []
+
+
+def test_approved_filter_excludes_new_duplicate_ns_number(world, ns):
+    assert approve(world, body(current(world))).approved
+    duplicate = customs("871")
+    duplicate[1]["custrecord_swc_realno"] = "REAL870"
+    save(ns, world[0], bundle([purchase("201", "871")], [duplicate]))
+    result = world[2].browse(CustomsReceiptQuery(status="approved"))
+    assert result.total == result.counts.approved == 0 and result.items == []
+
+
+def test_approved_filter_excludes_changed_receipt_version(world):
+    assert approve(world, body(current(world))).approved
+    _import(
+        world[2],
+        [
+            row("REAL870", "01", "墨水", "个", 10, "新客户", total=15),
+            row("REAL870", "02", "清洗液", "个", 10, "新客户", total=15),
+        ],
+    )
+    result = world[2].browse(CustomsReceiptQuery(status="approved"))
+    assert result.counts.receipts == result.counts.matched == 1
+    assert result.total == result.counts.approved == 0 and result.items == []
+    assert approve(world, body(current(world))).approved
+    result = world[2].browse(CustomsReceiptQuery(status="approved"))
+    assert result.total == result.counts.approved == 1
 
 
 def test_partial_results_missing_ns_and_identity(world):
@@ -327,6 +416,11 @@ def test_http_contract_rejects_invalid_scope_and_service_identity(world):
             actor["value"] = USER
             response = await client.post(path, json=request)
             assert response.status_code == 200 and len(response.json()["approved"]) == 1
+            listed = await client.post("/api/review/customs-receipts/query", json={"status": "approved"})
+            assert listed.status_code == 200
+            payload = listed.json()
+            assert payload["counts"]["approved"] == payload["total"] == 1
+            assert payload["items"][0]["approval"]["approved"] is True
 
     asyncio.run(check())
 

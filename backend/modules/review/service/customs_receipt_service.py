@@ -25,7 +25,7 @@ from ..vo.customs_receipt_vo import (
     RematchResult,
 )
 from .approval_progress_reader import read_progress
-from .customs_approval_service import approval_view
+from .customs_approval_service import approval_view, approved_receipt_ids
 from .customs_receipt_parser import parse
 
 STATUS_FILTERS = {
@@ -33,6 +33,7 @@ STATUS_FILTERS = {
     "matched": ("matched", "split_matched"),
     "different": ("different",),
     "ns_missing": ("ns_missing", "ns_duplicate"),
+    "approved": (),
 }
 # 差异类型：数量、单位、总价不一致及品名缺行，一张回执可同时出现在多类中。
 KIND_FILTERS = tuple(DIFFERENCE_KINDS)
@@ -197,6 +198,7 @@ class CustomsReceiptService:
                 counts = dao.status_counts(connection, filters)
                 kinds = dao.difference_counts(connection, filters, KIND_FILTERS)
                 items = dao.item_count(connection, filters)
+                approved_ids = approved_receipt_ids(connection, filters)
                 total, heads = dao.page(
                     connection,
                     filters,
@@ -204,6 +206,7 @@ class CustomsReceiptService:
                     (query.page - 1) * query.pageSize,
                     query.pageSize,
                     kind=query.difference or None,
+                    approved_ids=approved_ids if query.status == "approved" else None,
                 )
                 lines = dao.current_lines(connection, [head["id"] for head in heads])
                 progress = read_progress(
@@ -235,6 +238,7 @@ class CustomsReceiptService:
                 splitMatched=counts.get("split_matched", 0),
                 different=counts.get("different", 0),
                 nsMissing=counts.get("ns_missing", 0) + counts.get("ns_duplicate", 0),
+                approved=len(approved_ids),
                 quantityMismatch=kinds["quantity_mismatch"],
                 unitMismatch=kinds["unit_mismatch"],
                 totalMismatch=kinds["total_mismatch"],

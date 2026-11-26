@@ -41,12 +41,14 @@ const FILTERS: readonly { value: CustomsFilter; label: string; count: (c: Custom
   { value: "matched", label: "一致", count: (c) => c.matched },
   { value: "different", label: "有差异", count: (c) => c.different },
   { value: "ns_missing", label: "未找到 NS", count: (c) => c.nsMissing },
+  { value: "approved", label: "已审核通过", count: (c) => c.approved },
 ];
 const TITLES: Record<CustomsFilter, string> = {
   all: "海关回执列表",
   matched: "海关回执 · 一致",
   different: "海关回执 · 有差异",
   ns_missing: "海关回执 · 未找到 NS 报关单",
+  approved: "海关回执 · 已审核通过",
 };
 const COLUMN_WIDTHS = [16, 12, 15, 14, 8, 8, 15];
 const BATCH_WIDTHS = [3, 16, 11, 14, 13, 8, 8, 15];
@@ -116,7 +118,7 @@ export function CustomsMatchPage({ links }: { links?: ReviewLinks }) {
           actions={
             <div className="cm-actions">
               <Segmented
-                label="按比对结果筛选"
+                label="按比对及审核状态筛选"
                 value={query.status}
                 disabled={busy}
                 options={FILTERS.map((filter) => ({
@@ -324,7 +326,7 @@ function ReceiptList({
         }
       />
     ) : (
-      <EmptyState title="没有符合条件的海关回执" description="请调整查询条件或比对结果筛选。" />
+      <EmptyState title="没有符合条件的海关回执" description="请调整查询条件或状态筛选。" />
     );
   const selectable = result.items.filter((item) => item.approval.allowed);
   const allChosen = selectable.length > 0 && selectable.every((item) => selection.includes(item.id));
