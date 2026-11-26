@@ -2,7 +2,18 @@ import { Alert } from "../../../shared/components/ui";
 import type { CustomsImportJob } from "../customs-types";
 import { ImportOutcome } from "./CustomsImportResult";
 
-export function CustomsImportJobs({ jobs, error }: { jobs: CustomsImportJob[]; error: string }) {
+export function CustomsImportJobs({
+  jobs,
+  error,
+  showCompleted = false,
+}: {
+  jobs: CustomsImportJob[];
+  error: string;
+  showCompleted?: boolean;
+}) {
+  // 页面仅保留待处理和失败提示；已完成记录在导入弹窗内查看。
+  const visibleJobs = jobs.filter((job) => showCompleted || job.status !== "completed");
+  if (!visibleJobs.length && !error) return null;
   return (
     <div className="cm-import__jobs" aria-label="后台导入记录" aria-live="polite">
       {error && (
@@ -10,7 +21,7 @@ export function CustomsImportJobs({ jobs, error }: { jobs: CustomsImportJob[]; e
           {error}。请勿重复上传。
         </Alert>
       )}
-      {jobs.map((job) => (
+      {visibleJobs.map((job) => (
         <Alert
           key={job.id}
           tone={job.status === "failed" ? "danger" : job.status === "completed" ? "success" : "info"}

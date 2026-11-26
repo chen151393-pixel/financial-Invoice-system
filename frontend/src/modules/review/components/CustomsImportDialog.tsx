@@ -87,7 +87,7 @@ export function CustomsImportDialog({
             </Alert>
           ) : null,
         )}
-        <CustomsImportJobs jobs={jobs} error={progressError} />
+        <CustomsImportJobs jobs={jobs} error={progressError} showCompleted />
       </div>
       <footer className="cm-import__footer">
         <Button disabled={busy} onClick={onClose}>

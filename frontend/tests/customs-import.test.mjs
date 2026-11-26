@@ -36,7 +36,8 @@ const job = (status, extra = {}) => ({
   result: null,
   ...extra,
 });
-const render = (value, error = "") => renderToStaticMarkup(createElement(Jobs, { jobs: [value], error }));
+const render = (value, error = "", showCompleted = false) =>
+  renderToStaticMarkup(createElement(Jobs, { jobs: [value], error, showCompleted }));
 
 test("接收与处理中只显示等待后台完成，不冒充成功", () => {
   for (const status of ["pending", "running"]) {
@@ -56,28 +57,28 @@ test("后台失败显式说明未导入、原有数据未替换并保留原因",
   assert.doesNotMatch(html, /导入成功|已保存/);
 });
 
-test("成功展示服务器返回的报关单数、明细数与逐张结果", () => {
-  const html = render(
-    job("completed", {
-      result: {
-        fileName: "11月海关回执.xlsx",
-        rows: 24,
-        created: 15,
-        replaced: 0,
-        unchanged: 0,
-        columns: ["出口报关单号"],
-        ignoredColumns: [],
-        declarations: Array.from({ length: 15 }, (_, index) => ({
-          declarationNo: `REAL${index}`,
-          itemCount: index ? 1 : 10,
-          resultLabel: "新增",
-          status: "ns_missing",
-          statusLabel: "未找到 NS 报关单",
-          consignee: { state: "pending", label: "待关联" },
-        })),
-      },
-    }),
-  );
+test("页面不常驻成功提示，导入弹窗仍展示保存数量与逐张结果", () => {
+  const completed = job("completed", {
+    result: {
+      fileName: "11月海关回执.xlsx",
+      rows: 24,
+      created: 15,
+      replaced: 0,
+      unchanged: 0,
+      columns: ["出口报关单号"],
+      ignoredColumns: [],
+      declarations: Array.from({ length: 15 }, (_, index) => ({
+        declarationNo: `REAL${index}`,
+        itemCount: index ? 1 : 10,
+        resultLabel: "新增",
+        status: "ns_missing",
+        statusLabel: "未找到 NS 报关单",
+        consignee: { state: "pending", label: "待关联" },
+      })),
+    },
+  });
+  assert.equal(render(completed), "");
+  const html = render(completed, "", true);
   assert.match(html, /导入成功/);
   assert.match(html, /已保存 15 张报关单、24 项明细/);
   assert.match(html, /REAL14/);
