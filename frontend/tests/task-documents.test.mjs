@@ -71,17 +71,39 @@ const documents = [
   },
 ];
 
-test("报关资料逐项显示状态、失败原因与路径，每项可单独重试或重新下载", () => {
+test("报关资料暂时隐藏销售合同下载区，报关单与发票继续显示真实状态与操作", () => {
   const html = renderToStaticMarkup(createElement(Declarations, { documents, busy: null, onRetry() {} }));
   assert.match(html, /CD870_REAL870/);
-  assert.match(html, /失败原因：NS 中暂无该报关单的销售合同文件/);
-  assert.match(html, /已尝试 2 次/);
+  assert.doesNotMatch(html, /销售合同|已尝试 2 次/);
   assert.match(html, /aria-label="重新下载报关单"/);
-  assert.match(html, /aria-label="下载销售合同"[^>]*>重试下载/);
   // 接口未配置：按钮禁用并写明原因，不冒充可下载
   assert.match(html, /<button[^>]*disabled=""[^>]*aria-label="下载发票"/);
   assert.match(html, /报关资料下载接口尚未配置/);
   assert.match(html, /下载失败不影响通知供应商/);
+});
+
+test("隐藏销售合同不影响其他资料的失败原因和重试按钮", () => {
+  const html = renderToStaticMarkup(
+    createElement(Declarations, {
+      documents: [
+        documents[1],
+        {
+          ...documents[2],
+          status: "failed",
+          statusLabel: "下载失败",
+          attempts: 3,
+          error: "发票下载失败，请稍后重试",
+          retry: allowed,
+        },
+      ],
+      busy: null,
+      onRetry() {},
+    }),
+  );
+  assert.doesNotMatch(html, /销售合同/);
+  assert.match(html, /失败原因：发票下载失败，请稍后重试/);
+  assert.match(html, /已尝试 3 次/);
+  assert.match(html, /aria-label="下载发票"[^>]*>重试下载/);
 });
 
 test("回签合同按子采购单显示是否已上传，并提供上传入口", () => {
