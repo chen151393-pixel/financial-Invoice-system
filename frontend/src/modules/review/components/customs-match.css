@@ -75,6 +75,11 @@
   gap: var(--space-control);
   padding-top: var(--space-control);
 }
+.cm-import__jobs {
+  display: grid;
+  gap: var(--space-small);
+  overflow-wrap: anywhere;
+}
 .cm-import__picked {
   margin: 0;
   font-size: 12px;

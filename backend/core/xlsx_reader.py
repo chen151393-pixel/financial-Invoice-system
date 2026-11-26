@@ -41,16 +41,37 @@ def _cell(sheet, row_no, cell):
     return Cell("" if value is None else str(value).strip())
 
 
-def read_xlsx_sheets(raw, *, max_rows, max_columns, allow_trailing_blank_rows=False):
+def read_xlsx_sheets(
+    raw,
+    *,
+    max_rows,
+    max_columns,
+    allow_trailing_blank_rows=False,
+    max_uncompressed_bytes=32 * 1024 * 1024,
+):
     """返回工作表名和文本行。按实际行读取，不依赖 Excel 声明的工作表尺寸。"""
     try:
-        check_xlsx_archive(raw)
+        check_xlsx_archive(raw, max_uncompressed_bytes=max_uncompressed_bytes)
         book = load_workbook(BytesIO(raw), read_only=True, data_only=False, keep_links=False)
         try:
             for sheet in book.worksheets:
                 sheet.reset_dimensions()
                 rows = []
                 for row_no, cells in enumerate(sheet.iter_rows(), 1):
+                    if allow_trailing_blank_rows:
+                        # 样式单元格不算数据；公式/错误即使显示为空也必须继续校验。
+                        end = len(cells)
+                        while (
+                            end
+                            and cells[end - 1].data_type not in {"f", "e"}
+                            and (
+                                cells[end - 1].value is None
+                                or isinstance(cells[end - 1].value, str)
+                                and not cells[end - 1].value.strip()
+                            )
+                        ):
+                            end -= 1
+                        cells = cells[:end]
                     if (
                         allow_trailing_blank_rows
                         and max_rows < row_no <= 1_048_576

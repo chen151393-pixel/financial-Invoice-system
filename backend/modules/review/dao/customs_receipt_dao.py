@@ -2,6 +2,7 @@
 
 from sqlalchemy import and_, case, func, insert, or_, select, true, update
 
+from ..entity.customs_approval import customs_approvals as approvals
 from ..entity.customs_receipt import customs_receipt_lines as lines
 from ..entity.customs_receipt import customs_receipts as receipts
 
@@ -161,12 +162,38 @@ def item_count(connection, filters):
     return connection.execute(query).scalar_one()
 
 
-def page(connection, filters, statuses, offset, limit, *, kind=None):
+def approval_candidates(connection, filters):
+    """符合查询条件、当前回执版本有审核记录的候选；NS 来源有效性由 Service 核对。"""
+    query = (
+        select(
+            receipts.c.id,
+            receipts.c.declaration_no,
+            approvals.c.customs_declaration_id,
+            approvals.c.source_sha256,
+        )
+        .select_from(
+            receipts.join(
+                approvals,
+                and_(
+                    approvals.c.receipt_id == receipts.c.id,
+                    approvals.c.receipt_revision == receipts.c.revision,
+                    approvals.c.receipt_sha256 == receipts.c.content_sha256,
+                ),
+            )
+        )
+        .where(*_conditions(filters))
+    )
+    return list(connection.execute(query).mappings())
+
+
+def page(connection, filters, statuses, offset, limit, *, kind=None, approved_ids=None):
     conditions = _conditions(filters)
     if statuses:
         conditions.append(receipts.c.match_status.in_(statuses))
     if kind:
         conditions.append(receipts.c[kind] == true())
+    if approved_ids is not None:
+        conditions.append(receipts.c.id.in_(approved_ids))
     total = connection.execute(select(func.count()).select_from(receipts).where(*conditions)).scalar_one()
     query = (
         select(receipts)

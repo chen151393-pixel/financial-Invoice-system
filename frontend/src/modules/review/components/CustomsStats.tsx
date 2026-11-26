@@ -50,6 +50,15 @@ export function CustomsStats({
         selected={value === "ns_missing"}
         onSelect={() => onSelect("ns_missing")}
       />
+      <StatCard
+        glyph="审"
+        tone="success"
+        label="已审核通过"
+        value={`${counts.approved} 张`}
+        note="当前版本海关审核已通过"
+        selected={value === "approved"}
+        onSelect={() => onSelect("approved")}
+      />
     </StatGrid>
   );
 }

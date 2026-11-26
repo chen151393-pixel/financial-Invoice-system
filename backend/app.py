@@ -55,10 +55,13 @@ from .modules.matching.service.task_proposal_service import on_review_approved a
 from .modules.matching.service.workbench_service import WorkbenchService
 from .modules.review.controller.customs_receipt_controller import create_router as customs_receipt_router
 from .modules.review.controller.review_controller import create_router as review_router
+from .modules.review.policy.customs_import_policy import JSON_BODY_LIMITS as CUSTOMS_IMPORT_BODY_LIMITS
 from .modules.review.public import InvoiceReady, PurchaseBasisInvalidated, ReviewApproved
 from .modules.review.service.calculation_service import CalculationService, request_calculation
 from .modules.review.service.calculation_worker import CalculationWorker
 from .modules.review.service.customs_approval_service import CustomsApprovalService
+from .modules.review.service.customs_import_service import CustomsImportService
+from .modules.review.service.customs_import_worker import CustomsImportWorker
 from .modules.review.service.customs_receipt_service import CustomsReceiptService
 from .modules.review.service.purchase_basis_service import on_source_changed
 from .modules.review.service.review_service import ReviewService
@@ -218,11 +221,14 @@ def create_app(settings=None, ns=None, engine=None, wecom=None, lemon=None, lemo
             app.state.lemon_worker.start()
             app.state.ns_plan_worker.start()
             app.state.review_calculation_worker.start()
+            app.state.customs_import_worker.start()
             app.state.source_relation_worker.start()
             app.state.directory_sync_worker.start()
             app.state.writeback_prepare_worker.start()
             yield
         finally:
+            if hasattr(app.state, "customs_import_worker"):
+                await asyncio.to_thread(app.state.customs_import_worker.stop)
             if hasattr(app.state, "source_relation_worker"):
                 await asyncio.to_thread(app.state.source_relation_worker.stop)
             if hasattr(app.state, "wecom_directory_worker"):
@@ -268,6 +274,7 @@ def create_app(settings=None, ns=None, engine=None, wecom=None, lemon=None, lemo
         RequestGuard,
         secure=settings.origin.startswith("https://"),
         json_body_limits={
+            **CUSTOMS_IMPORT_BODY_LIMITS,
             **JSON_BODY_LIMITS,
             **settlement_documents.JSON_BODY_LIMITS,
             **settlement_hk_receipt.JSON_BODY_LIMITS,
@@ -359,10 +366,14 @@ def _register_business(app, settings, ns, contract_ns, wecom, engine, lemon_invo
     app.state.review_calculations = CalculationService(review)
     app.state.review_calculation_worker = CalculationWorker(app.state.review_calculations)
     app.include_router(review_router(review))
+    customs_receipts = CustomsReceiptService(engine, task_reader=review_task_outcomes)
+    customs_imports = CustomsImportService(engine, customs_receipts, settings.customs_import_root)
+    app.state.customs_import_worker = CustomsImportWorker(customs_imports)
     app.include_router(
         customs_receipt_router(
-            CustomsReceiptService(engine, task_reader=review_task_outcomes),
+            customs_receipts,
             CustomsApprovalService(engine, events),
+            customs_imports,
         )
     )
     settlement_candidates = SettlementCandidateService(

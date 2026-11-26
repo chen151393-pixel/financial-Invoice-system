@@ -39,6 +39,7 @@
 | `approved` 审核通过 | 有效审核的内容摘要与当前来源一致，且依据无需复核 | 否（查看记录） |
 
 - 列表计数 `counts` 另含 `changed`（待审核中来源已变化、需重新核对的张数）与 `approvedThisMonth`（北京时间本月审核通过的张数，按有效审核记录的 `approved_at`），供页面概况卡展示；随关键字、供应商条件变化。
+- `status=customs_approved` / `counts.customsApproved` 按当前有效海关审核筛选与计数，不限制财务审核状态。先由 review DAO 读取匹配当前回执版本及摘要的审核引用，再经 source 门面核实真实报关单号唯一、来源 ID 与当前摘要一致；回执换版、来源变化、重号均不计入。ID 条件与其他查询条件一起在数据库聚合、筛选和分页，不对当前页做过滤，无数据库迁移。
 - 申报幅度提醒与可自动审核预判（2026-10-27，`policy/auto_review_policy.py`）：任一报关行的关联采购未税单价（按真实税率逐行还原未税金额，合计除以下单数量合计）超出人民币报关单价容差时 `marginAlert` 为真；待审核、来源未变化、子采购行全部有行级关联、含税金额齐全、币种已确定、每条报关行申报幅度都已算出且未超出容差时 `autoReview.eligible` 为真，否则返回原因。只用于提示、计数（`counts.marginAlert`、`counts.autoApprovable`）与筛选（`status=margin_alert` / `auto`），不自动写入审核结果；供应商白名单待业务确认。NS 同步与审核提交后在后台计算并存库；列表仅读取结果，按数据库条件统计与分页，详见下文。
 - 列表"全部"只含待审核与审核通过；未出库的旧数据不显示、不计数，也不进入工作台待办，审核时返回 409 及原因。列表筛选只有 all / pending / approved。
 - 批量审核：逐张提交页面所见的 `contentSha256`；来源已变化、未出库、报关单不存在的计入 `skipped` 并返回原因，其余照常审核。数据库不可用（503）时停止后续，已完成的照常生效，页面重新读取。需要人工币种证据的报关单仍走单张审核。
@@ -121,7 +122,7 @@
 - `CalculationWorker` 每两秒检查持久队列，MySQL 命名锁保证多进程仅一个后台消费者。读取来源与 Decimal 计算在写事务外完成，复用 `declaration_mapper`、`margin_policy`、`auto_review_policy`；短事务取得队列行锁，核对代次和算法版本后原子替换整个账套快照。计算期间再次同步／审核时，旧结果丢弃，新请求仍待处理。
 - 账本锁被其他写入占用（`ApiError.code == "ledger_busy"`）或行锁等待超时／死锁（`lock_conflict`）不算计算失败：只把重试推迟 5 秒，不增加失败次数、不写失败原因，页面仍显示“后台计算中”。失败与推迟记录只更新本模块的队列行，不取账本锁，保证账本长时间繁忙时也能记下，后台线程不会每两秒整账套重算。
 - 失败记录中文原因并以 2—256 秒退避自动重试；进程重启继续未完成任务。启动时发现未建立快照的账套或算法／`REVIEW_UNIT_PRICE_TOLERANCE_CNY` 变化即排队。缺少汇率、金额或单位等属于已完成计算的 `unavailable`，保留具体原因，不当作零或系统失败。
-- `ReviewService.browse` 委托 `review_query_service.py`；`dao/declaration_snapshot_dao.py` 只查 review 表，使用 SQL 聚合计数、供应商子查询、关键字过滤、`ORDER BY declaration_date DESC, customs_declaration_id DESC LIMIT ... OFFSET ...`。每次列表共四条查询，不访问 source 原始 JSON、不组装全量来源、不重算幅度；每月审核数量仍按请求当时的北京时间自然月计算，跨月无需重建。
+- `ReviewService.browse` 委托 `review_query_service.py`；`dao/declaration_snapshot_dao.py` 只查 review 表，使用 SQL 聚合计数、供应商子查询、关键字过滤、`ORDER BY declaration_date DESC, customs_declaration_id DESC LIMIT ... OFFSET ...`。快照查询为四条 SQL；服务另读取当前海关审核引用并通过 source 门面批量核实单头，分页后汇总双审进度。不访问 source 原始 JSON、不组装全量来源、不重算幅度；每月审核数量仍按请求当时的北京时间自然月计算，跨月无需重建。
 - 接口仍为 `POST /api/review/declarations/query`。新增单据字段 `calculationStatus`（ready / pending / failed）、`calculatedAt`（最近完成计算的 UTC 时间）。更新中／失败时 `notices` 明确提示，暂展示上次完成的单据快照与状态统计；旧幅度与自动审核结论隐藏，审核按钮关闭，该账套暂不进入异常／自动审核计数和筛选。首次补算完成前单据尚不显示；完成后刷新列表。
 - 查询返回的 `review.reviewedByName` 通过 `identity.public.actor_names` 按页批量解析。飞书账号取本地人员目录姓名（含已停用人员），系统身份显示“系统”，无法解析时返回原标识，没有审核人时返回 `null`。历史快照读取时即可补充姓名，`review.reviewedBy` 仍保存原操作者标识。
 - 审核接口继续在来源锁内实时重读摘要和冻结依据。缓存只为查询提速，不代替审核校验，也不自动批准任何单据。审核接口返回当前单据时可复用原计算规则，列表请求始终只查库。
@@ -185,7 +186,7 @@ npm.cmd run dev:api
 | 层 | 文件 | 说明 |
 | --- | --- | --- |
 | controller | `customs_receipt_controller.py` | `POST /api/review/customs-receipts/import`、`/query`、`/rematch` |
-| service | `customs_receipt_reader.py` | 读取 .xlsx / .xls / .csv 为原始文本行（限 4MB、6000 行，拒绝公式与错误值） |
+| service | `customs_receipt_reader.py` | 后台读取 .xlsx / .xls / .csv；忽略 XLSX 尾部空白格式，拒绝公式与错误值，资源边界见下文 |
 | | `customs_receipt_parser.py` | 表头别名识别（标题行可在前 10 行内）、逐行校验、按报关单号分组、内容摘要 |
 | | `customs_receipt_service.py` | 导入（解析在事务外，保存/换版与比对在账本锁事务内）、列表、重新匹配（每批 200 张短事务） |
 | policy | `customs_match_policy.py` | 比对规则（纯函数） |
@@ -202,6 +203,15 @@ npm.cmd run dev:api
 6. 展开明细显示 NS 报关行原始金额和币种。品名与单位已配对的一对一同币种组按原金额精度比较，`totalMismatch` 为 true（不同）、false（相同）或 null（未比对）。主行 `totalComparison` 反映全部一致、有差异、部分未比对或未比对。拆行、合并逐行展示金额。2026-11-17 起总价参与准入：一对一行数量一致但总价不同，组状态为 `total_mismatch`（“总价不一致”），整单 `different`，见下文“自动审核一对一按行比价”。
 
 ### 导入与换版
+
+2026-11-26：海关回执改为持久后台导入。`POST /api/review/customs-receipts/import` 接收原文件后返回 **202** 与 `pending` 作业，不表示已导入。`GET /api/review/customs-receipts/imports` 返回当前认证身份最近的作业和未完成状态；`pending` / `running` / `completed` / `failed` 分别表示排队、后台解析比对、入库成功、失败。失败原因持久保存；解析失败整份不入库，保存过程失败整份回滚。只有回执与作业结果在同一账本事务内提交后才显示成功。
+
+- `service/customs_import_service.py` 复用原解析、换版、比对规则；`customs_import_worker.py` 通过 MySQL 命名锁单消费者按上传顺序处理。进程中断后接续 `pending` / `running`，不要求页面保持打开。
+- `review_customs_import_jobs` 由迁移 `0057_review_customs_import_jobs` 创建。原文件暂存 `CUSTOMS_IMPORT_ROOT`（默认 `data/customs-imports`），文件名采用随机标识；完成或确认失败后清除暂存文件，数据库只保存元数据与结果。部署必须先升级数据库，并持久挂载该目录（默认已落在 Compose 的 `/app/data` 挂载内）。不执行线上迁移或补导入。
+- 支持用户提供的 24 列单一窗口原表；表头仍按既有别名识别，不增加要求列。XLSX 不依赖声明尺寸，尾部空白行、列和仅有格式的单元格不算明细；公式、错误单元格及非空超限数据仍会明确失败。原 4MB 业务限制与遗漏的 128KB 请求拦截已移除；异步接口专用传输资源上限为原文件 64MiB、JSON 90MiB、解压 256MiB，最多 100000 项，不放大其他模块的限制。
+- 上传/接收中断时显示“未确认成功”，查询进度失败提示先核实，不能据此宣称未入库或重复上传。后台明确失败时提示“本文件未导入，原有数据未被此文件替换”；关闭弹窗后页面继续显示未完成和失败记录并轮询，成功后自动刷新列表；已完成的绿色成功提示仅在导入弹窗展示，列表页刷新后不显示。
+
+验证：新增 `backend/tests/test_customs_import_jobs.py` 覆盖排队不解析、后台完成、失败不替换、事务回滚、重启恢复、权限、超过旧限制的 HTTP 请求及空白格式。前端状态覆盖见 `frontend/tests/customs-import.test.mjs`。
 
 - 同一文件按真实报关单号分组，组内按规范化项号去重。重复项的明细内容相同则保留首次出现的行，不同项号各自保留。`POST /api/review/customs-receipts/import` 返回的 `rows` 为去重后的明细行数。
 - 一个文件内任一行有误（缺必需列、长号码被存为数字、同号同项的明细内容冲突、出口日期或境外收货人前后不一致、数值格式或精度超限）时整份拒绝。
@@ -220,6 +230,7 @@ npm.cmd run dev:api
 
 ## 海关审核与双审核开票门槛（2026-11-13，迁移 0044）
 
+- `POST /api/review/customs-receipts/query` 支持 `status=approved`，响应新增 `counts.approved`，用于“已审核通过”概况卡与列表筛选。包含自动和人工海关审核，不要求财务审核已通过；仅统计当前回执版本、内容摘要与当前唯一有效 NS 来源及其摘要一致的记录。回执换版、NS 来源变化、停用或同号多单后不计入。统计随单号、商品名、收货人和出口日期条件变化；与现有概况卡一致，不受状态与差异类型选择影响，列表同时应用差异类型并在数据库分页。该分类与明细一致／有差异可重叠，不可直接相加。无需数据库迁移。
 - 新增 `POST /api/review/customs-receipts/approve-batch`：`items` 为 1–50 个不重复的 `{id, token}`，`method` 为 `auto` 或 `manual`，`note` 最多 300 字。返回 `approved` / `skipped` 逐张结果及跳过原因；每张独立事务，数据库故障停止后续，部分已成功的保留。
 - 列表每张新增 `approval`：`token`、`approved`、`label`、`allowed`、`autoAllowed`、`reason`、`approvedBy`、`approvedAt`、`note`。服务端按当前 NS 来源重新核对可操作性；比对状态筛选与概况仍基于最近导入/重新匹配保存的结果，来源修改后可使用“全部重新匹配”更新统计。
 - 自动审核只放行逐行一一对应、数量一致且每行总价比对一致的回执（2026-11-17 起不再包含拆行/合并一致）。人工单张或批量审核允许已唯一匹配的差异单，说明选填（2026-11-17 起不再强制）；审核人、方式、时间写入审核记录留痕。未找到或重号的 NS 单据不可审核。操作者来自认证身份，服务身份只读。

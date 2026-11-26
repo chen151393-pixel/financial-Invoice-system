@@ -25,7 +25,7 @@ from ..vo.customs_receipt_vo import (
     RematchResult,
 )
 from .approval_progress_reader import read_progress
-from .customs_approval_service import approval_view
+from .customs_approval_service import approval_view, approved_receipt_ids
 from .customs_receipt_parser import parse
 
 STATUS_FILTERS = {
@@ -33,6 +33,7 @@ STATUS_FILTERS = {
     "matched": ("matched", "split_matched"),
     "different": ("different",),
     "ns_missing": ("ns_missing", "ns_duplicate"),
+    "approved": (),
 }
 # 差异类型：数量、单位、总价不一致及品名缺行，一张回执可同时出现在多类中。
 KIND_FILTERS = tuple(DIFFERENCE_KINDS)
@@ -113,12 +114,16 @@ class CustomsReceiptService:
         now = _now()
         try:
             with write_lock.transaction(self.engine) as connection:
-                outcomes = self._save(connection, parsed["declarations"], body.filename, owner, now)
+                return self.save_parsed(connection, parsed, body.filename, owner, now)
         except SQLAlchemyError:
             raise ApiError(503, "海关回执保存失败，请检查业务数据库及迁移状态") from None
+
+    def save_parsed(self, connection, parsed, filename, owner, now):
+        """复用同步入库规则；异步作业将回执与完成结果放在同一事务中提交。"""
+        outcomes = self._save(connection, parsed["declarations"], filename, owner, now)
         counts = {key: sum(1 for o in outcomes if o.result == key) for key in RESULT_LABELS}
         return CustomsImportResult(
-            fileName=body.filename,
+            fileName=filename,
             rows=parsed["rows"],
             columns=parsed["columns"],
             ignoredColumns=parsed["ignored"],
@@ -193,6 +198,7 @@ class CustomsReceiptService:
                 counts = dao.status_counts(connection, filters)
                 kinds = dao.difference_counts(connection, filters, KIND_FILTERS)
                 items = dao.item_count(connection, filters)
+                approved_ids = approved_receipt_ids(connection, filters)
                 total, heads = dao.page(
                     connection,
                     filters,
@@ -200,6 +206,7 @@ class CustomsReceiptService:
                     (query.page - 1) * query.pageSize,
                     query.pageSize,
                     kind=query.difference or None,
+                    approved_ids=approved_ids if query.status == "approved" else None,
                 )
                 lines = dao.current_lines(connection, [head["id"] for head in heads])
                 progress = read_progress(
@@ -231,6 +238,7 @@ class CustomsReceiptService:
                 splitMatched=counts.get("split_matched", 0),
                 different=counts.get("different", 0),
                 nsMissing=counts.get("ns_missing", 0) + counts.get("ns_duplicate", 0),
+                approved=len(approved_ids),
                 quantityMismatch=kinds["quantity_mismatch"],
                 unitMismatch=kinds["unit_mismatch"],
                 totalMismatch=kinds["total_mismatch"],

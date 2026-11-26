@@ -7,12 +7,29 @@ from sqlalchemy.exc import SQLAlchemyError
 
 from backend.core import write_lock
 from backend.core.errors import ApiError
-from backend.modules.source.public import declarations_by_number, digest, snapshot
+from backend.modules.source.public import declaration_refs_by_number, declarations_by_number, digest, snapshot
 
 from ..dao import customs_approval_dao, customs_receipt_dao
 from ..policy.customs_match_policy import AUTO_RULE, auto_review, compare
 from ..vo.customs_receipt_vo import CustomsApproval, CustomsApproveOutcome, CustomsApproveResult
 from .task_release_service import release_if_ready
+
+
+def approved_receipt_ids(connection, filters):
+    """批量核对当前来源，沿用双审进度的版本口径；不把历史审核计入概况或分页。"""
+    candidates = customs_receipt_dao.approval_candidates(connection, filters)
+    refs = declaration_refs_by_number(connection, [row["declaration_no"] for row in candidates])
+    approved = set()
+    for row in candidates:
+        matches = refs.get(row["declaration_no"], [])
+        if (
+            len(matches) == 1
+            and matches[0]["id"] == row["customs_declaration_id"]
+            and matches[0]["content_sha256"]
+            and matches[0]["content_sha256"] == row["source_sha256"]
+        ):
+            approved.add(row["id"])
+    return sorted(approved)
 
 
 def approval_view(connection, head, rows):

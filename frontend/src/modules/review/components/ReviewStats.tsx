@@ -3,7 +3,7 @@ import type { ComparisonResult, ReviewFilter } from "../types";
 
 /**
  * 财务核对概况：张数全部来自后端列表计数（随查询条件变化），前端只展示。
- * 五张卡均可点击；本月审核通过卡进入全部已审核列表，其余按对应范围筛选。
+ * 六张卡均可点击；本月审核通过卡进入全部已审核列表，其余按对应范围筛选。
  */
 export function ReviewStats({
   counts,
@@ -53,6 +53,15 @@ export function ReviewStats({
         note="关联、金额、币种齐全且申报幅度正常，可批量审核"
         selected={value === "auto"}
         onSelect={() => onSelect("auto")}
+      />
+      <StatCard
+        glyph="关"
+        tone="success"
+        label="海关审核通过"
+        value={`${counts.customsApproved} 张`}
+        note="当前海关审核有效，点击筛选报关单"
+        selected={value === "customs_approved"}
+        onSelect={() => onSelect("customs_approved")}
       />
       <StatCard
         glyph="月"

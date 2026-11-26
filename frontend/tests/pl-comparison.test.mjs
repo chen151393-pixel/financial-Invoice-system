@@ -65,6 +65,7 @@ test("单位不一致卡展示后端计数，选中并提交独立筛选", async
     marginAlert: 22,
     unitMismatch: 8,
     autoApprovable: 18,
+    customsApproved: 7,
     approvedThisMonth: 2,
   };
   let selected;
@@ -78,7 +79,7 @@ test("单位不一致卡展示后端计数，选中并提交独立筛选", async
   const cards = tree.props.children;
   assert.deepEqual(
     cards.map((card) => card.props.label),
-    ["待审核报关单", "申报幅度异常", "单位不一致", "可自动审核通过", "本月审核通过"],
+    ["待审核报关单", "申报幅度异常", "单位不一致", "可自动审核通过", "海关审核通过", "本月审核通过"],
   );
   cards[2].props.onSelect();
   assert.equal(selected, "unit_mismatch");
@@ -94,6 +95,29 @@ test("单位不一致卡展示后端计数，选中并提交独立筛选", async
   await queryDeclarations({ status: selected, recordNo: "CD870", page: 1, pageSize: 20 });
   assert.equal(calls[0].status, "unit_mismatch");
   assert.equal(calls[0].recordNo, "CD870");
+});
+test("海关审核通过卡展示后端计数并提交独立筛选", async (t) => {
+  let selected;
+  const tree = ReviewStats({
+    counts: { ...createPlComparisonState().result.counts, customsApproved: 7 },
+    value: "customs_approved",
+    onSelect: (value) => {
+      selected = value;
+    },
+  });
+  const card = tree.props.children.find((item) => item.props.label === "海关审核通过");
+  card.props.onSelect();
+  assert.equal(selected, "customs_approved");
+  assert.match(renderToStaticMarkup(tree), /aria-pressed="true"[^]*?海关审核通过[^]*?7 张/);
+  const calls = [];
+  t.mock.method(globalThis, "fetch", async (_url, options) => {
+    calls.push(JSON.parse(options.body));
+    return Response.json({ groups: [] });
+  });
+  const { queryDeclarations } = await server.ssrLoadModule("/src/modules/review/api.ts");
+  await queryDeclarations({ status: selected, supplierName: "合成供应商", page: 1, pageSize: 20 });
+  assert.equal(calls[0].status, "customs_approved");
+  assert.equal(calls[0].supplierName, "合成供应商");
 });
 test("后台计算未完成时不显示顶部黄色说明，保留审核禁用及原因", () => {
   const state = createPlComparisonState();
@@ -1172,6 +1196,7 @@ test("海关回执查询栏提供差异类型下拉，选项张数来自后端�
     splitMatched: 1,
     different: 2,
     nsMissing: 3,
+    approved: 4,
     quantityMismatch: 1,
     unitMismatch: 0,
     totalMismatch: 2,
@@ -1200,6 +1225,46 @@ test("海关回执查询栏提供差异类型下拉，选项张数来自后端�
   const stats = renderToStaticMarkup(
     createElement(CustomsStats, { counts, value: "all", onSelect: () => {} }),
   );
-  assert.equal((stats.match(/ui-stat__label/g) ?? []).length, 4);
+  assert.equal((stats.match(/ui-stat__label/g) ?? []).length, 5);
   assert.match(stats, /有差异/);
+});
+
+test("海关已审核通过卡展示后端计数并提交筛选，保留查询条件", async (t) => {
+  const { CustomsStats } = await server.ssrLoadModule("/src/modules/review/components/CustomsStats.tsx");
+  let selected;
+  const tree = CustomsStats({
+    counts: { receipts: 15, items: 24, matched: 7, splitMatched: 0, different: 0, nsMissing: 8, approved: 5 },
+    value: "approved",
+    onSelect: (value) => {
+      selected = value;
+    },
+  });
+  const card = tree.props.children.find((child) => child.props.label === "已审核通过");
+  card.props.onSelect();
+  assert.equal(selected, "approved");
+  const html = renderToStaticMarkup(tree);
+  assert.match(html, /aria-pressed="true"[^]*?已审核通过[^]*?5 张/);
+  const calls = [];
+  t.mock.method(globalThis, "fetch", async (_url, options) => {
+    calls.push(JSON.parse(options.body));
+    return new Response(JSON.stringify({ items: [] }), {
+      headers: { "Content-Type": "application/json" },
+    });
+  });
+  const { queryCustomsReceipts } = await server.ssrLoadModule("/src/modules/review/customs-api.ts");
+  await queryCustomsReceipts({
+    status: selected,
+    declarationNo: "REAL870",
+    name: "墨水",
+    consignee: "客户甲",
+    exportFrom: "2026-10-01",
+    exportTo: "2026-10-31",
+    difference: "total_mismatch",
+    page: 1,
+    pageSize: 20,
+  });
+  assert.equal(calls[0].status, "approved");
+  assert.equal(calls[0].declarationNo, "REAL870");
+  assert.equal(calls[0].difference, "total_mismatch");
+  assert.equal(calls[0].exportFrom, "2026-10-01");
 });

@@ -11,8 +11,8 @@ from backend.core.search_terms import SearchText
 
 class CustomsImportRequest(StrictModel):
     filename: str = Field(min_length=1, max_length=255)
-    # 4MB 原文件的 base64 长度上限
-    content: str = Field(min_length=1, max_length=5592408)
+    # 请求体由专用上传入口限量；解码后由 Service 返回明确的容量错误。
+    content: str = Field(min_length=1)
 
 
 class CustomsReceiptQuery(StrictModel):
@@ -24,7 +24,7 @@ class CustomsReceiptQuery(StrictModel):
     exportFrom: date | None = Field(default=None, strict=False)
     exportTo: date | None = Field(default=None, strict=False)
     # matched 含拆行一致；ns_missing 含 NS 报关单重号
-    status: Literal["all", "matched", "different", "ns_missing"] = "all"
+    status: Literal["all", "matched", "different", "ns_missing", "approved"] = "all"
     # 差异类型，与 status 同时生效；空为不限。一张回执可同时属于多类
     difference: Literal["", "quantity_mismatch", "unit_mismatch", "total_mismatch", "line_missing"] = ""
     page: int = Field(default=1, ge=1, le=100000)

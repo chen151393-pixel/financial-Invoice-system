@@ -5,7 +5,7 @@ export type CustomsMatchStatus = "matched" | "split_matched" | "different" | "ns
 // 差异类型：一张回执可同时属于多类，均为“有差异”的子集
 export type CustomsDifferenceKind = "quantity_mismatch" | "unit_mismatch" | "total_mismatch" | "line_missing";
 // matched 含拆行一致；ns_missing 含 NS 报关单重号（后端合并筛选）
-export type CustomsFilter = "all" | "matched" | "different" | "ns_missing";
+export type CustomsFilter = "all" | "matched" | "different" | "ns_missing" | "approved";
 export type CustomsGroupStatus =
   | "matched"
   // 一对一行数量一致、总价不同；报关单为有差异，不能自动审核
@@ -113,6 +113,7 @@ export interface CustomsCounts {
   splitMatched: number;
   different: number;
   nsMissing: number;
+  approved: number;
   // 有差异按类型拆分（后端计数，可重叠）
   quantityMismatch: number;
   unitMismatch: number;
@@ -166,3 +167,11 @@ export interface CustomsImportResult {
   unchanged: number;
   declarations: ImportedDeclaration[];
 }
+export type CustomsImportJob = {
+  id: string;
+  fileName: string;
+  status: "pending" | "running" | "completed" | "failed";
+  statusLabel: string;
+  error: string;
+  result: CustomsImportResult | null;
+};

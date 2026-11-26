@@ -13,6 +13,7 @@ from ..policy.auto_review_policy import margin_flags
 from ..policy.calculation_policy import FAILED_REASON, PENDING_REASON, calculation_key
 from ..vo.review_vo import AutoReview, Declaration, ReviewList, SupplierOption
 from .approval_progress_reader import read_progress
+from .customs_approved_reader import approved_declaration_ids
 
 
 def month_start_utc(now):
@@ -40,7 +41,12 @@ class ReviewQueryService:
                         else None
                     )
                     counts, total, page, suppliers, jobs = declaration_snapshot_dao.browse(
-                        connection, query, self.key, month_start_utc(datetime.now(UTC)), declaration_ids
+                        connection,
+                        query,
+                        self.key,
+                        month_start_utc(datetime.now(UTC)),
+                        declaration_ids,
+                        customs_approved_ids=approved_declaration_ids(connection),
                     )
                     groups = [Declaration.model_validate_json(row["payload"]) for row in page]
                     reviewer_names = actor_names(connection, (g.review.reviewedBy for g in groups))

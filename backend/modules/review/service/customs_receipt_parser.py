@@ -15,9 +15,9 @@ from decimal import Decimal, InvalidOperation
 
 from backend.core.errors import ApiError
 
+from ..policy.customs_import_policy import MAX_IMPORT_BYTES
 from .customs_receipt_reader import MAX_ROWS, read_sheets
 
-MAX_BYTES = 4 * 1024 * 1024
 HEADER_SCAN_ROWS = 10
 
 # 字段 → (页面名称, 可识别的表头)；表头比较前去除空白并做全半角统一
@@ -178,14 +178,21 @@ def decode(filename, content):
         raw = base64.b64decode(content, validate=True)
     except (ValueError, binascii.Error):
         raise ApiError(422, "文件编码损坏，请重新选择原文件") from None
-    if not raw or len(raw) > MAX_BYTES:
-        raise ApiError(413, "文件大小须在4MB以内")
+    if not raw:
+        raise ApiError(422, "文件为空，请选择有明细的海关回执")
+    if len(raw) > MAX_IMPORT_BYTES:
+        raise ApiError(413, "文件超过服务器单次上传容量，请拆分文件后重新上传")
     return raw
 
 
 def parse(filename, content):
     """返回 {declarations: [...], rows, columns, ignored}；任何一行有误时整份文件不导入。"""
     raw = decode(filename, content)
+    return parse_bytes(filename, raw)
+
+
+def parse_bytes(filename, raw):
+    """后台读取已暂存的文件，避免再次编码整份原文件。"""
     for sheet, rows in read_sheets(filename, raw):
         located = _locate_header(rows)
         if located is None:
