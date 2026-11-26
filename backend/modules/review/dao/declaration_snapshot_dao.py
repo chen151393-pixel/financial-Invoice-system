@@ -28,10 +28,11 @@ def replace_account(connection, account, rows, supplier_rows):
         connection.execute(insert(suppliers), supplier_rows[start : start + 300])
 
 
-def browse(connection, query, key, month_start, declaration_ids=None):
+def browse(connection, query, key, month_start, declaration_ids=None, *, customs_approved_ids=()):
     fresh = and_(jobs.c.requested_revision == jobs.c.completed_revision, jobs.c.calculation_key == key)
     pending = snapshots.c.review_status == "pending"
     approved = snapshots.c.review_status == "approved"
+    customs_approved = snapshots.c.customs_declaration_id.in_(customs_approved_ids)
     # 旧快照的 margin_alert 同时包含口径不一致，分类必须以逐行状态为准。
     alert = and_(pending, fresh, margin_status_matches("negative", connection.dialect.name))
     unit_alert = and_(pending, fresh, margin_status_matches("unit_mismatch", connection.dialect.name))
@@ -54,6 +55,7 @@ def browse(connection, query, key, month_start, declaration_ids=None):
     for name, condition in {
         "pending": pending,
         "approved": approved,
+        "customsApproved": customs_approved,
         "changed": and_(pending, snapshots.c.source_changed.is_(True)),
         "approvedThisMonth": and_(approved, snapshots.c.approved_at >= month_start),
         "marginAlert": alert,
@@ -75,13 +77,19 @@ def browse(connection, query, key, month_start, declaration_ids=None):
     selected = {
         "pending": pending,
         "approved": approved,
+        "customs_approved": customs_approved,
         "margin_alert": alert,
         "unit_mismatch": unit_alert,
         "auto": auto,
     }
     if query.status in selected:
         conditions.append(selected[query.status])
-    count_key = {"margin_alert": "marginAlert", "unit_mismatch": "unitMismatch", "auto": "autoApprovable"}
+    count_key = {
+        "margin_alert": "marginAlert",
+        "unit_mismatch": "unitMismatch",
+        "auto": "autoApprovable",
+        "customs_approved": "customsApproved",
+    }
     total = counts[count_key.get(query.status, query.status)]
     page = list(
         connection.execute(

@@ -137,7 +137,9 @@ export function ReviewPage({ links }: { links?: ReviewLinks }) {
                 ? "报关单 · 单位不一致"
                 : query.status === "auto"
                   ? "报关单 · 可自动审核通过"
-                  : "报关单"
+                  : query.status === "customs_approved"
+                    ? "报关单 · 海关审核通过"
+                    : "报关单"
           }
           actions={
             <Segmented

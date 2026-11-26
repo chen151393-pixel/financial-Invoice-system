@@ -3,6 +3,24 @@
 from sqlalchemy import insert, select
 
 from ..entity.customs_approval import customs_approvals
+from ..entity.customs_receipt import customs_receipts
+
+
+def approved_current_receipts(connection):
+    """只返回仍对应当前回执版本的审核引用，由服务核实当前 NS 来源。"""
+    query = select(
+        customs_receipts.c.declaration_no,
+        customs_approvals.c.customs_declaration_id,
+        customs_approvals.c.source_sha256,
+    ).select_from(
+        customs_approvals.join(
+            customs_receipts,
+            (customs_approvals.c.receipt_id == customs_receipts.c.id)
+            & (customs_approvals.c.receipt_revision == customs_receipts.c.revision)
+            & (customs_approvals.c.receipt_sha256 == customs_receipts.c.content_sha256),
+        )
+    )
+    return list(connection.execute(query).mappings())
 
 
 def current(connection, head, declaration_id, source_sha256):

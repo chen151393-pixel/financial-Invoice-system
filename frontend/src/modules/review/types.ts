@@ -5,7 +5,14 @@ import type { ApprovalProgress } from "./approval-progress";
 export type ReviewStatus = "pending" | "approved" | "unshipped";
 // margin_alert：待审核且实际单价超容差；auto：待审核且满足可自动审核条件（后端判定）
 // unit_mismatch：含单位不一致报关行的待审核单据，与幅度异常独立分类
-export type ReviewFilter = "all" | "pending" | "approved" | "margin_alert" | "unit_mismatch" | "auto";
+export type ReviewFilter =
+  | "all"
+  | "pending"
+  | "approved"
+  | "margin_alert"
+  | "unit_mismatch"
+  | "auto"
+  | "customs_approved";
 export interface UnitPriceMargin {
   // 后端按关联采购未税金额 / 采购下单数量计算，折 USD 展示；人民币差额判断容差。
   margin?: string;
@@ -116,6 +123,7 @@ export interface ComparisonResult {
     | "shown"
     | "changed"
     | "approvedThisMonth"
+    | "customsApproved"
     | "marginAlert"
     | "unitMismatch"
     | "autoApprovable",

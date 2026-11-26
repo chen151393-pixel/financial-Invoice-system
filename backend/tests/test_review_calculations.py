@@ -91,7 +91,8 @@ def test_list_paginates_before_batching_live_approval_progress(review, ns, engin
     assert [g.recordNumber for g in page.groups] == ["CD870"]
     assert len(wide_page.groups) == 2
     # 同样的业务状态下，扩大页容量不会逐行增加查询；来源只读单头。
-    assert len(page_statements) == len(statements) == 7
+    # 另有一条海关当前回执审核引用查询；没有已审核回执时不额外读取来源。
+    assert len(page_statements) == len(statements) == 8
     source_reads = [s for s in statements if re.search(r"(?:FROM|JOIN) source_", s)]
     assert len(source_reads) == 1 and "FROM source_customs_declarations" in source_reads[0]
     assert "WHERE source_customs_declarations.declaration_no IN" in source_reads[0]

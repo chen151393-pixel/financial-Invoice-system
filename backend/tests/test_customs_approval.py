@@ -21,6 +21,7 @@ from backend.tests.test_customs_receipts import _import, row
 from backend.tests.test_schema_baseline import schema_engine as schema_engine
 from backend.tests.test_source_storage import bundle, customs, purchase, rows, save
 from backend.tests.test_source_storage import ns as ns
+from sqlalchemy import text
 
 USER = "user:admin"
 
@@ -73,6 +74,54 @@ def progress_on_both_pages(world):
 
 def approve(world, request):
     return CustomsApprovalService(world[0], world[1]).approve_batch(request, USER)
+
+
+def test_finance_list_filters_current_customs_approval_independently(world):
+    engine, _, _, review = world
+    CalculationService(review).rebuild()
+    query = DeclarationListQuery(status="customs_approved", pageSize=1)
+    assert review.browse(query).counts["customsApproved"] == 0
+    assert review.browse(query).total == 0
+    approve(world, body(current(world)))
+    result = review.browse(query)
+    assert result.total == result.counts["customsApproved"] == 1
+    assert len(result.groups) == 1
+    assert result.groups[0].approvalProgress.customs.status == "approved"
+    assert result.groups[0].review.status == "pending"
+    assert review.browse(DeclarationListQuery(status="customs_approved", page=2, pageSize=1)).groups == []
+    missing = review.browse(DeclarationListQuery(status="customs_approved", recordNo="不存在"))
+    assert missing.total == missing.counts["customsApproved"] == 0
+    finance(world)
+    CalculationService(review).rebuild()
+    assert review.browse(query).total == 1
+    # 当前 NS 摘要变化后，即使财务快照尚未重建，也不能沿用历史海关通过记录。
+    with engine.begin() as connection:
+        connection.execute(
+            text("UPDATE source_customs_declarations SET content_sha256=:digest"), {"digest": "a" * 64}
+        )
+    assert review.browse(query).total == 0
+
+
+def test_finance_list_excludes_replaced_receipt_approval(world):
+    engine, _, _, review = world
+    CalculationService(review).rebuild()
+    approve(world, body(current(world)))
+    query = DeclarationListQuery(status="customs_approved")
+    assert review.browse(query).total == 1
+    with engine.begin() as connection:
+        connection.execute(text("UPDATE review_customs_receipts SET revision=revision+1"))
+    assert review.browse(query).total == 0
+
+
+def test_finance_list_excludes_duplicate_customs_number(world, ns):
+    engine, _, _, review = world
+    CalculationService(review).rebuild()
+    approve(world, body(current(world)))
+    duplicate = customs("871")
+    duplicate[1]["custrecord_swc_realno"] = "REAL870"
+    save(ns, engine, bundle([purchase("201", "871")], [duplicate]))
+    result = review.browse(DeclarationListQuery(status="customs_approved"))
+    assert result.total == result.counts["customsApproved"] == 0
 
 
 @pytest.mark.parametrize("first", ["finance", "customs"])
