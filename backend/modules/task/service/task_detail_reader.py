@@ -2,6 +2,8 @@
 
 from collections import defaultdict
 
+from backend.modules.identity.public import actor_names
+
 from ..dao import (
     contract_job_dao,
     declaration_document_dao,
@@ -35,6 +37,7 @@ def read_details(connection, rows):
     contacts = notification_dao.latest_sent_by_tasks(connection, ids)
     deliveries, blocked, scopes = notification_delivery_dao.detail_by_tasks(connection, ids, ACTIVE)
     events = event_dao.by_tasks(connection, ids)
+    people = actor_names(connection, [event["actor"] for history in events.values() for event in history])
     bindings = supplier_group_dao.by_suppliers(
         connection, sorted({row["supplier_id"] for row in rows if row["supplier_id"]})
     )
@@ -62,6 +65,7 @@ def read_details(connection, rows):
                 "deliveries": deliveries.get(row["id"], []),
                 "delivery_blocked": row["id"] in blocked,
                 "events": events.get(row["id"], []),
+                "actor_names": people,
                 "binding": bindings.get(row["supplier_id"]),
             }
             for row in rows

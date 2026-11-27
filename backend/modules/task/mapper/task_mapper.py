@@ -138,6 +138,7 @@ def events(rows):
                 "migration_review_required": "历史依据待复核",
                 "wecom_delivery": "企微通知进度",
                 "supplier_notice_scope": "保存供应商合并通知",
+                "contract_recovered": "子采购合同补存成功",
             }.get(row["event_type"])
             or event_label(row["from_status"], row["to_status"]),
             reason=row["reason"] or "",

@@ -27,34 +27,122 @@ after(async () => {
   await server?.close();
 });
 
-test("流转记录将多任务事件与合同获取记录按实际时间倒序展示，保留原始数据", () => {
-  const events = [
-    { at: "2026-10-20T10:30:05+08:00", label: "最早审核", actor: "system", reason: "CD001" },
-    { at: "2026-10-30T02:00:00Z", label: "最近通知", actor: "user:admin", reason: "CD002" },
+test("流转记录保留后端顺序和步骤号，最早审核为第1步，操作人展示姓名", () => {
+  const history = [
+    {
+      id: "document:7:1",
+      sequence: 4,
+      kind: "document",
+      label: "获取子采购合同：较新合同",
+      at: "2026-10-30T10:30:00+08:00",
+      archivedAt: "2026-10-30T10:31:00+08:00",
+      archivePath: "/share/较新合同.pdf",
+      environment: "prod",
+      nsId: "501",
+      sha256: "digest",
+    },
+    {
+      id: "event:2",
+      sequence: 3,
+      kind: "event",
+      label: "最近通知",
+      at: "2026-10-30T02:00:00Z",
+      actor: "user:fs:11gc6fb6",
+      actorName: "测试财务人员",
+      reason: "CD002",
+    },
+    {
+      id: "document:8:2",
+      sequence: 2,
+      kind: "document",
+      label: "获取子采购合同：中间合同",
+      at: "2026-10-25T10:00:00+08:00",
+    },
+    {
+      id: "event:1",
+      sequence: 1,
+      kind: "event",
+      label: "最早审核",
+      at: "2026-10-20T10:30:05+08:00",
+      actor: "system",
+      actorName: "系统",
+      reason: "CD001",
+    },
   ];
-  const documents = [
-    { orderId: "1", taskId: "7", orderNumber: "较新合同", downloadedAt: "2026-10-30T10:30:00+08:00" },
-    { orderId: "2", taskId: "8", orderNumber: "中间合同", downloadedAt: "2026-10-25T10:00:00+08:00" },
-    { orderId: "3", taskId: "8", orderNumber: "未下载合同", downloadedAt: null },
-  ];
-  const detail = { task: { id: "7" }, events, documents };
+  // 历史字段保留兼容，但前端不能重新排列或编号。
+  const detail = { task: { id: "7" }, events: [], documents: [], history };
   const original = structuredClone(detail);
   const html = renderToStaticMarkup(createElement(TaskHistory, { detail }));
   assert.deepEqual(
     [...html.matchAll(/<strong>(.*?)<\/strong>/g)].map((match) => match[1]),
     ["获取子采购合同：较新合同", "最近通知", "获取子采购合同：中间合同", "最早审核"],
   );
-  assert.match(html, /操作人 系统/);
-  assert.match(html, /操作人 user:admin/);
-  assert.match(html, /CD001|CD002/);
+  assert.match(html, /<ol[^>]*reversed=""[^>]*aria-label="流转记录，最新操作在前"/);
+  assert.deepEqual(
+    [...html.matchAll(/<li value="(\d+)"/g)].map((match) => Number(match[1])),
+    [4, 3, 2, 1],
+  );
+  assert.match(html, /操作人 <span title="system">系统<\/span>/);
+  assert.match(html, /操作人 <span title="user:fs:11gc6fb6">测试财务人员<\/span>/);
+  assert.match(html, /CD001/);
+  assert.match(html, /CD002/);
+  assert.match(html, /保存到共享盘/);
+  assert.match(html, /文件 SHA-256：digest/);
   assert.doesNotMatch(html, /未下载合同/);
   assert.deepEqual(detail, original);
   assert.match(
     renderToStaticMarkup(
-      createElement(TaskHistory, { detail: { task: { id: "7" }, events: [], documents: [] } }),
+      createElement(TaskHistory, { detail: { task: { id: "7" }, events: [], documents: [], history: [] } }),
     ),
     /任务编号：7/,
   );
+});
+
+test("同刻流转记录按后端步骤显示，补存成功不会被显示为退回待保存", () => {
+  const records = [
+    {
+      id: "event:9007199254740995",
+      sequence: 3,
+      kind: "event",
+      at: "2026-11-26T06:14:31.123456Z",
+      label: "子采购合同已全部保存到共享盘",
+      actor: "maintenance:contract-recovery",
+      actorName: "maintenance:contract-recovery",
+      reason: "CD000953：合同批量补存完成",
+    },
+    {
+      id: "event:9007199254740994",
+      sequence: 2,
+      kind: "event",
+      at: "2026-11-26T06:14:31.123456Z",
+      label: "子采购合同补存成功",
+      actor: "maintenance:contract-recovery",
+      actorName: "maintenance:contract-recovery",
+      reason: "CD000953：定向补存子采购合同",
+    },
+    {
+      id: "event:1",
+      sequence: 1,
+      kind: "event",
+      at: "2026-11-26T03:47:40Z",
+      label: "财务审核通过，生成开票任务",
+      actor: "system",
+      actorName: "系统",
+      reason: "",
+    },
+  ];
+  const html = renderToStaticMarkup(
+    createElement(TaskHistory, { detail: { task: { id: "481" }, history: records } }),
+  );
+  assert.deepEqual(
+    [...html.matchAll(/<strong>(.*?)<\/strong>/g)].map((match) => match[1]),
+    records.map((record) => record.label),
+  );
+  assert.deepEqual(
+    [...html.matchAll(/<li value="(\d+)"/g)].map((match) => Number(match[1])),
+    [3, 2, 1],
+  );
+  assert.doesNotMatch(html, /待保存子采购合同/);
 });
 
 test("供应商详情使用独立接口，保存固定范围版本和幂等编号；失败不自动重放", async (t) => {

@@ -1,48 +1,30 @@
 import type { TaskDetail } from "../types/task";
+import { EmptyState } from "../../../shared/components/ui";
 import { formatTime } from "./format";
 
 export function TaskHistory({ detail }: { detail: TaskDetail }) {
-  // 统一排列流程事件与合同获取记录，避免最新的合同操作固定落在历史末尾。
-  const records = [
-    ...detail.events.map((event, index) => ({
-      kind: "event" as const,
-      key: `event:${index}`,
-      at: event.at,
-      event,
-    })),
-    ...detail.documents
-      .filter((doc) => doc.downloadedAt)
-      .map((doc) => ({
-        kind: "document" as const,
-        key: `document:${doc.taskId || ""}:${doc.orderId}`,
-        at: doc.downloadedAt!,
-        doc,
-      })),
-  ].sort((left, right) => Date.parse(right.at) - Date.parse(left.at));
-
   return (
     <div className="itd-history-wrap">
-      <ol className="itd-history">
-        {records.map((record) => (
-          <li key={record.key}>
+      {detail.history.length === 0 && <EmptyState title="暂无流转记录" />}
+      <ol className="itd-history" reversed aria-label="流转记录，最新操作在前">
+        {detail.history.map((record) => (
+          <li key={record.id} value={record.sequence}>
+            <strong>{record.label}</strong>
             {record.kind === "event" ? (
               <>
-                <strong>{record.event.label}</strong>
                 <p>
-                  {formatTime(record.at)} · 操作人{" "}
-                  {record.event.actor === "system" ? "系统" : record.event.actor}
+                  {formatTime(record.at)} · 操作人 <span title={record.actor}>{record.actorName}</span>
                 </p>
-                {record.event.reason && <p>{record.event.reason}</p>}
+                {record.reason && <p>{record.reason}</p>}
               </>
             ) : (
               <>
-                <strong>获取子采购合同：{record.doc.orderNumber}</strong>
                 <p>
-                  {formatTime(record.at)} · NS {record.doc.environment} / {record.doc.nsId}
+                  {formatTime(record.at)} · NS {record.environment} / {record.nsId}
                 </p>
-                {record.doc.archivedAt && <p>保存到共享盘：{formatTime(record.doc.archivedAt)}</p>}
-                {record.doc.archivePath && <p className="it-reference">{record.doc.archivePath}</p>}
-                <p className="it-reference">文件 SHA-256：{record.doc.sha256}</p>
+                {record.archivedAt && <p>保存到共享盘：{formatTime(record.archivedAt)}</p>}
+                {record.archivePath && <p className="it-reference">{record.archivePath}</p>}
+                <p className="it-reference">文件 SHA-256：{record.sha256}</p>
               </>
             )}
           </li>

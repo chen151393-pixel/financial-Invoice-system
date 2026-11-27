@@ -8,7 +8,13 @@ from backend.core.errors import ApiError
 
 from ..dao import notification_dao, task_dao, task_line_dao
 from ..dao.notification_scope_dao import match_scope
-from ..mapper import document_mapper, notification_mapper, task_detail_mapper, task_mapper
+from ..mapper import (
+    document_mapper,
+    notification_mapper,
+    task_detail_mapper,
+    task_history_mapper,
+    task_mapper,
+)
 from ..policy.delivery_policy import BLOCK_REASON, LABELS, submit_reason
 from ..policy.stage_policy import declaration_stage
 from ..policy.task_policy import SUPERSEDED_REASON, missing_identity_reasons
@@ -238,6 +244,7 @@ class TaskService:
             downloadEnvironment=self.contracts.environment if self.contracts else "",
             notification=notification,
             events=task_mapper.events(data["events"]),
+            history=task_history_mapper.records(data["events"], documents, data["actor_names"]),
         )
         return task_detail_mapper.sections(detail)
 

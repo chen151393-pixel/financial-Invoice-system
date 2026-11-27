@@ -11,6 +11,7 @@ from backend.core.errors import ApiError
 from ..dao import document_dao, notification_dao, supplier_task_dao, task_line_dao
 from ..dao.notification_scope_dao import match_scope
 from ..mapper.task_detail_mapper import sections
+from ..mapper.task_history_mapper import ordered as ordered_history
 from ..policy.notification_policy import EDITABLE_STATUSES, default_message
 from ..policy.supplier_task_policy import apply_status, capability, steps_and_node, summary
 from ..vo.capability import Capability
@@ -122,6 +123,15 @@ class SupplierTaskService:
                 for event in detail.events
             ],
             key=lambda event: event.at,
+        )
+        base.history = ordered_history(
+            [
+                record.model_copy(update={"reason": f"{detail.task.recordNumber}：{record.reason}"})
+                if record.kind == "event"
+                else record
+                for detail in details
+                for record in detail.history
+            ]
         )
         base.sourceMessage = next(
             (detail.sourceMessage for detail in details if not detail.compare.allowed),

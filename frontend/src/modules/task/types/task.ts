@@ -105,6 +105,22 @@ export interface TaskEvent {
   reason: string;
 }
 
+export interface TaskHistoryRecord {
+  id: string;
+  sequence: number;
+  kind: "event" | "document";
+  at: string;
+  label: string;
+  actor: string;
+  actorName: string;
+  reason: string;
+  environment: string;
+  nsId: string;
+  archivedAt: string | null;
+  archivePath: string | null;
+  sha256: string;
+}
+
 // 报关资料：报关单、销售合同、发票按报关单各一份，由 NS 下载；每类可单独重试。
 export type DeclarationDocumentType = "customs_declaration" | "sales_contract" | "invoice";
 export interface DeclarationDocument {
@@ -160,6 +176,7 @@ export interface TaskDetail {
   downloadEnvironment: string;
   notification: TaskNotification;
   events: TaskEvent[];
+  history: TaskHistoryRecord[];
 }
 
 export interface TaskReviewRow {

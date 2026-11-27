@@ -8,6 +8,7 @@ from backend.core.dto import StrictModel
 
 from .capability import Capability
 from .notification_vo import NotificationBatchTarget, NotificationDetail
+from .task_history_vo import TaskHistoryRecord
 
 TaskStatus = Literal[
     "documents_pending",
@@ -232,6 +233,7 @@ class TaskDetail(StrictModel):
     downloadEnvironment: str
     notification: NotificationDetail
     events: list[TaskEvent]
+    history: list[TaskHistoryRecord] = Field(default_factory=list)
 
 
 class BoardNode(StrictModel):
