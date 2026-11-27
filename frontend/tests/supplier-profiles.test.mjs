@@ -7,6 +7,7 @@ import { MemoryRouter } from "react-router";
 import { createServer } from "vite";
 let server, api, Table, Picker, DirectoryStatus, navigation, paths, Search, pollDirectory;
 let OwnerTable, OwnerEditor, OwnerStats, SupplierTabs, ownerApi;
+let NotificationRecipients, useSupplierProfiles;
 before(async () => {
   server = await createServer({
     configFile: fileURLToPath(new URL("../vite.config.ts", import.meta.url)),
@@ -15,6 +16,10 @@ before(async () => {
     logLevel: "error",
   });
   api = await server.ssrLoadModule("/src/modules/task/api/supplier-group.ts");
+  ({ NotificationRecipients } = await server.ssrLoadModule(
+    "/src/modules/task/components/NotificationRecipients.tsx",
+  ));
+  ({ useSupplierProfiles } = await server.ssrLoadModule("/src/modules/task/hooks/useSupplierProfiles.ts"));
   ({ SupplierProfileSearch: Search } = await server.ssrLoadModule(
     "/src/modules/task/components/SupplierProfileSearch.tsx",
   ));
@@ -61,6 +66,49 @@ const ownerRow = {
   scheduled: [{ id: "9", memberName: "范宇洁", effectiveDate: "2026-12-01" }],
   status: "assigned",
 };
+
+test("通知中维护供应商档案携带当前供应商，目标页直接恢复名称筛选", () => {
+  for (const [supplier, grouped] of [
+    ["广州吉辉电子设备有限公司", false],
+    ["供应商 A&B + #设备（中国）有限公司", true],
+  ]) {
+    const html = renderToStaticMarkup(
+      createElement(
+        MemoryRouter,
+        { initialEntries: ["/tasks/12?status=unbound&page=3"] },
+        createElement(NotificationRecipients, {
+          detail: {
+            task: { supplier, company: "采购公司" },
+            grouped,
+            notification: { supplierGroup: null, edit: { allowed: true, reason: "" } },
+          },
+          draft: { groupName: "", employee: "", message: "" },
+          disabled: false,
+          onChange() {},
+        }),
+      ),
+    );
+    const href = html.match(/href="([^"]+)"[^>]*>维护供应商档案<\/a>/)?.[1];
+    assert.ok(href);
+    const target = new URL(href, "http://localhost");
+    assert.equal(target.pathname, paths.paths.supplierGroups);
+    assert.deepEqual([...target.searchParams], [["supplierName", supplier]]);
+
+    let query;
+    function ProfileQuery() {
+      ({ query } = useSupplierProfiles());
+      return createElement(Search, { query, busy: false, onSearch() {}, onRefresh() {} });
+    }
+    renderToStaticMarkup(
+      createElement(MemoryRouter, { initialEntries: [href] }, createElement(ProfileQuery)),
+    );
+    assert.equal(query.supplierName, supplier);
+    assert.equal(query.page, 1);
+    assert.equal(query.status, "all");
+    assert.equal(query.groupName, "");
+    assert.equal(query.owner, "");
+  }
+});
 
 test("供应商人员关联使用独立路由并复用供应商页签", () => {
   assert.equal(paths.paths.supplierOwners, "/suppliers/owners");

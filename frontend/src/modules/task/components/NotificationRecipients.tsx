@@ -42,7 +42,14 @@ export function NotificationRecipients({
           </dd>
         </dl>
       )}
-      <Link to={paths.supplierGroups}>维护供应商档案</Link>
+      <Link
+        to={{
+          pathname: paths.supplierGroups,
+          search: new URLSearchParams({ supplierName: detail.task.supplier }).toString(),
+        }}
+      >
+        维护供应商档案
+      </Link>
       <dl className="itn-facts">
         <dt>供应商</dt>
         <dd>{detail.task.supplier}</dd>
