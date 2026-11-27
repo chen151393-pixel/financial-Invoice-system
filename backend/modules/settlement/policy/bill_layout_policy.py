@@ -11,6 +11,7 @@ from datetime import date
 from statistics import median
 
 from .bill_parse_policy import parse_date
+from .bill_port_policy import field_head, field_label, port_lines
 
 FIELDS = ("bl_no", "port_of_loading", "port_of_discharge", "on_board_date")
 _MONTHS = ("JANUARY FEBRUARY MARCH APRIL MAY JUNE JULY AUGUST SEPTEMBER OCTOBER NOVEMBER DECEMBER").split()
@@ -21,8 +22,6 @@ _ORDINALS = (
     "TWENTY-NINTH THIRTIETH THIRTY-FIRST"
 ).split()
 _WORDED_DATE = re.compile(r"\b(" + "|".join(_MONTHS) + r")\s+([A-Z]+(?:\s*-\s*[A-Z]+)?)\s*,?\s*(\d{4})\b")
-_PORT = re.compile(r"[A-Z][A-Z .,'()/-]{2,60}")
-_LABEL_WORDS = re.compile(r"\b(PORT|PLACE|VESSEL|VOYAGE|CARRIAGE|DELIVERY|RECEIPT|DESTINATION|ROUTING)\b")
 
 
 def _key(text):
@@ -34,8 +33,8 @@ def _same_row(a, b, height):
     return abs(a["top"] - b["top"]) < 0.7 * height
 
 
-def _find_label(words, tokens, height):
-    """返回标签外框 {left, right, top, bottom}；标签各词须在同一行且相邻。"""
+def _find_label(words, tokens, height, *, wrapped=False):
+    """返回标签外框；口岸标签额外允许紧邻、左对齐的折行，不跨到旁边栏位。"""
     for word in sorted(words, key=lambda item: (item["top"], item["left"])):
         if _key(word["text"]) != tokens[0]:
             continue
@@ -46,16 +45,22 @@ def _find_label(words, tokens, height):
                 other
                 for other in words
                 if _key(other["text"]) == token
-                and _same_row(other, last, height)
-                and 0 <= other["left"] - last["right"] < 2 * height
+                and (
+                    (_same_row(other, last, height) and 0 <= other["left"] - last["right"] < 2 * height)
+                    or (
+                        wrapped
+                        and 0 <= other["top"] - last["bottom"] < height
+                        and abs(other["left"] - chain[0]["left"]) < height
+                    )
+                )
             ]
             if not following:
                 break
-            chain.append(min(following, key=lambda other: other["left"]))
+            chain.append(min(following, key=lambda other: (other["top"], other["left"])))
         else:
             return {
-                "left": chain[0]["left"],
-                "right": chain[-1]["right"],
+                "left": min(item["left"] for item in chain),
+                "right": max(item["right"] for item in chain),
                 "top": min(item["top"] for item in chain),
                 "bottom": max(item["bottom"] for item in chain),
             }
@@ -89,19 +94,46 @@ def _join(words):
 
 def _port(words, tokens, height):
     headings = [word for word in words if _key(word["text"]) != "PORT" or word["text"][:1].isupper()]
-    label = _find_label(headings, tokens, height)
+    label = _find_label(headings, tokens, height, wrapped=True)
     if not label:
         return ""
-    return port_value(_column(words, label, height)[1])
-
-
-def port_value(text):
-    """仅接受口岸文字，不接受相邻栏标签或含数字的噪声。"""
-    value = re.sub(r"\s*,\s*", ", ", text.upper())
-    value = re.sub(r"\s+", " ", value).strip(" ,.-/*")
-    if not _PORT.fullmatch(value) or _LABEL_WORDS.search(value):
-        return ""
-    return value
+    # 复用原列边界口径，值按从上到下的连续行读取，而非只保留最近一行。
+    neighbors = [
+        word["left"]
+        for word in words
+        if label["top"] - height * 0.5 <= word["top"] <= label["bottom"]
+        and word["left"] - label["right"] > 0.5 * height
+        and (field_head(word["text"]) or word["left"] - label["right"] > 6 * height)
+    ]
+    right = min(neighbors) - height * 0.5 if neighbors else float("inf")
+    below = sorted(
+        (
+            word
+            for word in words
+            if word["top"] >= label["bottom"] + height * 0.3
+            and label["left"] - 3 * height <= word["left"] < right
+        ),
+        key=lambda word: (word["top"], word["left"]),
+    )
+    rows = []
+    for word in below:
+        if not rows or not _same_row(rows[-1][0], word, height):
+            rows.append([])
+        rows[-1].append(word)
+    lines, bottom = [], label["bottom"]
+    for index, row in enumerate(rows):
+        value = _join(row)
+        following = _join(rows[index + 1]) if index + 1 < len(rows) else ""
+        if field_label(value, following) or min(item["top"] for item in row) - bottom > 1.5 * height:
+            break
+        if any(item["right"] > right for item in row):
+            return ""
+        row = sorted(row, key=lambda item: item["left"])
+        if any(second["left"] - first["right"] > 6 * height for first, second in zip(row, row[1:])):
+            return ""
+        lines.append(value)
+        bottom = max(item["bottom"] for item in row)
+    return port_lines(lines)
 
 
 def _number(text):
@@ -249,7 +281,7 @@ def cell_labels(readings):
             word for word in words if word["text"][:1].isupper() or _key(word["text"]) not in ("PORT", "ON")
         ]
         for field, label_tokens in tokens.items():
-            label = _find_label(headings, label_tokens, height)
+            label = _find_label(headings, label_tokens, height, wrapped=field != "on_board_date")
             if label:
                 candidates.append((field, label, height, words))
     return candidates

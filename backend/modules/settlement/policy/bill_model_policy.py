@@ -9,7 +9,8 @@
 import re
 from datetime import date
 
-from .bill_layout_policy import FIELDS, port_value
+from .bill_layout_policy import FIELDS
+from .bill_port_policy import port_value
 
 # 提单为英文单据，提示词用英文；要求认不出就留空，不得猜测。
 INSTRUCTIONS = """You extract four fields from an ocean bill of lading or sea waybill.

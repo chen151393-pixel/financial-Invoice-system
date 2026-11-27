@@ -5,9 +5,10 @@ import re
 from PIL import ImageOps
 
 from ..policy.bill_layout_policy import agreed, cell_labels, parse_words
+from ..policy.bill_port_policy import MAX_PORT_LINES
 
 
-def cell_box(image, label, height):
+def cell_box(image, label, height, *, depth=6):
     """取包围标签的横线与竖线；找不到完整且邻近的栏位时放弃。"""
     width = image.width
     pixels = image.tobytes()
@@ -15,7 +16,7 @@ def cell_box(image, label, height):
     center = (label["left"] + label["right"]) / 2
     above, below = [], []
     start = max(0, int(label["top"] - 6 * height))
-    end = min(image.height, int(label["bottom"] + 6 * height))
+    end = min(image.height, int(label["bottom"] + depth * height))
     for y in range(start, end):
         if label["top"] <= y <= label["bottom"]:
             continue
@@ -63,12 +64,13 @@ def cell_box(image, label, height):
 
 def refine_cells(image, readings, read_words):
     parsed = agreed([parse_words(words) for words in readings])
-    refined = set()
+    checked = set()
     for field, label, height, source in cell_labels(readings):
         # 日期即使整页结果一致也复核，表格线可能使两次都把 1 误读为 4。
-        if field in refined or (parsed[field] and field != "on_board_date"):
+        if field in checked or (parsed[field] and field != "on_board_date"):
             continue
-        box = cell_box(image, label, height)
+        # 多行港口的单元格更高；仍只取实际包围本栏的最近表格线，不跨行猜框。
+        box = cell_box(image, label, height, depth=6 if field == "on_board_date" else MAX_PORT_LINES * 1.5)
         if box is None:
             continue
         left, top, right, bottom = box
@@ -79,6 +81,8 @@ def refine_cells(image, readings, read_words):
         )
         if value_box[2] <= value_box[0] or value_box[3] <= value_box[1]:
             continue
+        # 同一字段找到真实网格后只复核一组；不因两次冲突而反复尝试直到偶然一致。
+        checked.add(field)
         crop = image.crop(value_box)
         crop = ImageOps.expand(crop.resize((crop.width * 2, crop.height * 2)), border=20, fill="white")
         labels = [
@@ -88,7 +92,9 @@ def refine_cells(image, readings, read_words):
             and label["top"] <= word["top"] <= label["bottom"]
         ]
         replacements = []
-        for mode in ("6", "7"):
+        # 港口按文本块与稀疏文字两次读取；单行模式 7 会丢失港口的续行。
+        modes = ("6", "7") if field == "on_board_date" else ("6", "11")
+        for mode in modes:
             words = read_words(crop, mode)
             if not words:
                 break
@@ -115,6 +121,5 @@ def refine_cells(image, readings, read_words):
             + replacements[i % 2]
             for i, words in enumerate(readings)
         ]
-        refined.add(field)
         parsed = agreed([parse_words(words) for words in readings])
     return readings

@@ -44,7 +44,7 @@ def test_cell_reading_recovers_missing_label_in_other_page_mode(field, label, va
         return [dict(word, bottom=word["top"] + 48) for word in output]
 
     result = refine_cells(image, readings, read)
-    assert calls == ["6", "7"]
+    assert calls == (["6", "7"] if field == "on_board_date" else ["6", "11"])
     assert agreed([parse_words(reading) for reading in result])[field] == expected
     assert agreed([parse_words(reading) for reading in readings])[field] in ("", None)
 
@@ -98,3 +98,27 @@ def test_date_cell_is_checked_even_if_whole_page_agrees_on_wrong_digit():
 
     result = refine_cells(table_image(), readings, read)
     assert agreed([parse_words(row) for row in result])["on_board_date"] == date(2026, 11, 1)
+
+
+@pytest.mark.parametrize("disagrees", [False, True])
+def test_tall_port_cell_recovers_all_lines_and_requires_both_readings_to_agree(disagrees):
+    image = Image.new("L", (1600, 800), 255)
+    ImageDraw.Draw(image).rectangle((200, 100, 1400, 340), outline=0, width=3)
+    source = words([(220, 120, "PORT OF DISCHARGE"), (220, 165, "LOS")])
+    readings, calls = [source, source], []
+    assert parse_words(source)["port_of_discharge"] == ""
+
+    def read(crop, mode):
+        calls.append(mode)
+        lines = ("LOS", "ANGELES,C", "A,UN", "ITED", "STATES")
+        if disagrees and mode == "11":
+            lines = ("NEW YORK, USA",)
+        return [
+            dict(word, bottom=word["top"] + 48)
+            for word in words([(40, 40 + index * 60, line) for index, line in enumerate(lines)])
+        ]
+
+    result = refine_cells(image, readings, read)
+    assert calls == ["6", "11"]
+    expected = "" if disagrees else "LOS ANGELES, CA, UNITED STATES"
+    assert agreed([parse_words(row) for row in result])["port_of_discharge"] == expected

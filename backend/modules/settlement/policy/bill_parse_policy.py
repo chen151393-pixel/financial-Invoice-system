@@ -6,6 +6,8 @@
 import re
 from datetime import date, datetime
 
+from .bill_port_policy import MAX_PORT_LINES, field_label, port_lines
+
 _MONTHS = {
     name: index
     for index, name in enumerate(
@@ -29,7 +31,6 @@ _ON_BOARD = re.compile(
     r"(?:ON\s+BOARD\s+DATE|LADEN\s+ON\s+BOARD(?:\s+THE\s+VESSEL)?|SHIPPED\s+ON\s+BOARD(?:\s+DATE)?)"
     r"[^0-9A-Z]{0,12}(?:DATE)?[^0-9A-Z]{0,6}([0-9A-Z ./,-]{6,20})"
 )
-_PORT_VALUE = r"([A-Z][A-Z .,'()/-]{2,60})"
 
 
 def parse_date(text):
@@ -47,24 +48,38 @@ def parse_date(text):
     return None
 
 
-_OTHER_LABEL = re.compile(r"PORT OF|PLACE OF|VESSEL|VOYAGE|PRE-CARRIAGE|DELIVERY")
-
-
 def _port(upper, label):
-    """标签同一行冒号后的值，或标签下一行的值。
+    """提取标签后的连续多行，以空行或下一栏位结束；并排标签时不猜列归属。
 
-    多个标签并排成一行时，下一行的值属于哪一列无法从文字判断，一律放弃，留给人工填写。
+    不能在遇到噪声或行数上限时退回第一行，否则 LOS 等碎片会冒充完整口岸。
     """
-    same = re.search(label + r"\s*[:：]\s*" + _PORT_VALUE, upper)
-    below = re.search(r"^([^\n]*)" + label + r"([^\n]*)\n\s*" + _PORT_VALUE, upper, re.M)
-    candidates = [same.group(1)] if same else []
-    if below and not _OTHER_LABEL.search(below.group(1) + below.group(2)):
-        candidates.append(below.group(3))
-    for candidate in candidates:
-        value = re.sub(r"\s+", " ", candidate).strip(" ,.-/")
-        if value and not _OTHER_LABEL.search(value):
-            return value[:200]
-    return ""
+    match = re.search(label, upper)
+    if not match:
+        return ""
+    start = upper.rfind("\n", 0, match.start()) + 1
+    end = upper.find("\n", match.end())
+    end = len(upper) if end == -1 else end
+    before, after = upper[start : match.start()], upper[match.end() : end]
+    if before.strip(" .:0123456789") or field_label(after):
+        return ""
+    first = after.lstrip(" :：").strip()
+    if re.search(r"\S(?:\t| {3,})\S", first):
+        return ""
+    values = [first] if first else []
+    tail = upper[end + 1 :].splitlines()
+    for index, line in enumerate(tail):
+        line = line.strip()
+        following = tail[index + 1] if index + 1 < len(tail) else ""
+        if field_label(line, following) or (not line and values):
+            break
+        if line:
+            # 多栏的原始文字还带有列间留白时，不能将两列值拼成一个地名。
+            if re.search(r"\S(?:\t| {3,})\S", line):
+                return ""
+            values.append(line)
+            if len(values) > MAX_PORT_LINES:
+                return ""
+    return port_lines(values)
 
 
 def parse_bill(text):
