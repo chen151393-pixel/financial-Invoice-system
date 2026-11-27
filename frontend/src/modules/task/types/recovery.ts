@@ -2,7 +2,7 @@
 export type RecoveryView = "due" | "collected" | "outstanding" | "overdue";
 
 export interface RecoveryQuery {
-  // 空为默认月份（本月到期的上月通知）；all 为全部月份；否则为 YYYY-MM
+  // 空为默认月份（北京时间当前月份）；all 为全部月份；否则为 YYYY-MM
   month: string;
   view: RecoveryView;
   // 空为全部采购员；none 为未指定负责人

@@ -40,8 +40,8 @@ def due_date(month):
 
 
 def default_month(today):
-    """本月到期的批次：上个月财务审核通过的任务。"""
-    return shift(month_of(today), -1)
+    """每次查询按北京时间日期默认显示当月开票任务。"""
+    return month_of(today)
 
 
 def window(today):

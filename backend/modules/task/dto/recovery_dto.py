@@ -9,7 +9,7 @@ from backend.core.search_terms import SearchText
 
 
 class RecoveryQuery(StrictModel):
-    # 空为默认月份（本月到期的上月审核）；all 为全部月份；否则为 YYYY-MM
+    # 空为默认月份（北京时间当前月份）；all 为全部月份；否则为 YYYY-MM
     month: str = Field(default="", pattern=r"^(all|[0-9]{4}-(0[1-9]|1[0-2]))?$")
     # 清单内容随卡片切换：due 应收回、collected 已收回、outstanding 未收回、overdue 逾期未收回
     view: Literal["due", "collected", "outstanding", "overdue"] = "outstanding"

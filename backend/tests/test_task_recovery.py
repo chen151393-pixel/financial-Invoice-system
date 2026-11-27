@@ -60,8 +60,8 @@ def test_month_due_date_and_default_cohort():
     assert policy.due_date("2026-10") == date(2026, 11, 30)
     assert policy.due_date("2026-12") == date(2027, 1, 31)
     assert policy.due_date("2027-01") == date(2027, 2, 28)
-    assert policy.default_month(TODAY) == "2026-10"
-    assert policy.default_month(date(2027, 1, 3)) == "2026-12"
+    assert policy.default_month(TODAY) == "2026-11"
+    assert policy.default_month(date(2027, 1, 3)) == "2027-01"
     assert policy.window(date(2027, 2, 1)) == ["2026-11", "2026-12", "2027-01", "2027-02"]
     # 只有发票全部收齐才算收回；部分收票不算
     assert [policy.collected(s) for s in ("partially_received", "documents_incomplete", "completed")] == [
@@ -129,13 +129,13 @@ def test_buyers_concentration_and_groups():
 
 def test_board_filters_views_and_pagination():
     rows = [
-        row(1, supplier=1, name="任丘科迈", orders=["POE20260807003"]),
-        row(2, supplier=2, name="永康帅标", member="none"),
+        row(1, "2026-11", supplier=1, name="任丘科迈", orders=["POE20260807003"]),
+        row(2, "2026-11", supplier=2, name="永康帅标", member="none"),
         row(3, "2026-09", supplier=3, name="泉州贺稳"),
-        row(4, supplier=4, name="诸暨华毅", status="completed", company=4),
+        row(4, "2026-11", supplier=4, name="诸暨华毅", status="completed", company=4),
     ]
     board = RecoveryService.board(rows, RecoveryQuery(), TODAY)
-    assert board.month == "2026-10" and board.dueDate == "2026-11-30" and board.monthLabel == "10月开票"
+    assert board.month == "2026-11" and board.dueDate == "2026-12-31" and board.monthLabel == "11月开票"
     assert board.cards.due.tasks == 3 and board.cards.outstanding.tasks == 2
     assert board.cards.overdue.tasks == 1 and board.list.summary.tasks == 2
     assert [o.id for o in board.options.buyers] == ["5", "none"]
@@ -153,6 +153,36 @@ def test_board_filters_views_and_pagination():
     assert RecoveryService.board(rows, RecoveryQuery(orderNo="cd2"), TODAY).cards.due.tasks == 1
     paged = RecoveryService.board(rows, RecoveryQuery(month="all", view="due", pageSize=3, page=2), TODAY)
     assert paged.list.pages == 2 and len(paged.list.items) == 1
+
+
+@pytest.mark.parametrize(
+    ("now", "today", "month"),
+    [
+        (datetime(2026, 11, 27, 4, tzinfo=UTC), "2026-11-27", "2026-11"),
+        (datetime(2026, 11, 30, 15, 59, 59, tzinfo=UTC), "2026-11-30", "2026-11"),
+        (datetime(2026, 11, 30, 16, tzinfo=UTC), "2026-12-01", "2026-12"),
+        (datetime(2026, 12, 31, 15, 59, 59, tzinfo=UTC), "2026-12-31", "2026-12"),
+        (datetime(2026, 12, 31, 16, tzinfo=UTC), "2027-01-01", "2027-01"),
+    ],
+)
+def test_default_month_follows_beijing_month_even_without_data(engine, now, today, month):
+    board = RecoveryService(engine).browse(RecoveryQuery(), now)
+    assert board.today == today
+    assert board.month == board.defaultMonth == month
+    assert board.dueDate == policy.due_date(month).isoformat()
+    assert board.cards.due.tasks == 0 and board.list.total == 0
+
+
+def test_default_does_not_fall_back_to_history_or_override_explicit_month():
+    rows = [row(1)]
+    current = RecoveryService.board(rows, RecoveryQuery(), TODAY)
+    assert current.month == current.defaultMonth == "2026-11"
+    assert current.cards.due.tasks == 0
+    historical = RecoveryService.board(rows, RecoveryQuery(month="2026-10"), TODAY)
+    assert historical.month == "2026-10" and historical.defaultMonth == "2026-11"
+    assert historical.cards.due.tasks == 1
+    every = RecoveryService.board(rows, RecoveryQuery(month="all"), TODAY)
+    assert every.month == "all" and every.cards.due.tasks == 1
 
 
 def test_query_validation():

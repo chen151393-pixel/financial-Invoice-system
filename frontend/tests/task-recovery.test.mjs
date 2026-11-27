@@ -46,7 +46,7 @@ const board = {
   month: "2026-10",
   monthLabel: "10月开票",
   dueDate: "2026-11-30",
-  defaultMonth: "2026-10",
+  defaultMonth: "2026-11",
   cards: {
     due: summary(333, "20834128.46", 168),
     collected: { ...summary(278, "18299491.76", 150), rate: 83.5 },
@@ -220,8 +220,44 @@ test("查询栏一行：月份分段含全部，采购员含未指定", () => {
   const selectedMonths = [...markup.matchAll(/<button\b[^>]*aria-pressed="true"[^>]*>(.*?)<\/button>/g)];
   assert.deepEqual(
     selectedMonths.map((match) => match[1]),
-    ["2026-10"],
+    ["11月"],
   );
   assert.match(markup, /未指定采购员/);
   assert.match(markup, /CD 号 \/ 子采购单号/);
+});
+
+for (const month of ["2026-12", "2027-01"]) {
+  test(`默认月份跟随接口跨月跨年切换：${month}`, () => {
+    const markup = render(
+      createElement(RecoverySearch, {
+        board: { ...board, defaultMonth: month },
+        query: { ...queryState.initialRecoveryQuery },
+        busy: false,
+        onSearch() {},
+        onRefresh() {},
+      }),
+    );
+    const selected = [...markup.matchAll(/<button\b[^>]*aria-pressed="true"[^>]*>(.*?)<\/button>/g)];
+    assert.deepEqual(
+      selected.map((match) => match[1]),
+      [month],
+    );
+  });
+}
+
+test("手动选择历史月份继续生效", () => {
+  const markup = render(
+    createElement(RecoverySearch, {
+      board,
+      query: { ...queryState.initialRecoveryQuery, month: "2026-10" },
+      busy: false,
+      onSearch() {},
+      onRefresh() {},
+    }),
+  );
+  const selected = [...markup.matchAll(/<button\b[^>]*aria-pressed="true"[^>]*>(.*?)<\/button>/g)];
+  assert.deepEqual(
+    selected.map((match) => match[1]),
+    ["2026-10"],
+  );
 });
