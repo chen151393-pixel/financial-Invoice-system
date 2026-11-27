@@ -2,6 +2,7 @@ import { DeclarationDetailLink } from "./DeclarationDetailLink";
 import { Link } from "react-router";
 import {
   settlementBatchListPath,
+  settlementHkBatchPath,
   settlementDirectDocumentsPath,
   settlementLedgerPath,
   settlementReceiptPath,
@@ -24,7 +25,15 @@ function NextStep({ row }: { row: ReceivableItem }) {
     const text = { collected: "去批次办资料", remit: "去批次登记汇回" }[row.stage as string] ?? "查看批次";
     return (
       <div className="settlement-cell">
-        <Link to={settlementBatchListPath("", row.batchNo)}>{text}</Link>
+        <Link
+          to={
+            row.batchId
+              ? settlementHkBatchPath(row.batchId, row.stage === "remit")
+              : settlementBatchListPath("", row.batchNo)
+          }
+        >
+          {text}
+        </Link>
         <span>{row.batchNo}</span>
       </div>
     );

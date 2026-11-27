@@ -26,6 +26,11 @@ const SettlementHkReceiptPage = lazy(() =>
     default: m.SettlementHkReceiptPage,
   })),
 );
+const SettlementHkBatchPage = lazy(() =>
+  import("../modules/settlement/pages/SettlementHkBatchPage").then((m) => ({
+    default: m.SettlementHkBatchPage,
+  })),
+);
 const SettlementBankReceiptsPage = lazy(() =>
   import("../modules/settlement/pages/SettlementBankReceiptsPage").then((m) => ({
     default: m.SettlementBankReceiptsPage,
@@ -88,6 +93,12 @@ const PAGES = {
     description: "将已选报关单登记到同一条香港到账流水，金额对平后提交并建立批次。",
     source: "银行水单 + 海关回执",
   },
+  "hk-batch": {
+    child: "settlement-hk",
+    title: "香港批次资料",
+    description: "集中办理本批次提单、销售合同与资料包，并跟踪资料出具和汇回结汇。",
+    source: "香港到账登记 + 海关回执 + 提单与销售合同",
+  },
   direct: {
     child: "settlement-direct",
     title: "直接收汇明细",
@@ -126,9 +137,14 @@ const KEYS: Record<string, keyof typeof PAGES> = {
 
 /** 结汇对账：各子页面共用一个页面权限，由侧栏子列表切换。 */
 export default function SettlementWorkspacePage() {
-  const { pathname, search } = useLocation();
+  const { pathname, search, state } = useLocation();
   const navigateView = useViewNavigate();
-  const { groupId } = useParams();
+  const { groupId, batchId } = useParams();
+  const hkReturnTo = (state as { hkReturnTo?: string } | null)?.hkReturnTo;
+  const hkBack =
+    hkReturnTo === paths.settlementHk || hkReturnTo?.startsWith(`${paths.settlementHk}?`)
+      ? hkReturnTo
+      : paths.settlementHk;
   const [groupHeading, setGroupHeading] = useState({ id: 0, label: "" });
   const loadedGroup = useCallback(
     (id: number, label: string) =>
@@ -138,9 +154,11 @@ export default function SettlementWorkspacePage() {
   const key =
     pathname === paths.settlementDocumentMerge
       ? "direct-merge"
-      : groupId
-        ? "direct-group"
-        : (KEYS[pathname] ?? "declarations");
+      : batchId
+        ? "hk-batch"
+        : groupId
+          ? "direct-group"
+          : (KEYS[pathname] ?? "declarations");
   const current = PAGES[key];
   return (
     <AppFrame
@@ -154,7 +172,9 @@ export default function SettlementWorkspacePage() {
           : current.title
       }
       breadcrumb={
-        key === "hk-register" ? (
+        key === "hk-batch" ? (
+          <Link to={hkBack}>香港中转批次</Link>
+        ) : key === "hk-register" ? (
           <Link to={paths.settlementHk}>香港中转</Link>
         ) : key === "direct-group" || key === "direct-merge" ? (
           <Link to={settlementDirectDocumentsPath()}>直接收汇明细</Link>
@@ -174,6 +194,7 @@ export default function SettlementWorkspacePage() {
         {key === "bank" && <SettlementBankReceiptsPage />}
         {key === "hk" && <SettlementHkTransitPage />}
         {key === "hk-register" && <SettlementHkReceiptPage />}
+        {key === "hk-batch" && <SettlementHkBatchPage key={batchId} batchId={Number(batchId)} />}
         {key === "direct" && (
           <SettlementLedgerPage key={new URLSearchParams(search).get("consignee") || ""} />
         )}

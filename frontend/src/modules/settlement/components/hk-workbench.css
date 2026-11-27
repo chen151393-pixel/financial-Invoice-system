@@ -15,9 +15,6 @@
   color: var(--color-muted);
   font-size: 12px;
 }
-.settlement-hk-batch[data-expanded] {
-  border-color: var(--color-primary-soft-border, var(--color-primary));
-}
 .settlement-hk-batch > .ui-card__content {
   display: grid;
   gap: 14px;
@@ -79,15 +76,6 @@
   border-radius: var(--radius-control);
   background: var(--color-canvas);
 }
-.settlement-hk-batch__workspace {
-  display: grid;
-  gap: var(--space-layout);
-  padding-top: 18px;
-  border-top: 1px solid var(--color-border);
-}
-.settlement-hk-batch__workspace .settlement-detail__head {
-  display: none;
-}
 .settlement-hk-rules {
   color: var(--color-muted);
   font-size: 12px;
@@ -132,9 +120,6 @@
   .settlement-hk-batch__actions {
     flex-direction: row;
     flex-wrap: wrap;
-  }
-  .settlement-hk-batch__workspace {
-    gap: var(--space-control);
   }
 }
 

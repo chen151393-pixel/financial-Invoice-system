@@ -48,7 +48,7 @@ const TITLES: Record<HkStageKey, string> = {
 const pageNumber = (value: string | null) =>
   value && /^\d+$/.test(value) && Number(value) > 0 ? Number(value) : 1;
 
-/** 香港中转：阶段入口 → 待登记报关单 → 批次卡片内办理资料与汇回。 */
+/** 香港中转：阶段入口与批次摘要；资料和汇回进入独立批次页面办理。 */
 export function SettlementHkTransitPage() {
   const [params, setParams] = useSearchParams();
   const value =
@@ -251,7 +251,7 @@ export function SettlementHkTransitPage() {
           {stage !== "register" && (
             <section aria-label={TITLES[stage]} className="settlement-hk-batches">
               {result.batches.map((row) => (
-                <HkBatchCard key={row.batch.id} row={row} onChanged={reload} />
+                <HkBatchCard key={row.batch.id} row={row} />
               ))}
               {!result.batches.length && (
                 <EmptyState

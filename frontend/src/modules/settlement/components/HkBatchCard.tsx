@@ -1,19 +1,16 @@
 import { useId, useState } from "react";
+import { Link, useLocation } from "react-router";
+import { settlementHkBatchPath } from "../../../app/paths";
 import { Badge, Button, Card, CardContent, Stepper } from "../../../shared/components/ui";
 import { money } from "../../../shared/format/money";
 import type { HkBatch } from "../types/hk-workbench";
-import { BatchWorkspace } from "./BatchWorkspace";
-export function HkBatchCard({ row, onChanged }: { row: HkBatch; onChanged: () => void }) {
-  const [open, setOpen] = useState(false);
+export function HkBatchCard({ row }: { row: HkBatch }) {
+  const location = useLocation();
   const [flowOpen, setFlowOpen] = useState(true);
-  const [mode, setMode] = useState<"none" | "remit">("none");
-  const [actionVersion, setActionVersion] = useState(0);
-  const [busy, setBusy] = useState(false);
-  const id = useId();
   const flowId = useId();
   const batch = row.batch;
   return (
-    <Card className="settlement-hk-batch" data-expanded={open || undefined}>
+    <Card className="settlement-hk-batch">
       <CardContent>
         <div className="settlement-hk-batch__summary">
           <div className="settlement-hk-batch__identity">
@@ -66,27 +63,18 @@ export function HkBatchCard({ row, onChanged }: { row: HkBatch; onChanged: () =>
                   下载资料包
                 </Button>
               )
-            ) : (
-              <Button
-                size="sm"
-                variant="primary"
-                aria-expanded={open}
-                aria-controls={id}
-                disabled={busy || (row.primaryAction === "remit" && !batch.actions.settle.allowed)}
-                title={row.primaryAction === "remit" ? batch.actions.settle.reason : undefined}
-                onClick={() => {
-                  if (open) {
-                    setOpen(false);
-                    setMode("none");
-                    return;
-                  }
-                  setOpen(true);
-                  setActionVersion((value) => value + 1);
-                  setMode(row.primaryAction === "remit" ? "remit" : "none");
-                }}
-              >
+            ) : row.primaryAction === "remit" && !batch.actions.settle.allowed ? (
+              <Button size="sm" variant="primary" disabled title={batch.actions.settle.reason}>
                 {row.primaryLabel}
               </Button>
+            ) : (
+              <Link
+                className="ui-button ui-button--primary ui-button--sm"
+                to={settlementHkBatchPath(batch.id, row.primaryAction === "remit")}
+                state={{ hkReturnTo: location.pathname + location.search }}
+              >
+                {row.primaryLabel}
+              </Link>
             )}
 
             <Button
@@ -104,19 +92,6 @@ export function HkBatchCard({ row, onChanged }: { row: HkBatch; onChanged: () =>
           <div className="settlement-hk-batch__flow">
             <Stepper label={`批次 ${batch.batchNo} 处理流程`} steps={row.steps} />
           </div>
-        </div>
-        <div id={id} hidden={!open}>
-          {open && (
-            <div className="settlement-hk-batch__workspace">
-              <BatchWorkspace
-                key={`${batch.id}:${actionVersion}`}
-                batchId={batch.id}
-                initialMode={mode}
-                onChanged={onChanged}
-                onBusyChange={setBusy}
-              />
-            </div>
-          )}
         </div>
       </CardContent>
     </Card>

@@ -7,7 +7,8 @@ import {
   CardContent,
   DataTable,
   ErrorState,
-  SectionTitle,
+  EmptyState,
+  CardHeader,
   Skeleton,
   type Column,
 } from "../../../shared/components/ui";
@@ -22,6 +23,7 @@ import type {
   PlannedContract,
 } from "../types";
 import { BillEditForm } from "./BillEditForm";
+import { DocumentSection } from "./DocumentSection";
 import { ContractGenerateForm } from "./ContractGenerateForm";
 
 type State =
@@ -64,10 +66,18 @@ export function BatchDocuments({
   target,
   onChanged,
   overview,
+  standalone = false,
+  revision = 0,
+  actions,
+  onBusyChange,
 }: {
   target: DocumentTarget;
   onChanged: () => void;
   overview?: (documents: Documents) => ReactNode;
+  standalone?: boolean;
+  revision?: number;
+  actions?: ReactNode;
+  onBusyChange?: (busy: boolean) => void;
 }) {
   const [state, setState] = useState<State>({ kind: "loading" });
   const [busy, setBusy] = useState(false);
@@ -88,10 +98,11 @@ export function BatchDocuments({
         setState({ kind: "error", message: reason instanceof Error ? reason.message : "加载失败" });
       });
     return () => controller.abort();
-  }, [target, refresh]);
+  }, [target, refresh, revision]);
 
   async function run(action: () => Promise<Documents>) {
     setBusy(true);
+    onBusyChange?.(true);
     setError("");
     try {
       setState({ kind: "ready", documents: await action() });
@@ -102,11 +113,13 @@ export function BatchDocuments({
       setError(reason instanceof Error ? reason.message : "操作失败，请稍后重试");
     } finally {
       setBusy(false);
+      onBusyChange?.(false);
     }
   }
 
   async function uploadAll(files: File[]) {
     setBusy(true);
+    onBusyChange?.(true);
     setError("");
     const failed: string[] = [];
     for (const file of files) {
@@ -118,6 +131,7 @@ export function BatchDocuments({
     }
     if (failed.length) setError(failed.join("；"));
     setBusy(false);
+    onBusyChange?.(false);
     onChanged();
   }
 
@@ -305,33 +319,33 @@ export function BatchDocuments({
   ];
 
   const billContent = (
-    <>
-      <SectionTitle
-        title="提单"
-        count={documents.bills.length}
-        actions={
-          editable && (
-            <>
-              <input
-                ref={fileInput}
-                type="file"
-                accept="application/pdf,.pdf"
-                multiple
-                hidden
-                aria-label="选择提单 PDF"
-                onChange={(event) => {
-                  const files = Array.from(event.currentTarget.files ?? []);
-                  event.currentTarget.value = "";
-                  if (files.length) void uploadAll(files);
-                }}
-              />
-              <Button variant="primary" size="sm" disabled={busy} onClick={() => fileInput.current?.click()}>
-                {busy ? "处理中…" : "上传提单 PDF"}
-              </Button>
-            </>
-          )
-        }
-      />
+    <DocumentSection
+      panel={standalone}
+      title="提单"
+      count={documents.bills.length}
+      actions={
+        editable && (
+          <>
+            <input
+              ref={fileInput}
+              type="file"
+              accept="application/pdf,.pdf"
+              multiple
+              hidden
+              aria-label="选择提单 PDF"
+              onChange={(event) => {
+                const files = Array.from(event.currentTarget.files ?? []);
+                event.currentTarget.value = "";
+                if (files.length) void uploadAll(files);
+              }}
+            />
+            <Button variant="primary" size="sm" disabled={busy} onClick={() => fileInput.current?.click()}>
+              {busy ? "处理中…" : "上传提单 PDF"}
+            </Button>
+          </>
+        )
+      }
+    >
       {documents.bills.length ? (
         overview ? (
           <div className="settlement-group-bills">
@@ -381,62 +395,100 @@ export function BatchDocuments({
           onSubmit={(fields) => void run(() => updateBill(target, editingBill.id, fields))}
         />
       )}
-    </>
+    </DocumentSection>
   );
   const contractContent = (
-    <>
-      <SectionTitle
-        title="销售合同（形式发票）"
-        count={`${documents.contracts.length} / ${documents.planned.length}`}
-        actions={
-          editable && (
-            <Button
-              variant="primary"
-              size="sm"
-              disabled={busy || !documents.generate.allowed}
-              title={documents.generate.reason}
-              onClick={() => setGenerating(true)}
-            >
-              {documents.contracts.length ? "重新生成" : "按模板生成"}
-            </Button>
-          )
-        }
-      />
+    <DocumentSection
+      panel={standalone}
+      title="销售合同（形式发票）"
+      count={`${documents.contracts.length} / ${documents.planned.length}`}
+      actions={
+        editable && (
+          <Button
+            variant="primary"
+            size="sm"
+            disabled={busy || !documents.generate.allowed}
+            title={documents.generate.reason}
+            onClick={() => setGenerating(true)}
+          >
+            {documents.contracts.length ? "重新生成" : "按模板生成"}
+          </Button>
+        )
+      }
+    >
       {editable && !documents.generate.allowed && (
         <p className="settlement-form__hint">暂不能生成：{documents.generate.reason}</p>
       )}
-      <DataTable
-        label="销售合同（形式发票）"
-        columns={contractColumns}
-        rows={contractRows(documents)}
-        rowKey={(row) => row.key}
-        density="compact"
-        minWidth={640}
-      />
-    </>
+      {standalone && !documents.planned.length && !documents.contracts.length ? (
+        <EmptyState
+          title="暂无销售合同依据"
+          description={documents.generate.reason || "核对当前报关单的销售订单后再办理。"}
+        />
+      ) : (
+        <DataTable
+          label="销售合同（形式发票）"
+          columns={contractColumns}
+          rows={contractRows(documents)}
+          rowKey={(row) => row.key}
+          density="compact"
+          minWidth={640}
+        />
+      )}
+      {generating && (
+        <ContractGenerateForm
+          documents={documents}
+          busy={busy}
+          onCancel={() => setGenerating(false)}
+          onSubmit={(body) => void run(() => generateContracts(target, body))}
+        />
+      )}
+    </DocumentSection>
+  );
+
+  const footer = (
+    <div className="settlement-form__actions settlement-batch__actions">
+      {documents.package.allowed ? (
+        <a className="ui-button ui-button--secondary" href={documents.packageUrl} download>
+          下载资料包（zip）
+        </a>
+      ) : (
+        <Button disabled title={documents.package.reason}>
+          下载资料包（zip）
+        </Button>
+      )}
+      {actions}
+    </div>
   );
 
   return (
-    <section className="settlement-docs" aria-label="结汇资料">
-      <Alert
-        tone={documents.complete ? (documents.warnings.length ? "warning" : "success") : "warning"}
-        title={hasNoticeDetails ? undefined : noticeTitle}
-      >
-        {hasNoticeDetails && (
-          <details className="settlement-docs__notice">
-            <summary>
-              <strong>{noticeTitle}</strong> <span className="settlement-docs__notice-expand">展开明细</span>
-              <span className="settlement-docs__notice-collapse">收起明细</span>
-            </summary>
-            <ul className="settlement-docs__list">
-              {[...documents.issues, ...documents.warnings].map((item, index) => (
-                <li key={`${index}-${item}`}>{item}</li>
-              ))}
-            </ul>
-          </details>
-        )}
-        {!editable && <span> {documents.edit.reason}。</span>}
-      </Alert>
+    <section className={standalone ? "settlement-page" : "settlement-docs"} aria-label="结汇资料">
+      {!standalone && (
+        <Alert
+          tone={documents.complete ? (documents.warnings.length ? "warning" : "success") : "warning"}
+          title={hasNoticeDetails ? undefined : noticeTitle}
+        >
+          {hasNoticeDetails && (
+            <details className="settlement-docs__notice">
+              <summary>
+                <strong>{noticeTitle}</strong>{" "}
+                <span className="settlement-docs__notice-expand">展开明细</span>
+                <span className="settlement-docs__notice-collapse">收起明细</span>
+              </summary>
+              <ul className="settlement-docs__list">
+                {[...documents.issues, ...documents.warnings].map((item, index) => (
+                  <li key={`${index}-${item}`}>{item}</li>
+                ))}
+              </ul>
+            </details>
+          )}
+          {!editable && <span> {documents.edit.reason}。</span>}
+        </Alert>
+      )}
+      {standalone && !editable && (
+        <Alert tone="info" title="当前资料状态">
+          {documents.edit.reason}
+        </Alert>
+      )}
 
       {overview ? (
         <div className="settlement-docs__split">
@@ -456,43 +508,37 @@ export function BatchDocuments({
       ) : (
         contractContent
       )}
-      <SectionTitle title="报关单" count={documents.declarationFiles.length} />
-      <p className="settlement-form__hint">
-        取“开票跟进”从 NS 下载并归档的报关单原件；未归档时请到对应开票任务的详情中下载。
-      </p>
-      <DataTable
-        label="报关单文件"
-        columns={declarationColumns}
-        rows={documents.declarationFiles}
-        rowKey={(row) => row.declarationNo}
-        density="compact"
-        minWidth={560}
-      />
-      {generating && (
-        <ContractGenerateForm
-          documents={documents}
-          busy={busy}
-          onCancel={() => setGenerating(false)}
-          onSubmit={(body) => void run(() => generateContracts(target, body))}
-        />
-      )}
+      <DocumentSection panel={standalone} title="报关单原件" count={documents.declarationFiles.length}>
+        <p className="settlement-form__hint">
+          取“开票跟进”从 NS 下载并归档的报关单原件；未归档时请到对应开票任务的详情中下载。
+        </p>
+        {standalone && !documents.declarationFiles.length ? (
+          <EmptyState title="暂无报关单原件" description="请在开票跟进中核对报关单归档状态。" />
+        ) : (
+          <DataTable
+            label="报关单文件"
+            columns={declarationColumns}
+            rows={documents.declarationFiles}
+            rowKey={(row) => row.declarationNo}
+            density="compact"
+            minWidth={560}
+          />
+        )}
+      </DocumentSection>
 
       {error && (
         <Alert tone="danger" title="操作未完成">
           {error}
         </Alert>
       )}
-      <div className="settlement-form__actions">
-        {documents.package.allowed ? (
-          <a className="ui-button ui-button--secondary" href={documents.packageUrl} download>
-            下载资料包（zip）
-          </a>
-        ) : (
-          <Button disabled title={documents.package.reason}>
-            下载资料包（zip）
-          </Button>
-        )}
-      </div>
+      {standalone ? (
+        <Card>
+          <CardHeader title="办理操作" />
+          <CardContent>{footer}</CardContent>
+        </Card>
+      ) : (
+        footer
+      )}
     </section>
   );
 }

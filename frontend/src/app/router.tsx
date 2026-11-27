@@ -86,6 +86,10 @@ export const router = createBrowserRouter([
             element: page("settlement", "登记香港回款", <SettlementWorkspacePage />),
           },
           {
+            path: `${paths.settlementHkBatches}/:batchId`,
+            element: page("settlement", "香港批次资料", <SettlementWorkspacePage />),
+          },
+          {
             path: paths.settlementParties,
             element: page("settlement", "合同抬头", <SettlementWorkspacePage />),
           },

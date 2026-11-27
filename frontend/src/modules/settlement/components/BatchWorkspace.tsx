@@ -1,291 +1,203 @@
-import { DeclarationDetailLink } from "./DeclarationDetailLink";
-import { useEffect, useState } from "react";
-import { Alert, Badge, Button, DataTable, ErrorState, Skeleton } from "../../../shared/components/ui";
-import { money } from "../../../shared/format/money";
+import { useEffect, useRef, useState } from "react";
+import { Alert, Button, ErrorState, Skeleton, Tabs } from "../../../shared/components/ui";
 import { cancelBatch, getBatch, markDocumentsReady, recordRemittance, settleBatch } from "../api";
-import type { BatchDetail, BatchItem } from "../types";
+import type { BatchDetail } from "../types";
+import { BatchCancelDialog } from "./BatchCancelDialog";
 import { BatchDocuments } from "./BatchDocuments";
+import { BatchOverview } from "./BatchOverview";
+import { BatchRemittanceForm } from "./BatchRemittanceForm";
+import "./hk-batch-detail.css";
 
 type State = { kind: "loading" } | { kind: "ready"; batch: BatchDetail } | { kind: "error"; message: string };
+export type BatchSection = "documents" | "remit";
 
-const ITEM_COLUMNS = [
-  {
-    key: "no",
-    header: "报关单号",
-    render: (row: BatchItem) => <DeclarationDetailLink number={row.declarationNo} />,
-  },
-  { key: "cd", header: "CD", render: (row: BatchItem) => row.recordNo || "—" },
-  { key: "orders", header: "销售订单", render: (row: BatchItem) => row.salesOrders || "—" },
-  { key: "date", header: "出口日期", render: (row: BatchItem) => row.exportDate || "—" },
-  {
-    key: "amount",
-    header: "报关金额",
-    align: "right" as const,
-    render: (row: BatchItem) => `${row.currency} ${money(row.amount)}`,
-  },
-];
-
-/** 香港批次展开区与旧详情弹窗复用同一套资料、汇回和作废操作。 */
+/** 独立页与兼容详情入口共用资料、汇回和作废流程，切换页签不卸载资料组件。 */
 export function BatchWorkspace({
   batchId,
   onChanged,
   onBusyChange,
   initialMode = "none",
+  section,
+  onSectionChange,
 }: {
   batchId: number;
-  onChanged: () => void;
+  onChanged?: () => void;
   onBusyChange?: (busy: boolean) => void;
   initialMode?: "none" | "remit";
+  section?: BatchSection;
+  onSectionChange?: (section: BatchSection) => void;
 }) {
   const [state, setState] = useState<State>({ kind: "loading" });
   const [busy, setBusy] = useState(false);
+  const [documentsBusy, setDocumentsBusy] = useState(false);
   const [error, setError] = useState("");
-  const [mode, setMode] = useState<"none" | "remit" | "cancel">(initialMode);
+  const [refresh, setRefresh] = useState(0);
+  const [documentsRevision, setDocumentsRevision] = useState(0);
+  const [localSection, setLocalSection] = useState<BatchSection>(
+    initialMode === "remit" ? "remit" : "documents",
+  );
+  const [cancelling, setCancelling] = useState(false);
+  const submitting = useRef(false);
+  const activeSection = section ?? localSection;
+  const actionBusy = busy || documentsBusy;
 
+  useEffect(() => {
+    onBusyChange?.(actionBusy);
+  }, [onBusyChange, actionBusy]);
   useEffect(() => {
     const controller = new AbortController();
     getBatch(batchId, controller.signal)
-      .then((batch) => setState({ kind: "ready", batch }))
+      .then((batch) => {
+        if (!controller.signal.aborted) setState({ kind: "ready", batch });
+      })
       .catch((reason: unknown) => {
-        if (reason instanceof Error && reason.name === "AbortError") return;
-        setState({ kind: "error", message: reason instanceof Error ? reason.message : "加载失败" });
+        if (!controller.signal.aborted)
+          setState({ kind: "error", message: reason instanceof Error ? reason.message : "批次读取失败" });
       });
     return () => controller.abort();
-  }, [batchId]);
+  }, [batchId, refresh]);
 
+  function selectSection(value: BatchSection) {
+    setLocalSection(value);
+    onSectionChange?.(value);
+  }
   async function run(action: () => Promise<BatchDetail>) {
+    if (submitting.current || documentsBusy) return;
+    submitting.current = true;
     setBusy(true);
-    onBusyChange?.(true);
     setError("");
     try {
       const batch = await action();
       setState({ kind: "ready", batch });
-      setMode("none");
-      onChanged();
+      setDocumentsRevision((value) => value + 1);
+      setCancelling(false);
+      onChanged?.();
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : "操作失败，请稍后重试");
+      setError(reason instanceof Error ? reason.message : "操作失败，填写内容已保留");
     } finally {
+      submitting.current = false;
       setBusy(false);
-      onBusyChange?.(false);
     }
   }
-
-  if (state.kind !== "ready") {
-    return (
-      <div className="settlement-detail">
-        {state.kind === "loading" ? (
-          <Skeleton rows={4} label="正在读取批次" />
-        ) : (
-          <ErrorState title="批次读取失败" message={state.message} />
-        )}
-      </div>
-    );
+  function documentsChanged() {
+    // 只更新批次许可，不切换为加载状态，保留资料清单及用户所在页签。
+    getBatch(batchId)
+      .then((batch) => setState({ kind: "ready", batch }))
+      .catch((reason: unknown) => setError(reason instanceof Error ? reason.message : "批次状态刷新失败"));
+    onChanged?.();
   }
+  if (state.kind === "loading") return <Skeleton rows={4} label="正在读取批次" />;
+  if (state.kind === "error")
+    return (
+      <ErrorState
+        title="批次读取失败"
+        message={state.message}
+        action={
+          <Button
+            onClick={() => {
+              setState({ kind: "loading" });
+              setRefresh((value) => value + 1);
+            }}
+          >
+            重试
+          </Button>
+        }
+      />
+    );
+
   const batch = state.batch;
-  const hk = batch.route === "hk_transit";
   return (
-    <>
-      <div className="settlement-detail">
-        <div className="settlement-detail__head">
-          <strong>{batch.batchNo}</strong>
-          <Badge tone={hk ? "info" : "neutral"}>{batch.routeLabel}</Badge>
-          <Badge
-            tone={
-              batch.status === "settled" ? "success" : batch.status === "cancelled" ? "neutral" : "progress"
-            }
-          >
-            {batch.statusLabel}
-          </Badge>
-          <span>
-            {batch.consignee} · 报关合计 {batch.currency} {money(batch.declaredTotal)}
-          </span>
-        </div>
-        <dl className="settlement-detail__facts">
-          <dt>到账</dt>
-          <dd>
-            {batch.receivedOn} · {money(batch.receivedAmount)}（手续费 {money(batch.receivedFee)}）
-            {batch.receivedReference && ` · ${batch.receivedReference}`}
-          </dd>
-          {batch.receivedSlipUrl && (
-            <>
-              <dt>银行水单</dt>
-              <dd>
-                <a href={batch.receivedSlipUrl} target="_blank" rel="noreferrer">
-                  {batch.receivedSlipName || "查看银行水单原件"}
-                </a>
-              </dd>
-            </>
-          )}
-          <dt>付款方 / 账户</dt>
-          <dd>
-            {batch.payer || "—"} / {batch.receivingAccount || "—"}
-          </dd>
-          {hk && (
-            <>
-              <dt>汇回境内</dt>
-              <dd>
-                {batch.remittedOn
-                  ? `${batch.remittedOn} · ${money(batch.remittedAmount)}（手续费 ${money(batch.remittedFee)}）`
-                  : "尚未登记"}
-              </dd>
-            </>
-          )}
-          <dt>经办</dt>
-          <dd>
-            {batch.createdBy}
-            {batch.documentsReadyBy && ` · 资料已出：${batch.documentsReadyBy}`}
-            {batch.settledBy && ` · 结汇确认：${batch.settledBy}`}
-            {batch.cancelReason && ` · 作废原因：${batch.cancelReason}`}
-          </dd>
-        </dl>
-        {batch.balances.map((balance) => (
-          <Alert
-            key={balance.stage}
-            tone={balance.balanced ? (balance.warnings.length ? "warning" : "success") : "danger"}
-            title={`${balance.label}核对：${balance.balanced ? "已对平" : `差额 ${balance.difference}`}`}
-          >
-            {balance.warnings.length ? balance.warnings.join("；") : "到账加手续费等于报关合计。"}
-          </Alert>
-        ))}
-        <DataTable
-          label="批次报关单"
-          columns={ITEM_COLUMNS}
-          rows={batch.items}
-          rowKey={(row) => row.declarationNo}
-          density="compact"
-        />
-        {hk && batch.status !== "cancelled" && (
+    <div className="settlement-page">
+      <BatchOverview batch={batch} />
+      <Tabs
+        label="批次资料视图"
+        items={[
+          { key: "documents", label: "资料办理" },
+          { key: "remit", label: "汇回登记" },
+        ]}
+        value={activeSection}
+        onChange={selectSection}
+      />
+      {error && !cancelling && (
+        <Alert tone="danger" title="操作未完成">
+          {error}
+        </Alert>
+      )}
+      <div hidden={activeSection !== "documents"}>
+        {batch.route === "hk_transit" && batch.status !== "cancelled" ? (
           <BatchDocuments
             target={batch.id}
-            onChanged={() => {
-              onChanged();
-              // 资料变化会影响“确认资料已出”是否可用，重新读取批次
-              getBatch(batch.id)
-                .then((fresh) => setState({ kind: "ready", batch: fresh }))
-                .catch((reason: unknown) =>
-                  setError(reason instanceof Error ? reason.message : "批次状态刷新失败"),
-                );
-            }}
+            standalone
+            revision={documentsRevision}
+            onChanged={documentsChanged}
+            onBusyChange={setDocumentsBusy}
+            actions={
+              <>
+                <Button
+                  disabled={actionBusy || !batch.actions.settle.allowed}
+                  title={batch.actions.settle.reason}
+                  onClick={() => selectSection("remit")}
+                >
+                  登记汇回
+                </Button>
+                {batch.status === "collected" && (
+                  <Button
+                    variant="primary"
+                    disabled={actionBusy || !batch.actions.documentsReady.allowed}
+                    title={batch.actions.documentsReady.reason}
+                    onClick={() => void run(() => markDocumentsReady(batch.id))}
+                  >
+                    确认资料已出
+                  </Button>
+                )}
+                {!batch.actions.documentsReady.allowed && batch.status === "collected" && (
+                  <p className="settlement-form__hint">{batch.actions.documentsReady.reason}</p>
+                )}
+                {batch.actions.cancel.allowed && (
+                  <Button
+                    variant="ghost"
+                    disabled={actionBusy}
+                    onClick={() => {
+                      setError("");
+                      setCancelling(true);
+                    }}
+                  >
+                    作废批次
+                  </Button>
+                )}
+              </>
+            }
           />
-        )}
-        {mode === "remit" && (
-          <form
-            className="settlement-form"
-            onSubmit={(event) => {
-              event.preventDefault();
-              const data = new FormData(event.currentTarget);
-              const value = (name: string) => String(data.get(name) || "").trim();
-              void run(() =>
-                recordRemittance(batch.id, {
-                  remittedOn: value("remittedOn"),
-                  remittedAmount: value("remittedAmount"),
-                  remittedFee: value("remittedFee") || "0",
-                  remittedReference: value("remittedReference"),
-                }),
-              );
-            }}
-          >
-            <label>
-              汇回日期
-              <input name="remittedOn" type="date" required />
-            </label>
-            <label>
-              境内到账金额
-              <input name="remittedAmount" inputMode="decimal" required />
-            </label>
-            <label>
-              汇回手续费
-              <input name="remittedFee" inputMode="decimal" defaultValue="0" />
-            </label>
-            <label>
-              汇回流水号
-              <input name="remittedReference" maxLength={200} />
-            </label>
-            <div className="settlement-form__actions">
-              <Button type="button" variant="ghost" onClick={() => setMode("none")} disabled={busy}>
-                取消
-              </Button>
-              <Button type="submit" disabled={busy}>
-                登记汇回并确认结汇
-              </Button>
-            </div>
-          </form>
-        )}
-        {mode === "cancel" && (
-          <form
-            className="settlement-form"
-            onSubmit={(event) => {
-              event.preventDefault();
-              const reason = String(new FormData(event.currentTarget).get("reason") || "").trim();
-              void run(() => cancelBatch(batch.id, reason));
-            }}
-          >
-            <label className="settlement-form__wide">
-              作废原因（作废后报关单可重新建批次）
-              <input name="reason" required maxLength={300} />
-            </label>
-            <div className="settlement-form__actions">
-              <Button type="button" variant="ghost" onClick={() => setMode("none")} disabled={busy}>
-                返回
-              </Button>
-              <Button type="submit" disabled={busy}>
-                确认作废
-              </Button>
-            </div>
-          </form>
-        )}
-        {error && (
-          <Alert tone="danger" title="操作未完成">
-            {error}
-          </Alert>
-        )}
-        {mode === "none" && (
-          <div className="settlement-form__actions">
-            {hk && batch.status === "collected" && (
+        ) : (
+          <Alert tone="info" title={batch.statusLabel}>
+            {batch.cancelReason || batch.actions.documentsReady.reason}
+            {batch.route === "direct" && (
               <Button
-                disabled={busy || !batch.actions.documentsReady.allowed}
-                title={batch.actions.documentsReady.reason}
-                onClick={() => void run(() => markDocumentsReady(batch.id))}
-              >
-                确认资料已出
-              </Button>
-            )}
-            {hk && batch.status === "documents_ready" && (
-              <Button
-                disabled={busy || !batch.actions.settle.allowed}
-                title={batch.actions.settle.reason}
-                onClick={() => setMode("remit")}
-              >
-                登记汇回
-              </Button>
-            )}
-            {!hk && batch.status === "collected" && (
-              <Button
-                disabled={busy || !batch.actions.settle.allowed}
-                title={batch.actions.settle.reason}
+                disabled={actionBusy || !batch.actions.settle.allowed}
                 onClick={() => void run(() => settleBatch(batch.id))}
               >
                 确认已结汇
               </Button>
             )}
-            {batch.actions.cancel.allowed && (
-              <Button variant="ghost" disabled={busy} onClick={() => setMode("cancel")}>
-                作废批次
-              </Button>
-            )}
-          </div>
+          </Alert>
         )}
-        {mode === "none" &&
-          !batch.actions.settle.allowed &&
-          batch.status !== "settled" &&
-          batch.status !== "cancelled" && (
-            <p className="settlement-form__hint">
-              {hk && batch.status === "collected"
-                ? batch.actions.documentsReady.reason
-                : batch.actions.settle.reason}
-            </p>
-          )}
       </div>
-    </>
+      <div hidden={activeSection !== "remit"}>
+        <BatchRemittanceForm
+          batch={batch}
+          busy={actionBusy}
+          onCancel={() => selectSection("documents")}
+          onSubmit={(body) => void run(() => recordRemittance(batch.id, body))}
+        />
+      </div>
+      {cancelling && (
+        <BatchCancelDialog
+          busy={actionBusy}
+          error={error}
+          onClose={() => setCancelling(false)}
+          onSubmit={(reason) => void run(() => cancelBatch(batch.id, reason))}
+        />
+      )}
+    </div>
   );
 }

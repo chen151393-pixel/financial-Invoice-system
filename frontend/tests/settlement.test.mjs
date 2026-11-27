@@ -628,8 +628,8 @@ test("报关单明细逐单显示后端收款、资料、结汇状态，并指�
       }),
     ),
   );
-  assert.match(html, /href="\/settlement\/hk-transit\?batchNo=SB20261110-00012"[^>]*>去批次办资料/);
-  assert.match(html, />去批次登记汇回</);
+  assert.match(html, /href="\/settlement\/hk-transit\/batches\/12"[^>]*>去批次办资料/);
+  assert.match(html, /href="\/settlement\/hk-transit\/batches\/12\?mode=remit"[^>]*>去批次登记汇回</);
   assert.match(html, /香港滞留 40 天/);
   assert.match(html, /出口合同号 YX-034 未生成合同/);
   assert.match(
@@ -818,7 +818,7 @@ test("香港批次卡展示真实流程摘要与资料包许可", async () => {
     package: { allowed: true, reason: "" },
     packageUrl: "/api/settlement/batches/8/package",
   };
-  const html = renderToStaticMarkup(createElement(HkBatchCard, { row, onChanged() {} }));
+  const html = renderToStaticMarkup(inRouter(createElement(HkBatchCard, { row })));
   assert.match(html, /TEST-BATCH-008/);
   assert.match(html, /1,200.00/);
   assert.match(html, /href="\/api\/settlement\/batches\/8\/package" download/);
@@ -828,19 +828,21 @@ test("香港批次卡展示真实流程摘要与资料包许可", async () => {
   assert.match(html, /汇回结汇/);
   assert.doesNotMatch(html, /展开资料|收起资料/);
   const documents = renderToStaticMarkup(
-    createElement(HkBatchCard, {
-      row: { ...row, primaryAction: "documents", primaryLabel: "办理资料" },
-      onChanged() {},
-    }),
+    inRouter(
+      createElement(HkBatchCard, {
+        row: { ...row, primaryAction: "documents", primaryLabel: "办理资料" },
+      }),
+    ),
   );
-  assert.match(documents, /aria-expanded="false"[^>]*>办理资料/);
+  assert.match(documents, /href="\/settlement\/hk-transit\/batches\/8"[^>]*>办理资料/);
   assert.doesNotMatch(documents, /展开资料|收起资料/);
   assert.doesNotMatch(html, /正在读取批次|批次报关单|结汇资料读取失败/);
   const blocked = renderToStaticMarkup(
-    createElement(HkBatchCard, {
-      row: { ...row, package: { allowed: false, reason: "资料待补" } },
-      onChanged() {},
-    }),
+    inRouter(
+      createElement(HkBatchCard, {
+        row: { ...row, package: { allowed: false, reason: "资料待补" } },
+      }),
+    ),
   );
   assert.doesNotMatch(blocked, /href="\/api\/settlement\/batches\/8\/package"/);
   assert.match(blocked, /disabled="" title="资料待补"/);
@@ -875,8 +877,128 @@ test("香港批次登记汇回入口沿用后端许可", async () => {
     package: { allowed: false, reason: "资料待补" },
     packageUrl: "",
   };
-  const html = renderToStaticMarkup(createElement(HkBatchCard, { row, onChanged() {} }));
+  const html = renderToStaticMarkup(inRouter(createElement(HkBatchCard, { row })));
   assert.match(html, /disabled="" title="后端核对未通过"[^>]*>登记汇回/);
+  const allowed = renderToStaticMarkup(
+    inRouter(
+      createElement(HkBatchCard, {
+        row: { ...row, batch: { ...row.batch, actions: { settle: { allowed: true, reason: "" } } } },
+      }),
+    ),
+  );
+  assert.match(allowed, /href="\/settlement\/hk-transit\/batches\/9\?mode=remit"[^>]*>登记汇回/);
+  assert.doesNotMatch(allowed, /<form|正在读取批次/);
+});
+
+test("香港批次资料地址可直达，列表入口保留导航语义", async () => {
+  const { paths, settlementHkBatchPath } = await server.ssrLoadModule("/src/app/paths.ts");
+  assert.equal(settlementHkBatchPath(12), `${paths.settlementHkBatches}/12`);
+  assert.equal(settlementHkBatchPath(12, true), `${paths.settlementHkBatches}/12?mode=remit`);
+  const { SettlementHkBatchPage } = await server.ssrLoadModule(
+    "/src/modules/settlement/pages/SettlementHkBatchPage.tsx",
+  );
+  const html = renderToStaticMarkup(inRouter(createElement(SettlementHkBatchPage, { batchId: 12 })));
+  assert.match(html, /正在读取批次/);
+  assert.doesNotMatch(html, /香港中转处理阶段|当前条件下没有/);
+});
+
+test("香港批次概览使用真实金额与后端票数，不展示已删除的信息页签", async () => {
+  const { BatchOverview } = await server.ssrLoadModule(
+    "/src/modules/settlement/components/BatchOverview.tsx",
+  );
+  const html = renderToStaticMarkup(
+    createElement(BatchOverview, {
+      batch: {
+        batchNo: "SB-REAL-12",
+        route: "hk_transit",
+        routeLabel: "香港中转",
+        status: "collected",
+        statusLabel: "香港已收",
+        consignee: "REAL HK LTD",
+        currency: "EUR",
+        declaredTotal: "1234.56",
+        receivedOn: "2026-11-27",
+        receivedAmount: "1230.56",
+        receivedFee: "4.00",
+        declarationCount: 7,
+        receivedReference: "REF-REAL",
+        receivedSlipUrl: "/api/slip/12",
+        receivedSlipName: "银行水单.pdf",
+        items: [],
+      },
+    }),
+  );
+  assert.match(html, /1,234\.56/);
+  assert.match(html, /EUR 1,230\.56 \/ 4\.00/);
+  assert.match(html, /7 张/);
+  assert.match(html, /href="\/api\/slip\/12"/);
+  assert.doesNotMatch(html, /批次信息|批次报关单|HTML 示例/);
+});
+
+test("汇回表单沿用后端许可、保留真实已登记金额与手续费提醒", async () => {
+  const { BatchRemittanceForm } = await server.ssrLoadModule(
+    "/src/modules/settlement/components/BatchRemittanceForm.tsx",
+  );
+  const batch = {
+    currency: "USD",
+    status: "documents_ready",
+    statusLabel: "资料已出",
+    remittedOn: "",
+    balances: [],
+    actions: { settle: { allowed: false, reason: "请先补齐合同" } },
+  };
+  const props = { batch, busy: false, onSubmit() {}, onCancel() {} };
+  const blocked = renderToStaticMarkup(createElement(BatchRemittanceForm, props));
+  assert.match(blocked, /请先补齐合同/);
+  assert.match(blocked, /<input(?=[^>]*name="remittedAmount")(?=[^>]*disabled)[^>]*>/);
+  assert.match(blocked, /<button(?=[^>]*type="submit")(?=[^>]*disabled)[^>]*>/);
+  const enabled = renderToStaticMarkup(
+    createElement(BatchRemittanceForm, {
+      ...props,
+      batch: { ...batch, actions: { settle: { allowed: true, reason: "" } } },
+    }),
+  );
+  assert.doesNotMatch(enabled, /disabled/);
+  const saved = renderToStaticMarkup(
+    createElement(BatchRemittanceForm, {
+      ...props,
+      batch: {
+        ...batch,
+        status: "settled",
+        statusLabel: "已结汇",
+        remittedOn: "2026-11-27",
+        remittedAmount: "1200.01",
+        remittedFee: "34.55",
+        remittedReference: "BANK-REAL",
+        settledBy: "财务甲",
+        actions: { settle: { allowed: false, reason: "已结汇" } },
+        balances: [{ stage: "remitted", label: "汇回", balanced: true, warnings: ["手续费需复核"] }],
+      },
+    }),
+  );
+  assert.match(saved, /1,200\.01/);
+  assert.match(saved, /34\.55/);
+  assert.match(saved, /手续费需复核/);
+  assert.doesNotMatch(saved, /<form/);
+});
+
+test("汇回请求保留十进制字符串且失败不自动重试", async (t) => {
+  const { recordRemittance } = await server.ssrLoadModule("/src/modules/settlement/api.ts");
+  const body = {
+    remittedOn: "2026-11-27",
+    remittedAmount: "1,200.0100",
+    remittedFee: "0.0001",
+    remittedReference: "BANK-12",
+  };
+  let calls = 0;
+  t.mock.method(globalThis, "fetch", async (url, options) => {
+    calls += 1;
+    assert.equal(url, "/api/settlement/batches/12/remittance");
+    assert.deepEqual(JSON.parse(options.body), body);
+    return Response.json({ error: "汇回金额未对平" }, { status: 409 });
+  });
+  await assert.rejects(recordRemittance(12, body), /汇回金额未对平/);
+  assert.equal(calls, 1);
 });
 
 test("报关单详情地址保留列表筛选并支持特殊字符编号", async () => {

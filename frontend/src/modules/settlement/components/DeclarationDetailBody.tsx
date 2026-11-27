@@ -1,7 +1,7 @@
 import { Link } from "react-router";
 import {
   directDocumentGroupPath,
-  settlementBatchListPath,
+  settlementHkBatchPath,
   settlementDirectDocumentsPath,
   settlementLedgerPath,
   settlementReceiptPath,
@@ -30,7 +30,7 @@ export function DeclarationDetailBody({ detail }: { detail: DeclarationDetail })
   const target =
     item.route === "hk_transit"
       ? batch
-        ? settlementBatchListPath("", batch.batchNo)
+        ? settlementHkBatchPath(batch.id, item.stage === "remit")
         : settlementReceiptPath(item.consignee)
       : detail.documents.groupId
         ? directDocumentGroupPath(detail.documents.groupId)
