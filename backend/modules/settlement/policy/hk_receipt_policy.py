@@ -1,10 +1,10 @@
 """独立登记页核对规则：严格对平才允许提交，手续费超预警仅提醒。"""
 
 from backend.core.errors import ApiError
-from backend.core.names import normalize_name
 
 from .amount_policy import balance_check, money
 from .batch_selection_policy import validate_selection
+from .consignee_policy import consignee_key
 from .hk_workbench_policy import pending
 
 
@@ -17,7 +17,7 @@ def preview(rows, body, fee_alert, accounts, today):
             selection = validate_selection(rows, body.declarationNos)
         except ApiError as error:
             reason = error.message
-    names = {normalize_name(row["consignee"]) for row in rows if row["consignee"]}
+    names = {consignee_key(row["consignee"]) for row in rows if row["consignee"]}
     currencies = {row["currency"] for row in rows if row["currency"]}
     valid_scope = selection is not None
     total = selection[3] if selection else None

@@ -53,10 +53,18 @@ class DeclarationDetailService:
                 ]
                 evidence, balance = rules.direct_evidence(row, rows, direct_receipts)
             issue = state["issues"][0] if state and state["issues"] else ""
+            display = self.receivables.candidates.display_names(connection)
             return DeclarationDetail(
-                item=_item(row),
+                item=_item(display.display_consignee(row)),
                 steps=rules.steps(row, state),
-                batch=batch_detail(batch, linked, self.fee_alert, issue) if batch else None,
+                batch=batch_detail(
+                    display.display_consignee(batch),
+                    [display.display_consignee(item) for item in linked],
+                    self.fee_alert,
+                    issue,
+                )
+                if batch
+                else None,
                 allocations=evidence,
                 ledgerBalance=balance,
                 ledgerNote="同一境外收货人、收款抬头、币种，按出口日期和银行收汇日期先后推算；不保存人工分配关系。余额为全部历史出口减收汇，负数表示超收。"

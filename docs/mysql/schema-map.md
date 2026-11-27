@@ -3,7 +3,7 @@
 > 本文件由 `npm.cmd run db:map` 根据迁移链离线 MySQL DDL、实体定义和字段字典生成，请勿手工修改；迁移或实体变化后重新生成，`backend/tests/test_schema_map.py` 会检查是否过期。
 > “修改”含加列、改列、索引与中文备注；数据回填仅在线执行，不在离线 DDL 中体现。
 
-当前最新迁移：`0057_review_customs_import_jobs`；共 57 个迁移、78 张实体表。
+当前最新迁移：`0058_settlement_consignees`；共 58 个迁移、79 张实体表。
 
 ## 1. 按模块查表
 
@@ -126,6 +126,7 @@
 | `settlement_batch_items` | 结汇批次包含的报关单，金额按建批次时的海关回执冻结 | `0045` | — | [查看](current-data-dictionary.md#settlement_batch_items结汇批次明细) |
 | `settlement_batches` | 结汇批次：一笔回款及其对应的报关单合计、手续费与汇回记录 | `0045` | — | [查看](current-data-dictionary.md#settlement_batches结汇批次) |
 | `settlement_bills` | 结汇批次的提单文件及装运口岸、目的口岸、装船日期 | `0046` | `0050`、`0051` | [查看](current-data-dictionary.md#settlement_bills结汇批次提单) |
+| `settlement_consignees` | 结汇客户名称归并；香港客户展示由环境配置覆盖 | `0058` | — | **缺失** |
 | `settlement_contracts` | 结汇批次按模板生成的销售合同 PDF 及其生成依据 | `0046` | `0050`、`0051`、`0052` | [查看](current-data-dictionary.md#settlement_contracts结汇批次销售合同) |
 | `settlement_direct_allocations` | （无实体定义，代码不读写；说明见字段字典） | `0049` | — | [查看](current-data-dictionary.md#settlement_direct_allocations直接收汇历史分配) |
 | `settlement_document_group_items` | 直接收汇资料组成员，一张报关单只属于一组 | `0051` | `0052` | [查看](current-data-dictionary.md#settlement_document_group_items直接收汇资料组成员) |
@@ -194,3 +195,4 @@
 | [`0055_settlement_group_basis`](../../backend/migrations/versions/0055_settlement_group_basis.py) | — | `settlement_document_groups` | settlement：资料组人工更新来源的前后依据和操作者留痕。 |
 | [`0056_review_customs_difference_kinds`](../../backend/migrations/versions/0056_review_customs_difference_kinds.py) | — | `review_customs_receipts` | review：海关回执按差异类型计数与筛选（2026-11-25）。 |
 | [`0057_review_customs_import_jobs`](../../backend/migrations/versions/0057_review_customs_import_jobs.py) | `review_customs_import_jobs` | — | review：后台导入队列；回退前必须确认没有排队、运行或已完成的作业记录。 |
+| [`0058_settlement_consignees`](../../backend/migrations/versions/0058_settlement_consignees.py) | `settlement_consignees` | — | 结汇客户唯一名称；存量名称由应用在启动工作线程前幂等补齐。 |

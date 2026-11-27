@@ -5,13 +5,13 @@ import io
 import math
 
 from backend.core.errors import ApiError
-from backend.core.names import normalize_name
 
 from ..dao import batch_dao, batch_item_dao
 from ..mapper.batch_mapper import detail
 from ..policy import hk_workbench_policy as rules
 from ..policy.amount_policy import balance_check, money
 from ..policy.batch_state_policy import status_label
+from ..policy.consignee_policy import consignee_key
 from ..vo.hk_workbench_vo import HkExport, HkReceiptCheck, HkWorkbench
 from .batch_service import validate_selection
 from .receivable_service import china_today
@@ -74,6 +74,7 @@ class HkWorkbenchService:
         )
 
     def _selection(self, connection, body, today):
+        display = self.candidates.display_names(connection)
         declarations = self.candidates.load(connection, consignee=body.consignee, limit=None)
         pending = [
             row
@@ -91,11 +92,11 @@ class HkWorkbenchService:
         )
         _, heads = batch_dao.page(connection, {"route": "hk_transit"}, 0, None)
         items = batch_item_dao.of_batches(connection, [row["id"] for row in heads])
-        wanted = normalize_name(body.consignee)
+        wanted = consignee_key(body.consignee)
         heads = [
             row
             for row in heads
-            if (not wanted or wanted in normalize_name(row["consignee"]))
+            if (not wanted or wanted in consignee_key(row["consignee"]))
             and (
                 rules.matches(
                     row,
@@ -108,7 +109,11 @@ class HkWorkbenchService:
                 )
             )
         ]
-        return pending, heads, items
+        return (
+            [display.display_consignee(row) for row in pending],
+            [display.display_consignee(row) for row in heads],
+            {key: [display.display_consignee(row) for row in rows] for key, rows in items.items()},
+        )
 
     def preview(self, body):
         if self.engine is None:

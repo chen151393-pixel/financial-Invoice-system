@@ -50,8 +50,7 @@ def bank(amount, company="上海毅鑫", customer="ACME LTD", currency="USD"):
     }
 
 
-def test_direct_receipts_cover_earliest_exports_per_receiving_company(monkeypatch):
-    monkeypatch.setattr(rules, "normalize_name", lambda name: name.lower().replace(" ", ""))
+def test_direct_receipts_cover_earliest_exports_per_receiving_company():
     rows = [
         declaration("B", "300", "2026-10-20"),
         declaration("A", "500", "2026-10-01"),
@@ -63,8 +62,8 @@ def test_direct_receipts_cover_earliest_exports_per_receiving_company(monkeypatc
     # 先出口的 A 先收齐，B 收到余下的 100；毅烁的收汇只冲抵毅烁的出口
     assert received == {"A": Decimal("500"), "B": Decimal("100"), "C": Decimal("80")}
     assert overpaid == {
-        ("acmeltd", "USD", "上海毅烁"): Decimal("20"),
-        ("onlyreceipt", "USD", "上海毅鑫"): Decimal("40"),
+        ("ACMELTD", "USD", "上海毅烁"): Decimal("20"),
+        ("ONLYRECEIPT", "USD", "上海毅鑫"): Decimal("40"),
     }
 
 

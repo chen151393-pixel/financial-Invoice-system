@@ -101,9 +101,10 @@ def _rematch_batch(connection, receipt_ids, now, *, only_changed=False):
 
 
 class CustomsReceiptService:
-    def __init__(self, engine, *, task_reader=None):
+    def __init__(self, engine, *, task_reader=None, events=None):
         self.engine = engine
         self.task_reader = task_reader
+        self.events = events
 
     def _require_engine(self):
         if self.engine is None:
@@ -123,6 +124,17 @@ class CustomsReceiptService:
     def save_parsed(self, connection, parsed, filename, owner, now):
         """复用同步入库规则；异步作业将回执与完成结果放在同一事务中提交。"""
         outcomes = self._save(connection, parsed["declarations"], filename, owner, now)
+        if self.events is not None:
+            # 局部导入避免 public 门面加载其他 review 服务时形成初始化环。
+            from ..public import CustomsReceiptsSaved
+
+            self.events.publish(
+                connection,
+                CustomsReceiptsSaved(
+                    consignees=tuple(declaration["consignee"] for declaration in parsed["declarations"]),
+                    saved_at=now,
+                ),
+            )
         counts = {key: sum(1 for o in outcomes if o.result == key) for key in RESULT_LABELS}
         return CustomsImportResult(
             fileName=filename,

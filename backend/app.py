@@ -88,6 +88,12 @@ from .modules.settlement.service.bill_model_reader import BillModelReader as Set
 from .modules.settlement.service.bill_ocr import BillOcr as SettlementBillOcr
 from .modules.settlement.service.bill_service import BillService as SettlementBillService
 from .modules.settlement.service.candidate_service import CandidateService as SettlementCandidateService
+from .modules.settlement.service.consignee_service import (
+    initialize as initialize_settlement_consignees,
+)
+from .modules.settlement.service.consignee_service import (
+    on_customs_receipts_saved,
+)
 from .modules.settlement.service.contract_service import ContractService as SettlementContractService
 from .modules.settlement.service.declaration_detail_service import (
     DeclarationDetailService as SettlementDeclarationDetail,
@@ -218,6 +224,7 @@ def create_app(settings=None, ns=None, engine=None, wecom=None, lemon=None, lemo
     async def lifespan(_app):
         try:
             verify_database(engine)
+            await asyncio.to_thread(initialize_settlement_consignees, engine)
             app.state.contract_worker.start()
             app.state.wecom_directory_worker.start()
             app.state.signed_upload_worker.start()
@@ -321,6 +328,9 @@ def create_app(settings=None, ns=None, engine=None, wecom=None, lemon=None, lemo
 def create_events(*, writeback_queue_enabled=True):
     """关联写的订阅次序：任务生成/换版先于匹配重算，订阅方复用同一事务。"""
     events = EventBus()
+    from .modules.review.public import CustomsReceiptsSaved
+
+    events.subscribe(CustomsReceiptsSaved, on_customs_receipts_saved)
     events.subscribe(InvoiceMatchingChanged, partial(on_matching_changed, enabled=writeback_queue_enabled))
     events.subscribe(SourceChanged, partial(on_source_changed, events=events))
     events.subscribe(PurchaseBasisInvalidated, partial(ledger_service.on_basis_invalidated, events=events))
@@ -369,7 +379,7 @@ def _register_business(app, settings, ns, contract_ns, wecom, engine, lemon_invo
     app.state.review_calculations = CalculationService(review)
     app.state.review_calculation_worker = CalculationWorker(app.state.review_calculations)
     app.include_router(review_router(review))
-    customs_receipts = CustomsReceiptService(engine, task_reader=review_task_outcomes)
+    customs_receipts = CustomsReceiptService(engine, task_reader=review_task_outcomes, events=events)
     customs_imports = CustomsImportService(engine, customs_receipts, settings.customs_import_root)
     app.state.customs_import_worker = CustomsImportWorker(customs_imports)
     app.include_router(

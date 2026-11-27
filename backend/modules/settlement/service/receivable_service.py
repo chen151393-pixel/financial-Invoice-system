@@ -9,11 +9,11 @@ from decimal import Decimal
 from zoneinfo import ZoneInfo
 
 from backend.core.errors import ApiError
-from backend.core.names import normalize_name
 
 from ..dao import bank_receipt_dao, batch_dao, batch_item_dao, bill_dao, contract_dao, document_group_dao
 from ..policy import receivable_policy as rules
 from ..policy.amount_policy import money
+from ..policy.consignee_policy import consignee_key
 from ..policy.route_policy import DIRECT, HK_TRANSIT, ROUTE_LABELS
 from ..vo.receivable_vo import (
     ReceivableCustomer,
@@ -67,9 +67,11 @@ class ReceivableService:
             raise ApiError(503, "业务数据库未配置")
         with self.engine.connect() as connection:
             rows, overpaid, _, batches, items, today = self.snapshot(connection)
+            display = self.candidates.display_names(connection)
             selected = self._filter(rows, body)
             self._documents(connection, selected, batches, items)
 
+        selected = [display.display_consignee(row) for row in selected]
         shown = [row for row in selected if _stage_match(row, body.stage)]
         shown.sort(key=_work_order)
         return ReceivableList(
@@ -91,11 +93,11 @@ class ReceivableService:
             raise ApiError(503, "业务数据库未配置")
         with self.engine.connect() as connection:
             rows, _, _, _, _, today = self.snapshot(connection)
-        wanted = normalize_name(body.consignee)
+        wanted = consignee_key(body.consignee)
         selected = [
             row
             for row in rows
-            if (not wanted or wanted in normalize_name(row["consignee"]))
+            if (not wanted or wanted in consignee_key(row["consignee"]))
             and (not body.currency or body.currency.upper() == row["currency"])
         ]
         currencies, excluded = describe(selected)
@@ -160,10 +162,10 @@ class ReceivableService:
         return result, overpaid
 
     def _filter(self, rows, body):
-        wanted = normalize_name(body.consignee)
+        wanted = consignee_key(body.consignee)
         result = []
         for row in rows:
-            if wanted and wanted not in normalize_name(row["consignee"]):
+            if wanted and wanted not in consignee_key(row["consignee"]):
                 continue
             if body.currency and body.currency.upper() != row["currency"]:
                 continue
@@ -266,14 +268,14 @@ def _item(row):
 
 
 def _overpaid_of(overpaid, consignee, currency):
-    key = normalize_name(consignee)
+    key = consignee_key(consignee)
     return sum((value for (name, cur, _), value in overpaid.items() if name == key and cur == currency), ZERO)
 
 
 def _customers(rows, overpaid):
     groups = {}
     for row in rows:
-        key = (normalize_name(row["consignee"]), row["currency"])
+        key = (consignee_key(row["consignee"]), row["currency"])
         groups.setdefault(key, []).append(row)
     result = []
     for (_, currency), members in groups.items():
@@ -348,7 +350,7 @@ def _totals(rows, overpaid):
     result = []
     for currency in sorted({row["currency"] for row in rows if row["usable"]}):
         same = [row for row in rows if row["usable"] and row["currency"] == currency]
-        names = {normalize_name(row["consignee"]) for row in same if row["route"] == DIRECT}
+        names = {consignee_key(row["consignee"]) for row in same if row["route"] == DIRECT}
         extra = sum(
             (value for (name, cur, _), value in overpaid.items() if cur == currency and name in names), ZERO
         )

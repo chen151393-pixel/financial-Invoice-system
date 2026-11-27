@@ -12,6 +12,7 @@ from backend.core.names import normalize_name
 
 from ..dao import bank_receipt_dao
 from ..policy.amount_policy import money
+from ..policy.consignee_policy import consignee_key
 from ..policy.ledger_policy import (
     EXPORT,
     KIND_LABELS,
@@ -58,19 +59,24 @@ class LedgerService:
         if self.engine is None:
             raise ApiError(503, "业务数据库未配置")
         with self.engine.connect() as connection:
+            display = self.candidates.display_names(connection)
             declarations = self.candidates.load(connection, limit=None)
             receipts = bank_receipt_dao.all_receipts(connection)
         entries, skipped = [], []
         for row in declarations:
             if row["route"] != DIRECT:
                 continue
-            reason = row["currency_issue"] or ("" if row["consignee"] else "海关回执没有境外收货人")
+            reason = row["currency_issue"] or (
+                "" if consignee_key(row["consignee"]) else "海关回执没有境外收货人"
+            )
             if not reason and body.startDate and not row["export_date"]:
                 reason = "海关回执没有出口日期"
             if reason:
                 skipped.append(
                     LedgerSkipped(
-                        declarationNo=row["declaration_no"], consignee=row["consignee"], reason=reason
+                        declarationNo=row["declaration_no"],
+                        consignee=display.display_name(row["consignee"]),
+                        reason=reason,
                     )
                 )
                 continue
@@ -89,7 +95,7 @@ class LedgerService:
             by_recipient=body.byRecipient or bool(body.receivingCompany),
         )
         if body.consignee:
-            wanted = normalize_name(body.consignee)
+            wanted = consignee_key(body.consignee)
             groups = [group for group in groups if wanted in group["key"]]
         if body.company:
             company = normalize_name(body.company)
@@ -106,7 +112,7 @@ class LedgerService:
         return LedgerList(
             groups=[
                 LedgerGroup(
-                    consignee=group["consignee"],
+                    consignee=display.display_name(group["consignee"]),
                     receivingCompany=group["receiving_company"],
                     openingBalance=_amount(group["opening_balance"]),
                     currency=group["currency"],

@@ -25,7 +25,7 @@ def direct_evidence(row, rows, receipts):
     banks = [
         r
         for r in receipts
-        if (r["customer_key"], r["currency"], rules.normalize_name(r["receiving_company"])) == key
+        if rules.direct_key(r["customer_key"], r["currency"], r["receiving_company"]) == key
     ]
     banks.sort(key=lambda r: (r["receipt_date"] or date.min, r["id"]))
     remaining = [Decimal(r["amount"]) for r in banks]

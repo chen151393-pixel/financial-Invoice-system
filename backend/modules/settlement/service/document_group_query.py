@@ -3,6 +3,7 @@
 from backend.core.names import normalize_name
 
 from ..dao import document_group_dao as dao
+from ..policy.consignee_policy import consignee_key
 from ..vo.document_group_vo import DocumentGroupList
 
 
@@ -17,13 +18,13 @@ def _search_text(group, numbers, found):
 
 
 def query_groups(service, body):
-    keyword, consignee = normalize_name(body.keyword), normalize_name(body.consignee)
+    keyword, consignee = normalize_name(body.keyword), consignee_key(body.consignee)
     start = (body.page - 1) * body.pageSize
     with service.engine.connect() as connection:
         heads = [
             group
             for group in dao.all_groups(connection, body.grouping)
-            if not consignee or consignee in normalize_name(group["consignee"])
+            if not consignee or consignee in consignee_key(group["consignee"])
         ]
         if not heads:
             return DocumentGroupList(items=[], total=0, page=body.page, pageSize=body.pageSize)
@@ -45,8 +46,11 @@ def query_groups(service, body):
             group["id"]: service.source.context(group, members[group["id"]], found) for group in heads
         }
         states = service.reader.group_states(connection, contexts)
+        display = service.candidates.display_names(connection)
         result = [
-            service._view(connection, group, loaded=contexts[group["id"]], state=states[group["id"]])
+            service._view(
+                connection, group, loaded=contexts[group["id"]], state=states[group["id"]], display=display
+            )
             for group in heads
         ]
         if body.status != "all":

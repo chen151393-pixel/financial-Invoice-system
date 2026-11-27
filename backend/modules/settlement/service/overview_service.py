@@ -8,18 +8,18 @@ import math
 from decimal import Decimal
 
 from backend.core.errors import ApiError
-from backend.core.names import normalize_name
 
 from ..dao import bank_receipt_dao, batch_dao
 from ..policy import overview_insight_policy as insights
 from ..policy.amount_policy import money
+from ..policy.consignee_policy import consignee_key
 from ..policy.route_policy import DIRECT, HK_TRANSIT, ROUTE_LABELS
 from ..vo.ledger_vo import LedgerSkipped
 from ..vo.overview_vo import OverviewCustomer, OverviewList, OverviewRoute, OverviewTotal
 
 
 def _group(groups, route, consignee, currency):
-    key = (route, normalize_name(consignee), currency)
+    key = (route, consignee_key(consignee), currency)
     return groups.setdefault(
         key,
         {
@@ -73,6 +73,7 @@ class OverviewService:
         if self.engine is None:
             raise ApiError(503, "业务数据库未配置")
         with self.engine.connect() as connection:
+            display = self.candidates.display_names(connection)
             declarations = self.candidates.load(connection, limit=None)
             receipts = bank_receipt_dao.all_receipts(connection)
             batches = batch_dao.customer_receipts(connection)
@@ -80,11 +81,11 @@ class OverviewService:
             if self.receivables is not None:
                 snapshot, _, _, heads, items, today = self.receivables.snapshot(connection)
                 as_of = str(today)
-                wanted = normalize_name(body.consignee)
+                wanted = consignee_key(body.consignee)
                 snapshot = [
                     row
                     for row in snapshot
-                    if (not wanted or wanted in normalize_name(row["consignee"]))
+                    if (not wanted or wanted in consignee_key(row["consignee"]))
                     and (not body.currency or body.currency.upper() == row["currency"])
                 ]
                 # 仅核对当前范围内待办香港批次的资料，不读取直接收汇留存文件。
@@ -92,22 +93,26 @@ class OverviewService:
                 self.receivables._documents(connection, pending_docs, heads, items)
 
         groups, skipped = {}, []
-        wanted = normalize_name(body.consignee)
+        wanted = consignee_key(body.consignee)
 
         def matches(name, currency):
-            return (not wanted or wanted in normalize_name(name)) and (
+            return (not wanted or wanted in consignee_key(name)) and (
                 not body.currency or body.currency.upper() == currency
             )
 
         for row in declarations:
-            reason = row["currency_issue"] or ("" if row["consignee"] else "海关回执没有境外收货人")
+            reason = row["currency_issue"] or (
+                "" if consignee_key(row["consignee"]) else "海关回执没有境外收货人"
+            )
             if row["amount"] is None and not reason:
                 reason = "海关回执没有可用金额"
             if reason:
                 if matches(row["consignee"], row["currency"]):
                     skipped.append(
                         LedgerSkipped(
-                            declarationNo=row["declaration_no"], consignee=row["consignee"], reason=reason
+                            declarationNo=row["declaration_no"],
+                            consignee=display.display_name(row["consignee"]),
+                            reason=reason,
                         )
                     )
                 continue
@@ -130,7 +135,7 @@ class OverviewService:
         currencies = sorted({group["currency"] for group in groups.values()})
         selected = [g for g in groups.values() if matches(g["consignee"], g["currency"])]
         selected.sort(
-            key=lambda g: (g["currency"], -(g["declared"] - g["received"]), normalize_name(g["consignee"]))
+            key=lambda g: (g["currency"], -(g["declared"] - g["received"]), consignee_key(g["consignee"]))
         )
         total = len(selected)
         page = min(body.page, max(1, math.ceil(total / body.pageSize)))
@@ -146,7 +151,7 @@ class OverviewService:
         return OverviewList(
             items=[
                 OverviewCustomer(
-                    consignee=group["consignee"],
+                    consignee=display.display_name(group["consignee"]),
                     currency=group["currency"],
                     route=group["route"],
                     routeLabel=ROUTE_LABELS[group["route"]],

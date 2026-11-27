@@ -7,6 +7,8 @@ from ..entity.bank_receipt import settlement_bank_receipts as receipts
 
 def _conditions(filters):
     conditions = []
+    if filters.get("ids") is not None:
+        conditions.append(receipts.c.id.in_(filters["ids"]))
     if filters.get("customer"):
         conditions.append(receipts.c.customer_name.contains(filters["customer"], autoescape=True))
     if filters.get("receiving_company"):
@@ -62,6 +64,16 @@ def all_receipts(connection):
     """全部收汇记录，按收汇日期、主键升序；直接收汇明细汇总用。"""
     query = select(receipts).order_by(receipts.c.receipt_date, receipts.c.id)
     return [dict(row) for row in connection.execute(query).mappings()]
+
+
+def customers(connection):
+    """返回流水 ID 和实际客户原名；名称规则由服务层决定。"""
+    return connection.execute(select(receipts.c.id, receipts.c.customer_name)).all()
+
+
+def consignee_history(connection):
+    query = select(receipts.c.imported_at, receipts.c.id, receipts.c.customer_name)
+    return [(row.imported_at, "bank", row.id, row.customer_name) for row in connection.execute(query)]
 
 
 def by_import_keys(connection, keys):

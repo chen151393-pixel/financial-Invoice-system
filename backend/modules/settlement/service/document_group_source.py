@@ -3,10 +3,10 @@
 from decimal import Decimal
 
 from backend.core.errors import ApiError
-from backend.core.names import normalize_name
 
 from ..dao import document_group_dao as dao
 from ..dao.document_scope import DocumentGroupRef
+from ..policy.consignee_policy import consignee_key
 from ..policy.route_policy import DIRECT
 
 
@@ -49,7 +49,7 @@ class DocumentGroupSource:
                 )
             elif (
                 row["route"] != DIRECT
-                or normalize_name(row["consignee"]) != normalize_name(group["consignee"])
+                or consignee_key(row["consignee"]) != consignee_key(group["consignee"])
                 or row["currency"] != group["currency"]
                 or row["currency_issue"]
             ):

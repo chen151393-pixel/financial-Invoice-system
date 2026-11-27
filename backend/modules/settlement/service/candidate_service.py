@@ -7,13 +7,13 @@ from collections import defaultdict
 from decimal import Decimal
 
 from backend.core.errors import ApiError
-from backend.core.names import normalize_name
 from backend.modules.review.public import settlement_declarations
 from backend.modules.source.public import declarant_names_by_number, declaration_refs_by_number
 
-from ..dao import batch_dao, batch_item_dao
+from ..dao import batch_dao, batch_item_dao, consignee_dao
 from ..policy.amount_policy import money, suggest_combination
-from ..policy.route_policy import HK_TRANSIT, ROUTE_LABELS, hk_consignee_keys, route_of
+from ..policy.consignee_policy import ConsigneeDisplay, consignee_key, consignee_names
+from ..policy.route_policy import DEFAULT_HK_CONSIGNEES, HK_TRANSIT, ROUTE_LABELS, route_of
 from ..vo.batch_vo import Candidate, CandidateList, ConsigneeTotal, CurrencyTotal, RouteTotal
 
 # 页面一次最多列出的报关单张数；汇总不受此限制
@@ -36,7 +36,7 @@ def describe(rows, record_nos, export_companies, occupied, batch_nos, hk_keys):
         batch_id = occupied.get(row["declaration_no"])
         if batch_id is not None:
             blocked = f"已在结汇批次 {batch_nos.get(batch_id, batch_id)} 中"
-        elif not row["consignee"]:
+        elif not consignee_key(row["consignee"]):
             blocked = "海关回执没有境外收货人"
         result.append(
             {
@@ -57,7 +57,8 @@ def describe(rows, record_nos, export_companies, occupied, batch_nos, hk_keys):
 class CandidateService:
     def __init__(self, engine, *, hk_consignees=(), fee_alert=Decimal("50")):
         self.engine = engine
-        self.hk_keys = hk_consignee_keys(hk_consignees)
+        self.hk_names = consignee_names(hk_consignees or DEFAULT_HK_CONSIGNEES)
+        self.hk_keys = set(self.hk_names)
         self.fee_alert = fee_alert
 
     def _require_engine(self):
@@ -68,10 +69,18 @@ class CandidateService:
         """境外收货人的回款路径与依据；银行收汇、直接收汇明细复用同一判定。"""
         return route_of("", consignee, self.hk_keys)
 
+    def display_names(self, connection):
+        """一次读取名称档案，用于整个响应；避免逐行查询或跨请求缓存。"""
+        return ConsigneeDisplay({**consignee_dao.names(connection), **self.hk_names})
+
     def load(self, connection, *, numbers=None, consignee="", limit=CANDIDATE_LIMIT):
         """读取并判定候选报关单；建批次、直接收汇明细在各自连接中复用同一套规则。
         limit 为 None 时读取全部。"""
-        rows = settlement_declarations(connection, numbers=numbers, consignee=consignee, limit=limit)
+        # 名称格式比较属于结汇模块；先取完整候选再筛选，避免来源层按原始句点/空白漏单。
+        rows = settlement_declarations(connection, numbers=numbers, limit=None if consignee else limit)
+        if consignee:
+            wanted = consignee_key(consignee)
+            rows = [row for row in rows if wanted in consignee_key(row["consignee"])][:limit]
         numbers_found = [row["declaration_no"] for row in rows]
         occupied = batch_item_dao.active_by_numbers(connection, numbers_found)
         batch_nos = {}
@@ -91,6 +100,7 @@ class CandidateService:
         self._require_engine()
         with self.engine.connect() as connection:
             rows = self.load(connection, consignee=body.consignee, limit=None)
+            display = self.display_names(connection)
         if body.declarationNo:
             rows = [row for row in rows if body.declarationNo in row["declaration_no"]]
         if body.route != "all":
@@ -101,12 +111,13 @@ class CandidateService:
             rows = [row for row in rows if row["export_date"] and row["export_date"] <= body.exportTo]
         if body.batchStatus == "unbatched":
             rows = [row for row in rows if not row["batch_no"]]
+        rows = [display.display_consignee(row) for row in rows]
         open_rows = [row for row in rows if not row["blocked"]]
         # 只有香港中转的报关单可以选入批次
         batchable = [row for row in open_rows if row["handling"] == "batch"]
         suggestion, note = None, ""
         if body.targetAmount:
-            groups = {(row["consignee"], row["currency"]) for row in batchable}
+            groups = {(consignee_key(row["consignee"]), row["currency"]) for row in batchable}
             if len(groups) != 1:
                 note = "请先按境外收货人筛选到同一家香港中转收货人、同一币种，再推荐组合"
             else:
@@ -187,7 +198,7 @@ def _consignee_totals(rows):
     """按（境外收货人, 币种）汇总应收汇：张数、出口日期范围、金额，以及香港中转的建批次进度。"""
     groups = {}
     for row in rows:
-        key = (normalize_name(row["consignee"]), row["currency"])
+        key = (consignee_key(row["consignee"]), row["currency"])
         group = groups.setdefault(
             key,
             {

@@ -8,6 +8,11 @@ from decimal import Decimal
 from ..dao import customs_receipt_dao as dao
 
 
+def settlement_consignee_names(connection):
+    """现存回执名称及其当前格式的写入时间，供结汇初始化客户名称；不含金额、审核状态。"""
+    return dao.settlement_consignee_names(connection)
+
+
 def settlement_declarations(connection, *, numbers=None, consignee="", limit=500):
     """返回 [{receipt_id, revision, declaration_no, ns_declaration_id, consignee, export_date,
     sales_orders, currency, amount, currency_issue}]；多币种或缺总价时 amount 为 None 并给出原因。

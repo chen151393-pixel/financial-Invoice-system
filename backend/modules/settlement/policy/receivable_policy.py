@@ -13,6 +13,7 @@ from decimal import ROUND_HALF_UP, Decimal
 
 from backend.core.names import normalize_name
 
+from .consignee_policy import consignee_key
 from .route_policy import HK_TRANSIT
 
 ZERO = Decimal(0)
@@ -53,11 +54,11 @@ DOCUMENT_LABELS = {
 
 def usable(row):
     """金额、币制、收货人齐全的报关单才参与应收与已收计算。"""
-    return row["amount"] is not None and not row["currency_issue"] and bool(row["consignee"])
+    return row["amount"] is not None and not row["currency_issue"] and bool(consignee_key(row["consignee"]))
 
 
 def direct_key(consignee, currency, company):
-    return normalize_name(consignee), currency, normalize_name(company)
+    return consignee_key(consignee), currency, normalize_name(company)
 
 
 def _apply(rows, credit):
@@ -78,7 +79,7 @@ def direct_received(declarations, receipts):
     """
     credits = {}
     for row in receipts:
-        key = (row["customer_key"], row["currency"], normalize_name(row["receiving_company"]))
+        key = direct_key(row["customer_key"], row["currency"], row["receiving_company"])
         credits[key] = credits.get(key, ZERO) + Decimal(row["amount"])
     groups = {}
     for row in declarations:

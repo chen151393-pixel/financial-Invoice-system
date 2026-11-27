@@ -25,13 +25,17 @@ class HkReceiptService:
         if self.engine is None:
             raise ApiError(503, "业务数据库未配置")
         with self.engine.connect() as connection:
+            display = self.candidates.display_names(connection)
             rows = (
                 self.candidates.load(connection, numbers=body.declarationNos, limit=None)
                 if body.declarationNos
                 else []
             )
             accounts = hk_slip_dao.accounts(connection)
-        return HkRegistrationCheck(**preview(rows, body, self.fee_alert, accounts, self.today()))
+        result = preview(rows, body, self.fee_alert, accounts, self.today())
+        result["consignee"] = display.display_name(result["consignee"])
+        result["rows"] = [display.display_consignee(row) for row in result["rows"]]
+        return HkRegistrationCheck(**result)
 
     def register(self, body, owner):
         if owner.startswith("service:"):

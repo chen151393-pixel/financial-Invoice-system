@@ -18,6 +18,16 @@ def by_request(connection, request_id):
     return dict(row) if row else None
 
 
+def consignees(connection):
+    """返回批次 ID 和原始客户名称，供服务层按结汇名称规则确定筛选范围。"""
+    return connection.execute(select(batches.c.id, batches.c.consignee)).all()
+
+
+def consignee_history(connection):
+    query = select(batches.c.created_at, batches.c.id, batches.c.consignee)
+    return [(row.created_at, "batch", row.id, row.consignee) for row in connection.execute(query)]
+
+
 def insert_batch(connection, values, now):
     result = connection.execute(insert(batches).values(**values, created_at=now, updated_at=now))
     return result.inserted_primary_key[0]

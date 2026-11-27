@@ -1,10 +1,12 @@
 """review 模块对外门面：其他模块唯一可以导入的文件。"""
 
 from dataclasses import dataclass
+from datetime import datetime
 from decimal import Decimal
 
 from .service.basis_reader import basis_versions as basis_versions
 from .service.basis_reader import current_bases as current_bases
+from .service.settlement_reader import settlement_consignee_names as settlement_consignee_names
 from .service.settlement_reader import settlement_declaration_lines as settlement_declaration_lines
 from .service.settlement_reader import settlement_declarations as settlement_declarations
 from .service.workbench_reader import review_approval_times as review_approval_times
@@ -42,7 +44,21 @@ class ReviewApproved:
     lines: tuple[ApprovedLine, ...]
 
 
-__all__ = ["ApprovedLine", "ReviewApproved", "InvoiceReady", "PurchaseBasisInvalidated"]
+__all__ = [
+    "ApprovedLine",
+    "ReviewApproved",
+    "InvoiceReady",
+    "PurchaseBasisInvalidated",
+    "CustomsReceiptsSaved",
+]
+
+
+@dataclass(frozen=True)
+class CustomsReceiptsSaved:
+    """回执保存完成，在同一事务内通知订阅方登记客户名称；不代表审核通过。"""
+
+    consignees: tuple[str, ...]
+    saved_at: datetime
 
 
 @dataclass(frozen=True)

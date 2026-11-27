@@ -5,6 +5,7 @@ from backend.modules.review.public import settlement_declarations
 from backend.modules.source.public import declarant_names_by_number, declaration_refs_by_number
 
 from ..dao import party_dao
+from ..policy.consignee_policy import consignee_key
 from ..policy.contract_policy import document_key
 
 
@@ -28,10 +29,18 @@ def resolve(connection, items, planned, *, facts=None):
     receipts, refs, declarants, parties = (
         facts[key] for key in ("receipts", "refs", "declarants", "parties")
     )
+    buyer_parties = {}
+    for key, party in parties.items():
+        if normalized := consignee_key(key):
+            buyer_parties.setdefault(normalized, []).append(party)
     bindings, issues = {}, []
     for contract in planned:
         linked = contract["declaration_nos"]
-        buyers = _unique([receipts[number]["consignee"] for number in linked if number in receipts])
+        buyers = {
+            consignee_key(receipts[number]["consignee"]): receipts[number]["consignee"]
+            for number in linked
+            if number in receipts and consignee_key(receipts[number]["consignee"])
+        }
         sellers = _unique([declarants.get(number, "") for number in linked])
         missing_buyers = [number for number in linked if not receipts.get(number, {}).get("consignee")]
         missing_sellers = [
@@ -49,9 +58,12 @@ def resolve(connection, items, planned, *, facts=None):
             problems.append("关联 NS 报关单的申报抬头不一致，请拆分资料范围或核对来源")
         buyer_key = next(iter(buyers)) if len(buyers) == 1 and not missing_buyers else None
         seller_key = next(iter(sellers)) if len(sellers) == 1 and not missing_sellers else None
-        buyer = parties.get(buyer_key)
+        buyer_matches = buyer_parties.get(buyer_key, [])
+        buyer = buyer_matches[0] if len(buyer_matches) == 1 else None
         seller = parties.get(seller_key)
-        if buyer_key and buyer is None:
+        if len(buyer_matches) > 1:
+            problems.append("同一境外收货人匹配到多个买方合同抬头，请先核对抬头配置")
+        elif buyer_key and buyer is None:
             problems.append(f"未维护买方合同抬头：{buyers[buyer_key]}，请在合同抬头中补齐")
         if seller_key and seller is None:
             problems.append(f"未维护卖方合同抬头：{sellers[seller_key]}，须与 NS 申报抬头一致")

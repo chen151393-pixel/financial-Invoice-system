@@ -7,6 +7,8 @@
 
 from backend.core.names import normalize_name
 
+from .consignee_policy import consignee_key, consignee_names
+
 HK_TRANSIT = "hk_transit"
 DIRECT = "direct"
 ROUTE_LABELS = {HK_TRANSIT: "香港中转", DIRECT: "直接收汇"}
@@ -21,7 +23,7 @@ DEFAULT_HK_CONSIGNEES = (
 
 
 def hk_consignee_keys(names):
-    return {normalize_name(name) for name in (names or DEFAULT_HK_CONSIGNEES) if normalize_name(name)}
+    return set(consignee_names(names or DEFAULT_HK_CONSIGNEES))
 
 
 def route_of(trade_country, consignee, hk_keys):
@@ -31,6 +33,6 @@ def route_of(trade_country, consignee, hk_keys):
         if country in HK_COUNTRY_NAMES:
             return HK_TRANSIT, "贸易国为中国香港"
         return DIRECT, f"贸易国为{trade_country}"
-    if normalize_name(consignee) in hk_keys:
+    if consignee_key(consignee) in hk_keys:
         return HK_TRANSIT, "境外收货人为集团香港公司"
     return DIRECT, "境外收货人非集团香港公司"

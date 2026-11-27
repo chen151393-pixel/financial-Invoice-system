@@ -102,10 +102,13 @@ def test_runtime_owns_only_one_business_pool_and_releases_it(context, monkeypatc
     monkeypatch.setattr("backend.app.make_business_engine", factory)
     verified = []
     monkeypatch.setattr("backend.app.verify_database", lambda actual, **kwargs: verified.append(actual))
+    initialize_names = Mock()
+    monkeypatch.setattr("backend.app.initialize_settlement_consignees", initialize_names)
     settings = replace(context.settings, business_database_url="mysql+pymysql://user@localhost/business")
     with TestClient(create_app(settings, context.ns)):
         pass
     assert verified == [engine]
+    initialize_names.assert_called_once_with(engine)
     factory.assert_called_once_with(settings.business_database_url)
     engine.dispose.assert_called_once()
 
@@ -121,6 +124,23 @@ def test_startup_verification_failure_releases_unified_pool(context, monkeypatch
     monkeypatch.setattr("backend.app.verify_database", fail)
     settings = replace(context.settings, business_database_url="mysql+pymysql://user@localhost/business")
     with pytest.raises(RuntimeError, match="迁移版本"):
+        with TestClient(create_app(settings, context.ns)):
+            pass
+    engine.dispose.assert_called_once()
+
+
+def test_name_initialization_failure_releases_unified_pool(context, monkeypatch):
+    engine = Mock()
+    monkeypatch.setattr("backend.app.make_business_engine", lambda _url: engine)
+    monkeypatch.setattr("backend.app.verify_database", lambda _engine: None)
+
+    def fail(actual):
+        assert actual is engine
+        raise RuntimeError("模拟名称初始化失败")
+
+    monkeypatch.setattr("backend.app.initialize_settlement_consignees", fail)
+    settings = replace(context.settings, business_database_url="mysql+pymysql://user@localhost/business")
+    with pytest.raises(RuntimeError, match="模拟名称初始化失败"):
         with TestClient(create_app(settings, context.ns)):
             pass
     engine.dispose.assert_called_once()

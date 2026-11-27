@@ -1,5 +1,7 @@
 # review 模块：财务核对
 
+海关回执保存完成时发布 `CustomsReceiptsSaved`（境外收货人原名、保存时间），结汇模块在同一事务中登记客户名称；不代表审核通过。同步导入与后台导入复用 `save_parsed`，事件总线由应用装配注入；订阅方失败时回执与名称整体回滚。
+
 架构 v2 第 4b 步新建。财务按 source 模块已保存的报关单与关联子采购明细整单审核；审核通过后保存审核记录，冻结开票口径的审核行，并发布 `ReviewApproved` 事件。表结构见[数据库设计](../../../docs/architecture/database.md)（`review_records`、`review_lines`）。
 
 4d 已增加 `review_purchase_bases`、只读门面 `current_bases` / `basis_versions` 和 `PurchaseBasisInvalidated`。按全局子采购行冻结依据，同内容复用，来源关键变化重审；所有受影响报关记录进入待审核。

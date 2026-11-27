@@ -37,6 +37,7 @@ class DirectDocumentService:
         start = (body.page - 1) * body.pageSize
         keyword = normalize_name(body.keyword)
         with self.engine.connect() as connection:
+            display = self.candidates.display_names(connection)
             rows = self.candidates.load(connection, consignee=body.consignee, limit=None)
             candidates = []
             for row in rows:
@@ -90,7 +91,7 @@ class DirectDocumentService:
                         declarationNo=row["declaration_no"],
                         recordNo=row["record_no"],
                         salesOrders=row["sales_orders"],
-                        consignee=row["consignee"],
+                        consignee=display.display_name(row["consignee"]),
                         exportCompany=row["export_company"],
                         currency=row["currency"],
                         amount=str(money(row["amount"])) if row["amount"] is not None else "",

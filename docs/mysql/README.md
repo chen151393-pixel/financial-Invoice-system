@@ -4,7 +4,9 @@
 
 需要查看每张表用途和字段含义，先读[当前表设计与字段字典](current-data-dictionary.md)：按当前工作区实体与迁移整理 26 张业务表、422 个字段，另说明 `schema_version`。其中已定义但未接入的表单独标注；不代表已核实目标数据库部署状态。
 
-2026-10-15 的 4e 切换后，当前结构以[架构数据库设计](../architecture/database.md)为准。迁移统一位于 `backend/migrations`，从 `0001_baseline` 到 `0015_sync_comments`，版本表为 `schema_version`。`npm.cmd run db:upgrade` 支持空库初始化，也支持既存 v2 表的在线升级；`db:business:upgrade` 是同一入口的兼容别名。
+2026-10-15 的 4e 切换后，当前结构以[架构数据库设计](../architecture/database.md)为准。迁移统一位于 `backend/migrations`，从 `0001_baseline` 开始，最新版本见[表与迁移对照](schema-map.md)，版本表为 `schema_version`。`npm.cmd run db:upgrade` 支持空库初始化，也支持既存 v2 表的在线升级；`db:business:upgrade` 是同一入口的兼容别名。
+
+结汇客户名称归并的 [0058 手动增量 SQL](settlement-upgrade-0058-mysql80.sql) 仅适用于当前版本为 `0057_review_customs_import_jobs` 的 MySQL 8.0 业务库；执行后启动包含 0058 的新版应用，由应用幂等补齐存量名称。脚本不会改写原始回执、银行流水或批次；低版本须先补齐前置迁移。
 
 运行读取 `BUSINESS_DATABASE_URL` / `BUSINESS_MYSQL_*`。旧六表及双迁移链已退出代码，升级不会删除数据库中的旧表和数据。既存 v2 升级会保守补记版本与待复核状态，历史证据不会被当前数据冒充；操作与限制见[后端启动说明](../python-backend.md)。
 

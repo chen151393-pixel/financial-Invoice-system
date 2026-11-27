@@ -1,11 +1,11 @@
 """资料组合并资格（纯函数）：不按申报抬头限制，只按客户、币种、当前依据与占用校验。"""
 
-from backend.core.names import normalize_name
+from .consignee_policy import consignee_key
 
 
 def original_basis(row, group):
     if group and (
-        normalize_name(group["consignee"]) != normalize_name(row["consignee"])
+        consignee_key(group["consignee"]) != consignee_key(row["consignee"])
         or group["currency"] != row["currency"]
     ):
         return "原单票组的客户或币种依据已变化，请核对来源"
@@ -30,7 +30,7 @@ def checks(source, numbers, requested_count, rows, occupied, counts, shared_vali
         not eligibility(r, None, 0) and not original_basis(r, occupied.get(r["declaration_no"])) for r in rows
     )
     same_buyer = bool(rows) and all(
-        normalize_name(r["consignee"]) == normalize_name(source["consignee"]) for r in rows
+        consignee_key(r["consignee"]) == consignee_key(source["consignee"]) for r in rows
     )
     same_currency = bool(rows) and all(r["currency"] == source["currency"] for r in rows)
     free = all(counts.get(g["id"], 0) <= 1 for g in occupied.values())

@@ -10,6 +10,8 @@ from decimal import Decimal
 
 from backend.core.names import normalize_name
 
+from .consignee_policy import consignee_key
+
 EXPORT = "export"
 RECEIPT = "receipt"
 KIND_LABELS = {EXPORT: "出口", RECEIPT: "收汇"}
@@ -28,7 +30,7 @@ def export_entry(row):
     """候选报关单（直接收汇、金额有效）→ 出口流水。"""
     return {
         "kind": EXPORT,
-        "key": normalize_name(row["consignee"]),
+        "key": consignee_key(row["consignee"]),
         "name": row["consignee"],
         "currency": row["currency"],
         "date": row["export_date"],
@@ -45,7 +47,7 @@ def receipt_entry(row):
     """银行收汇记录 → 收汇流水，按实际客户归属。"""
     return {
         "kind": RECEIPT,
-        "key": row["customer_key"],
+        "key": consignee_key(row["customer_key"]),
         "name": row["customer_name"],
         "currency": row["currency"],
         "date": row["receipt_date"],

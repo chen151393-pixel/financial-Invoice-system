@@ -2,9 +2,8 @@
 
 from decimal import Decimal
 
-from backend.core.names import normalize_name
-
 from .amount_policy import money
+from .consignee_policy import consignee_key
 from .receivable_policy import SETTLED, STAGE_LABELS, received_percent
 from .settlement_progress_policy import percent
 
@@ -22,7 +21,7 @@ def customer_fields(group, rows):
         for row in rows
         if row["route"] == group["route"]
         and row["currency"] == group["currency"]
-        and normalize_name(row["consignee"]) == normalize_name(group["consignee"])
+        and consignee_key(row["consignee"]) == consignee_key(group["consignee"])
         and row["usable"]
     ]
     waiting = [row for row in members if row["stage"] != SETTLED]

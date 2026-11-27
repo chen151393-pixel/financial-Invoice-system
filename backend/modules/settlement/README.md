@@ -4,6 +4,16 @@
 
 报关应收汇通过 `DocumentReader.states(connection, contexts)` 批量读取提单、销售合同、来源、主体及归档状态；`contexts` 按香港批次 ID、直接收汇单号或 `DocumentGroupRef` 隔离。直接收汇资料组即使只命中部分列表成员，也读取完整组成员后判断资料状态。完整历史收汇推算、金额与资料齐全规则不变；不跨请求缓存，也不写主数据。专项验证见 `tests/test_navigation_query_performance.py`。
 
+## 客户名称格式归并（2026-11-27）
+
+应收客户汇总、收汇总览、直接收汇总账、逐单冲抵及流水解释共用 `policy/consignee_policy.py`：全半角统一后去除符号和空白、统一大写，只保留文字和数字后精确匹配。例如 `MECOLOUR DIGITAL TECHNOLOGY (HK) CO., LIMITED`、`Mecolour-Digital Technology/HK CO LIMITED.` 均归为 `MECOLOURDIGITALTECHNOLOGYHKCOLIMITED`。字母、数字或地区内容不同仍视为不同客户，不做相似度匹配。不同币种分别汇总；直接收汇冲抵仍严格区分收款抬头，不跨公司挪用到账金额。
+
+香港公司名单匹配、候选组合、香港登记选单、资料组客户一致性校验及工作区筛选使用相同规则。合同买方抬头按此规则匹配，命中多个档案时提示核对，不自动选取地址或印章；卖方抬头和收款公司的规则不变。名单 `SETTLEMENT_HK_CONSIGNEES` 仍须以英文分号分隔不同公司；公司名称自身的逗号不是分隔符。
+
+展示优先使用 `SETTLEMENT_HK_CONSIGNEES` 中的原始写法；同一匹配键重复配置时取第一项。其他直接收汇客户使用 `settlement_consignees` 中已登记的原名：匹配键存在就归入已有客户，首次出现才新增，后续格式变体不覆盖原名。表以匹配键作为主键；海关回执通过 `CustomsReceiptsSaved` 事件、银行流水通过导入 Service 在同一事务内登记，唯一键冲突时保留已有名称。查询只读取一次名称快照，不写表、不使用跨请求可变缓存。
+
+部署须先执行 `npm run db:upgrade`（新增 `0058_settlement_consignees`）。应用通过版本核验后、启动工作线程前，按现存回执、银行流水及批次中最早可用记录幂等补齐名称；同一时间按来源类型、记录 ID 确定顺序。此前已被覆盖且无历史记录的格式无法还原；已登记名称在后续启动和重导中保持不变。应收、总览、候选、逐单详情、资料组、香港登记与工作区、批次和银行流水响应统一展示口径；原始回执、冻结批次及银行流水名称不改写，合同正文仍使用维护的合同抬头。读取历史 `customer_key` 时使用同一匹配规则，银行导入去重摘要与三方代付标记保持原口径。修改 `.env` 后需重建应用容器以加载配置。专项测试见 `tests/settlement/test_consignee_identity.py`、`test_consignee_registry.py`；MySQL 并发专项需配置专用测试库，未配置时跳过。
+
 ## 职责
 
 报关之后的结汇：客户货款必须与报关金额一致。按报关单“贸易国”分两条回款路径：
@@ -20,6 +30,8 @@
 > 海关回执导入文件目前不含“贸易国”。未取得贸易国时，按境外收货人是否为集团香港公司判定（`SETTLEMENT_HK_CONSIGNEES`，分号分隔；为空时使用 `policy/route_policy.py` 内置名单）。NS 报关记录字段 `custrecord_swc_country_body`（值 95 为中国香港）同步进 source 后，可直接传入 `route_of()` 的 `trade_country`。
 
 ## 拥有的表
+
+- `settlement_consignees`：规范化匹配键与首次登记名称；香港显示由环境配置覆盖，后续格式变体不新增客户、不覆盖已有原名。
 
 直接收汇明细按境外收货人、收款抬头及币种对账。选择起止日时，开始日前的出口与到账累计差额为期初，起止日当天计入本期。出口使用海关回执出口日期，收汇使用银行实际入账日期。选择期间时，缺出口日期的报关单单独提示。
 
@@ -52,7 +64,7 @@
 - `source.public.declaration_refs_by_number`：真实报关单号 → NS CD 编号（展示）。
 - `source.public.declarant_names_by_number`：真实报关单号 → 申报主体名称（出口抬头）。
 
-不发布、不订阅事件；`public.py` 暂无对外函数。
+订阅 review 的 `CustomsReceiptsSaved`，在发布事务内登记客户名称；订阅只在 `app.py` 装配。不发布事件；`public.py` 暂无对外函数。
 
 ## 收汇总览（2026-11-19）
 

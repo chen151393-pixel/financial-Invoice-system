@@ -8,10 +8,10 @@ from sqlalchemy.exc import IntegrityError
 
 from backend.core import write_lock
 from backend.core.errors import ApiError
-from backend.core.names import normalize_name
 
 from ..dao import document_group_dao as dao
 from ..policy.amount_policy import money
+from ..policy.consignee_policy import consignee_key
 from ..policy.document_group_basis_policy import update_reason
 from ..policy.route_policy import DIRECT
 from ..vo.batch_vo import Action
@@ -54,7 +54,7 @@ class DocumentGroupService:
                     raise ApiError(422, "资料组只适用于直接收汇，香港中转请在香港批次办理")
                 if any(r["currency_issue"] or r["amount"] is None or not r["consignee"] for r in rows):
                     raise ApiError(422, "所选报关单的收货人、币种或金额依据不完整，请先核对回执")
-                if len({normalize_name(r["consignee"]) for r in rows}) != 1:
+                if len({consignee_key(r["consignee"]) for r in rows}) != 1:
                     raise ApiError(422, "同一资料组的报关单必须对应同一个境外收货人")
                 if len({r["currency"] for r in rows}) != 1:
                     raise ApiError(422, "同一资料组不能跨币种合并")
@@ -95,7 +95,8 @@ class DocumentGroupService:
 
         return query_groups(self, body)
 
-    def _view(self, connection, group, *, loaded=None, state=None):
+    def _view(self, connection, group, *, loaded=None, state=None, display=None):
+        display = display if display is not None else self.candidates.display_names(connection)
         if loaded is None:
             group = dao.resolve(connection, group["id"])
         if group is None:
@@ -108,7 +109,7 @@ class DocumentGroupService:
         return DocumentGroup(
             id=group["id"],
             groupNo=group["group_no"],
-            consignee=group["consignee"],
+            consignee=display.display_name(group["consignee"]),
             currency=group["currency"],
             amount=str(money(context["declared_total"])),
             members=[
@@ -116,7 +117,7 @@ class DocumentGroupService:
                     declarationNo=r["declaration_no"],
                     recordNo=r["record_no"],
                     exportDate=str(r["export_date"]) if r["export_date"] else "",
-                    consignee=r["consignee"],
+                    consignee=display.display_name(r["consignee"]),
                     exportCompany=r["export_company"],
                     currency=r["currency"],
                     amount=str(money(r["amount"])) if r["amount"] is not None else "",

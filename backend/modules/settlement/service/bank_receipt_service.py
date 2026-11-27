@@ -9,11 +9,13 @@ from backend.core.errors import ApiError
 from ..dao import bank_receipt_dao
 from ..dto.bank_receipt_dto import MAX_IMPORT_BYTES
 from ..policy.amount_policy import money
+from ..policy.consignee_policy import consignee_key
 from ..policy.receiving_company_policy import company_totals
 from ..policy.route_policy import ROUTE_LABELS
 from ..vo.bank_receipt_vo import BankReceipt, BankReceiptImportResult, BankReceiptList, BankReceiptTotal
 from .bank_receipt_parser import parse_bank_receipts
 from .bill_service import decode
+from .consignee_service import register
 
 THIRD_PARTY = {"all": None, "yes": True, "no": False}
 
@@ -41,7 +43,9 @@ class BankReceiptService:
                 key = row["import_key"]
                 stored = known.get(key)
                 if stored is not None:
-                    if any(stored[field] != row[field] for field in ("customer_key", "payer_key", "amount")):
+                    if consignee_key(stored["customer_key"]) != consignee_key(row["customer_key"]) or any(
+                        stored[field] != row[field] for field in ("payer_key", "amount")
+                    ):
                         raise ApiError(
                             409, f"第 {row['source_row']} 行与同一笔流水的客户、付款人或金额冲突，请核对"
                         )
@@ -50,6 +54,7 @@ class BankReceiptService:
                 added.append({**row, "source_file": filename, "imported_by": owner, "imported_at": now})
             if added:
                 bank_receipt_dao.insert_many(connection, added)
+            register(connection, (row["customer_name"] for row in entries), now)
         return BankReceiptImportResult(
             imported=len(added), duplicates=len(entries) - len(added), ignored=ignored
         )
@@ -58,7 +63,6 @@ class BankReceiptService:
         if self.engine is None:
             raise ApiError(503, "业务数据库未配置")
         filters = {
-            "customer": body.customer,
             "receiving_company": body.receivingCompany,
             "date_from": body.receiptFrom,
             "date_to": body.receiptTo,
@@ -66,6 +70,14 @@ class BankReceiptService:
         }
         page = body.page
         with self.engine.connect() as connection:
+            display = self.candidates.display_names(connection)
+            if body.customer:
+                wanted = consignee_key(body.customer)
+                filters["ids"] = [
+                    id_
+                    for id_, name in bank_receipt_dao.customers(connection)
+                    if wanted in consignee_key(name)
+                ]
             total, rows = bank_receipt_dao.page(
                 connection, filters, (page - 1) * body.pageSize, body.pageSize
             )
@@ -76,7 +88,7 @@ class BankReceiptService:
                 )
             totals = company_totals(bank_receipt_dao.totals(connection, filters))
         return BankReceiptList(
-            items=[self._view(row) for row in rows],
+            items=[self._view(row, display) for row in rows],
             total=total,
             page=page,
             pageSize=body.pageSize,
@@ -94,7 +106,7 @@ class BankReceiptService:
             ],
         )
 
-    def _view(self, row):
+    def _view(self, row, display):
         route, _ = self.candidates.route(row["customer_name"])
         return BankReceipt(
             id=row["id"],
@@ -103,7 +115,7 @@ class BankReceiptService:
             receivingCompany=row["receiving_company"],
             receivingAccount=row["receiving_account"] or "",
             payerName=row["payer_name"],
-            customerName=row["customer_name"],
+            customerName=display.display_name(row["customer_name"]),
             thirdParty=row["payer_key"] != row["customer_key"],
             currency=row["currency"],
             amount=str(money(row["amount"])),

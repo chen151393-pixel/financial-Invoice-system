@@ -237,3 +237,8 @@ def settlement_heads(connection, *, numbers=None, consignee="", limit=500):
     if limit is not None:
         query = query.limit(limit)
     return [dict(row) for row in connection.execute(query).mappings()]
+
+
+def settlement_consignee_names(connection):
+    query = select(receipts.c.imported_at, receipts.c.id, receipts.c.consignee)
+    return [(row.imported_at, "customs", row.id, row.consignee) for row in connection.execute(query)]

@@ -22,6 +22,7 @@ from ..mapper.batch_mapper import balances, detail, summary
 from ..policy.amount_policy import balance_check
 from ..policy.batch_selection_policy import validate_selection
 from ..policy.batch_state_policy import STATUS_LABELS, can_transition, status_label
+from ..policy.consignee_policy import consignee_key
 from ..policy.route_policy import HK_TRANSIT, ROUTE_LABELS
 from ..vo.batch_vo import BatchList, StatusCount
 
@@ -56,14 +57,18 @@ class BatchService:
         filters = {
             "route": None if body.route == "all" else body.route,
             "statuses": {"all": None, "open": OPEN_STATUSES}.get(body.status, (body.status,)),
-            "consignee": body.consignee,
             "batch_no": body.batchNo,
             "received_from": body.receivedFrom,
             "received_to": body.receivedTo,
         }
         with self.engine.connect() as connection:
+            display = self.candidates.display_names(connection)
             if body.declarationNo:
                 filters["ids"] = batch_item_dao.batch_ids_by_declaration(connection, body.declarationNo)
+            if body.consignee:
+                wanted = consignee_key(body.consignee)
+                ids = {id_ for id_, name in batch_dao.consignees(connection) if wanted in consignee_key(name)}
+                filters["ids"] = sorted(ids.intersection(filters.get("ids", ids)))
             total, rows = batch_dao.page(connection, filters, (body.page - 1) * body.pageSize, body.pageSize)
             if rows == [] and total and body.page > 1:
                 last = math.ceil(total / body.pageSize)
@@ -71,7 +76,10 @@ class BatchService:
             items = batch_item_dao.of_batches(connection, [row["id"] for row in rows])
             counts = batch_dao.status_counts(connection, filters)
         return BatchList(
-            items=[summary(row, len(items.get(row["id"], [])), self.fee_alert) for row in rows],
+            items=[
+                summary(display.display_consignee(row), len(items.get(row["id"], [])), self.fee_alert)
+                for row in rows
+            ],
             total=total,
             page=body.page,
             pageSize=body.pageSize,
@@ -227,12 +235,18 @@ class BatchService:
             return self._detail(connection, batch_id)
 
     def _detail(self, connection, batch_id):
+        display = self.candidates.display_names(connection)
         batch = batch_dao.get(connection, batch_id)
         items = batch_item_dao.of_batches(connection, [batch_id])[batch_id]
         issue = ""
         if batch["status"] == "collected":
             issue = self.documents.blocking_reason(connection, batch, items)
-        view = detail(batch, items, self.fee_alert, issue)
+        view = detail(
+            display.display_consignee(batch),
+            [display.display_consignee(item) for item in items],
+            self.fee_alert,
+            issue,
+        )
         slip = hk_slip_dao.get(connection, batch_id)
         if slip:
             view.receivedSlipName = slip["file_name"]

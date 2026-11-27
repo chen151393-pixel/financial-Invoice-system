@@ -3,7 +3,8 @@
 from decimal import Decimal
 
 from backend.core.errors import ApiError
-from backend.core.names import normalize_name
+
+from .consignee_policy import consignee_key
 
 
 def _single(values, label):
@@ -27,7 +28,7 @@ def validate_selection(rows, numbers):
     if ledger:
         raise ApiError(422, "直接收汇的报关单不建批次，请在“直接收汇明细”核对：" + "、".join(ledger))
     route = _single((row["route"] for row in chosen), "回款路径")
-    _single((normalize_name(row["consignee"]) for row in chosen), "境外收货人")
+    _single((consignee_key(row["consignee"]) for row in chosen), "境外收货人")
     currency = _single((row["currency"] for row in chosen), "币种")
     total = sum((row["amount"] for row in chosen), Decimal(0))
     return route, chosen[0]["consignee"], currency, total

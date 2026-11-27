@@ -19,6 +19,7 @@ from ..dao import document_group_dao as dao
 from ..dto.document_reference import DocumentGroupRef
 from ..policy import document_merge_policy as rules
 from ..policy.amount_policy import money
+from ..policy.consignee_policy import consignee_key
 from ..policy.contract_policy import document_key, plan
 from ..vo.batch_vo import Action
 from ..vo.document_group_vo import DocumentGroupMember
@@ -54,12 +55,13 @@ class DocumentMergeService:
     def query(self, body):
         self.groups._require_engine()
         with self.engine.connect() as connection:
+            display = self.candidates.display_names(connection)
             source = self._source(connection, body.sourceDeclarationNo)
             rows = [
                 r
                 for r in self.candidates.load(connection, consignee=source["consignee"], limit=None)
                 if r["route"] == "direct"
-                and normalize_name(r["consignee"]) == normalize_name(source["consignee"])
+                and consignee_key(r["consignee"]) == consignee_key(source["consignee"])
                 and r["currency"] == source["currency"]
             ]
             occupied = dao.by_numbers(connection, [r["declaration_no"] for r in rows])
@@ -85,7 +87,7 @@ class DocumentMergeService:
                     for b in bill_dao.active(connection, scope)
                 )
                 item = MergeCandidate(
-                    **member(row),
+                    **member(display.display_consignee(row)),
                     groupId=group["id"] if group else None,
                     groupNo=group["group_no"] if group else "",
                     source=number == body.sourceDeclarationNo,
@@ -122,6 +124,7 @@ class DocumentMergeService:
             return self._preview(connection, body)[0]
 
     def _preview(self, connection, body):
+        display = self.candidates.display_names(connection)
         source = self._source(connection, body.sourceDeclarationNo)
         numbers = sorted(set(body.declarationNos))
         rows = self.candidates.load(connection, numbers=numbers, limit=None)
@@ -183,7 +186,7 @@ class DocumentMergeService:
             json.dumps(signature, ensure_ascii=False, sort_keys=True, default=str).encode()
         ).hexdigest()
         preview = DocumentMergePreview(
-            selected=[DocumentGroupMember(**member(r)) for r in rows],
+            selected=[DocumentGroupMember(**member(display.display_consignee(r))) for r in rows],
             selectedCount=len(numbers),
             currency=source["currency"],
             amount=str(money(total)) if total is not None else "",
