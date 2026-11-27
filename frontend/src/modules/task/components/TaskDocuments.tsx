@@ -1,15 +1,9 @@
-import { Button } from "../../../shared/components/Button";
-import type { DeclarationDocumentType, TaskDetail, TaskDocument } from "../types/task";
+import { Badge } from "../../../shared/components/ui";
+import type { DeclarationDocumentType, TaskDetail } from "../types/task";
 import { DeclarationDocuments } from "./DeclarationDocuments";
-import { formatTime } from "./format";
+import { PurchaseContracts } from "./PurchaseContracts";
 import { SignedContracts } from "./SignedContracts";
-
-function documentStatus(doc: TaskDocument) {
-  if (doc.status === "ready")
-    return `已保存到共享盘 · ${formatTime(doc.archivedAt!)} · NS ${doc.environment} / ${doc.nsId}`;
-  if (doc.status === "failed") return `保存失败：${doc.error || "请重试"}`;
-  return `待保存 · NS 环境 ${doc.environment || "未配置"}`;
-}
+import "./task-materials.css";
 
 export function TaskDocuments({
   detail,
@@ -17,55 +11,37 @@ export function TaskDocuments({
   onPrepare,
   onRetryDeclaration,
   onUploadSigned,
-  onNotify,
 }: {
   detail: TaskDetail;
   busy: string | null;
   onPrepare: (orderId: string) => void;
-  onRetryDeclaration: (type: DeclarationDocumentType) => void;
+  onRetryDeclaration: (type: DeclarationDocumentType, taskId?: string) => void;
   onUploadSigned: () => void;
-  onNotify: () => void;
 }) {
-  const superseded = detail.sourceStatus === "superseded";
+  const preparation = detail.preparation;
   return (
-    <div className="itd-content">
-      <div>
-        <h3>子采购合同</h3>
-        <p className="it-help">
-          合同保存到共享盘“月份/CD号_真实报关单号”文件夹，文件名为“子采购单号_供应商简称_真实报关单号.pdf”；全部保存后即可通知供应商。
-        </p>
-      </div>
-      {detail.documents.length === 0 && <p>此任务没有可下载的子采购订单。</p>}
-      {detail.documents.map((doc) => (
-        <div key={doc.orderId} className="itd-document">
-          <span className="itd-file-type" aria-hidden="true">
-            PDF
-          </span>
-          <div className="itd-document__info">
-            <strong>{doc.orderNumber || "子采购单编号缺失"}</strong>
-            <p>{documentStatus(doc)}</p>
-            <p>{doc.prepare.reason}</p>
-            {doc.archivePath && <p className="it-reference">保存路径：{doc.archivePath}</p>}
-          </div>
-          {doc.status !== "ready" && (
-            <Button
-              variant="primary"
-              disabled={!doc.prepare.allowed || busy !== null}
-              onClick={() => onPrepare(doc.orderId)}
-            >
-              {busy === doc.orderId ? "正在保存到共享盘…" : "保存到共享盘"}
-            </Button>
-          )}
+    <div className="it-materials">
+      <section className="it-materials__section" aria-label="子采购合同">
+        <div className="it-materials__heading">
+          <h4>子采购合同</h4>
+          <Badge tone={preparation?.contractsReady ? "success" : "warning"}>
+            {preparation?.contractSummary || "归档数量待获取"}
+          </Badge>
+          <span className="it-help">生成通知时带入本次通知范围的全部合同</span>
         </div>
-      ))}
+        <PurchaseContracts documents={detail.documents} busy={busy} onPrepare={onPrepare} pathOnly />
+      </section>
       <DeclarationDocuments
-        documents={detail.declarationDocuments}
+        groups={detail.declarationRows || []}
+        count={preparation?.declarationCount}
         busy={busy}
         onRetry={onRetryDeclaration}
       />
       <SignedContracts
         contracts={detail.signedContracts}
-        disabled={superseded || busy !== null}
+        summary={preparation?.signedSummary}
+        pendingCount={preparation?.signedPendingCount}
+        disabled={detail.sourceStatus === "superseded" || busy !== null}
         onUpload={onUploadSigned}
       />
       {detail.reasons.map((reason) => (
@@ -73,13 +49,6 @@ export function TaskDocuments({
           {reason}
         </p>
       ))}
-      <div className="itd-next">
-        <div>
-          <h3>下一步：通知供应商开票</h3>
-          <p>{detail.notify.reason}</p>
-        </div>
-        <Button onClick={onNotify}>通知供应商</Button>
-      </div>
     </div>
   );
 }

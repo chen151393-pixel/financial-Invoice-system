@@ -99,6 +99,24 @@ def ids(connection, receipt_ids=None, *, lock=False):
     return [dict(row) for row in connection.execute(query).mappings()]
 
 
+def import_history(connection, page, page_size):
+    """按文件、身份和入库时间归组当前保留的回执来源，由数据库分页。"""
+    grouped = select(
+        receipts.c.file_name,
+        receipts.c.imported_by,
+        receipts.c.imported_at,
+        func.count().label("receipt_count"),
+        func.max(receipts.c.id).label("last_id"),
+    ).group_by(receipts.c.file_name, receipts.c.imported_by, receipts.c.imported_at)
+    total = connection.execute(select(func.count()).select_from(grouped.subquery())).scalar_one()
+    query = (
+        grouped.order_by(receipts.c.imported_at.desc(), func.max(receipts.c.id).desc())
+        .offset((page - 1) * page_size)
+        .limit(page_size)
+    )
+    return total, [dict(row) for row in connection.execute(query).mappings()]
+
+
 def _conditions(filters):
     conditions = []
     if filters.get("exact_number"):

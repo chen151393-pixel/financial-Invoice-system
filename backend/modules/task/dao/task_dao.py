@@ -5,6 +5,16 @@ from sqlalchemy import desc, false, func, insert, or_, select, update
 from ..entity import task_lines, tasks
 
 GROUP_COLUMNS = {"supplier": tasks.c.supplier_id, "declaration": tasks.c.customs_declaration_id}
+BOARD_COLUMNS = (
+    tasks.c.id,
+    tasks.c.ns_account,
+    tasks.c.supplier_id,
+    tasks.c.company_id,
+    tasks.c.currency,
+    tasks.c.customs_declaration_id,
+    tasks.c.status,
+    tasks.c.created_at,
+)
 
 
 def insert_task(connection, values, now):
@@ -133,10 +143,16 @@ def in_groups(connection, where, group_by, keys):
     return [dict(row) for row in connection.execute(query).mappings()]
 
 
-def by_statuses(connection, where, statuses, *, offset=None, limit=None, newest_first=False):
+def by_statuses(
+    connection, where, statuses, *, offset=None, limit=None, newest_first=False, heads_only=False
+):
     """符合条件且处于给定状态的任务；采购任务台默认等待最久（编号最小）的在前。"""
     order = tasks.c.id.desc() if newest_first else tasks.c.id
-    query = select(tasks).where(*where, tasks.c.status.in_(statuses)).order_by(order)
+    query = (
+        select(*(BOARD_COLUMNS if heads_only else (tasks,)))
+        .where(*where, tasks.c.status.in_(statuses))
+        .order_by(order)
+    )
     if limit is not None:
         query = query.offset(offset or 0).limit(limit)
     return [dict(row) for row in connection.execute(query).mappings()]

@@ -2,6 +2,7 @@
 
 import base64
 import io
+from datetime import datetime
 from decimal import Decimal
 
 import pytest
@@ -21,6 +22,7 @@ from backend.tests.test_schema_baseline import schema_engine as schema_engine
 from backend.tests.test_source_storage import bundle, customs, purchase, save
 from backend.tests.test_source_storage import ns as ns
 from openpyxl import Workbook
+from sqlalchemy import text
 
 HEADERS = [
     "出口报关单号",
@@ -297,6 +299,58 @@ def test_parse_accepts_csv_with_title_row():
 
 def _import(service, rows, filename="回执.xlsx"):
     return service.import_file(CustomsImportRequest(filename=filename, content=xlsx(rows)), "admin")
+
+
+def test_import_history_groups_sources_paginates_and_resolves_actor(schema_engine, monkeypatch):
+    from backend.modules.identity.dao import user_dao
+    from backend.modules.review.service import customs_receipt_service
+
+    service = CustomsReceiptService(schema_engine)
+    assert service.import_history().total == 0
+    actor = "user:fs:customs-importer"
+    for day in range(21, 27):
+        now = datetime(2026, 11, day, 2, 17, 41)
+        monkeypatch.setattr(customs_receipt_service, "_now", lambda value=now: value)
+        rows = [row(f"REAL{day}", "01", "相纸", "张", 1)]
+        if day == 26:
+            rows.append(row("SECOND26", "01", "相纸", "张", 2))
+        service.import_file(
+            CustomsImportRequest(filename=f"导出{day}.xlsx", content=xlsx(rows)),
+            actor if day == 26 else "admin",
+        )
+    with schema_engine.begin() as connection:
+        user_dao.save(
+            connection,
+            {
+                "user_id": "customs-importer",
+                "open_id": None,
+                "union_id": None,
+                "name": "王燕",
+                "avatar_url": None,
+                "active": False,
+                "inactive_reason": "已停用",
+            },
+            now,
+        )
+    first = service.import_history()
+    assert (first.total, first.page, first.pageSize, first.pages) == (6, 1, 5, 2)
+    assert [item.fileName for item in first.items] == [f"导出{day}.xlsx" for day in range(26, 21, -1)]
+    latest = first.items[0]
+    assert (latest.importedBy, latest.importedByName, latest.receiptCount) == (actor, "王燕", 2)
+    assert latest.importedAt == "2026-11-26T02:17:41+00:00"
+    second = service.import_history(2)
+    assert len(second.items) == 1 and second.items[0].fileName == "导出21.xlsx"
+    assert second.items[0].importedByName == "admin"
+    assert service.browse(CustomsReceiptQuery(exactDeclarationNo="REAL21")).total == 1
+    assert service.import_history().total == 6
+    with pytest.raises(ApiError):
+        _import(service, [row("BAD", "01", "相纸", "", 1)], "失败.xlsx")
+    assert service.import_history().total == 6
+    # 来源仅由当前保留的回执恢复，已删除数据不继续出现在记录区。
+    with schema_engine.begin() as connection:
+        connection.execute(text("DELETE FROM review_customs_receipt_lines"))
+        connection.execute(text("DELETE FROM review_customs_receipts"))
+    assert service.import_history().items == []
 
 
 def test_import_matches_ns_declaration_and_saves_consignee(schema_engine, ns):

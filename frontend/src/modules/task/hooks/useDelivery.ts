@@ -23,10 +23,18 @@ export function useDelivery(
   }, [id]);
   useEffect(() => {
     const epoch = ++current.current;
-    void api
-      .getDeliveries(id)
+    void Promise.resolve()
+      .then(() => {
+        if (current.current !== epoch) return null;
+        setItems([]);
+        setLoading(true);
+        setError("");
+        setPreview(null);
+        setCandidates(null);
+        return api.getDeliveries(id);
+      })
       .then((data) => {
-        if (current.current === epoch) setItems(data.items);
+        if (data && current.current === epoch) setItems(data.items);
       })
       .catch((err: unknown) => {
         if (current.current === epoch) setError(err instanceof Error ? err.message : "发送记录读取失败");

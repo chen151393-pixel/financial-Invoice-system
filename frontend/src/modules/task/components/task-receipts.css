@@ -1,0 +1,29 @@
+.it-receipts__content {
+  display: grid;
+  gap: 18px;
+  min-width: 0;
+}
+.it-receipts__metrics .ui-metric-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+.it-receipts__metrics .ui-metric {
+  gap: 6px;
+  padding: 12px;
+  border: 0;
+  border-radius: var(--radius-control);
+  background: var(--color-canvas);
+  box-shadow: none;
+}
+.it-receipts__metrics .ui-metric__value strong {
+  font-size: 14px;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+.it-receipts__metrics .ui-metric__bottom {
+  display: none;
+}
+@media (max-width: 600px) {
+  .it-receipts__metrics .ui-metric-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

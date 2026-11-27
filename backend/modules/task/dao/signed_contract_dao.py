@@ -12,6 +12,15 @@ def by_orders(connection, order_ids):
     return {row["purchase_order_id"]: dict(row) for row in connection.execute(query).mappings()}
 
 
+def saved_orders(connection, order_ids):
+    if not order_ids:
+        return set()
+    query = select(signed_contracts.c.purchase_order_id).where(
+        signed_contracts.c.purchase_order_id.in_(order_ids)
+    )
+    return set(connection.execute(query).scalars())
+
+
 def get(connection, order_id, *, lock=False):
     query = select(signed_contracts).where(signed_contracts.c.purchase_order_id == order_id)
     if lock:

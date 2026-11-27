@@ -1,5 +1,4 @@
-import { http, HttpError } from "../../../shared/api/http";
-import { openLocalSession } from "../../identity/api";
+import { http } from "../../../shared/api/http";
 import type { InvoiceTotals, InvoiceTotalsFilters } from "../types/invoice-totals";
 import type { ManualOrderBody, ManualOrderCandidates } from "../types/manual-order";
 import type { OrderCandidates, OrderConfirmBody } from "../types/order-matching";
@@ -19,48 +18,47 @@ export type { InvoiceTotals } from "../types/invoice-totals";
 
 const allocation = (id: string) => `/matching/allocations/${encodeURIComponent(id)}`;
 
-// 只读查询允许会话失效后恢复一次；写操作不自动重试，结果不明时由用户刷新核实。
-async function read<T>(path: string, method = "GET", body?: unknown): Promise<T> {
-  try {
-    return await http<T>(path, method, body);
-  } catch (error) {
-    if (!(error instanceof HttpError) || error.status !== 401) throw error;
-    await openLocalSession();
-    return http<T>(path, method, body);
-  }
-}
-
-export const getInvoiceMatching = (invoiceId: string) =>
-  read<InvoiceMatching>(`/matching/invoices/${encodeURIComponent(invoiceId)}`);
+export const getInvoiceMatching = (invoiceId: string, signal?: AbortSignal) =>
+  http<InvoiceMatching>(`/matching/invoices/${encodeURIComponent(invoiceId)}`, "GET", undefined, signal);
 
 export const findOrderCandidates = (body: { invoiceId: string; keyword: string; page: number }) =>
-  read<OrderCandidates>("/matching/order-candidates/query", "POST", body);
+  http<OrderCandidates>("/matching/order-candidates/query", "POST", body);
 
 export const confirmOrder = (body: OrderConfirmBody) =>
   http<InvoiceMatching>("/matching/orders/confirm", "POST", body);
 // 日期为空时提交 null，由后端按"不限"处理
-export const getMatchingQueue = (query: QueueQuery) =>
-  read<InvoiceQueue>("/matching/invoice-queue/query", "POST", {
-    ...query,
-    invoiceFrom: query.invoiceFrom || null,
-    invoiceTo: query.invoiceTo || null,
-  });
+export const getMatchingQueue = (query: QueueQuery, signal?: AbortSignal) =>
+  http<InvoiceQueue>(
+    "/matching/invoice-queue/query",
+    "POST",
+    {
+      ...query,
+      invoiceFrom: query.invoiceFrom || null,
+      invoiceTo: query.invoiceTo || null,
+    },
+    signal,
+  );
 // 进项发票列表按匹配状态筛选；日期为空时提交 null，由后端按“不限”处理
-export const queryInvoiceMatchList = <List>(filters: InvoiceMatchFilters) =>
-  read<InvoiceMatchList<List>>("/matching/invoices/query", "POST", {
-    q: filters.q,
-    invoice_no: filters.invoice_no,
-    seller_name: filters.seller_name,
-    seller_tax_no: filters.seller_tax_no,
-    account: filters.account,
-    status: filters.status,
-    date_from: filters.date_from || null,
-    date_to: filters.date_to || null,
-    matchStatus: filters.matchStatus,
-    page: filters.page,
-    page_size: filters.pageSize,
-  });
-export function getInvoiceTotals(filters: InvoiceTotalsFilters) {
+export const queryInvoiceMatchList = <List>(filters: InvoiceMatchFilters, signal?: AbortSignal) =>
+  http<InvoiceMatchList<List>>(
+    "/matching/invoices/query",
+    "POST",
+    {
+      q: filters.q,
+      invoice_no: filters.invoice_no,
+      seller_name: filters.seller_name,
+      seller_tax_no: filters.seller_tax_no,
+      account: filters.account,
+      status: filters.status,
+      date_from: filters.date_from || null,
+      date_to: filters.date_to || null,
+      matchStatus: filters.matchStatus,
+      page: filters.page,
+      page_size: filters.pageSize,
+    },
+    signal,
+  );
+export function getInvoiceTotals(filters: InvoiceTotalsFilters, signal?: AbortSignal) {
   const params = new URLSearchParams();
   for (const key of [
     "q",
@@ -73,11 +71,11 @@ export function getInvoiceTotals(filters: InvoiceTotalsFilters) {
     "date_to",
   ] as const)
     if (filters[key]) params.set(key, filters[key]);
-  return read<InvoiceTotals>(`/matching/invoice-totals?${params}`);
+  return http<InvoiceTotals>(`/matching/invoice-totals?${params}`, "GET", undefined, signal);
 }
 // 手动关联候选：一行一张整张子采购单
 export const findManualOrders = (invoiceId: string, invoiceItemId: string, keyword: string) =>
-  read<ManualOrderCandidates>("/matching/manual-orders/candidates/query", "POST", {
+  http<ManualOrderCandidates>("/matching/manual-orders/candidates/query", "POST", {
     invoiceId,
     invoiceItemId,
     keyword,

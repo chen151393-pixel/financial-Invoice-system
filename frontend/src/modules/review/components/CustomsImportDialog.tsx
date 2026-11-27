@@ -3,6 +3,8 @@ import { Alert, Button, Dialog, FileDropzone } from "../../../shared/components/
 import { importCustomsReceipt } from "../customs-api";
 import type { CustomsImportJob } from "../customs-types";
 import { CustomsImportJobs } from "./CustomsImportJobs";
+import { useCustomsLastImport } from "../useCustomsLastImport";
+import { CustomsLastImport } from "./CustomsLastImport";
 
 type FileOutcome = { name: string; kind: "queued" } | { name: string; kind: "failed"; message: string };
 
@@ -28,6 +30,12 @@ export function CustomsImportDialog({
   const [outcomes, setOutcomes] = useState<FileOutcome[]>([]);
   const [busy, setBusy] = useState(false);
   const sending = useRef(false);
+  const completedImports = jobs
+    .filter((job) => job.status === "completed")
+    .map((job) => job.id)
+    .sort()
+    .join(",");
+  const lastImport = useCustomsLastImport(completedImports);
 
   async function upload() {
     if (sending.current || !files.length) return;
@@ -68,6 +76,7 @@ export function CustomsImportDialog({
           disabled={busy}
           onFiles={(picked) => setFiles(picked)}
         />
+        <CustomsLastImport state={lastImport.state} disabled={busy} onRetry={lastImport.reload} />
         {files.length > 0 && (
           <p className="cm-import__picked">
             已选择 {files.length} 个文件：{files.map((file) => file.name).join("、")}

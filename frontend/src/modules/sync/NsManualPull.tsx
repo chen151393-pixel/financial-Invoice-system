@@ -1,5 +1,4 @@
 import { useEffect, useState } from "react";
-import { openLocalSession } from "../identity/api";
 import { Button } from "../../shared/components/Button";
 import { getSources, type Sources, type SourceKind } from "./api";
 import { PullPanel } from "./PullPanel";
@@ -14,10 +13,10 @@ export function NsManualPull() {
   const [selectedKind, setSelectedKind] = useState<SourceKind>("customs-declarations");
   useEffect(() => {
     let active = true;
+    const controller = new AbortController();
     async function load() {
       try {
-        await openLocalSession();
-        const data = await getSources();
+        const data = await getSources(controller.signal);
         if (active) {
           setSources(data);
           setError("");
@@ -29,6 +28,7 @@ export function NsManualPull() {
     void load();
     return () => {
       active = false;
+      controller.abort();
     };
   }, [attempt]);
   if (error)

@@ -12,6 +12,7 @@ from ..dao import notification_delivery_dao as dao
 from ..mapper.delivery_mapper import view
 from ..policy.delivery_policy import receipt
 from ..vo.delivery_vo import DeliveryList
+from . import notification_scope
 from .basis_guard import reason as basis_reason
 from .delivery_snapshot import evidence_warning
 from .delivery_state import now, owned, require_writer, transition
@@ -34,7 +35,11 @@ class DeliveryReceiptService:
 
     def _claim_refresh(self, task_id, delivery_id, actor):
         with transaction(self.engine, "task") as connection:
-            task = task_dao.get(connection, task_id, lock=True)
+            original = owned(connection, task_id, delivery_id)
+            notification_scope.members(
+                connection, original["task_id"], original["notification_id"], lock=True
+            )
+            task = task_dao.get(connection, original["task_id"])
             row = owned(connection, task_id, delivery_id, lock=True)
             at = now()
             if row["status"] in ("preparing", "submitting") and row["lease_expires_at"] <= at:
@@ -79,7 +84,7 @@ class DeliveryReceiptService:
 
     def _query_error(self, task_id, row, error):
         with transaction(self.engine, "task") as connection:
-            task_dao.get(connection, task_id, lock=True)
+            notification_scope.members(connection, row["task_id"], row["notification_id"], lock=True)
             current = owned(connection, task_id, row["id"], lock=True)
             if current["status"] == "pending_confirmation":
                 dao.update_delivery(
@@ -100,11 +105,11 @@ class DeliveryReceiptService:
             raise ApiError(502, "目标群回执发送成员不一致，请核实")
         target, sent_at, message = receipt(results, row["chat_id"])
         with transaction(self.engine, "task") as connection:
-            task = task_dao.get(connection, task_id, lock=True)
+            notification_scope.members(connection, row["task_id"], row["notification_id"], lock=True)
+            task = task_dao.get(connection, row["task_id"])
             current = owned(connection, task_id, row["id"], lock=True)
             if current["status"] != "pending_confirmation":
                 return
-            block = basis_reason(connection, task_id)
             values = {
                 "last_checked_at": now(),
                 "error_message": evidence_warning(connection, current) or message or None,
@@ -121,27 +126,41 @@ class DeliveryReceiptService:
                 values["sent_at"] = sent_at
                 transition(connection, task, current, target, actor, values)
                 if target == "sent":
-                    self._mark_notification(connection, task, current, sent_at, actor, block)
+                    self._mark_notification(connection, task, current, sent_at, actor)
             else:
                 dao.update_delivery(connection, row["id"], values, now())
 
     @staticmethod
-    def _mark_notification(connection, task, row, sent_at, actor, block):
+    def _mark_notification(connection, task, row, sent_at, actor):
         frozen = row["snapshot_json"]
-        notification_dao.mark_sent(
-            connection,
-            row["notification_id"],
-            {
-                "channel": "wecom",
-                "channel_message_id": row["channel_message_id"],
-                "chat_id": row["chat_id"],
-                "recipient_name": frozen["groupName"],
-                "sender_name": frozen["employee"],
-                "sent_by": actor,
-                "sent_at": sent_at,
-                "note": "企微目标群渠道回执确认；不代表供应商已读或已开票。",
-            },
-            now(),
+        members, scope = notification_scope.members(connection, row["task_id"], row["notification_id"])
+        ids = (
+            {member["taskId"]: member["notificationId"] for member in scope["members"]}
+            if scope
+            else {task["id"]: row["notification_id"]}
         )
-        if not block and task["status"] == "notify_pending":
-            change_status(connection, task, "awaiting_invoice", actor, "企微已确认目标群发送", now())
+        for member in members:
+            notification_dao.mark_sent(
+                connection,
+                ids[member["id"]],
+                {
+                    "channel": "wecom",
+                    "channel_message_id": row["channel_message_id"],
+                    "chat_id": row["chat_id"],
+                    "recipient_name": frozen["groupName"],
+                    "sender_name": frozen["employee"],
+                    "sent_by": actor,
+                    "sent_at": sent_at,
+                    "note": "企微目标群渠道回执确认；不代表供应商已读或已开票。",
+                },
+                now(),
+            )
+            if not basis_reason(connection, member["id"]) and member["status"] == "notify_pending":
+                change_status(
+                    connection,
+                    member,
+                    "awaiting_invoice",
+                    actor,
+                    "企微已确认目标群发送（供应商合并通知）" if scope else "企微已确认目标群发送",
+                    now(),
+                )

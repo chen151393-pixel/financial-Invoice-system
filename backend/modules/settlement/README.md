@@ -1,5 +1,9 @@
 # settlement 模块：结汇对账
 
+## 报关应收汇查询优化（2026-11-26）
+
+报关应收汇通过 `DocumentReader.states(connection, contexts)` 批量读取提单、销售合同、来源、主体及归档状态；`contexts` 按香港批次 ID、直接收汇单号或 `DocumentGroupRef` 隔离。直接收汇资料组即使只命中部分列表成员，也读取完整组成员后判断资料状态。完整历史收汇推算、金额与资料齐全规则不变；不跨请求缓存，也不写主数据。专项验证见 `tests/test_navigation_query_performance.py`。
+
 ## 职责
 
 报关之后的结汇：客户货款必须与报关金额一致。按报关单“贸易国”分两条回款路径：

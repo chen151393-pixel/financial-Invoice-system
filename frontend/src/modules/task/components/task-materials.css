@@ -1,0 +1,72 @@
+.it-materials {
+  display: grid;
+  gap: 18px;
+  min-width: 0;
+}
+.it-materials__section {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+}
+.it-materials__heading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+}
+.it-materials__heading h4 {
+  margin: 0;
+  font-size: 13px;
+}
+.it-materials__file {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+  font-size: 12px;
+  line-height: 1.65;
+  overflow-wrap: anywhere;
+}
+.it-materials__file > span,
+.it-materials__file details {
+  color: var(--color-muted);
+}
+.it-materials__file p {
+  margin: 4px 0;
+  white-space: normal;
+}
+.it-materials__error {
+  color: var(--color-danger-text);
+}
+.it-materials summary {
+  cursor: pointer;
+}
+.it-materials summary:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 4px;
+}
+.it-materials__signed {
+  min-width: 0;
+  padding-top: 14px;
+  border-top: 1px solid var(--color-border);
+}
+.it-materials__signed > summary {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  font-size: 13px;
+}
+.it-materials__chevron {
+  margin-left: auto;
+  color: var(--color-muted);
+  transform: rotate(90deg);
+}
+.it-materials__signed[open] .it-materials__chevron {
+  transform: rotate(-90deg);
+}
+.it-materials__signed > div {
+  margin-top: 14px;
+}
+.it-materials__signed:not([open]) > div {
+  display: none;
+}

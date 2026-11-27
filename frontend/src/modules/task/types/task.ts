@@ -17,6 +17,7 @@ export interface TaskSummary {
   id: string;
   account: string;
   recordNumber: string;
+  declarationNumber?: string;
   supplier: string;
   company: string;
   currency: string;
@@ -31,6 +32,7 @@ export interface TaskSummary {
   orderNumbers: string[];
   lineCount: number;
   expectedAmount: string | null;
+  receivedAmount?: string | null;
   // 兼容尚未更新的任务查询服务；缺失字段只展示待获取，不在前端补算。
   outstandingAmount?: string | null;
   receiptPercent?: string | null;
@@ -57,6 +59,7 @@ export const stageLabels: Record<Exclude<TaskStage, "">, string> = {
   completed: "开票完成",
 };
 export interface TaskLine {
+  taskId?: string;
   purchaseBasisId: string | null;
   ledgerSha256: string | null;
   requiresReview: boolean;
@@ -78,6 +81,9 @@ export interface TaskLine {
 }
 
 export interface TaskDocument {
+  taskId?: string;
+  recordNumber?: string;
+  declarationNumber?: string;
   orderId: string;
   orderNumber: string;
   status: "pending" | "failed" | "ready";
@@ -102,6 +108,8 @@ export interface TaskEvent {
 // 报关资料：报关单、销售合同、发票按报关单各一份，由 NS 下载；每类可单独重试。
 export type DeclarationDocumentType = "customs_declaration" | "sales_contract" | "invoice";
 export interface DeclarationDocument {
+  taskId?: string;
+  recordNumber?: string;
   type: DeclarationDocumentType;
   label: string;
   status: "unregistered" | "pending" | "archived" | "failed";
@@ -128,6 +136,13 @@ export interface TaskCompletion {
   reason: string;
 }
 export interface TaskDetail {
+  grouped?: boolean;
+  memberTasks?: TaskSummary[];
+  reviewRows?: TaskReviewRow[];
+  declarationRows?: TaskDeclarationRow[];
+  preparation?: TaskPreparation | null;
+  scopeRevision?: string;
+  notificationTaskId?: string;
   task: TaskSummary;
   lines: TaskLine[];
   reasons: string[];
@@ -138,12 +153,41 @@ export interface TaskDetail {
   compare: Capability;
   steps: TaskStep[];
   documents: TaskDocument[];
+  notificationDocuments?: TaskDocument[] | null;
   declarationDocuments: DeclarationDocument[];
   signedContracts: SignedContract[];
   completion: TaskCompletion | null;
   downloadEnvironment: string;
   notification: TaskNotification;
   events: TaskEvent[];
+}
+
+export interface TaskReviewRow {
+  taskId: string;
+  recordNumber: string;
+  declarationNumber: string;
+  reviewRevision: number;
+  customsStatusLabel: string;
+  financeStatusLabel: string;
+  orderCount: number;
+}
+export interface TaskDeclarationRow {
+  taskId: string;
+  recordNumber: string;
+  declarationNumber: string;
+  customs: DeclarationDocument | null;
+  sales: DeclarationDocument | null;
+  invoice: DeclarationDocument | null;
+}
+export interface TaskPreparation {
+  contractCount: number;
+  archivedCount: number;
+  contractsReady: boolean;
+  contractSummary: string;
+  declarationCount: number;
+  signedPendingCount: number;
+  signedSummary: string;
+  note: string;
 }
 
 export interface NotificationDraft {
@@ -159,6 +203,8 @@ export interface NotificationRecord {
   confirmed: boolean;
 }
 export interface NotificationEvent {
+  taskId?: string;
+  recordNumber?: string;
   channel: string;
   revision: number;
   actor: string;
@@ -172,6 +218,9 @@ export interface NotificationEvent {
   attachments: string[];
 }
 export interface TaskNotification extends NotificationDraft {
+  scopeReason?: string;
+  taskIds?: string[];
+  attachments?: string[];
   supplierGroup: {
     groupName: string;
     chatId: string;

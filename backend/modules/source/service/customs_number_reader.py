@@ -3,6 +3,8 @@
 只返回报关口径：报关品名、规格、数量、单位、行金额及币种。
 """
 
+from collections import defaultdict
+
 from ..dao import company_dao, customs_declaration_dao, unit_dictionary_dao
 from ..policy.currency_policy import currency_code
 from ..policy.unit_policy import unit_label
@@ -53,6 +55,11 @@ def declarations_by_number(connection, numbers):
     if not refs:
         return {}
     names = unit_dictionary_dao.unit_names(connection)
+    grouped = defaultdict(list)
+    for line in customs_declaration_dao.lines_by_declarations(
+        connection, [head["id"] for group in refs.values() for head in group]
+    ):
+        grouped[line["customs_declaration_id"]].append(line)
     result = {}
     for head in (head for group in refs.values() for head in group):
         lines = [
@@ -67,7 +74,7 @@ def declarations_by_number(connection, numbers):
                 "amount": line["amount"],
                 "currency": currency_code({"currencyname": line["currency"]}) or line["currency"] or "",
             }
-            for line in customs_declaration_dao.lines(connection, head["id"])
+            for line in grouped[head["id"]]
         ]
         result.setdefault(head["declaration_no"], []).append(
             {

@@ -4,7 +4,14 @@ from datetime import UTC
 from decimal import Decimal
 
 from ..policy.customs_match_policy import CONSISTENT, STATUS_LABELS, amount_text, text
-from ..vo.customs_receipt_vo import CompareGroup, Consignee, CustomsItem, CustomsReceipt, NsLine
+from ..vo.customs_receipt_vo import (
+    CompareGroup,
+    Consignee,
+    CustomsImportSource,
+    CustomsItem,
+    CustomsReceipt,
+    NsLine,
+)
 
 
 def _amount(value):
@@ -50,6 +57,19 @@ def consignee(head, ns_record_no=""):
 
 def _joined(rows, key):
     return "、".join(dict.fromkeys(row[key] for row in rows if row[key]))
+
+
+def import_source(head, names):
+    if not head:
+        return None
+    actor = head["imported_by"]
+    return CustomsImportSource(
+        fileName=head["file_name"],
+        importedBy=actor,
+        importedByName=names.get(actor, actor),
+        importedAt=_iso(head["imported_at"]),
+        receiptCount=head["receipt_count"],
+    )
 
 
 def receipt(head, rows, approval):

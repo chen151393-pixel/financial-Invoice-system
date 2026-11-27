@@ -20,9 +20,6 @@ export const startFeishuLogin = (returnTo: string) =>
   http<{ url: string }>("/session/feishu/start", "POST", { returnTo });
 export const getFeishuOutcome = () => http<FeishuOutcome>("/session/feishu/outcome");
 
-// 兼容现有业务调用方：只检查会话，不再签发本机免密会话。
-export const openLocalSession = getSession;
-
 // 人员与权限（由后端按角色的页面授权校验）
 export const getAccess = () => http<AccessOverview>("/identity/access");
 export const getRolePages = () => http<RolePageOverview>("/identity/role-pages");

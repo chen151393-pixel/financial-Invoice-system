@@ -34,8 +34,17 @@ def pending(connection, limit=20):
 
 
 def by_task(connection, task_id):
-    query = select(contract_jobs).where(contract_jobs.c.task_id == task_id)
-    return {row["purchase_order_id"]: dict(row) for row in connection.execute(query).mappings()}
+    return by_tasks(connection, [task_id]).get(task_id, {})
+
+
+def by_tasks(connection, task_ids):
+    if not task_ids:
+        return {}
+    query = select(contract_jobs).where(contract_jobs.c.task_id.in_(task_ids))
+    result = {}
+    for row in connection.execute(query).mappings():
+        result.setdefault(row["task_id"], {})[row["purchase_order_id"]] = dict(row)
+    return result
 
 
 def complete(connection, task_id, order_id, now):

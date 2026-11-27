@@ -1,25 +1,35 @@
 import { useCallback, useEffect, useState, type ReactNode } from "react";
-import { Link } from "react-router";
+import { Link, useSearchParams } from "react-router";
 import { paths } from "../../../app/paths";
-import { Button, Card, CardContent, CardHeader, ErrorState, Skeleton } from "../../../shared/components/ui";
-import { openLocalSession } from "../../identity/api";
+import {
+  Badge,
+  Button,
+  Card,
+  CardContent,
+  CardHeader,
+  ErrorState,
+  Skeleton,
+} from "../../../shared/components/ui";
 import {
   closeTaskLine,
   getTask,
+  getSupplierTask,
   prepareDeclarationDocument,
   prepareTaskDocument,
   recordTaskNotification,
   saveTaskNotification,
+  saveSupplierTaskNotification,
+  recordSupplierTaskNotification,
 } from "../api/task";
-import { DeclarationDocuments } from "../components/DeclarationDocuments";
 import { formatTime } from "../components/format";
 import { SignedContractUpload } from "../components/SignedContractUpload";
-import { SignedContracts } from "../components/SignedContracts";
 import { TaskDocuments } from "../components/TaskDocuments";
 import { TaskHistory } from "../components/TaskHistory";
 import { TaskLines } from "../components/TaskLines";
+import { TaskReceiptCard } from "../components/TaskReceiptCard";
 import { TaskNotification } from "../components/TaskNotification";
 import { TaskOverview, type Section } from "../components/TaskOverview";
+import { TaskReview } from "../components/TaskReview";
 import { useDelivery } from "../hooks/useDelivery";
 import type {
   ClosureRequest,
@@ -53,9 +63,11 @@ type Feedback = { error: boolean; text: string } | null;
 
 /**
  * 开票任务详情：概览 + 六个节点；左侧「当前节点」卡片放该节点的处理内容（进入页面即停在当前节点），
- * 下方为应开明细与收票进度；右侧为完结资料、流转记录和任务信息。
+ * 发票比对节点展示应开明细与收票进度；右侧为完结资料、流转记录和任务信息。
  */
-export function TaskDetailPage({ id }: { id: string }) {
+export function TaskDetailPage({ id, grouped = false }: { id: string; grouped?: boolean }) {
+  const [searchParams] = useSearchParams();
+  const completed = searchParams.get("completed") === "1";
   const [state, setState] = useState<Remote>({ kind: "loading" });
   const [refresh, setRefresh] = useState(0);
   const [chosen, setChosen] = useState<Section | null>(hashSection);
@@ -65,17 +77,21 @@ export function TaskDetailPage({ id }: { id: string }) {
   const detail = state.kind === "ready" ? state.data : null;
   const current = detail ? currentSection(detail) : "documents";
   const section = chosen ?? current;
+  const read = useCallback(
+    (signal?: AbortSignal) => (grouped ? getSupplierTask(id, completed, signal) : getTask(id, signal)),
+    [id, grouped, completed],
+  );
   const deliveryChanged = useCallback(async () => {
-    const data = await getTask(id);
+    const data = await read();
     setState({ kind: "ready", data });
-  }, [id]);
-  const delivery = useDelivery(id, deliveryChanged, section === "notification");
+  }, [read]);
+  const delivery = useDelivery(detail?.notificationTaskId || id, deliveryChanged, section === "notification");
   useEffect(() => {
     let active = true;
+    const controller = new AbortController();
     async function load() {
       try {
-        await openLocalSession();
-        const data = await getTask(id);
+        const data = await read(controller.signal);
         if (active) setState({ kind: "ready", data });
       } catch (error) {
         if (active)
@@ -85,8 +101,9 @@ export function TaskDetailPage({ id }: { id: string }) {
     void load();
     return () => {
       active = false;
+      controller.abort();
     };
-  }, [id, refresh]);
+  }, [read, refresh]);
 
   useEffect(() => {
     const sync = () => setChosen(hashSection());
@@ -103,7 +120,9 @@ export function TaskDetailPage({ id }: { id: string }) {
     setBusy(orderId);
     setFeedback(null);
     try {
-      const data = await prepareTaskDocument(id, orderId);
+      const sourceId = detail?.documents.find((doc) => doc.orderId === orderId)?.taskId || id;
+      const changed = await prepareTaskDocument(sourceId, orderId);
+      const data = grouped ? await read() : changed;
       setState({ kind: "ready", data });
       setFeedback({ error: false, text: "子采购合同已保存到共享盘。" });
     } catch (error) {
@@ -112,12 +131,13 @@ export function TaskDetailPage({ id }: { id: string }) {
       setBusy(null);
     }
   }
-  async function retryDeclaration(type: DeclarationDocumentType) {
+  async function retryDeclaration(type: DeclarationDocumentType, sourceId = id) {
     if (busy) return;
-    setBusy(type);
+    setBusy(`${sourceId}:${type}`);
     setFeedback(null);
     try {
-      const data = await prepareDeclarationDocument(id, type);
+      const changed = await prepareDeclarationDocument(sourceId, type);
+      const data = grouped ? await read() : changed;
       setState({ kind: "ready", data });
       setFeedback({ error: false, text: "报关资料已从 NS 下载并保存到共享盘。" });
     } catch (error) {
@@ -129,12 +149,16 @@ export function TaskDetailPage({ id }: { id: string }) {
   }
   // 通知组件只收集输入；请求在页面发起，结果以后端返回的任务详情为准。
   async function saveNotification(draft: NotificationDraft) {
-    const data = await saveTaskNotification(id, draft);
+    const data = grouped
+      ? await saveSupplierTaskNotification(id, draft, detail?.scopeRevision || "")
+      : await saveTaskNotification(id, draft);
     setState({ kind: "ready", data });
     setFeedback({ error: false, text: "通知已保存，尚未向企微发送。" });
   }
   async function recordNotification(record: NotificationRecord) {
-    const data = await recordTaskNotification(id, record);
+    const data = grouped
+      ? await recordSupplierTaskNotification(id, record, detail?.scopeRevision || "")
+      : await recordTaskNotification(id, record);
     setState({ kind: "ready", data });
     setFeedback({ error: false, text: "已保存人工发送登记，任务进入等待收票。" });
   }
@@ -144,7 +168,9 @@ export function TaskDetailPage({ id }: { id: string }) {
     setBusy(lineId);
     setFeedback(null);
     try {
-      setState({ kind: "ready", data: await closeTaskLine(id, lineId, body) });
+      const sourceId = detail?.lines.find((line) => line.id === lineId)?.taskId || id;
+      const changed = await closeTaskLine(sourceId, lineId, body);
+      setState({ kind: "ready", data: grouped ? await read() : changed });
       setFeedback({ error: false, text: "差异结束决定已登记。" });
       return true;
     } catch (error) {
@@ -201,11 +227,20 @@ export function TaskDetailPage({ id }: { id: string }) {
                 <span id="itd-node-title">
                   <span className="itd-node__tag">{section === current ? "当前节点" : "查看节点"}</span>
                   {step?.label ?? "任务节点"}
+                  {(section === "review" || section === "documents") && step?.state === "done" && (
+                    <span className="itd-node__status">
+                      <Badge tone="success">已完成</Badge>
+                    </span>
+                  )}
                 </span>
               }
               description={section === current ? data.task.reason : step?.description}
               actions={
-                section !== current ? (
+                section === "documents" ? (
+                  <Button size="sm" onClick={() => navigate("notification")}>
+                    前往通知供应商
+                  </Button>
+                ) : section !== current ? (
                   <Button size="sm" onClick={() => navigate(current)}>
                     回到当前节点
                   </Button>
@@ -218,28 +253,20 @@ export function TaskDetailPage({ id }: { id: string }) {
                   {feedback.text}
                 </p>
               )}
-              {section === "review" && (
-                <NodeText title="财务审核已通过">
-                  <p>
-                    报关单：{data.task.recordNumber || "报关单号缺失"} · 审核版本 {data.task.reviewRevision}
-                  </p>
-                  <p>{data.sourceMessage}</p>
-                </NodeText>
-              )}
+              {section === "review" && <TaskReview detail={data} />}
               {section === "documents" && (
                 <TaskDocuments
                   detail={data}
                   busy={busy}
                   onPrepare={(orderId) => void prepare(orderId)}
-                  onRetryDeclaration={(type) => void retryDeclaration(type)}
+                  onRetryDeclaration={(type, sourceId) => void retryDeclaration(type, sourceId)}
                   onUploadSigned={() => setUploading(true)}
-                  onNotify={() => navigate("notification")}
                 />
               )}
               {/* 通知组件常驻，保留企微发送状态的轮询；只在通知节点显示 */}
               <div hidden={section !== "notification"}>
                 <TaskNotification
-                  key={`${data.task.id}:${data.notification.revision}:${data.task.status}`}
+                  key={`${data.task.id}:${data.notification.revision}:${data.task.status}:${data.scopeRevision || ""}`}
                   detail={data}
                   onSave={saveNotification}
                   onRecord={recordNotification}
@@ -249,7 +276,7 @@ export function TaskDetailPage({ id }: { id: string }) {
               {section === "invoices" && (
                 <NodeText title={data.notification.statusLabel}>
                   <p>
-                    已收数量与含税金额由发票比对中已通过的分配汇总，不能手工修改；收票进度见下方应开明细。
+                    已收数量与含税金额由发票比对中已通过的分配汇总，不能手工修改；应开明细与收票进度在“发票比对”节点查看。
                   </p>
                   <dl className="itd-facts itd-facts--inline">
                     <div>
@@ -280,30 +307,27 @@ export function TaskDetailPage({ id }: { id: string }) {
                       {data.completion ? `资料情况：${data.completion.reason}。` : ""}
                     </p>
                   </NodeText>
-                  <DeclarationDocuments
-                    documents={data.declarationDocuments}
-                    busy={busy}
-                    onRetry={(type) => void retryDeclaration(type)}
-                  />
-                  <SignedContracts
-                    contracts={data.signedContracts}
-                    disabled={superseded || busy !== null}
-                    onUpload={() => setUploading(true)}
-                  />
+                  <Button onClick={() => navigate("documents")}>查看合同与资料</Button>
                 </div>
               )}
             </CardContent>
           </Card>
 
-          <Card aria-labelledby="itd-lines-title">
-            <CardHeader
-              title={<span id="itd-lines-title">应开明细与收票进度</span>}
-              description="按财务审核时冻结的数量和金额跟进；已收由比对通过的发票自动汇总"
-            />
-            <CardContent>
-              <TaskLines lines={data.lines} busy={!!busy} open onClose={closeLine} />
-            </CardContent>
-          </Card>
+          {section === "comparison" && (
+            <TaskReceiptCard detail={data} onNotification={() => navigate("notification")} />
+          )}
+
+          {section === "comparison" && (
+            <Card aria-labelledby="itd-lines-title">
+              <CardHeader
+                title={<span id="itd-lines-title">应开明细与收票进度</span>}
+                description="按财务审核时冻结的数量和金额跟进；已收由比对通过的发票自动汇总"
+              />
+              <CardContent>
+                <TaskLines lines={data.lines} busy={!!busy} open onClose={closeLine} />
+              </CardContent>
+            </Card>
+          )}
         </div>
 
         <aside className="itd-aside" aria-label="资料与记录">

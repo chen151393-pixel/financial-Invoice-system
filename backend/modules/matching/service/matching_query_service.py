@@ -1,5 +1,6 @@
 """发票比对查询：单张发票的比对视图、待审核队列、发票列表摘要、人工分配候选。"""
 
+from collections import defaultdict
 from decimal import Decimal
 
 from sqlalchemy.exc import SQLAlchemyError
@@ -98,7 +99,7 @@ class MatchingQueryService:
             {line["purchase_line_id"]: line for line in open_lines(connection, line_ids)} if line_ids else {}
         )
         lines = purchase_lines(connection, line_ids)
-        bases = current_bases(connection, line_ids)
+        bases = current_bases(connection, line_ids, sources=lines)
         for key, line in lines.items():
             basis = bases.get(key)
             line.update(
@@ -111,8 +112,8 @@ class MatchingQueryService:
             )
         return lines, tasks
 
-    def _views(self, connection, invoice, rows):
-        lines, tasks = self._context(connection, rows)
+    def _views(self, connection, invoice, rows, *, context=None):
+        lines, tasks = self._context(connection, rows) if context is None else context
         legacy = legacy_ids(rows)
         previews = pending_order_service.comparisons(connection, invoice, rows, lines, legacy)
         items = {item["id"]: item for item in invoice["items"]}
@@ -257,17 +258,28 @@ class MatchingQueryService:
 
         return self._read(action)
 
-    def _queue_rows(self, connection, rows):
+    def _queue_rows(self, connection, rows, *, invoices=None):
         """按原顺序生成队列行（含当前比对项与异常分类）；同一发票的分配一起计算占用。"""
-        invoices = {
-            invoice["id"]: invoice
-            for invoice in read_invoices(connection, [row["invoice_id"] for row in rows])
-        }
+        if not rows:
+            return []
+        invoices = (
+            invoices
+            if invoices is not None
+            else {
+                invoice["id"]: invoice
+                for invoice in read_invoices(connection, [row["invoice_id"] for row in rows])
+            }
+        )
+        all_rows = allocation_dao.by_invoices(connection, list({row["invoice_id"] for row in rows}))
+        grouped = defaultdict(list)
+        for row in all_rows:
+            grouped[row["invoice_id"]].append(row)
+        context = self._context(connection, all_rows)
         result = []
         for invoice_id in dict.fromkeys(row["invoice_id"] for row in rows):
             invoice = invoices[invoice_id]
             own = [row for row in rows if row["invoice_id"] == invoice_id]
-            views = self._views(connection, invoice, allocation_dao.by_invoices(connection, [invoice_id]))
+            views = self._views(connection, invoice, grouped[invoice_id], context=context)
             items = {item["id"]: item for item in invoice["items"]}
             result.extend(
                 QueueRow(

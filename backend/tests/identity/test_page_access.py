@@ -51,6 +51,46 @@ def member(admin, name="王财务"):
     return next(row for row in admin.get("/api/identity/access").json()["users"] if row["name"] == name)
 
 
+def test_request_reuses_current_identity_but_next_request_checks_revocation(system, context, monkeypatch):
+    app, admin, feishu, headers = system
+    user, _, _ = feishu_login(app, context.settings, feishu, "u-wang")
+    access = app.state.identity.access
+    original, calls = access.current, []
+
+    def current(user_id):
+        calls.append(user_id)
+        return original(user_id)
+
+    monkeypatch.setattr(access, "current", current)
+    assert user.get("/api/session").status_code == 200
+    assert len(calls) == 1
+    calls.clear()
+    assert user.post("/api/review/declarations/query", json={}, headers=headers).status_code == 200
+    assert len(calls) == 1
+    assert grant(admin, headers, "finance", ["invoices"]).status_code == 200
+    calls.clear()
+    assert user.get("/api/session").json()["user"]["pages"] == ["invoices"]
+    assert len(calls) == 1
+    calls.clear()
+    assert user.post("/api/review/declarations/query", json={}, headers=headers).status_code == 403
+    assert len(calls) == 1
+    person = member(admin)
+    assert (
+        admin.put(
+            f"/api/identity/users/{person['id']}/access",
+            json={"roles": ["finance"], "customRoles": True, "enabled": False},
+            headers=headers,
+        ).status_code
+        == 200
+    )
+    calls.clear()
+    assert user.get("/api/session").status_code == 401
+    assert len(calls) == 1
+    calls.clear()
+    assert user.get("/api/session").status_code == 401
+    assert calls == []  # 已失效的会话不能被请求内复用重新激活。
+
+
 def test_role_configuration_versions_audit_and_persistence(system, context):
     _, admin, _, headers = system
     overview = admin.get("/api/identity/role-pages").json()

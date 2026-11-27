@@ -40,6 +40,9 @@ def waiting(task, now):
 def fields(task, lines, contact=None, *, now=None):
     outstanding, percent, bar = amounts(lines)
     return {
+        "receivedAmount": format(sum((line["received_amount"] for line in lines), Decimal(0)), "f")
+        if lines
+        else None,
         "outstandingAmount": format(outstanding, "f") if outstanding is not None else None,
         "receiptPercent": format(percent.normalize(), "f") if percent is not None else None,
         "receiptBarPercent": format(bar.normalize(), "f") if bar is not None else None,

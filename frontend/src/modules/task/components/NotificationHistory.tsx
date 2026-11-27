@@ -9,10 +9,11 @@ export function NotificationHistory({ history }: { history: NotificationEvent[] 
         <p className="it-help">暂无保存或发送记录。</p>
       ) : (
         history.map((event) => (
-          <details key={event.revision}>
+          <details key={`${event.taskId || ""}:${event.revision}`}>
             <summary>
               {event.sentAt ? (event.channel === "wecom" ? "企微渠道已发送" : "人工登记已发送") : "保存通知"}{" "}
-              · {formatTime(event.at)} · 版本 {event.revision}
+              · {formatTime(event.at)} · {event.recordNumber ? `${event.recordNumber} · ` : ""}版本{" "}
+              {event.revision}
             </summary>
             <dl className="itn-facts itn-record-facts">
               <dt>保存人</dt>

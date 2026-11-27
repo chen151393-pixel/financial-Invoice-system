@@ -14,7 +14,6 @@ import {
   StatCard,
   StatGrid,
 } from "../../../shared/components/ui";
-import { openLocalSession } from "../../identity/api";
 import { confirmInvoiceBatch, getMatchingQueue, queryInvoiceMatchList } from "../api";
 import { uploadInvoiceFiles } from "../api/invoice-file-api";
 import { InvoiceFileUploadDialog } from "../components/InvoiceFileUploadDialog";
@@ -86,10 +85,10 @@ export function MatchingQueuePage() {
 
   useEffect(() => {
     let active = true;
+    const controller = new AbortController();
     async function load() {
       try {
-        await openLocalSession();
-        const data = await getMatchingQueue(query);
+        const data = await getMatchingQueue(query, controller.signal);
         if (active) setState({ kind: "ready", data });
       } catch (error) {
         if (active)
@@ -99,26 +98,30 @@ export function MatchingQueuePage() {
     void load();
     return () => {
       active = false;
+      controller.abort();
     };
   }, [query, refresh]);
 
   // 未生成建议、已审核通过的张数与列表来自发票匹配状态（已排除红字、作废等不参与比对的发票）
   useEffect(() => {
     let active = true;
+    const controller = new AbortController();
     async function load() {
       try {
-        await openLocalSession();
-        const data = await queryInvoiceMatchList<MatchPageList>({
-          invoice_no: single(query.invoiceNo),
-          seller_name: single(query.supplierName),
-          account: "",
-          status: "",
-          date_from: query.invoiceFrom,
-          date_to: query.invoiceTo,
-          matchStatus: view === "none" ? "none" : view === "done" ? "confirmed" : "all",
-          page: listed ? listPage : 1,
-          pageSize: listed ? LIST_PAGE_SIZE : 1,
-        });
+        const data = await queryInvoiceMatchList<MatchPageList>(
+          {
+            invoice_no: single(query.invoiceNo),
+            seller_name: single(query.supplierName),
+            account: "",
+            status: "",
+            date_from: query.invoiceFrom,
+            date_to: query.invoiceTo,
+            matchStatus: view === "none" ? "none" : view === "done" ? "confirmed" : "all",
+            page: listed ? listPage : 1,
+            pageSize: listed ? LIST_PAGE_SIZE : 1,
+          },
+          controller.signal,
+        );
         if (active) setList({ kind: "ready", data });
       } catch (error) {
         if (active)
@@ -128,6 +131,7 @@ export function MatchingQueuePage() {
     void load();
     return () => {
       active = false;
+      controller.abort();
     };
   }, [
     query.invoiceNo,

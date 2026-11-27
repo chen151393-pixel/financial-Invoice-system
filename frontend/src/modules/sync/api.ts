@@ -51,7 +51,8 @@ export type PullResult = {
   dateRange: DateRange & { label: string };
   rows: { id: string; number: string; record: Record<string, unknown> }[];
 };
-export const getSources = () => http<Sources>("/ns/sync/sources");
+export const getSources = (signal?: AbortSignal) =>
+  http<Sources>("/ns/sync/sources", "GET", undefined, signal);
 /** 只读拉取一批，不入库；保存改用后台批次 startRun。 */
 export const pullRecords = (kind: SourceKind, offset: number, range: DateRange, cursor?: PullCursor) =>
   http<PullResult>(`/ns/sync/${kind}/pull`, "POST", {

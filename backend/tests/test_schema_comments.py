@@ -49,6 +49,8 @@ TABLES = ALL_TABLES - {
     "review_customs_receipts",
     "review_customs_receipt_lines",
     "review_customs_approvals",
+    # 0057 才新增的导入任务表，不属于本测试停留的 0015 结构。
+    "review_customs_import_jobs",
     "identity_departments",
     "identity_sync_scopes",
     "identity_department_roles",

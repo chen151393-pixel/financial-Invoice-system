@@ -58,6 +58,7 @@ def test_list_and_detail_use_latest_actual_sent_time(engine, app_services, appro
     service = app_services["tasks"]
     initial = service.browse(TaskListQuery()).groups[0].tasks[0]
     assert Decimal(initial.outstandingAmount) == Decimal("120.5")
+    assert Decimal(initial.receivedAmount) == Decimal("0")
     assert initial.receiptPercent == "0" and initial.lastContactAt is None
     assert initial.followupEmployee == "" and initial.waitingLabel == "已等待 0 天"
     task_id = approved["id"]

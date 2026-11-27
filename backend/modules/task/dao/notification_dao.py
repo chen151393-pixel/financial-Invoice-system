@@ -6,12 +6,21 @@ from ..entity import notifications
 
 
 def history(connection, task_id):
+    return history_by_tasks(connection, [task_id]).get(task_id, [])
+
+
+def history_by_tasks(connection, task_ids):
+    if not task_ids:
+        return {}
     query = (
         select(notifications)
-        .where(notifications.c.task_id == task_id)
+        .where(notifications.c.task_id.in_(task_ids))
         .order_by(notifications.c.version.desc())
     )
-    return [dict(row) for row in connection.execute(query).mappings()]
+    result = {}
+    for row in connection.execute(query).mappings():
+        result.setdefault(row["task_id"], []).append(dict(row))
+    return result
 
 
 def latest(connection, task_id):
@@ -25,6 +34,7 @@ def latest_by_tasks(connection, task_ids):
         return {}
     ranked = (
         select(
+            notifications.c.id,
             notifications.c.task_id,
             notifications.c.status,
             notifications.c.channel,
@@ -68,17 +78,18 @@ def latest_sent_by_tasks(connection, task_ids):
 
 def first_sent_by_tasks(connection, task_ids):
     """{任务 ID: 最早一次实际发送时间（UTC）}；应收看板按它确定通知月份，之后重发不改变归属月份。"""
-    if not task_ids:
+    if task_ids is not None and not task_ids:
         return {}
     query = (
         select(notifications.c.task_id, func.min(notifications.c.sent_at).label("sent_at"))
         .where(
-            notifications.c.task_id.in_(task_ids),
             notifications.c.status == "sent",
             notifications.c.sent_at.is_not(None),
         )
         .group_by(notifications.c.task_id)
     )
+    if task_ids is not None:
+        query = query.where(notifications.c.task_id.in_(task_ids))
     return {row["task_id"]: row["sent_at"] for row in connection.execute(query).mappings()}
 
 

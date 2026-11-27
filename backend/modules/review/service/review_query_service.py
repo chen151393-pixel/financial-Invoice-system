@@ -16,11 +16,12 @@ from .approval_progress_reader import read_progress
 from .customs_approved_reader import approved_declaration_ids
 
 
-def month_start_utc(now):
+def month_bounds_utc(now):
     local = now.astimezone(timezone(timedelta(hours=8))).replace(
         day=1, hour=0, minute=0, second=0, microsecond=0
     )
-    return local.astimezone(UTC).replace(tzinfo=None)
+    following = (local + timedelta(days=32)).replace(day=1)
+    return tuple(bound.astimezone(UTC).replace(tzinfo=None) for bound in (local, following))
 
 
 class ReviewQueryService:
@@ -40,11 +41,13 @@ class ReviewQueryService:
                         if query.createdFrom
                         else None
                     )
+                    month_start, month_end = month_bounds_utc(datetime.now(UTC))
                     counts, total, page, suppliers, jobs = declaration_snapshot_dao.browse(
                         connection,
                         query,
                         self.key,
-                        month_start_utc(datetime.now(UTC)),
+                        month_start,
+                        month_end,
                         declaration_ids,
                         customs_approved_ids=approved_declaration_ids(connection),
                     )

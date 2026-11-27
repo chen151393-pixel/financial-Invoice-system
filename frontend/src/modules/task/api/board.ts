@@ -1,9 +1,14 @@
 import { http } from "../../../shared/api/http";
 import type { TaskBoard, TaskBoardQuery } from "../types/board";
 
-export const queryTaskBoard = (query: TaskBoardQuery) =>
-  http<TaskBoard>("/task/board/query", "POST", {
-    ...query,
-    ...(query.createdFrom !== undefined ? { createdFrom: query.createdFrom || null } : {}),
-    ...(query.createdTo !== undefined ? { createdTo: query.createdTo || null } : {}),
-  });
+export const queryTaskBoard = (query: TaskBoardQuery, signal?: AbortSignal) =>
+  http<TaskBoard>(
+    "/task/board/query",
+    "POST",
+    {
+      ...query,
+      ...(query.createdFrom !== undefined ? { createdFrom: query.createdFrom || null } : {}),
+      ...(query.createdTo !== undefined ? { createdTo: query.createdTo || null } : {}),
+    },
+    signal,
+  );

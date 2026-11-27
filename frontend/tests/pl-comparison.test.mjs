@@ -1081,6 +1081,9 @@ test("海关审核行复用财务勾选与主按钮样式，移除重新匹配�
     usageFlag: "未使用",
     nsLineCount: 1,
     itemCount: 1,
+    fileName: "出口报关单（导出20261112）.xlsx",
+    importedBy: "user:fs:customs-importer",
+    importedByName: "王燕",
     nsRecordNo: "CDTEST17",
     consignee: { state: "empty", label: "回执未提供", value: "", note: "" },
     status: "matched",
@@ -1162,6 +1165,67 @@ test("海关审核行复用财务勾选与主按钮样式，移除重新匹配�
   assert.doesNotMatch(blocked, /type="checkbox"/);
   assert.match(blocked, /须先唯一匹配到 NS 报关单/);
   assert.match(blocked, /<button[^>]*disabled[^>]*aria-label="审核通过：TEST-17"/);
+});
+
+test("上传区下方只显示上次导入的一行结果，没有表格和分页", async () => {
+  const { CustomsLastImport } = await server.ssrLoadModule(
+    "/src/modules/review/components/CustomsLastImport.tsx",
+  );
+  const source = {
+    fileName: "海关回执-&-20261126.xlsx",
+    importedBy: "user:fs:customs-importer",
+    importedByName: "王燕",
+    importedAt: "2026-11-26T02:17:41+00:00",
+    receiptCount: 11,
+  };
+  const render = (state) =>
+    renderToStaticMarkup(
+      createElement(CustomsLastImport, {
+        state,
+        disabled: false,
+        onRetry() {},
+      }),
+    );
+  const html = render({ kind: "ready", source });
+  assert.match(html, /上次导入：/);
+  assert.match(html, /海关回执-&amp;-20261126.xlsx/);
+  assert.match(html, /王燕/);
+  assert.match(html, /已导入 11 张回执/);
+  assert.match(html, /10:17:41/);
+  assert.equal((html.match(/<time /g) ?? []).length, 1);
+  assert.doesNotMatch(html, /<table|<nav|分页|文件名称/);
+  assert.match(render({ kind: "ready", source: null }), /暂无记录/);
+  for (const state of [{ kind: "loading" }, { kind: "error", message: "读取失败" }]) {
+    const pending = render(state);
+    assert.doesNotMatch(pending, /王燕|20261126.xlsx/);
+    assert.match(pending, state.kind === "loading" ? /正在读取/ : /重新读取/);
+  }
+});
+
+test("上次导入结果位于弹窗上传区下方，只请求最新一条记录", async () => {
+  const { CustomsImportDialog } = await server.ssrLoadModule(
+    "/src/modules/review/components/CustomsImportDialog.tsx",
+  );
+  const html = renderToStaticMarkup(
+    createElement(CustomsImportDialog, { onClose() {}, jobs: [], progressError: "", onQueued() {} }),
+  );
+  assert.ok(html.indexOf("点击选择或拖入海关回执") < html.indexOf('aria-label="上次导入结果"'));
+  assert.ok(html.indexOf('aria-label="上次导入结果"') < html.indexOf('class="cm-import__footer"'));
+  assert.doesNotMatch(html, /导入记录分页|已保存的海关回执导入记录/);
+  const { queryCustomsLastImport } = await server.ssrLoadModule("/src/modules/review/customs-api.ts");
+  const originalFetch = globalThis.fetch;
+  const controller = new AbortController();
+  try {
+    globalThis.fetch = async (url, options) => {
+      assert.equal(url, "/api/review/customs-receipts/import-history?page=1&pageSize=1");
+      assert.equal(options.method, "GET");
+      assert.equal(options.signal, controller.signal);
+      return new Response(JSON.stringify({ items: [], total: 0, page: 1, pageSize: 1, pages: 1 }));
+    };
+    assert.deepEqual((await queryCustomsLastImport(controller.signal)).items, []);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
 });
 
 test("海关人工审核说明独立成行，输入框关联标签与说明", async () => {
@@ -1267,4 +1331,46 @@ test("海关已审核通过卡展示后端计数并提交筛选，保留查询�
   assert.equal(calls[0].declarationNo, "REAL870");
   assert.equal(calls[0].difference, "total_mismatch");
   assert.equal(calls[0].exportFrom, "2026-10-01");
+});
+
+test("本月审核通过卡仅提交本月筛选并保留已有查询条件", async (t) => {
+  let selected;
+  const tree = ReviewStats({
+    counts: { ...createPlComparisonState().result.counts, approved: 141, approvedThisMonth: 1 },
+    value: "approved_this_month",
+    onSelect: (value) => {
+      selected = value;
+    },
+  });
+  const card = tree.props.children.find((item) => item.props.label === "本月审核通过");
+  card.props.onSelect();
+  assert.equal(selected, "approved_this_month");
+  const html = renderToStaticMarkup(tree);
+  assert.match(html, /aria-pressed="true"[^]*?本月审核通过[^]*?1 张/);
+  assert.doesNotMatch(html, /点击查看全部审核通过/);
+  const allApproved = ReviewStats({
+    counts: createPlComparisonState().result.counts,
+    value: "approved",
+    onSelect() {},
+  });
+  assert.equal(
+    allApproved.props.children.find((item) => item.props.label === "本月审核通过").props.selected,
+    false,
+  );
+  const calls = [];
+  t.mock.method(globalThis, "fetch", async (_url, options) => {
+    calls.push(JSON.parse(options.body));
+    return Response.json({ groups: [] });
+  });
+  const { queryDeclarations } = await server.ssrLoadModule("/src/modules/review/api.ts");
+  await queryDeclarations({
+    status: selected,
+    supplierName: "合成供应商",
+    recordNo: "CD962",
+    page: 1,
+    pageSize: 20,
+  });
+  assert.equal(calls[0].status, "approved_this_month");
+  assert.equal(calls[0].supplierName, "合成供应商");
+  assert.equal(calls[0].recordNo, "CD962");
 });

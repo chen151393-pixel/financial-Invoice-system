@@ -1,5 +1,11 @@
 # source 模块：NS 来源数据
 
+## 批量只读来源（2026-11-26）
+
+公开门面 `snapshots(connection, declaration_ids)` 返回 `{ID: 完整来源}`，缺失 ID 不出现在结果中；单张 `snapshot` 与 `DeclarationService.details` 复用同一组装逻辑，后者仍按传入顺序保留缺失项 `None`。有效关联、采购行顺序、母采购单位、最新依据与内容摘要口径不变。最新依据批量按来源身份选最大主键，再取 JSON 正文，避免正文参与排序。
+
+`workbench_line_labels(connection, line_ids)` 只返回子采购行的供应商名称与单号（含停用记录），用于任务工作台展示；不生成也不替代比对摘要。`declarations_by_number` 批量读取报关行，保留重号与单位、币种规则。全部复用调用方连接，不跨请求缓存。验证见 `tests/test_navigation_query_performance.py` 与 `tests/source/test_raw_records*.py`。
+
 ## 任务组合搜索门面（2026-10-28）
 
 `SourceDirectory.search_task_filters(supplier_name="", purchase_order_no="")` 分别返回名称匹配的 `supplier_ids` 和单号匹配的 `order_ids`；未填写返回 `None`，无匹配返回空列表，不使用旧关键词查询的 500 条上限。由本模块 DAO 查询，SQL 通配符按普通字符转义；task 使用这些 ID 与自身 CD 号等条件取交集，不跨模块访问来源表。

@@ -42,6 +42,10 @@ def summary(task, lines, names, contact=None):
         id=str(task["id"]),
         account=task["ns_account"],
         recordNumber=task["record_no"] or "",
+        declarationNumber=(names.get("declarations", {}).get(task["customs_declaration_id"]) or {}).get(
+            "declaration_no"
+        )
+        or "",
         supplier=supplier.get("name") or UNKNOWN_SUPPLIER,
         company=names["companies"].get(task["company_id"]) or UNKNOWN_COMPANY,
         currency=task["currency"] or "",
@@ -133,6 +137,7 @@ def events(rows):
                 "evidence_linked": "关联报关审核证据",
                 "migration_review_required": "历史依据待复核",
                 "wecom_delivery": "企微通知进度",
+                "supplier_notice_scope": "保存供应商合并通知",
             }.get(row["event_type"])
             or event_label(row["from_status"], row["to_status"]),
             reason=row["reason"] or "",

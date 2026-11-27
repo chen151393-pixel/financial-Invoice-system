@@ -1,19 +1,33 @@
 import { Link, useMatch, useParams } from "react-router";
-import { ExternalGroupsPage } from "../modules/task/pages/ExternalGroupsPage";
-import { SupplierGroupsPage } from "../modules/task/pages/SupplierGroupsPage";
-import { SupplierOwnersPage } from "../modules/task/pages/SupplierOwnersPage";
-import { TaskBoardPage } from "../modules/task/pages/TaskBoardPage";
-import { TaskDetailPage } from "../modules/task/pages/TaskDetailPage";
+import { lazy, Suspense } from "react";
+import { Skeleton } from "../shared/components/ui";
 import { AppFrame } from "./WorkspaceFrame";
 import { navigation } from "./navigation";
 import { paths } from "./paths";
 import { useViewNavigate } from "./useViewNavigate";
+
+const ExternalGroupsPage = lazy(() =>
+  import("../modules/task/pages/ExternalGroupsPage").then((m) => ({ default: m.ExternalGroupsPage })),
+);
+const SupplierGroupsPage = lazy(() =>
+  import("../modules/task/pages/SupplierGroupsPage").then((m) => ({ default: m.SupplierGroupsPage })),
+);
+const SupplierOwnersPage = lazy(() =>
+  import("../modules/task/pages/SupplierOwnersPage").then((m) => ({ default: m.SupplierOwnersPage })),
+);
+const TaskBoardPage = lazy(() =>
+  import("../modules/task/pages/TaskBoardPage").then((m) => ({ default: m.TaskBoardPage })),
+);
+const TaskDetailPage = lazy(() =>
+  import("../modules/task/pages/TaskDetailPage").then((m) => ({ default: m.TaskDetailPage })),
+);
 
 export default function TaskWorkspacePage() {
   const externalPage = useMatch(paths.externalGroups) !== null;
   const ownerPage = useMatch(paths.supplierOwners) !== null;
   const groupsPage = useMatch(paths.supplierGroups) !== null || externalPage || ownerPage;
   const { taskId } = useParams();
+  const supplierTask = useMatch(`${paths.supplierTasks}/:taskId`) !== null;
   const navigateView = useViewNavigate();
   return (
     <AppFrame
@@ -48,17 +62,19 @@ export default function TaskWorkspacePage() {
                 : "按任务当前节点跟进合同归档、通知供应商、收票与补资料，等待最久的任务排在最前"
       }
     >
-      {ownerPage ? (
-        <SupplierOwnersPage />
-      ) : externalPage ? (
-        <ExternalGroupsPage />
-      ) : groupsPage ? (
-        <SupplierGroupsPage />
-      ) : taskId ? (
-        <TaskDetailPage key={taskId} id={taskId} />
-      ) : (
-        <TaskBoardPage />
-      )}
+      <Suspense fallback={<Skeleton rows={5} label="正在加载页面…" />}>
+        {ownerPage ? (
+          <SupplierOwnersPage />
+        ) : externalPage ? (
+          <ExternalGroupsPage />
+        ) : groupsPage ? (
+          <SupplierGroupsPage />
+        ) : taskId ? (
+          <TaskDetailPage key={`${supplierTask}:${taskId}`} id={taskId} grouped={supplierTask} />
+        ) : (
+          <TaskBoardPage />
+        )}
+      </Suspense>
     </AppFrame>
   );
 }

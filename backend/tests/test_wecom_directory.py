@@ -228,6 +228,7 @@ def test_directory_migration_can_downgrade_and_upgrade_without_touching_other_ta
     before = set(inspect(engine).get_table_names())
     command.downgrade(config, "0038_source_purchase_line_tax_rate")
     assert set(inspect(engine).get_table_names()) == before - {
+        "review_customs_import_jobs",  # 0057 的空导入任务表随之回退；有任务时由迁移保护拒绝
         "settlement_hk_slips",  # 0054 的空水单索引表允许回退；有附件时由迁移保护拒绝
         "settlement_document_groups",  # 0051 的空资料组表允许回退；有组时保护拒绝
         "settlement_document_group_items",

@@ -110,6 +110,93 @@ const notification = {
 };
 const controller = { items: [], loading: false, busy: false, error: "", preview: null, candidates: null };
 
+test("合并通知完整展示 11 份合同及各自状态，不按已归档附件名过滤", () => {
+  const contracts = Array.from({ length: 11 }, (_, index) => ({
+    taskId: String(index + 1),
+    orderId: String(index + 200),
+    orderNumber: `SUB-${index + 200}`,
+    recordNumber: `CD${index + 870}`,
+    status: index < 2 ? "ready" : index === 2 ? "failed" : "pending",
+    // 未归档项也可能已有下载文件名，甚至与其他项重名；展示范围不能由文件名决定。
+    filename: index < 3 ? "合同.pdf" : "",
+    archivePath: index < 2 ? `/share/${index}/合同.pdf` : null,
+    error: index === 2 ? "合同下载失败：NS 暂时不可用" : "",
+    prepare: { allowed: false, reason: "采购来源已变化，请重新审核" },
+  }));
+  const html = renderToStaticMarkup(
+    createElement(
+      MemoryRouter,
+      null,
+      createElement(TaskPanel, {
+        detail: {
+          grouped: true,
+          task: { supplier: "测试供应商", company: "测试公司" },
+          documents: [...contracts, { ...contracts[0], orderId: "999", orderNumber: "已通知旧单" }],
+          notificationDocuments: contracts,
+          notification: {
+            ...notification,
+            attachments: ["合同.pdf"],
+            scopeReason:
+              "本次通知覆盖 9 个原任务、11 张子采购单。子采购合同已归档 2 / 11 份。合同尚未齐全，请先完成归档。",
+          },
+        },
+        delivery: controller,
+      }),
+    ),
+  );
+  for (const doc of contracts) {
+    assert.ok(html.includes(doc.orderNumber), doc.orderNumber);
+    assert.ok(html.includes(doc.recordNumber), doc.recordNumber);
+  }
+  assert.equal((html.match(/>已保存到共享盘</g) || []).length, 2);
+  assert.equal((html.match(/>保存失败</g) || []).length, 1);
+  assert.equal((html.match(/>待保存</g) || []).length, 8);
+  for (const text of [
+    "本次通知对应合同",
+    "2 / 11",
+    "合同尚未齐全",
+    "合同下载失败：NS 暂时不可用",
+    "采购来源已变化，请重新审核",
+  ])
+    assert.ok(html.includes(text), text);
+  assert.doesNotMatch(html, /已通知旧单|附带全部对应|重试保存|>保存到共享盘</);
+  assert.match(html, /aria-label="本次通知合同清单，可横向滚动"/);
+  // 默认不带 open；原生 details 支持鼠标及 Enter/空格展开、收起，合同数据完整保留。
+  assert.match(html, /<details class="itn-files"><summary>/);
+  assert.doesNotMatch(html, /<details[^>]*class="itn-files"[^>]*\bopen(?:=|\s|>)/);
+  assert.match(html, /class="itn-files__expand">展开/);
+  assert.match(html, /class="itn-files__collapse">收起/);
+});
+
+test("合同清单保留空状态，单任务继续使用原合同数据", () => {
+  const render = (detail) =>
+    renderToStaticMarkup(
+      createElement(
+        MemoryRouter,
+        null,
+        createElement(TaskPanel, {
+          detail: { task: { supplier: "测试供应商", company: "测试公司" }, notification, ...detail },
+          delivery: controller,
+        }),
+      ),
+    );
+  assert.match(render({ documents: [], notificationDocuments: [] }), /暂无子采购合同/);
+  const html = render({
+    documents: [
+      {
+        orderId: "200",
+        orderNumber: "单任务未归档合同",
+        status: "pending",
+        filename: "",
+        prepare: { allowed: true, reason: "获取子采购合同并保存到共享盘" },
+      },
+    ],
+    notificationDocuments: null,
+  });
+  assert.match(html, /单任务未归档合同/);
+  assert.match(html, /待保存/);
+});
+
 test("群发入口紧随保存及人工操作，保留后端禁用条件", () => {
   for (const allowed of [false, true]) {
     const html = renderToStaticMarkup(

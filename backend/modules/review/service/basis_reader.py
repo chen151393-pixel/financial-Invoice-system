@@ -5,8 +5,10 @@ from backend.modules.source.public import purchase_lines
 from ..dao import purchase_basis_dao
 
 
-def current_bases(connection, line_ids, *, lock=False):
-    sources = purchase_lines(connection, line_ids, lock=lock)
+def current_bases(connection, line_ids, *, lock=False, sources=None):
+    # 展示查询可复用同一连接已读取的来源；加锁确认仍自行重新读取，不能复用展示快照。
+    if sources is None or lock:
+        sources = purchase_lines(connection, line_ids, lock=lock)
     found = purchase_basis_dao.current(connection, line_ids, lock=lock)
     for line_id, basis in found.items():
         source = sources.get(line_id)

@@ -1,5 +1,54 @@
 # task 模块：开票跟进
 
+## 工作台与应收看板读取优化（2026-11-26）
+
+`workbench_tasks(connection, now, task_ids=None)` 可按指定任务 ID 读取；不传时保留全部未被替代版本的原范围。只读取金额必需的任务行字段和来源名称，节点复用 `board_facts(node_only=True)`；不读取本入口不展示的来源阻断及通知范围。应收看板先取最早实际发送通知的任务 ID，再读取这些任务，不提前按月份裁剪完整通知历史；未通知任务、金额缺失与节点口径不变。
+
+## 收票概况展示（2026-11-26）
+
+任务摘要新增 `receivedAmount`，在 `followup_policy.fields` 从任务行已收金额以 Decimal 汇总；无任务行时为未知。供应商合并摘要沿用当前成员范围汇总，成员任务保留各自的金额、CD 和子采购单。应开或待收金额未知时继续返回 NULL，已收金额不由应开减待收或百分比推算，不改变差异结束、超收、取消分配和任务完成规则。前端“发票比对”节点只展示这些后端结果，无数据库迁移。
+
+## 查询性能优化（2026-11-26）
+
+供应商合并详情与原任务详情共用 `service/task_detail_reader.py` 批量装载，再复用 `TaskService` 原有展示与能力组装。合同、通知历史、最新联系、报关资料、回签、作业、事件、来源依据与供应商群均按本次范围读取；通知范围按供应商身份批量展开，保留历史任务及其固定通知成员。`scopeRevision` 复用同次读取的有序事实，写入时仍在原事务和锁内重新计算，不使用跨请求缓存。
+
+任务台先读取任务头、去重的任务与子采购单关系及资料/通知状态，复用原步骤规则统计全部节点并定位分组和页码；分页后才读取当前页完整任务行、来源校验、名称和最近联系。供应商组始终包含全部成员，命中某张 CD 或子采购单时仍展开完整办理范围。进行中与已完成分开、节点筛选、等待顺序、金额和可执行能力均保持原口径。全范围节点统计仍需读取轻量事实，没有引入预计算状态或更改表结构。
+
+本机同一 MySQL 数据（342 个进行中原任务、90 个供应商办理组），预热后计时三次取中位数；只调用查询 Service，连接强制只读，不启动后台任务或调用真实 NS/企微。该计时不含浏览器网络与渲染，也不含诊断分析器开销，与先前带分析器的计时不可直接比较。
+
+| 查询 | 优化前 | 优化后 | SQL 次数（前 → 后） |
+| --- | ---: | ---: | ---: |
+| 42 个原任务的合并详情 | 1624.13 ms | 80.30 ms | 2239 → 27 |
+| 27 个原任务的合并详情 | 799.10 ms | 55.38 ms | 1141 → 27 |
+| 23 个原任务的合并详情 | 527.66 ms | 45.60 ms | 865 → 27 |
+| 供应商列表第一页，20 组 | 180.27 ms | 110.24 ms | 26 → 28 |
+| 报关单列表第一页，20 项 | 199.66 ms | 50.20 ms | 25 → 27 |
+
+列表增加的固定查询用于轻量计数与分页后装载，完整明细及来源校验范围缩小到当前页。32 组优化前后完整响应快照一致，覆盖两种分组、六种节点、翻页、越界页、CD 筛选、空结果、不同大小的供应商详情与原任务详情。
+
+验证入口新增 `backend/tests/test_task_query_performance.py`：任务成员增加时查询次数不增长、分页仅装载当前页完整数据、跨页节点总数一致、进行中与完成范围隔离、未知发送结果对重审核后继继续生效。相同断言由 `test_task_query_performance_mysql.py` 在随机专用 MySQL 库复用，5 项通过；原合并通知并发/回滚测试 `test_supplier_tasks_mysql.py` 在随机专用库运行，3 项通过。既有通知、合同、金额和状态测试继续使用原入口。
+
+验证边界：后端 lint、架构检查和变更文件格式检查通过。全量 API 首轮为 2224 通过、215 跳过、3 失败；其中发票比对的旧步骤断言与原有 `skipped` 规则不符，核对 Git 原规则后修正测试，12 项发票比对测试复测通过。另两处历史迁移测试（`test_schema_comments.py`、`test_wecom_directory.py`）对 `review_customs_import_jobs` 的表范围预期未更新，单独复现仍失败；本次没有修改迁移、表结构或这两处测试。浏览器端到端耗时尚未测量。
+
+## 供应商合并办理（2026-11-26）
+
+合并详情新增 `notificationDocuments`：按本次通知的成员范围返回全部子采购合同，包含未登记下载、待保存、失败和已归档项，保留原 `taskId`、报关单与失败原因；单任务该字段为 `null`，沿用 `documents`。通知区不再按已归档文件名筛选，已通知成员的资料仍在全量 `documents` 中，但不混入本次通知清单。`notification.attachments` 继续仅包含已归档文件名；`scopeReason` 返回本次范围实际已归档/总份数，未齐时明确要求补齐，不再声称已附带全部合同。该清单只反映数据库归档状态，发送时仍复核文件可读性、摘要与全部范围，不改变原发送校验。
+
+任务摘要 `TaskSummary` 返回 `recordNumber`（CD 编号）与 `declarationNumber`（真实报关单号，来源缺失时为空）。通过 source 的 `SourceDirectory.declarations` 只读门面批量读取，不从归档路径或合同名反推；供应商合并摘要汇总全部成员的真实报关单号，成员摘要各自保留原单号。
+
+详情另返回 `reviewRows`（每个报关单及审核版本的任务生成时通过依据与子采购单张数）、`declarationRows`（每个报关单的报关单文件/销售合同/发票状态及原操作任务 ID）和 `preparation`（子采购合同已归档数/总数、是否已齐、待补回签数与说明）。`task_detail_mapper` 只转换既有冻结审核和归档事实，不查询或改变审批与完结状态；来源失效仍通过原 `sourceMessage/compare` 明确提示。子采购合同携带 `recordNumber/declarationNumber`，保留合并前的归属。无表结构变化。
+
+`POST /api/task/board/query` 支持 `groupBy: supplier | declaration`，兼容旧客户端时默认 `declaration`；正式前端默认 `supplier`。按来源账户、供应商 ID、采购公司 ID、币种合并，身份不全时独立展示，不按名称猜测身份。查询命中某张 CD 或子采购单后返回该供应商完整办理范围，再按组分页与统计；进行中和已完成分开，不包含已被替代的任务。金额由后端 Decimal 汇总。
+
+- `GET /api/task/supplier-tasks/{taskId}`：以原任务为锚点读取完整进行中范围，无进行中任务时回看完成范围；`?completed=true` 明确读取已完成范围。返回 `grouped/memberTasks/scopeRevision/notificationTaskId`，资料和应开行携带原 `taskId`，报关资料另带 `recordNumber`。原任务详情接口保持可用。
+- `POST /api/task/supplier-tasks/{taskId}/notification/draft`：原草稿参数加 `scopeRevision` 与 UUID `requestId`。短事务锁定成员、复核版本，每个待通知原任务追加通知版本；`task_events` 的 `supplier_notice_scope` 事件固定成员任务与通知 ID、根执行任务、请求摘要。相同请求可核实重放，范围变化返回 409。已通知或进入收票的成员只展示，不再加入新通知。
+- `POST /api/task/supplier-tasks/{taskId}/notification/record`：原登记参数加 `scopeRevision`，同一事务确认固定范围全部成员，失败整批回滚。保存过多成员合并草稿后，单任务保存、单任务登记与列表批量登记均提示进入合并详情，防止仅改部分成员。
+- 企微继续使用现有预览、提交、回执与核实接口，`notificationTaskId` 指向根执行任务。快照固定全部通知成员、审核版本、依据、正文与合同；上传前后重新校验，附上全部范围内的子采购合同。合同同单不同源/不同摘要时阻止发送；超过现有 9 附件上限时明确拒绝，不截断。未决执行保护全部成员及重审核后继；仅确认目标群回执后登记各原通知。结果未知时继续禁止重发。
+
+实现：`supplier_task_dao`、`supplier_task_policy`、`SupplierTaskService` 负责只读合并；`SupplierNotificationService` 与 `notification_scope` 复用原通知、归档及发送管道。没有任务/审核/收票台账物理合并，没有表结构迁移。页面授权沿用 `invoice-followup`，写入仍禁止服务身份。
+
+验证入口：`test_supplier_tasks.py` 覆盖完整分组分页、身份隔离、原资料归属、草稿幂等、已通知成员排除、过期范围拒绝、整批回滚、企微全附件与未知结果、HTTP 会话；`test_supplier_tasks_mysql.py` 在随机专用 MySQL 库验证并发占用与整批回滚。未配置 MySQL 建库连接时明确跳过，不以 SQLite 代替并发验证。
+
 ## 组合搜索（2026-10-28）
 
 正式节点查询为 `POST /api/task/board/query`，新增 `supplierName`（供应商名称）、`recordNo`（CD 号）、`purchaseOrderNo`（子采购单号）。均为可选字符串，去除首尾空白后最多 120 字符，空值不限；按包含文字匹配，多个条件取交集，`%`、`_` 按普通字符搜索。子采购单命中任一任务行即返回完整任务。节点计数、总数和分页共用过滤条件。
@@ -34,7 +83,8 @@
 | | `task_service.py` | 列表（分组分页、搜索、统计）与详情 |
 | | `document_service.py` | 合同下载、登记、归档 |
 | | `notification_service.py` | 通知版本与人工发送登记 |
-| | `notification_batch_service.py` | 列表勾选批量登记线下已通知，逐任务独立事务 |
+| | `notification_batch_service.py` | 原任务登记规则与旧批量接口兼容 |
+| | `notification_group_service.py` | 列表按组展开、范围复核、整组事务与逐组结果 |
 | | `supplier_group_service.py` | 供应商群查询与保存 |
 | dao | 每张表一个文件 | 只访问本模块的表 |
 | policy | `task_policy.py` | 状态机、分组键、状态文案 |
@@ -311,13 +361,17 @@ MySQL 命名锁保证多实例单消费者，并对同一任务的同一子采�
 
 采购在系统外（企微群、电话等）通知供应商后，在开票跟进列表勾选任务一次登记，不必逐个进入详情填写发送时间。只登记，不调用企微。
 
+- 列表使用按组入口 `POST /api/tasks/notification/record-groups`：请求 `{groupBy: "supplier" | "declaration", groups: [{id, scopeRevision}], note?, notifiedOn?}`，每次至多 50 个列表组。`id` 是组锚点任务编号；后端按账户、供应商、采购公司、币种展开完整组，再选出当前可登记成员。单组或本次合计原任务超过 50 条仍可办理，不在前端展开、切分请求。
+- 每组一个独立事务，组内原任务全部通过原登记校验后才提交；任一成员失败则整组回滚，其他组继续。列表返回 `notifyScopeRevision`，覆盖组成员、任务状态、最新通知、开票依据和可登记条件；提交时在任务锁内重新计算，不一致整组跳过，不能把新成员静默加入已确认范围。
+- 按组响应 `{groups: [{id, status: "recorded" | "skipped" | "unknown", taskIds, reason}], recordedGroups, recordedTasks, skippedGroups, unknownGroups}`。数据库提交结果无法确认时保留“待核实”，不自动重试；已提交组的结果不冒充整批回滚。已保存的合并通知仍须从合并详情统一登记，不能改用报关单模式绕过完整成员保护。
+- 旧 `record-batch` 的单任务请求与响应在一个版本内保留，供尚未升级的客户端使用；正式列表已改调 `record-groups`，待旧客户端升级完成后删除旧入口。旧接口的 50 条限制不适用于按组入口。
 - 接口：`POST /api/tasks/notification/record-batch`，请求 `{taskIds: ["1", ...], note?, notifiedOn?: "YYYY-MM-DD"}`，一次 1–50 个不重复的任务；页面授权沿用 `invoice-followup`，服务身份返回 403。`notifiedOn` 为北京时间通知日期，不接受客户端时间戳；旧客户端不传日期时取登记当时。
 - 响应 `{recorded: [{id}], skipped: [{id, reason}]}`。每个任务一个事务，逐个重新校验；不符合条件的跳过并附原因，不影响其他任务；数据库不可用时停止后续，已登记的不回滚。
 - 可登记条件（`policy/notification_policy.batch_record_block`）：任务状态为 `notify_pending`（子采购合同已全部归档）、最新通知未发送、来源与开票依据未变化、没有未决的企微通知。不要求先保存群名称和通知正文。
 - 登记内容（`service/notification_batch_service.py`）：通知日期默认今天，可选历史日期。后端拒绝未来日期；早于某任务生成日期的任务逐项跳过。今天取实际登记时刻；历史日期按北京零点折 UTC 保存，同任务生成日时不早于任务生成时刻。版本更新、状态历史等审计时间仍取实际登记时刻。最新版本是草稿时直接登记该草稿，保留其正文与群名称；没有草稿时新增一个版本，正文固定注明“系统未发送消息，未保存通知正文”，群名称取已启用的供应商默认群，发送员工取操作者姓名（飞书人员副本，找不到时为操作者标识）。说明为空时记为“批量登记：线下已通知供应商开票”。
 - 登记后与单个登记一致：通知版本为 `sent`、渠道 `manual`，任务转为 `awaiting_invoice` 并写入状态历史。重复提交按“已登记”跳过，不产生第二条记录。
-- 任务台 `BoardItem` 新增 `notifyRecord`（`allowed/reason`），前端只按它显示勾选框；未决企微通知在提交时复核，列表不预先判断。
-- 无表结构变化，无需迁移。验证：`tests/test_task_notification_batch.py`（默认日期、历史通知日期与真实审计时间、日期格式与未来日期拦截、草稿复用、逐任务跳过、服务身份与参数校验、任务台能力、HTTP 与未登录）。SQLite 隔离测试，未在 MySQL 上验证并发。
+- 任务台 `BoardItem` 返回 `notifyRecord`（`allowed/reason`）、`notifyTargets`（`[{id, supplier, recordNumber, orderNumbers}]`）及 `notifyScopeRevision`。`taskIds` 仍是完整合并成员；`notifyTargets` 仅供确认清单展示，本次可登记范围排除已通知、合同未齐、来源失效或受合并通知保护的成员。合并组只要有可登记成员就允许勾选；请求提交组锚点与范围摘要，由后端重新展开。未决企微通知仍在提交时复核，列表不预先判断。
+- 无表结构变化，无需迁移。验证：`tests/test_task_notification_batch.py` 覆盖兼容接口；`tests/test_notification_groups.py` 覆盖 51 成员整组提交、业务/数据库故障整组回滚且其他组继续、成员/草稿变化、重复提交、已通知排除、合并通知保护、DTO 和 HTTP。`test_notification_groups_mysql.py` 提供并发重复提交及回滚专项；未提供专用测试连接时明确跳过。
 
 ## 应收看板（2026-11-23）
 

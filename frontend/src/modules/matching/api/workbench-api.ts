@@ -8,8 +8,8 @@ const body = (query: WorkbenchQuery) => ({
   createdTo: query.createdTo || null,
 });
 
-export const queryWorkbench = (query: WorkbenchQuery) =>
-  http<Workbench>("/matching/workbench/query", "POST", body(query));
+export const queryWorkbench = (query: WorkbenchQuery, signal?: AbortSignal) =>
+  http<Workbench>("/matching/workbench/query", "POST", body(query), signal);
 
 export const exportWorkbench = (query: WorkbenchQuery) =>
   http<{ filename: string; content: string; count: number }>(

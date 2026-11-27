@@ -12,20 +12,22 @@ from sqlalchemy.exc import SQLAlchemyError
 from backend.core import write_lock
 from backend.core.errors import ApiError
 from backend.core.search_terms import search_terms
+from backend.modules.identity.public import actor_names
 from backend.modules.source.public import declarations_by_number
 
 from ..dao import customs_receipt_dao as dao
-from ..mapper.customs_receipt_mapper import consignee, receipt
+from ..mapper.customs_receipt_mapper import consignee, import_source, receipt
 from ..policy.customs_match_policy import DIFFERENCE_KINDS, STATUS_LABELS, compare, difference_kinds
 from ..vo.customs_receipt_vo import (
     CustomsCounts,
+    CustomsImportHistory,
     CustomsImportResult,
     CustomsReceiptList,
     ImportedDeclaration,
     RematchResult,
 )
 from .approval_progress_reader import read_progress
-from .customs_approval_service import approval_view, approved_receipt_ids
+from .customs_approval_service import approval_views, approved_receipt_ids
 from .customs_receipt_parser import parse
 
 STATUS_FILTERS = {
@@ -215,8 +217,9 @@ class CustomsReceiptService:
                     self.task_reader,
                 )
                 views = []
+                approvals = approval_views(connection, heads, lines)
                 for head in heads:
-                    view, ns_id, _, status, result = approval_view(connection, head, lines[head["id"]])
+                    view, ns_id, _, status, result = approvals[head["id"]]
                     current = {
                         **head,
                         "ns_declaration_id": ns_id,
@@ -248,6 +251,26 @@ class CustomsReceiptService:
             page=query.page,
             pageSize=query.pageSize,
             pages=max(1, math.ceil(total / query.pageSize)),
+        )
+
+    def import_history(self, page=1, page_size=5):
+        """只读导入来源记录；不受主列表筛选影响，不重算比对或审核。"""
+        self._require_engine()
+        try:
+            with self.engine.connect() as connection:
+                if connection.dialect.name == "mysql":
+                    connection = connection.execution_options(isolation_level="REPEATABLE READ")
+                total, rows = dao.import_history(connection, page, page_size)
+                names = actor_names(connection, [row["imported_by"] for row in rows])
+                items = [import_source(row, names) for row in rows]
+        except SQLAlchemyError:
+            raise ApiError(503, "导入记录暂时无法读取，请稍后重试") from None
+        return CustomsImportHistory(
+            items=items,
+            total=total,
+            page=page,
+            pageSize=page_size,
+            pages=max(1, math.ceil(total / page_size)),
         )
 
     def rematch(self, body, owner):

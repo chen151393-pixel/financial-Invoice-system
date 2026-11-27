@@ -7,7 +7,13 @@ from sqlalchemy.exc import SQLAlchemyError
 
 from backend.core import write_lock
 from backend.core.errors import ApiError
-from backend.modules.source.public import declaration_refs_by_number, declarations_by_number, digest, snapshot
+from backend.modules.source.public import (
+    declaration_refs_by_number,
+    declarations_by_number,
+    digest,
+    snapshot,
+    snapshots,
+)
 
 from ..dao import customs_approval_dao, customs_receipt_dao
 from ..policy.customs_match_policy import AUTO_RULE, auto_review, compare
@@ -38,10 +44,47 @@ def approval_view(connection, head, rows):
     status, declaration_id, result = compare(candidates.get(head["declaration_no"], []), rows)
     content = snapshot(connection, declaration_id) if declaration_id else None
     source_sha = digest(content) if content else ""
+    active = customs_approval_dao.current(connection, head, declaration_id, source_sha) if content else None
+    return _approval_view(head, status, declaration_id, result, content, source_sha, active)
+
+
+def approval_views(connection, heads, lines):
+    """列表共用一批当前来源；提交仍在写锁内重新读取、比对并验证版本。"""
+    candidates = declarations_by_number(connection, [head["declaration_no"] for head in heads])
+    compared = {
+        head["id"]: compare(candidates.get(head["declaration_no"], []), lines[head["id"]]) for head in heads
+    }
+    contents = snapshots(connection, [identity for _, identity, _ in compared.values() if identity])
+    approved = {
+        (
+            row["receipt_id"],
+            row["receipt_revision"],
+            row["receipt_sha256"],
+            row["customs_declaration_id"],
+            row["source_sha256"],
+        ): row
+        for row in customs_approval_dao.for_receipts(
+            connection, [head["id"] for head in heads if compared[head["id"]][1] in contents]
+        )
+    }
+    result = {}
+    for head in heads:
+        status, identity, comparison = compared[head["id"]]
+        content = contents.get(identity)
+        sha = digest(content) if content else ""
+        active = (
+            approved.get((head["id"], head["revision"], head["content_sha256"], identity, sha))
+            if content
+            else None
+        )
+        result[head["id"]] = _approval_view(head, status, identity, comparison, content, sha, active)
+    return result
+
+
+def _approval_view(head, status, declaration_id, result, content, source_sha, active):
     token = hashlib.sha256(
         f"{head['id']}:{head['revision']}:{head['content_sha256']}:{declaration_id}:{source_sha}:{status}".encode()
     ).hexdigest()
-    active = customs_approval_dao.current(connection, head, declaration_id, source_sha) if content else None
     stable = bool(content and content["declaration"]["content_sha256"] == source_sha)
     allowed = bool(stable and not active)
     auto_ok, manual_reason = auto_review(status, result)

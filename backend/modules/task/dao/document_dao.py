@@ -6,7 +6,13 @@ from ..entity import documents
 
 
 def by_task(connection, task_id):
-    query = select(documents).where(documents.c.task_id == task_id).order_by(documents.c.id)
+    return by_tasks(connection, [task_id])
+
+
+def by_tasks(connection, task_ids):
+    if not task_ids:
+        return []
+    query = select(documents).where(documents.c.task_id.in_(task_ids)).order_by(documents.c.id)
     return [dict(row) for row in connection.execute(query).mappings()]
 
 

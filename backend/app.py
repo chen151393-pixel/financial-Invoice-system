@@ -157,6 +157,7 @@ from .modules.task.controller.signed_upload_controller import JSON_BODY_LIMITS
 from .modules.task.controller.signed_upload_controller import create_router as signed_upload_router
 from .modules.task.controller.supplier_group_controller import create_router as task_group_router
 from .modules.task.controller.supplier_owner_controller import create_router as supplier_owner_router
+from .modules.task.controller.supplier_task_controller import create_router as supplier_task_router
 from .modules.task.controller.task_controller import create_router as task_router
 from .modules.task.public import review_task_outcomes
 from .modules.task.service.closure_service import ClosureService, on_lines_closed_by_difference
@@ -177,8 +178,10 @@ from .modules.task.service.signed_upload_service import SignedUploadService
 from .modules.task.service.signed_upload_store import SignedUploadStore
 from .modules.task.service.signed_upload_worker import SignedUploadWorker
 from .modules.task.service.supplier_group_service import SupplierGroupService as TaskGroupService
+from .modules.task.service.supplier_notification_service import SupplierNotificationService
 from .modules.task.service.supplier_owner_service import SupplierOwnerService
 from .modules.task.service.supplier_profile_service import SupplierProfileService
+from .modules.task.service.supplier_task_service import SupplierTaskService
 from .modules.task.service.task_board_service import TaskBoardService
 from .modules.task.service.task_generation_service import on_review_approved
 from .modules.task.service.task_service import TaskService
@@ -508,6 +511,8 @@ def _register_business(app, settings, ns, contract_ns, wecom, engine, lemon_invo
     )
     archive = ContractArchive(settings.subpo_archive_root)
     task_queries = TaskService(engine, directory, SourceContracts(contract_ns), archive, settings)
+    supplier_tasks = SupplierTaskService(task_queries)
+    app.include_router(supplier_task_router(supplier_tasks, SupplierNotificationService(supplier_tasks)))
     app.include_router(supplier_owner_router(SupplierOwnerService(engine)))
     messaging = WeComMessaging(wecom)
     receipts = DeliveryReceiptService(engine, messaging)

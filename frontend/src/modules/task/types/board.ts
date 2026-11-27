@@ -11,6 +11,8 @@ export interface BoardNode {
 }
 
 export interface BoardItem {
+  grouped?: boolean;
+  taskIds?: string[];
   task: TaskSummary;
   steps: TaskStep[];
   currentNode: BoardNodeKey;
@@ -20,12 +22,35 @@ export interface BoardItem {
   missing: string[];
   // 能否勾选后批量登记“线下已通知”，由后端判断；提交时后端逐个任务重新校验
   notifyRecord: Capability;
+  // 后端给出的实际登记范围，不能用合并卡片的完整 taskIds 替代。
+  notifyTargets: NotifyBatchTarget[];
+  notifyScopeRevision: string;
 }
 
-// 批量登记线下已通知的逐任务结果；skipped 附后端给出的原因
-export interface NotifyBatchResult {
-  recorded: { id: string; reason: string }[];
-  skipped: { id: string; reason: string }[];
+export interface NotifyBatchTarget {
+  id: string;
+  supplier: string;
+  recordNumber: string;
+  orderNumbers: string[];
+}
+
+export interface NotifyBatchGroup {
+  id: string;
+  scopeRevision: string;
+  targets: NotifyBatchTarget[];
+}
+
+export interface NotifyGroupBatchResult {
+  groups: {
+    id: string;
+    status: "recorded" | "skipped" | "unknown";
+    taskIds: string[];
+    reason: string;
+  }[];
+  recordedGroups: number;
+  skippedGroups: number;
+  unknownGroups: number;
+  recordedTasks: number;
 }
 
 export interface TaskBoard {
@@ -40,6 +65,7 @@ export interface TaskBoard {
 }
 
 export interface TaskBoardQuery {
+  groupBy?: "supplier" | "declaration";
   // 兼容发票工作台和旧跟进链接的报关单范围，由后端校验和筛选。
   stage?: string;
   createdFrom?: string;

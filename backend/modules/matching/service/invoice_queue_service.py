@@ -24,15 +24,20 @@ def invoice_queue(connection, query, render_rows, suppliers):
         if group["invoice_id"] in headers and invoice_display_status(headers[group["invoice_id"]]) == "normal"
     ]
 
+    cached = {}
+
     def views(batch):
-        ids = [group["invoice_id"] for group in batch]
-        invoices = {row["id"]: row for row in read_invoices(connection, ids)}
+        missing = [group for group in batch if group["invoice_id"] not in cached]
+        if not missing:
+            return [cached[group["invoice_id"]] for group in batch]
+        ids = [group["invoice_id"] for group in missing]
+        invoices = headers
         proposed = [row for row in allocation_dao.by_invoices(connection, ids) if row["status"] == "proposed"]
         rows_by_invoice = {str(key): [] for key in ids}
-        for row in render_rows(connection, proposed):
+        for row in render_rows(connection, proposed, invoices=invoices):
             rows_by_invoice[row.invoiceId].append(row)
         result = []
-        for group in batch:
+        for group in missing:
             own = rows_by_invoice[str(group["invoice_id"])]
             batchable = bool(own) and all(
                 row.allocation.confidence is not None
@@ -62,7 +67,8 @@ def invoice_queue(connection, query, render_rows, suppliers):
                     batchIds=[row.allocation.id for row in own] if batchable else [],
                 )
             )
-        return result
+        cached.update({int(row.invoice.id): row for row in result})
+        return [cached[group["invoice_id"]] for group in batch]
 
     def evaluate(batch):
         rows = []

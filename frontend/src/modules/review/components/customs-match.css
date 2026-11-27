@@ -85,6 +85,19 @@
   font-size: 12px;
   overflow-wrap: anywhere;
 }
+.cm-import__last {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px var(--space-small);
+}
+.cm-import__last-file {
+  flex: 1;
+  min-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .cm-import__outcome {
   display: grid;
   gap: 6px;

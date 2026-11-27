@@ -2,11 +2,20 @@ import { http } from "../../shared/api/http";
 import { readImportFile } from "../../shared/api/import-file";
 import type {
   CustomsApproveResult,
+  CustomsImportHistory,
   CustomsImportJob,
   CustomsReceipt,
   CustomsReceiptList,
   CustomsReceiptQuery,
 } from "./customs-types";
+
+export const queryCustomsLastImport = (signal?: AbortSignal) =>
+  http<CustomsImportHistory>(
+    "/review/customs-receipts/import-history?page=1&pageSize=1",
+    "GET",
+    undefined,
+    signal,
+  );
 
 export const queryCustomsReceipts = (query: CustomsReceiptQuery, signal?: AbortSignal) =>
   http<CustomsReceiptList>(

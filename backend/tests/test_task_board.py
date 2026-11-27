@@ -40,6 +40,8 @@ def test_nodes_follow_task_facts(board, app_services, approved):
     first = board.browse(TaskBoardQuery())
     assert first.openTotal == 1 and counts(first)["documents"] == 1 and counts(first)["done"] == 0
     item = first.items[0]
+    assert item.task.recordNumber == "CD870" and item.task.declarationNumber == "REAL870"
+    assert app_services["tasks"].detail(approved["id"]).task.declarationNumber == "REAL870"
     assert item.currentNode == "documents" and item.currentLabel == "待存合同"
     assert [step.key for step in item.steps] == [
         "review",

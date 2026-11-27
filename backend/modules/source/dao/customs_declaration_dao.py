@@ -75,6 +75,13 @@ def head(connection, declaration_id, *, lock=False):
     return dict(row) if row else None
 
 
+def heads(connection, declaration_ids):
+    if not declaration_ids:
+        return {}
+    query = _head_query().where(customs_declarations.c.id.in_(declaration_ids))
+    return {row["id"]: dict(row) for row in connection.execute(query).mappings()}
+
+
 def ids_created_between(connection, start, end):
     """NS 创建时间落在 [start, end) 的报关单 ID（UTC 无时区时间，调用方按中国日期换算）。"""
     query = select(customs_declarations.c.id).where(
@@ -205,10 +212,18 @@ def page(connection, account, keyword, offset, limit):
 
 
 def lines(connection, declaration_id):
+    return lines_by_declarations(connection, [declaration_id])
+
+
+def lines_by_declarations(connection, declaration_ids):
+    if not declaration_ids:
+        return []
     query = (
         select(customs_lines, companies.c.name.label("company_name"))
         .select_from(customs_lines.outerjoin(companies, companies.c.id == customs_lines.c.company_id))
-        .where(customs_lines.c.customs_declaration_id == declaration_id, customs_lines.c.is_active.is_(True))
+        .where(
+            customs_lines.c.customs_declaration_id.in_(declaration_ids), customs_lines.c.is_active.is_(True)
+        )
         .order_by(customs_lines.c.id)
     )
     return [dict(row) for row in connection.execute(query).mappings()]

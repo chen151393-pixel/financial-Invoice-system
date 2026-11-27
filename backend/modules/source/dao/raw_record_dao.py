@@ -3,7 +3,7 @@
 import hashlib
 import json
 
-from sqlalchemy import insert, select
+from sqlalchemy import func, insert, select, tuple_
 
 from ..entity import raw_records
 
@@ -64,3 +64,20 @@ def latest(connection, account, record_type, ns_internal_id):
     if identity is None:
         return None
     return connection.execute(select(raw_records.c.payload).where(raw_records.c.id == identity)).scalar()
+
+
+def latest_by_keys(connection, record_type, keys):
+    """批量取得各来源最新正文；聚合仅携带主键，避免大 JSON 进入排序。"""
+    if not keys:
+        return {}
+    query = (
+        select(raw_records.c.ns_account, raw_records.c.ns_internal_id, func.max(raw_records.c.id).label("id"))
+        .where(
+            raw_records.c.record_type == record_type,
+            tuple_(raw_records.c.ns_account, raw_records.c.ns_internal_id).in_(keys),
+        )
+        .group_by(raw_records.c.ns_account, raw_records.c.ns_internal_id)
+    )
+    rows = list(connection.execute(query).mappings())
+    bodies = payloads(connection, [row["id"] for row in rows])
+    return {(row["ns_account"], row["ns_internal_id"]): bodies[row["id"]] for row in rows}

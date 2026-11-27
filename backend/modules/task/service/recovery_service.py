@@ -101,8 +101,9 @@ class RecoveryService:
         self.engine = engine
 
     def rows(self, connection, now, today):
-        tasks = workbench_tasks(connection, now)
-        sent = notification_dao.first_sent_by_tasks(connection, [task["id"] for task in tasks])
+        sent = notification_dao.first_sent_by_tasks(connection, None)
+        # 看板只纳入已实际通知的任务；先定位成员，再读取明细，不改变首次通知月份和金额口径。
+        tasks = workbench_tasks(connection, now, task_ids=list(sent))
         owners = current_owners(supplier_owner_dao.records(connection), today)
         companies = {row["id"]: row["name"] for row in supplier_owner_directory(connection)["companies"]}
         result = []

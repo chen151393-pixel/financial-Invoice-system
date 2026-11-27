@@ -31,7 +31,8 @@ export function useWorkbench() {
   const exportLock = useRef(false);
   useEffect(() => {
     let active = true;
-    queryWorkbench(query)
+    const controller = new AbortController();
+    queryWorkbench(query, controller.signal)
       .then((data) => {
         if (active) {
           setState({ data, request: query, version, error: "" });
@@ -48,6 +49,7 @@ export function useWorkbench() {
       });
     return () => {
       active = false;
+      controller.abort();
     };
   }, [query, version]);
   const change = (patch: Partial<WorkbenchQuery>) => {

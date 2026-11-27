@@ -33,3 +33,12 @@ def test_latest_snapshot_selects_newest_id_with_large_json_and_isolates_sources(
             raw_record_dao.save(connection, account, kind, identity, {"other": True}, now)
         assert raw_record_dao.latest(connection, "prod", "relation_evidence", "990") == expected
         assert raw_record_dao.latest(connection, "prod", "relation_evidence", "missing") is None
+        assert raw_record_dao.latest_by_keys(
+            connection,
+            "relation_evidence",
+            [
+                ("prod", "990"),
+                ("sandbox", "990"),
+                ("prod", "missing"),
+            ],
+        ) == {("prod", "990"): expected, ("sandbox", "990"): {"other": True}}

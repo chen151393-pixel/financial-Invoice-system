@@ -29,6 +29,18 @@ def by_tasks(connection, task_ids):
     return [dict(row) for row in connection.execute(query).mappings()]
 
 
+def orders_by_tasks(connection, task_ids):
+    """节点计数只需要任务与子采购单的关系，不读取金额、数量和账本明细。"""
+    if not task_ids:
+        return []
+    query = (
+        select(task_lines.c.task_id, task_lines.c.purchase_order_id)
+        .where(task_lines.c.task_id.in_(task_ids))
+        .distinct()
+    )
+    return [dict(row) for row in connection.execute(query).mappings()]
+
+
 def supersede(connection, task_ids, now):
     if task_ids:
         connection.execute(

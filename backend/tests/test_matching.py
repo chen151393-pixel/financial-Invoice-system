@@ -178,7 +178,8 @@ def test_full_chain_from_review_to_completed_task(engine, world, reviewed):
     # 发票已收齐但资料未到齐：停在"资料待补齐"，完成节点写明尚缺的资料
     assert waiting["status"] == "documents_incomplete" and waiting["completed_at"] is None
     steps = world["tasks"].detail(waiting["id"]).steps
-    assert [step.state for step in steps] == ["done", "current", "waiting", "done", "done", "waiting"]
+    # 收票已发生时，未归档合同和未通知节点按现行规则标为 skipped，停在补齐完结资料。
+    assert [step.state for step in steps] == ["done", "skipped", "skipped", "done", "done", "current"]
     assert "子采购合同" in steps[-1].description and "回签合同" in steps[-1].description
     complete_documents(engine)
     done = task(engine)

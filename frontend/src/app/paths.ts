@@ -19,6 +19,7 @@ export const paths = {
   // 销售合同买卖双方抬头与印章
   settlementParties: "/settlement/parties",
   tasks: "/tasks",
+  supplierTasks: "/tasks/supplier",
   taskWorkflowDemo: "/tasks/workflow-demo",
   // 应收看板：按通知月份审计发票回收，只读
   invoiceRecovery: "/invoice-recovery",
@@ -48,6 +49,8 @@ export const legacyPaths = {
 } as const;
 
 export const taskPath = (id: string) => `${paths.tasks}/${encodeURIComponent(id)}`;
+export const supplierTaskPath = (id: string, completed = false) =>
+  `${paths.supplierTasks}/${encodeURIComponent(id)}${completed ? "?completed=1" : ""}`;
 
 // 带筛选条件的列表地址（工作台业务状态分区跳转用）；空值不写入地址
 function withQuery(path: string, filters: Record<string, string>) {

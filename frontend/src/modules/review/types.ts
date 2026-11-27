@@ -12,7 +12,8 @@ export type ReviewFilter =
   | "margin_alert"
   | "unit_mismatch"
   | "auto"
-  | "customs_approved";
+  | "customs_approved"
+  | "approved_this_month";
 export interface UnitPriceMargin {
   // 后端按关联采购未税金额 / 采购下单数量计算，折 USD 展示；人民币差额判断容差。
   margin?: string;

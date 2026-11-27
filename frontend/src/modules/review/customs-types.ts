@@ -130,6 +130,23 @@ export interface CustomsReceiptList {
   pages: number;
 }
 
+/** 当前保留回执按来源归组的导入记录。 */
+export interface CustomsImportSource {
+  fileName: string;
+  importedBy: string;
+  importedByName: string;
+  importedAt: string;
+  receiptCount: number;
+}
+
+export interface CustomsImportHistory {
+  items: CustomsImportSource[];
+  total: number;
+  page: number;
+  pageSize: number;
+  pages: number;
+}
+
 export interface CustomsSearch {
   declarationNo: string;
   name: string;

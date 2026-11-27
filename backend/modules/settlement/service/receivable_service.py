@@ -180,14 +180,26 @@ class ReceivableService:
 
     def _documents(self, connection, rows, batches, items):
         """资料状态：香港中转读所在批次（只对办资料中的批次读取齐全度），直接收汇读该报关单已办理的资料。"""
-        states = {}
+        contexts = {}
         for batch_id in {
             row["batch"]["id"] for row in rows if row["batch"] and row["batch"]["status"] == "collected"
         }:
-            states[batch_id] = self.reader.state(connection, batches[batch_id], items.get(batch_id, []))
+            contexts[batch_id] = (batches[batch_id], items.get(batch_id, []))
         direct = [row["declaration_no"] for row in rows if row["route"] == DIRECT and row["usable"]]
         owners = bill_dao.direct_owners(connection, direct) | contract_dao.direct_owners(connection, direct)
-        owners |= set(document_group_dao.by_numbers(connection, direct))
+        groups = document_group_dao.by_numbers(connection, direct)
+        owners |= set(groups)
+        direct_contexts = DirectDocumentSource(self.candidates).for_rows(
+            connection,
+            [
+                row
+                for row in rows
+                if row["route"] == DIRECT and row["usable"] and row["declaration_no"] in owners
+            ],
+            groups,
+        )
+        contexts.update({context["id"]: (context, linked) for context, linked in direct_contexts.values()})
+        states = self.reader.states(connection, contexts)
         for row in rows:
             if row["route"] == HK_TRANSIT:
                 batch = row["batch"]
@@ -199,8 +211,8 @@ class ReceivableService:
                 owned = row["declaration_no"] in owners
                 state = None
                 if owned:
-                    context, linked = DirectDocumentSource(self.candidates).for_row(connection, row)
-                    state = self.reader.state(connection, context, linked)
+                    context, _ = direct_contexts[row["declaration_no"]]
+                    state = states[context["id"]]
                 row["document"] = rules.direct_document_status(owned, state)
 
 

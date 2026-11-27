@@ -11,7 +11,31 @@ from backend.tests.test_matching import ns as ns
 from backend.tests.test_matching import reviewed as reviewed
 from backend.tests.test_matching import world as world
 from pydantic import ValidationError
-from sqlalchemy import text
+from sqlalchemy import event, text
+
+
+def test_queue_batches_current_context_instead_of_querying_per_invoice(engine, world, reviewed):
+    import_invoices(world, [invoice("26000000000000009961", [INK, FLUID], remark="SUB-200")])
+    statements = []
+
+    def count(*args):
+        statements.append(args[2])
+
+    event.listen(engine, "before_cursor_execute", count)
+    try:
+        single = world["queries"].invoice_queue(QueueQuery())
+        single_count = len(statements)
+        import_invoices(
+            world, [invoice(str(26000000000000009962 + i), [INK, FLUID], remark="SUB-200") for i in range(7)]
+        )
+        statements.clear()
+        multiple = world["queries"].invoice_queue(QueueQuery())
+        assert multiple.total == 8
+        assert len(statements) <= single_count + 1
+        assert multiple.rows[0] == single.rows[0]
+    finally:
+        event.remove(engine, "before_cursor_execute", count)
+
 
 SIMILAR = "上海供货商有限公司"  # 与 NS 供应商名称相近：部分一致，须填写说明
 

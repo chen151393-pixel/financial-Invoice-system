@@ -4,7 +4,7 @@ from collections import defaultdict
 from datetime import UTC
 from decimal import Decimal
 
-from backend.modules.source.public import purchase_lines
+from backend.modules.source.public import workbench_line_labels
 
 from ..dao import notification_dao, supplier_group_dao, workbench_task_dao
 from ..policy.board_policy import NODE_LABELS
@@ -42,13 +42,16 @@ def unbound_notify_suppliers(connection, tasks):
     }
 
 
-def workbench_tasks(connection, now):
-    tasks, lines = workbench_task_dao.read(connection)
-    context = purchase_lines(connection, [line["purchase_line_id"] for line in lines])
+def workbench_tasks(connection, now, *, task_ids=None):
+    tasks, lines = workbench_task_dao.read(connection, task_ids)
+    context = workbench_line_labels(connection, [line["purchase_line_id"] for line in lines])
     grouped = defaultdict(list)
     for line in lines:
         grouped[line["task_id"]].append(line)
-    facts = board_facts(connection, [task for task in tasks if task["status"] in OPEN_STATUSES])
+    # 此入口只消费节点，不展示来源阻断原因；金额仍基于完整任务行，节点沿用同一套事实规则。
+    facts = board_facts(
+        connection, [task for task in tasks if task["status"] in OPEN_STATUSES], node_only=True
+    )
     # 真实通知按发送记录判定，不受节点越过（未通知即收票）影响
     notified = set(notification_dao.latest_sent_by_tasks(connection, [task["id"] for task in tasks]))
     result = []

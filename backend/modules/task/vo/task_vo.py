@@ -7,7 +7,7 @@ from pydantic import Field
 from backend.core.dto import StrictModel
 
 from .capability import Capability
-from .notification_vo import NotificationDetail
+from .notification_vo import NotificationBatchTarget, NotificationDetail
 
 TaskStatus = Literal[
     "documents_pending",
@@ -24,6 +24,7 @@ class TaskSummary(StrictModel):
     id: str
     account: str
     recordNumber: str
+    declarationNumber: str = ""
     supplier: str
     company: str
     currency: str
@@ -39,6 +40,7 @@ class TaskSummary(StrictModel):
     orderNumbers: list[str]
     lineCount: int
     expectedAmount: str | None = None
+    receivedAmount: str | None = None
     outstandingAmount: str | None
     receiptPercent: str | None
     receiptBarPercent: str | None
@@ -80,6 +82,7 @@ class TaskList(StrictModel):
 
 
 class TaskLine(StrictModel):
+    taskId: str = ""
     purchaseBasisId: str | None
     ledgerSha256: str | None
     requiresReview: bool
@@ -101,6 +104,9 @@ class TaskLine(StrictModel):
 
 
 class TaskDocument(StrictModel):
+    taskId: str = ""
+    recordNumber: str = ""
+    declarationNumber: str = ""
     orderId: str
     orderNumber: str
     status: Literal["pending", "failed", "ready"]
@@ -123,6 +129,8 @@ class ArchivedFile(StrictModel):
 class DeclarationDocument(StrictModel):
     """报关资料（报关单、销售合同、发票）：按报关单各一份，各供应商任务共用。"""
 
+    taskId: str = ""
+    recordNumber: str = ""
     type: Literal["customs_declaration", "sales_contract", "invoice"]
     label: str
     status: Literal["unregistered", "pending", "archived", "failed"]
@@ -142,6 +150,36 @@ class SignedContract(StrictModel):
     archivePath: str | None = None
     uploadedAt: str | None = None
     uploadedBy: str = ""
+
+
+class TaskReviewRow(StrictModel):
+    taskId: str
+    recordNumber: str
+    declarationNumber: str
+    reviewRevision: int
+    customsStatusLabel: str
+    financeStatusLabel: str
+    orderCount: int
+
+
+class TaskDeclarationRow(StrictModel):
+    taskId: str
+    recordNumber: str
+    declarationNumber: str
+    customs: DeclarationDocument | None = None
+    sales: DeclarationDocument | None = None
+    invoice: DeclarationDocument | None = None
+
+
+class TaskPreparation(StrictModel):
+    contractCount: int
+    archivedCount: int
+    contractsReady: bool
+    contractSummary: str
+    declarationCount: int
+    signedPendingCount: int
+    signedSummary: str
+    note: str
 
 
 class TaskCompletion(StrictModel):
@@ -169,6 +207,13 @@ class TaskEvent(StrictModel):
 
 
 class TaskDetail(StrictModel):
+    grouped: bool = False
+    memberTasks: list[TaskSummary] = Field(default_factory=list)
+    reviewRows: list[TaskReviewRow] = Field(default_factory=list)
+    declarationRows: list[TaskDeclarationRow] = Field(default_factory=list)
+    preparation: TaskPreparation | None = None
+    scopeRevision: str = ""
+    notificationTaskId: str = ""
     task: TaskSummary
     lines: list[TaskLine]
     reasons: list[str]
@@ -179,6 +224,8 @@ class TaskDetail(StrictModel):
     compare: Capability
     steps: list[TaskStep]
     documents: list[TaskDocument]
+    # 本次通知范围内的全部合同，保留各原任务的归档状态；单任务沿用 documents。
+    notificationDocuments: list[TaskDocument] | None = None
     declarationDocuments: list[DeclarationDocument] = Field(default_factory=list)
     signedContracts: list[SignedContract] = Field(default_factory=list)
     completion: TaskCompletion | None = None
@@ -197,6 +244,8 @@ class BoardNode(StrictModel):
 
 
 class BoardItem(StrictModel):
+    grouped: bool = False
+    taskIds: list[str] = Field(default_factory=list)
     task: TaskSummary
     steps: list[TaskStep]
     currentNode: str
@@ -207,6 +256,9 @@ class BoardItem(StrictModel):
     missing: list[str]
     # 能否在列表勾选后批量登记“线下已通知”；提交时后端逐个任务重新校验
     notifyRecord: Capability
+    # 本次允许批量登记的原任务；已通知及当前不可登记成员不在此范围。
+    notifyTargets: list[NotificationBatchTarget] = Field(default_factory=list)
+    notifyScopeRevision: str = ""
 
 
 class TaskBoard(StrictModel):

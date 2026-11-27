@@ -1,9 +1,9 @@
 import { useState } from "react";
 import { Alert, Badge, Button, DataTable, Dialog, Field } from "../../../shared/components/ui";
-import type { BoardItem, NotifyBatchResult } from "../types/board";
+import type { NotifyBatchGroup, NotifyGroupBatchResult } from "../types/board";
 
 /**
- * 批量登记“线下已通知供应商”：确认本页勾选的任务并展示逐任务结果。
+ * 批量登记“线下已通知供应商”：确认本页选中组，后端逐组事务提交并返回结果。
  * 只登记，不发送消息；通知日期由后端校验保存。失败后先关闭刷新核实，不直接重发。
  */
 export function NotifyBatchDialog({
@@ -14,9 +14,9 @@ export function NotifyBatchDialog({
   onClose,
   onSubmit,
 }: {
-  items: BoardItem[];
+  items: NotifyBatchGroup[];
   busy: boolean;
-  result: NotifyBatchResult | null;
+  result: NotifyGroupBatchResult | null;
   error: string;
   onClose: () => void;
   onSubmit: (note: string, notifiedOn: string) => void;
@@ -31,6 +31,7 @@ export function NotifyBatchDialog({
     }).format(new Date()),
   );
   const done = !!result || !!error;
+  const taskCount = items.reduce((count, item) => count + item.targets.length, 0);
   return (
     <Dialog title={done ? "批量登记结果" : "批量登记已通知"} busy={busy} onClose={onClose}>
       <form
@@ -42,8 +43,9 @@ export function NotifyBatchDialog({
         }}
       >
         <p className="tb-batch__help">
-          用于已在系统外（企微群、电话等）通知供应商开票的任务。本页已选 {items.length}{" "}
-          个任务，登记后进入“待供应商开票”。系统不会发送任何消息。
+          用于已在系统外（企微群、电话等）通知供应商开票的任务。本页已选 {items.length} 组、{taskCount}{" "}
+          个待通知任务。系统不会发送任何消息。已通知任务不在本次范围。
+          系统按组处理，一组内全部成功才保存；范围变化时跳过整组，请刷新后重新确认。
         </p>
         {!done && (
           <Field label="通知日期（北京时间）">
@@ -51,29 +53,43 @@ export function NotifyBatchDialog({
           </Field>
         )}
         {result && (
-          <Alert tone={result.skipped.length ? "warning" : "success"}>
-            已登记 {result.recorded.length} 个，跳过 {result.skipped.length} 个。
+          <Alert tone={result.skippedGroups || result.unknownGroups ? "warning" : "success"}>
+            {`已登记 ${result.recordedGroups} 组（${result.recordedTasks} 个任务），跳过 ${result.skippedGroups} 组，待核实 ${result.unknownGroups} 组。`}
           </Alert>
         )}
         {error && <Alert tone="danger">{error}</Alert>}
         <DataTable
           label="本次批量登记的任务"
           rows={items}
-          rowKey={(item) => item.task.id}
+          rowKey={(item) => item.id}
           minWidth={560}
           maxHeight="46dvh"
           columns={[
-            { key: "supplier", header: "供应商", render: (item) => item.task.supplier },
-            { key: "record", header: "CD 号", render: (item) => item.task.recordNumber || "—" },
+            { key: "supplier", header: "供应商", render: (item) => item.targets[0]?.supplier || "—" },
+            {
+              key: "record",
+              header: "本组 CD 号",
+              render: (item) => item.targets.map((target) => target.recordNumber || "—").join("、"),
+            },
             {
               key: "orders",
               header: done ? "处理结果" : "子采购单",
               render: (item) => {
-                if (!done) return item.task.orderNumbers.join("、") || "—";
-                const skipped = result?.skipped.find((entry) => entry.id === item.task.id);
-                if (skipped) return <span>{skipped.reason}</span>;
-                if (result?.recorded.some((entry) => entry.id === item.task.id))
-                  return <Badge tone="success">已登记</Badge>;
+                if (!done) return item.targets.flatMap((target) => target.orderNumbers).join("、") || "—";
+                const outcome = result?.groups.find((entry) => entry.id === item.id);
+                if (outcome)
+                  return (
+                    <span>
+                      <Badge tone={outcome.status === "recorded" ? "success" : "warning"}>
+                        {outcome.status === "recorded"
+                          ? "整组已登记"
+                          : outcome.status === "skipped"
+                            ? "整组跳过"
+                            : "结果待核实"}
+                      </Badge>{" "}
+                      {outcome.reason}
+                    </span>
+                  );
                 return "结果待核实，请刷新查看";
               },
             },
@@ -92,14 +108,14 @@ export function NotifyBatchDialog({
             />
           </label>
         )}
-        {busy && <p role="status">正在逐个登记，请稍候…</p>}
+        {busy && <p role="status">正在逐组登记，请稍候…</p>}
         <div className="tb-batch__actions">
           <Button disabled={busy} onClick={onClose}>
             {done ? "关闭" : "取消"}
           </Button>
           {!done && (
             <Button type="submit" variant="primary" disabled={busy || !items.length}>
-              {busy ? "登记中…" : `确认已通知 ${items.length} 个`}
+              {busy ? "登记中…" : `确认已通知 ${items.length} 组（${taskCount} 个任务）`}
             </Button>
           )}
         </div>

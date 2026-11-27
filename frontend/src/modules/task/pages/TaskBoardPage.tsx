@@ -11,27 +11,33 @@ import {
   ErrorState,
   Pagination,
   Skeleton,
+  Segmented,
 } from "../../../shared/components/ui";
-import { openLocalSession } from "../../identity/api";
 import { queryTaskBoard } from "../api/board";
-import { recordNotificationBatch } from "../api/task";
+import { recordNotificationGroups } from "../api/task";
 import { BoardNodeCards } from "../components/BoardNodeCards";
 import { BoardTaskItem } from "../components/BoardTaskItem";
 import { NotifyBatchDialog } from "../components/NotifyBatchDialog";
 import { SignedContractUpload } from "../components/SignedContractUpload";
 import { BoardSearch } from "../components/BoardSearch";
 import { readBoardQuery, writeBoardQuery } from "../hooks/board-query";
-import type { BoardItem, NotifyBatchResult, TaskBoard, TaskBoardQuery } from "../types/board";
+import type { NotifyBatchGroup, NotifyGroupBatchResult, TaskBoard, TaskBoardQuery } from "../types/board";
 import { stageLabels } from "../types/task";
 import "./task-board.css";
 
 type Remote = { kind: "loading" } | { kind: "error"; message: string } | { kind: "ready"; data: TaskBoard };
 // 批量登记弹窗：打开时固定本次任务，提交后保留逐任务结果直到关闭
-type NotifyBatch = { items: BoardItem[]; busy: boolean; result: NotifyBatchResult | null; error: string };
+type NotifyBatch = {
+  items: NotifyBatchGroup[];
+  groupBy: "supplier" | "declaration";
+  busy: boolean;
+  result: NotifyGroupBatchResult | null;
+  error: string;
+};
 
 /**
  * 开票跟进：节点卡片筛选，列表卡片内含查询栏与任务卡片；单项处理进入详情。
- * 回签合同支持批量上传；线下已通知的任务可在本页勾选后批量登记。
+ * 回签合同支持批量上传；点击批量登记后，才能勾选本页线下已通知的任务。
  */
 export function TaskBoardPage() {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -43,14 +49,15 @@ export function TaskBoardPage() {
   const [uploading, setUploading] = useState(false);
   // 本页勾选的任务 ID；查询条件、分页变化或重新加载后清空，避免登记看不到的任务
   const [selected, setSelected] = useState<string[]>([]);
+  const [selecting, setSelecting] = useState(false);
   const [batch, setBatch] = useState<NotifyBatch | null>(null);
 
   useEffect(() => {
     let active = true;
+    const controller = new AbortController();
     async function load() {
       try {
-        await openLocalSession();
-        const data = await queryTaskBoard(query);
+        const data = await queryTaskBoard(query, controller.signal);
         if (!active) return;
         setState({ kind: "ready", data });
         setLast(data);
@@ -65,20 +72,25 @@ export function TaskBoardPage() {
     void load();
     return () => {
       active = false;
+      controller.abort();
     };
   }, [query, refresh]);
 
   function change(patch: Partial<TaskBoardQuery>) {
     setState({ kind: "loading" });
-    setSelected([]);
+    exitSelection();
     const next = { ...query, page: 1, ...patch };
     setSearchParams(writeBoardQuery(next), { replace: true });
     setRefresh((n) => n + 1);
   }
   function reload() {
     setState({ kind: "loading" });
-    setSelected([]);
+    exitSelection();
     setRefresh((n) => n + 1);
+  }
+  function exitSelection() {
+    setSelecting(false);
+    setSelected([]);
   }
   function toggle(id: string) {
     setSelected((current) =>
@@ -87,20 +99,22 @@ export function TaskBoardPage() {
   }
   async function recordBatch(note: string, notifiedOn: string) {
     if (!batch) return;
-    const items = batch.items;
-    setBatch({ items, busy: true, result: null, error: "" });
+    const { items, groupBy } = batch;
+    setBatch({ items, groupBy, busy: true, result: null, error: "" });
     try {
-      const result = await recordNotificationBatch(
-        items.map((item) => item.task.id),
+      const result = await recordNotificationGroups(
+        groupBy,
+        items.map(({ id, scopeRevision }) => ({ id, scopeRevision })),
         note,
         notifiedOn,
       );
-      setBatch({ items, busy: false, result, error: "" });
+      setBatch({ items, groupBy, busy: false, result, error: "" });
     } catch (error) {
       // 写操作不自动重试；结果不明时关闭后刷新列表核实
       const message = error instanceof Error ? error.message : "批量登记请求失败";
       setBatch({
         items,
+        groupBy,
         busy: false,
         result: null,
         error: `${message}；部分任务可能已登记，请关闭后核实列表再操作。`,
@@ -146,6 +160,7 @@ export function TaskBoardPage() {
   const selectable =
     state.kind === "ready" ? state.data.items.filter((item) => item.notifyRecord.allowed) : [];
   const chosen = selectable.filter((item) => selected.includes(item.task.id));
+  const chosenTargets = chosen.flatMap((item) => item.notifyTargets);
   const allChosen = selectable.length > 0 && chosen.length === selectable.length;
 
   return (
@@ -172,15 +187,44 @@ export function TaskBoardPage() {
           }
           actions={
             <>
-              {selectable.length > 0 && (
+              {selecting ? (
+                <>
+                  <Button size="sm" disabled={busy} onClick={exitSelection}>
+                    取消批量
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="primary"
+                    disabled={busy || !chosenTargets.length}
+                    onClick={() =>
+                      setBatch({
+                        items: chosen.map((item) => ({
+                          id: item.task.id,
+                          scopeRevision: item.notifyScopeRevision,
+                          targets: item.notifyTargets,
+                        })),
+                        groupBy: query.groupBy || "supplier",
+                        busy: false,
+                        result: null,
+                        error: "",
+                      })
+                    }
+                  >
+                    确认登记已通知（{chosenTargets.length}）
+                  </Button>
+                </>
+              ) : (
                 <Button
-                  disabled={busy || !chosen.length}
-                  onClick={() => setBatch({ items: chosen, busy: false, result: null, error: "" })}
+                  size="sm"
+                  variant="primary"
+                  disabled={busy || !selectable.length}
+                  title={!busy && !selectable.length ? "本页没有可登记已通知的任务" : undefined}
+                  onClick={() => setSelecting(true)}
                 >
-                  {`批量登记已通知${chosen.length ? `（${chosen.length}）` : ""}`}
+                  批量登记已通知
                 </Button>
               )}
-              <Button disabled={busy} onClick={() => setUploading(true)}>
+              <Button size="sm" disabled={busy} onClick={() => setUploading(true)}>
                 批量上传回签合同
               </Button>
             </>
@@ -261,23 +305,38 @@ export function TaskBoardPage() {
             onSubmit={(note, notifiedOn) => void recordBatch(note, notifiedOn)}
           />
         )}
+        <div className="tb-view-mode">
+          <Segmented
+            label="开票任务展示方式"
+            value={query.groupBy || "supplier"}
+            options={[
+              { value: "supplier", label: "按供应商合并" },
+              { value: "declaration", label: "按报关单分开" },
+            ]}
+            disabled={busy}
+            onChange={(groupBy) => change({ groupBy })}
+          />
+        </div>
         <section className="tb-list" aria-labelledby="tb-list-title">
           {state.kind === "loading" && <Skeleton label="正在读取开票任务" />}
 
-          {selectable.length > 0 && (
+          {selecting && selectable.length > 0 && (
             <div className="tb-select">
               <label className="tb-select__all">
                 <input
                   type="checkbox"
                   checked={allChosen}
+                  ref={(input) => {
+                    if (input) input.indeterminate = chosen.length > 0 && !allChosen;
+                  }}
                   onChange={() => setSelected(allChosen ? [] : selectable.map((item) => item.task.id))}
                 />
-                全选本页待通知任务（{selectable.length} 个）
+                全选本页可登记项（{selectable.length} 项）
               </label>
               <span className="tb-select__hint" role="status">
                 {chosen.length
-                  ? `已选 ${chosen.length} 个`
-                  : "勾选线下已通知的任务后，点击顶部“批量登记已通知”"}
+                  ? `已选 ${chosen.length} 项，待登记 ${chosenTargets.length} 个任务`
+                  : "可全选本页后逐项取消勾选，仅登记线下已通知的任务"}
               </span>
             </div>
           )}
@@ -296,11 +355,15 @@ export function TaskBoardPage() {
                 <BoardTaskItem
                   key={item.task.id}
                   item={item}
-                  selection={{
-                    checked: selected.includes(item.task.id),
-                    disabled: false,
-                    onToggle: () => toggle(item.task.id),
-                  }}
+                  selection={
+                    selecting
+                      ? {
+                          checked: selected.includes(item.task.id),
+                          disabled: false,
+                          onToggle: () => toggle(item.task.id),
+                        }
+                      : undefined
+                  }
                 />
               ))
             ) : (

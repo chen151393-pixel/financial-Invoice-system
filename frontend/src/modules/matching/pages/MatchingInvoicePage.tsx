@@ -2,7 +2,6 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router";
 import { paths } from "../../../app/paths";
 import { Alert, Button, Card, EmptyState, ErrorState, Skeleton } from "../../../shared/components/ui";
-import { openLocalSession } from "../../identity/api";
 import {
   cancelAllocation,
   confirmAllocation,
@@ -39,10 +38,10 @@ export function MatchingInvoicePage({ invoiceId }: { invoiceId: string }) {
 
   useEffect(() => {
     let active = true;
+    const controller = new AbortController();
     async function load() {
       try {
-        await openLocalSession();
-        const data = await getInvoiceMatching(invoiceId);
+        const data = await getInvoiceMatching(invoiceId, controller.signal);
         if (active) setState({ kind: "ready", data });
       } catch (error) {
         if (active)
@@ -52,6 +51,7 @@ export function MatchingInvoicePage({ invoiceId }: { invoiceId: string }) {
     void load();
     return () => {
       active = false;
+      controller.abort();
     };
   }, [invoiceId, refresh]);
 

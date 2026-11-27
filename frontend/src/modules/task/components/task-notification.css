@@ -24,6 +24,9 @@
   border-left: 1px solid var(--color-border);
   padding-left: 32px;
 }
+.itn-columns > section {
+  min-width: 0;
+}
 .itn-facts {
   display: grid;
   grid-template-columns: 80px minmax(0, 1fr);
@@ -90,6 +93,26 @@
 .itn-files {
   padding-block: 16px;
   overflow-wrap: anywhere;
+}
+.itn-files > summary {
+  cursor: pointer;
+}
+.itn-files > summary:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+.itn-files__expand,
+.itn-files__collapse {
+  margin-left: var(--space-control);
+  color: var(--color-primary);
+}
+.itn-files__content {
+  padding-top: var(--space-control);
+}
+.itn-files:not([open]) > .itn-files__content,
+.itn-files:not([open]) .itn-files__collapse,
+.itn-files[open] .itn-files__expand {
+  display: none;
 }
 .itn-history {
   margin-top: var(--space-layout);

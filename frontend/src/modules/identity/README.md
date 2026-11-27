@@ -39,7 +39,7 @@
 | `PUT /api/identity/departments/{id}/roles`           | 部门默认角色                     |
 | `PUT /api/identity/users/{id}/access`                | 个人角色与启用状态               |
 
-兼容函数 `openLocalSession` 仅检查现有会话，待业务调用方统一迁移命名后删除。
+会话由全局 `SessionProvider` 检查，导航与窗口重新聚焦时更新页面授权。业务页面直接请求接口，由后端逐次认证，401/403 通过公共请求客户端通知身份层；已移除无调用方的 `openLocalSession` 别名，避免多余的会话等待。
 
 ## 约束
 

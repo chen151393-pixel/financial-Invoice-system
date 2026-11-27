@@ -10,6 +10,7 @@ from backend.core.write_lock import transaction
 from ..dao import task_dao
 from ..mapper.delivery_mapper import view
 from ..vo.delivery_vo import DeliveryCandidate, DeliveryCandidates
+from . import notification_scope
 from .delivery_snapshot import digest
 from .delivery_state import now, owned, require_writer, transition
 
@@ -98,7 +99,8 @@ class DeliveryReconcileService:
             raise ApiError(409, "渠道证据不完整或已变化，不能关联，请重新核实")
         try:
             with transaction(self.engine, "task") as connection:
-                task = task_dao.get(connection, task_id, lock=True)
+                notification_scope.members(connection, row["task_id"], row["notification_id"], lock=True)
+                task = task_dao.get(connection, row["task_id"])
                 current = owned(connection, task_id, row["id"], lock=True)
                 if current["status"] != "unknown":
                     raise ApiError(409, "发送记录已变化，请刷新")

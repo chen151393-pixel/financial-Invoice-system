@@ -7,6 +7,7 @@ from pathlib import Path
 from backend.core.errors import ApiError
 
 from ..dao import document_dao, notification_dao, supplier_group_dao, task_dao, task_line_dao
+from . import notification_scope
 from .basis_guard import reason as basis_reason
 
 
@@ -17,7 +18,8 @@ def digest(value):
 
 
 def evidence_warning(connection, row):
-    block = basis_reason(connection, row["task_id"])
+    members, _ = notification_scope.members(connection, row["task_id"], row["notification_id"])
+    block = next((reason for task in members if (reason := basis_reason(connection, task["id"]))), "")
     binding = supplier_group_dao.by_supplier(connection, row["snapshot_json"]["supplierId"])
     if not binding or not binding["enabled"] or binding["version"] != row["group_binding_version"]:
         return block or "提交后供应商群绑定已变化；此回执仅证明原快照目标的发送事实，请人工核对"
@@ -28,18 +30,30 @@ def load(connection, task_id, *, lock_binding=False):
     task = task_dao.get(connection, task_id)
     if task is None:
         raise ApiError(404, "开票任务不存在")
-    return {
+    latest = notification_dao.latest(connection, task_id)
+    members, scope = (
+        notification_scope.members(connection, task_id, latest["id"]) if latest else ([task], None)
+    )
+    if scope and scope["taskId"] != task_id:
+        raise ApiError(409, "该通知属于供应商合并通知，请从合并任务入口预览或发送")
+    notification_scope.validate(connection, scope)
+    notices = {member["id"]: notification_dao.latest(connection, member["id"]) for member in members}
+    data = {
         "task": task,
-        "latest": notification_dao.latest(connection, task_id),
+        "latest": latest,
         "binding": supplier_group_dao.by_supplier(connection, task["supplier_id"], lock=lock_binding),
-        "documents": document_dao.by_task(connection, task_id),
-        "lines": task_line_dao.by_tasks(connection, [task_id]),
+        "documents": [doc for member in members for doc in document_dao.by_task(connection, member["id"])],
+        "lines": task_line_dao.by_tasks(connection, [member["id"] for member in members]),
+        "scope": scope,
+        "scopeTasks": members,
+        "scopeNotices": notices,
     }
+    return data
 
 
 def snapshot(data, corp_id, group, files):
     task, latest, binding = data["task"], data["latest"], data["binding"]
-    return {
+    result = {
         "taskId": task["id"],
         "account": task["ns_account"],
         "supplierId": task["supplier_id"],
@@ -70,11 +84,32 @@ def snapshot(data, corp_id, group, files):
         ],
         "files": files,
     }
+    if data.get("scope"):
+        result["members"] = [
+            [
+                member["id"],
+                member["review_id"],
+                member["review_revision"],
+                data["scopeNotices"][member["id"]]["id"],
+            ]
+            for member in data["scopeTasks"]
+        ]
+    return result
 
 
 def read_files(data, root):
     orders = {row["purchase_order_id"] for row in data["lines"]}
-    documents = data["documents"]
+    saved = {}
+    for doc in data["documents"]:
+        previous = saved.get(doc["purchase_order_id"])
+        if previous and (previous["sha256"], previous["ns_environment"], previous["ns_file_id"]) != (
+            doc["sha256"],
+            doc["ns_environment"],
+            doc["ns_file_id"],
+        ):
+            raise ApiError(409, "同一子采购单的归档合同来源或内容不同，请先核实")
+        saved.setdefault(doc["purchase_order_id"], doc)
+    documents = list(saved.values())
     if not orders or orders != {row["purchase_order_id"] for row in documents}:
         raise ApiError(409, "本任务合同不齐全，请先完成归档")
     if not root:

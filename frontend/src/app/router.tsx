@@ -7,6 +7,7 @@ import { RequireSession } from "../modules/identity/RequireSession";
 import { identityRoutes } from "../modules/identity/routes";
 import { SidebarExpansionProvider } from "../shared/components/Sidebar";
 import { homePath, legacyPaths, paths, type View } from "./paths";
+import { WorkspaceLoading } from "./WorkspaceLoading";
 
 // 各页面按需加载；新增页面只在这里登记路由。
 const PlWorkspacePage = lazy(() => import("./PlWorkspacePage"));
@@ -30,7 +31,7 @@ const TaskWorkflowDemoWorkspacePage = lazy(() => import("./TaskWorkflowDemoWorks
 function page(view: View, label: string, element: ReactNode) {
   return (
     <RequirePage view={view}>
-      <Suspense fallback={<p role="status">正在加载{label}…</p>}>{element}</Suspense>
+      <Suspense fallback={<WorkspaceLoading view={view} label={label} />}>{element}</Suspense>
     </RequirePage>
   );
 }
@@ -122,6 +123,10 @@ export const router = createBrowserRouter([
           {
             path: paths.supplierGroups,
             element: page("supplier-profiles", "供应商档案", <TaskWorkspacePage />),
+          },
+          {
+            path: `${paths.supplierTasks}/:taskId`,
+            element: page("invoice-followup", "供应商开票任务详情", <TaskWorkspacePage />),
           },
           {
             path: `${paths.tasks}/:taskId`,

@@ -15,6 +15,7 @@ from backend.core.write_lock import transaction
 from backend.modules.identity.public import actor_names
 
 from ..dao import notification_dao, notification_delivery_dao, supplier_group_dao, task_dao
+from ..dao.notification_scope_dao import find_scope
 from ..policy.delivery_policy import ACTIVE, BLOCK_REASON
 from ..policy.notification_policy import OFFLINE_CONTENT, OFFLINE_NOTE, batch_record_block
 from ..vo.notification_vo import NotificationBatchResult
@@ -33,6 +34,9 @@ def _record(connection, task_id, note, actor, now, notified_on):
     if notification_delivery_dao.overlapping(connection, task_id, ACTIVE):
         raise ApiError(409, BLOCK_REASON)
     latest = notification_dao.latest(connection, task_id)
+    scope = find_scope(connection, task_id, latest["id"]) if latest else None
+    if scope and len(scope["members"]) > 1:
+        raise ApiError(409, "该通知已按供应商合并，请从合并详情统一登记")
     block = batch_record_block(task["status"], latest["status"] if latest else None)
     if block:
         raise ApiError(409, block)
@@ -71,13 +75,17 @@ def _record(connection, task_id, note, actor, now, notified_on):
     change_status(connection, task, "awaiting_invoice", actor, note, now)
 
 
-def record_batch(engine, body, actor):
+def validate_batch(body, actor):
     if actor.startswith("service:"):
         raise ApiError(403, "服务身份只读，不能保存或登记通知")
     today = datetime.now(BEIJING).date()
     if body.notifiedOn is not None and body.notifiedOn > today:
         raise ApiError(400, "通知日期不能晚于今天")
-    note = body.note or OFFLINE_NOTE
+    return body.note or OFFLINE_NOTE
+
+
+def record_batch(engine, body, actor):
+    note = validate_batch(body, actor)
     recorded, skipped = [], []
     for task_id in body.taskIds:
         try:

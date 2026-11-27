@@ -198,6 +198,22 @@ def line_context(connection, line_ids, *, lock=False):
     return [dict(row) for row in connection.execute(query).mappings()]
 
 
+def line_labels(connection, line_ids):
+    """工作台只展示单号与供应商；同样保留停用记录，不计算比对摘要。"""
+    if not line_ids:
+        return {}
+    query = (
+        select(purchase_order_lines.c.id, purchase_orders.c.order_no, suppliers.c.name.label("supplier_name"))
+        .select_from(
+            purchase_order_lines.join(
+                purchase_orders, purchase_orders.c.id == purchase_order_lines.c.purchase_order_id
+            ).outerjoin(suppliers, suppliers.c.id == purchase_orders.c.supplier_id)
+        )
+        .where(purchase_order_lines.c.id.in_(line_ids))
+    )
+    return {row["id"]: dict(row) for row in connection.execute(query).mappings()}
+
+
 def inherited_orders(connection, parent_id, values, now):
     ids = list(
         connection.execute(

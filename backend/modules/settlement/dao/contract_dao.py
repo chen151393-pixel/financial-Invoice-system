@@ -3,13 +3,23 @@
 from sqlalchemy import delete, insert, select
 
 from ..entity.contract import settlement_contracts as contracts
-from .document_scope import condition
+from .document_scope import belongs, condition, conditions
 from .document_scope import values as scope_values
 
 
 def of_batch(connection, batch_id):
     query = select(contracts).where(condition(contracts, batch_id)).order_by(contracts.c.contract_no)
     return [dict(row) for row in connection.execute(query).mappings()]
+
+
+def by_scopes(connection, references):
+    result = {reference: [] for reference in references}
+    if references:
+        query = select(contracts).where(conditions(contracts, references)).order_by(contracts.c.contract_no)
+        rows = [dict(row) for row in connection.execute(query).mappings()]
+        for reference in references:
+            result[reference] = [row for row in rows if belongs(row, reference)]
+    return result
 
 
 def direct_owners(connection, numbers):

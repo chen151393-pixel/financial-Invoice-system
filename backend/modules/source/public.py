@@ -17,11 +17,11 @@ from .service.contract_service import SubpoContractSource
 from .service.customs_number_reader import declarant_names_by_number as declarant_names_by_number
 from .service.customs_number_reader import declaration_refs_by_number as declaration_refs_by_number
 from .service.customs_number_reader import declarations_by_number
-from .service.declaration_service import DeclarationService, digest, snapshot
+from .service.declaration_service import DeclarationService, digest, snapshot, snapshots
 from .service.directory_service import SourceDirectory, china_day_range, declaration_ids_created
 from .service.pl_comparison_service import PlScriptService
 from .service.purchase_context import line_declarations, purchase_lines, supplier_line_ids
-from .service.workbench_reader import workbench_declarations, workbench_purchases
+from .service.workbench_reader import workbench_declarations, workbench_line_labels, workbench_purchases
 from .service.writeback_context import parent_sub_order_counts, writeback_context
 
 __all__ = [
@@ -35,6 +35,7 @@ __all__ = [
     "admission_reason",
     "workbench_declarations",
     "workbench_purchases",
+    "workbench_line_labels",
     "unit_names",
     "unit_label",
     # 采购报关联查（实时 NS）与子采购合同
@@ -45,6 +46,7 @@ __all__ = [
     "DeclarationService",
     "digest",
     "snapshot",
+    "snapshots",
     # 来源目录（task）：供应商、采购公司、子采购单号与行品名的只读查询
     "SourceDirectory",
     # 子采购行比对上下文（matching）：purchase_lines(connection, line_ids) → {ID: 上下文含 digest}

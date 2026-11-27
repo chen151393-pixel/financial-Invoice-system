@@ -27,7 +27,7 @@ test("公网已登录会话不重新请求本机登录", async (t) => {
     calls.push(url);
     return Response.json({ authenticated: true });
   });
-  await identity.openLocalSession();
+  await identity.getSession();
   assert.deepEqual(calls, ["/api/session"]);
 });
 
@@ -39,14 +39,14 @@ test("未登录和连接失败都不自动建立本机会话", async (t) => {
       ? Response.json({ error: "请先登录" }, { status: 401 })
       : Response.json({ authenticated: true });
   });
-  await assert.rejects(identity.openLocalSession(), /请先登录/);
+  await assert.rejects(identity.getSession(), /请先登录/);
   assert.deepEqual(calls, ["/api/session"]);
   calls.length = 0;
   mock.mock.mockImplementation(async (url) => {
     calls.push(url);
     throw new TypeError("network interrupted");
   });
-  await assert.rejects(identity.openLocalSession(), /无法连接/);
+  await assert.rejects(identity.getSession(), /无法连接/);
   assert.deepEqual(calls, ["/api/session"]);
 });
 

@@ -28,10 +28,13 @@ def replace_account(connection, account, rows, supplier_rows):
         connection.execute(insert(suppliers), supplier_rows[start : start + 300])
 
 
-def browse(connection, query, key, month_start, declaration_ids=None, *, customs_approved_ids=()):
+def browse(connection, query, key, month_start, month_end, declaration_ids=None, *, customs_approved_ids=()):
     fresh = and_(jobs.c.requested_revision == jobs.c.completed_revision, jobs.c.calculation_key == key)
     pending = snapshots.c.review_status == "pending"
     approved = snapshots.c.review_status == "approved"
+    approved_this_month = and_(
+        approved, snapshots.c.approved_at >= month_start, snapshots.c.approved_at < month_end
+    )
     customs_approved = snapshots.c.customs_declaration_id.in_(customs_approved_ids)
     # 旧快照的 margin_alert 同时包含口径不一致，分类必须以逐行状态为准。
     alert = and_(pending, fresh, margin_status_matches("negative", connection.dialect.name))
@@ -57,7 +60,7 @@ def browse(connection, query, key, month_start, declaration_ids=None, *, customs
         "approved": approved,
         "customsApproved": customs_approved,
         "changed": and_(pending, snapshots.c.source_changed.is_(True)),
-        "approvedThisMonth": and_(approved, snapshots.c.approved_at >= month_start),
+        "approvedThisMonth": approved_this_month,
         "marginAlert": alert,
         "unitMismatch": unit_alert,
         "autoApprovable": auto,
@@ -75,6 +78,7 @@ def browse(connection, query, key, month_start, declaration_ids=None, *, customs
     # MySQL SUM(CASE...) 返回 Decimal；这里是计数，不是金额，统一转为接口整数。
     counts = {name: int(value) for name, value in counts.items()}
     selected = {
+        "approved_this_month": approved_this_month,
         "pending": pending,
         "approved": approved,
         "customs_approved": customs_approved,
@@ -85,6 +89,7 @@ def browse(connection, query, key, month_start, declaration_ids=None, *, customs
     if query.status in selected:
         conditions.append(selected[query.status])
     count_key = {
+        "approved_this_month": "approvedThisMonth",
         "margin_alert": "marginAlert",
         "unit_mismatch": "unitMismatch",
         "auto": "autoApprovable",

@@ -46,6 +46,7 @@ class TaskBoardQuery(TaskScopeQuery):
     """
 
     keyword: str = Field(default="", max_length=120)
+    groupBy: Literal["supplier", "declaration"] = "declaration"
     supplierName: str = Field(default="", max_length=120)
     recordNo: str = Field(default="", max_length=120)
     purchaseOrderNo: str = Field(default="", max_length=120)

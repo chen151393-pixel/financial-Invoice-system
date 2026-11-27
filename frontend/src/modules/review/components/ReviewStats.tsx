@@ -3,7 +3,7 @@ import type { ComparisonResult, ReviewFilter } from "../types";
 
 /**
  * 财务核对概况：张数全部来自后端列表计数（随查询条件变化），前端只展示。
- * 六张卡均可点击；本月审核通过卡进入全部已审核列表，其余按对应范围筛选。
+ * 六张卡均可点击；卡片计数与对应列表使用相同的后端筛选范围。
  */
 export function ReviewStats({
   counts,
@@ -67,9 +67,9 @@ export function ReviewStats({
         glyph="月"
         label="本月审核通过"
         value={`${counts.approvedThisMonth} 张`}
-        note="按北京时间自然月统计，点击查看全部审核通过"
-        selected={value === "approved"}
-        onSelect={() => onSelect("approved")}
+        note="按北京时间自然月统计，点击查看本月审核通过"
+        selected={value === "approved_this_month"}
+        onSelect={() => onSelect("approved_this_month")}
       />
     </StatGrid>
   );

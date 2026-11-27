@@ -6,25 +6,15 @@ from sqlalchemy.exc import SQLAlchemyError
 
 from backend.core.errors import ApiError
 
-from ..dao import (
-    contract_job_dao,
-    declaration_document_dao,
-    document_dao,
-    event_dao,
-    notification_dao,
-    notification_delivery_dao,
-    signed_contract_dao,
-    supplier_group_dao,
-    task_dao,
-    task_line_dao,
-)
-from ..mapper import document_mapper, notification_mapper, task_mapper
-from ..policy.delivery_policy import ACTIVE, BLOCK_REASON, LABELS, submit_reason
+from ..dao import notification_dao, task_dao, task_line_dao
+from ..dao.notification_scope_dao import match_scope
+from ..mapper import document_mapper, notification_mapper, task_detail_mapper, task_mapper
+from ..policy.delivery_policy import BLOCK_REASON, LABELS, submit_reason
 from ..policy.stage_policy import declaration_stage
 from ..policy.task_policy import SUPERSEDED_REASON, missing_identity_reasons
 from ..vo.capability import Capability
 from ..vo.task_vo import SupplierOption, TaskDetail, TaskDocument, TaskGroup, TaskList
-from .basis_guard import reason as basis_reason
+from .task_detail_reader import read_details
 
 READ_ERROR = "开票任务读取失败，请检查业务数据库及迁移状态"
 
@@ -98,12 +88,16 @@ class TaskService:
         return sorted(options, key=lambda option: (option.name, int(option.id)))
 
     def names(self, tasks, lines):
-        return self.directory.describe(
+        names = self.directory.describe(
             supplier_ids=[task["supplier_id"] for task in tasks if task["supplier_id"]],
             company_ids=[task["company_id"] for task in tasks if task["company_id"]],
             order_ids=[line["purchase_order_id"] for line in lines],
             line_ids=[line["purchase_line_id"] for line in lines],
         )
+        names["declarations"] = self.directory.declarations(
+            [task["customs_declaration_id"] for task in tasks]
+        )
+        return names
 
     def _group(self, group_by, key, rows, lines, names, contacts):
         column = "supplier_id" if group_by == "supplier" else "customs_declaration_id"
@@ -126,48 +120,38 @@ class TaskService:
             tasks=summaries,
         )
 
-    def _load(self, task_id):
+    def detail(self, task_id, *, scope_member=False):
         try:
             with self.engine.connect() as connection:
                 task = task_dao.get(connection, task_id)
                 if task is None:
                     raise ApiError(404, "开票任务不存在")
-                return {
-                    "basis_reason": basis_reason(connection, task_id),
-                    "task": task,
-                    "lines": task_line_dao.by_tasks(connection, [task_id]),
-                    "documents": document_dao.by_task(connection, task_id),
-                    "declaration_documents": declaration_document_dao.by_declarations(
-                        connection, [task["customs_declaration_id"]]
-                    ).get(task["customs_declaration_id"], {}),
-                    "contract_jobs": contract_job_dao.by_task(connection, task_id),
-                    "notifications": notification_dao.history(connection, task_id),
-                    "contact": notification_dao.latest_sent_by_tasks(connection, [task_id]).get(task_id),
-                    "deliveries": notification_delivery_dao.history(connection, task_id),
-                    "delivery_blocked": bool(
-                        notification_delivery_dao.overlapping(connection, task_id, ACTIVE)
-                    ),
-                    "events": event_dao.by_task(connection, task_id),
-                    "binding": supplier_group_dao.by_supplier(connection, task["supplier_id"])
-                    if task["supplier_id"]
-                    else None,
-                }
+                details, _ = self.details(connection, [task], scope_member=scope_member)
+                return details[0]
         except SQLAlchemyError:
             raise ApiError(503, READ_ERROR) from None
+
+    def details(self, connection, rows, *, scope_member=True):
+        data = read_details(connection, rows)
+        names = self.names(rows, data["lines"])
+        details = []
+        for row in rows:
+            task_data = data["tasks"][row["id"]]
+            latest = data["latest"].get(row["id"])
+            scope = (
+                match_scope(data["scopes"].get(row["id"], []), row["id"], latest["id"])
+                if latest and not scope_member
+                else None
+            )
+            details.append(self._detail(task_data, names, data["signed"], scope=scope))
+        return details, data
 
     def order_ids(self, lines):
         return sorted({line["purchase_order_id"] for line in lines})
 
-    def detail(self, task_id):
-        data = self._load(task_id)
+    def _detail(self, data, names, signed, *, scope=None):
         task, lines = data["task"], data["lines"]
         order_ids = self.order_ids(lines)
-        try:
-            with self.engine.connect() as connection:
-                signed = signed_contract_dao.by_orders(connection, order_ids)
-        except SQLAlchemyError:
-            raise ApiError(503, READ_ERROR) from None
-        names = self.names([task], lines)
         summary = task_mapper.summary(task, lines, names, data["contact"])
         documents = self._documents(
             task, self.order_ids(lines), data["documents"], names, data["contract_jobs"]
@@ -211,9 +195,14 @@ class TaskService:
                 document.prepare = Capability(allowed=False, reason=block)
             notification.edit = Capability(allowed=False, reason=block)
             notification.record = Capability(allowed=False, reason=block)
+        if scope and len(scope["members"]) > 1:
+            reason = "该通知已按供应商合并，请切换供应商合并视图办理"
+            notification.edit = Capability(reason=reason)
+            notification.record = Capability(reason=reason)
+            notification.send = Capability(reason=reason)
         prepare_reason = next((doc.prepare.reason for doc in documents if not doc.prepare.allowed), "")
         completion = document_mapper.completion(order_ids, documents, data["declaration_documents"], signed)
-        return TaskDetail(
+        detail = TaskDetail(
             task=summary,
             lines=task_mapper.lines(lines, names, task["currency"]),
             reasons=missing_identity_reasons(task["supplier_id"], task["company_id"], task["currency"]),
@@ -250,6 +239,7 @@ class TaskService:
             notification=notification,
             events=task_mapper.events(data["events"]),
         )
+        return task_detail_mapper.sections(detail)
 
     def _declaration_unavailable(self):
         if self.archive is None or self.archive.root is None:
@@ -278,6 +268,12 @@ class TaskService:
             block = unavailable or ("子采购单编号缺失" if not number else "")
             result.append(
                 TaskDocument(
+                    taskId=str(task["id"]),
+                    recordNumber=task["record_no"] or "",
+                    declarationNumber=(
+                        names.get("declarations", {}).get(task["customs_declaration_id"]) or {}
+                    ).get("declaration_no")
+                    or "",
                     orderId=str(order_id),
                     orderNumber=number,
                     status="ready"

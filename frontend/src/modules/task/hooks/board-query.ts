@@ -27,6 +27,7 @@ function pageNumber(value: string | null, fallback: number) {
 /** 地址只保存查询与分页状态；业务过滤和参数合法性由后端处理。 */
 export function readBoardQuery(params: URLSearchParams): TaskBoardQuery {
   return {
+    groupBy: params.get("groupBy") === "declaration" ? "declaration" : "supplier",
     keyword: params.get("keyword") || "",
     supplierId: params.get("supplierId") || "",
     ...Object.fromEntries(TEXT_KEYS.filter((key) => params.has(key)).map((key) => [key, params.get(key)])),
@@ -38,6 +39,7 @@ export function readBoardQuery(params: URLSearchParams): TaskBoardQuery {
 
 export function writeBoardQuery(query: TaskBoardQuery): URLSearchParams {
   const params = new URLSearchParams();
+  if (query.groupBy === "declaration") params.set("groupBy", query.groupBy);
   for (const key of TEXT_KEYS) if (query[key]) params.set(key, query[key]);
   if (query.node) params.set("node", query.node);
   if (query.page !== 1) params.set("page", String(query.page));

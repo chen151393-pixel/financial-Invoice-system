@@ -1,6 +1,6 @@
 """海关回执接口：导入、列表与重新匹配。比对规则与可操作判断在后端。"""
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Query
 
 from backend.core.dependencies import Owner
 
@@ -13,6 +13,7 @@ from ..dto.customs_receipt_dto import (
 from ..vo.customs_import_vo import CustomsImportJob, CustomsImportJobs
 from ..vo.customs_receipt_vo import (
     CustomsApproveResult,
+    CustomsImportHistory,
     CustomsReceiptList,
     RematchResult,
 )
@@ -20,6 +21,14 @@ from ..vo.customs_receipt_vo import (
 
 def create_router(service, approval, imports=None):
     router = APIRouter(prefix="/api/review/customs-receipts", tags=["海关报关单比对"])
+
+    @router.get("/import-history", response_model=CustomsImportHistory)
+    def import_history(
+        owner: Owner,
+        page: int = Query(1, ge=1),
+        pageSize: int = Query(5, ge=1, le=20),
+    ):
+        return service.import_history(page, pageSize)
 
     @router.post("/approve-batch", response_model=CustomsApproveResult)
     def approve_batch(body: CustomsApproveRequest, owner: Owner):

@@ -89,6 +89,47 @@ class DocumentReader:
             for group_id, (context, rows) in contexts.items()
         }
 
+    def states(self, connection, contexts):
+        """批量读取混合作用域；共享来源事实，提单、合同及返回主体仍按作用域隔离。"""
+        if not contexts:
+            return {}
+        references = list(contexts)
+        items = [item for _, rows in contexts.values() for item in rows]
+        facts = source_facts(connection, items)
+        bills = bill_dao.by_scopes(connection, references)
+        contracts = contract_dao.by_scopes(connection, references)
+        lines = settlement_declaration_lines(connection, [item["declaration_no"] for item in items])
+        # 合同可能引用已停用主体，不能只从当前启用主体中取回显示资料。
+        parties = party_dao.by_ids(
+            connection,
+            {
+                row[key]
+                for rows in contracts.values()
+                for row in rows
+                for key in ("seller_party_id", "buyer_party_id")
+            },
+        )
+        files = {
+            row["declaration_no"]: row
+            for row in (self.declaration_files.state(connection, items) if self.declaration_files else [])
+        }
+        result = {}
+        for reference, (context, rows) in contexts.items():
+            group_id = context.get("document_group_id")
+            party_ids = {
+                row[key] for row in contracts[reference] for key in ("seller_party_id", "buyer_party_id")
+            }
+            snapshot = dict(
+                bills={group_id: bills[reference]},
+                contracts={group_id: contracts[reference]},
+                lines=lines,
+                facts=facts,
+                files=files,
+                parties={identity: party for identity, party in parties.items() if identity in party_ids},
+            )
+            result[reference] = self.state(connection, context, rows, snapshot=snapshot)
+        return result
+
     def blocking_reason(self, connection, batch, items):
         """香港批次确认资料已出前的校验；直接收汇资料不参与该批次状态转换。"""
         if batch["route"] != HK_TRANSIT:

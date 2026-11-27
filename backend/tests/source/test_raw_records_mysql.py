@@ -14,5 +14,8 @@ def test_latest_large_snapshot_with_small_mysql_sort_buffer(engine):
             connection.execute(text("SET SESSION sort_buffer_size = 32768"))
             expected = seed_large_history(connection)
             assert raw_record_dao.latest(connection, "prod", "relation_evidence", "990") == expected
+            assert raw_record_dao.latest_by_keys(connection, "relation_evidence", [("prod", "990")]) == {
+                ("prod", "990"): expected
+            }
         finally:
             connection.execute(text("SET SESSION sort_buffer_size = :size"), {"size": original})

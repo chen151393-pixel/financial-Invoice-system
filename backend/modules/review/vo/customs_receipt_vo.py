@@ -134,6 +134,22 @@ class CustomsCounts(StrictModel):
     lineMissing: int
 
 
+class CustomsImportSource(StrictModel):
+    fileName: str
+    importedBy: str
+    importedByName: str
+    importedAt: str
+    receiptCount: int
+
+
+class CustomsImportHistory(StrictModel):
+    items: list[CustomsImportSource]
+    total: int
+    page: int
+    pageSize: int
+    pages: int
+
+
 class CustomsReceiptList(StrictModel):
     items: list[CustomsReceipt]
     counts: CustomsCounts

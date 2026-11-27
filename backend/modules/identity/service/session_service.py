@@ -81,12 +81,14 @@ class IdentityService:
             self.attempts.pop(ip, None)
             return self._issue_session(session_token, now, f"user:{self.settings.admin_user}")
 
-    def owner(self, *, authorization="", session_token=None, method="GET", origin=None):
+    def owner(self, *, authorization="", session_token=None, method="GET", origin=None, principal=None):
         if (
             len(self.settings.service_key) >= 32
             and authorization.startswith("Bearer ")
             and same(authorization[7:], self.settings.service_key)
         ):
+            if principal is not None:
+                principal["description"] = self._describe("service:feishu", None, [])
             return "service:feishu"
         with self.lock:
             session = self.sessions.get(session_token)
@@ -95,17 +97,19 @@ class IdentityService:
         if method not in ("GET", "HEAD"):
             self.check_origin(origin)
         user_id = feishu_user_id(session[0])
-        if user_id is not None and not self._feishu_allowed(user_id):
-            with self.lock:
-                self.sessions.pop(session_token, None)
-            raise ApiError(401, "账号已停用或权限已收回，请重新登录")
+        user, roles = None, []
+        if user_id is not None:
+            user, roles = self.access.current(user_id) if self.access is not None else (None, [])
+            if not (user and user["active"] and user["enabled"] and roles):
+                with self.lock:
+                    self.sessions.pop(session_token, None)
+                raise ApiError(401, "账号已停用或权限已收回，请重新登录")
+        elif session[0] == f"user:{self.settings.admin_user}":
+            roles = list(EMERGENCY_ROLES)
+        if principal is not None:
+            # 只复用当前 HTTP 请求内已校验的身份；下一请求仍重新读取停用、角色与页面授权。
+            principal["description"] = self._describe(session[0], user, roles)
         return session[0]
-
-    def _feishu_allowed(self, user_id):
-        if self.access is None:
-            return False
-        user, roles = self.access.current(user_id)
-        return bool(user and user["active"] and user["enabled"] and roles)
 
     def roles_of(self, actor):
         """当前生效角色代码；服务身份没有角色。"""
@@ -122,11 +126,20 @@ class IdentityService:
         user_id = feishu_user_id(actor)
         if user_id is not None and self.access is not None:
             user, roles = self.access.current(user_id)
+        elif actor == f"user:{self.settings.admin_user}":
+            user, roles = None, list(EMERGENCY_ROLES)
+        else:
+            user, roles = None, []
+        return self._describe(actor, user, roles)
+
+    def _describe(self, actor, user, roles):
+        user_id = feishu_user_id(actor)
+        if user_id is not None and self.access is not None:
             name, kind = (user["name"] if user else user_id), "feishu"
         elif actor == f"user:{self.settings.admin_user}":
-            name, kind, roles = "管理员（应急账号）", "admin", list(EMERGENCY_ROLES)
+            name, kind = "管理员（应急账号）", "admin"
         else:
-            name, kind, roles = actor, "service", []
+            name, kind = actor, "service"
         pages = self.pages_of(roles)
         return {
             "kind": kind,
@@ -141,12 +154,13 @@ class IdentityService:
             return list(PAGE_CODES)
         return self.access.pages(roles) if self.access is not None else []
 
-    def require_api(self, actor, method, route):
+    def require_api(self, actor, method, route, *, pages=None):
         required = required_pages(method, route)
         # 服务密钥沿用原有接口范围，仍不能绕过已有管理员业务校验。
         if required is None or actor == "service:feishu":
             return
-        if not set(required).intersection(self.pages_of(self.roles_of(actor))):
+        allowed = self.pages_of(self.roles_of(actor)) if pages is None else pages
+        if not set(required).intersection(allowed):
             raise ApiError(403, "没有此页面的访问权限，请联系系统管理员")
 
     def require_manage(self, actor):

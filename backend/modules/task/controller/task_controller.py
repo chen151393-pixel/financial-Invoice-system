@@ -7,8 +7,9 @@ from fastapi import APIRouter, Path
 from backend.core.dependencies import Owner
 
 from ..dto.notification_dto import NotificationBatchRecord, NotificationDraft, NotificationRecord
+from ..dto.notification_group_dto import NotificationGroupBatchRecord
 from ..dto.task_dto import ClosureRequest, TaskListQuery
-from ..vo.notification_vo import NotificationBatchResult
+from ..vo.notification_vo import NotificationBatchResult, NotificationGroupBatchResult
 from ..vo.task_vo import TaskDetail, TaskList
 
 Id = Annotated[int, Path(ge=1, le=2**63 - 1)]
@@ -25,6 +26,10 @@ def create_router(tasks, documents, notifications, closures, declarations):
     @router.post("/notification/record-batch", response_model=NotificationBatchResult)
     def record_notifications(body: NotificationBatchRecord, owner: Owner):
         return notifications.record_batch(body, owner)
+
+    @router.post("/notification/record-groups", response_model=NotificationGroupBatchResult)
+    def record_notification_groups(body: NotificationGroupBatchRecord, owner: Owner):
+        return notifications.record_groups(body, owner)
 
     @router.get("/{task_id}", response_model=TaskDetail)
     def detail(task_id: Id, owner: Owner):

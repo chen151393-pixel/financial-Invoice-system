@@ -2,7 +2,6 @@ import type { CurrencyEvidence } from "../types";
 import { useEffect, useRef, useState } from "react";
 import { useSearchParams } from "react-router";
 import { Card, CardFooter, CardHeader, Pagination, Segmented } from "../../../shared/components/ui";
-import { openLocalSession } from "../../identity/api";
 import { approveDeclaration, approveDeclarations, queryDeclarations } from "../api";
 import type { ReviewLinks } from "../approval-progress";
 import { BatchApproveDialog } from "../components/BatchApproveDialog";
@@ -60,11 +59,11 @@ export function ReviewPage({ links }: { links?: ReviewLinks }) {
   const submitLock = useRef(false);
   useEffect(() => {
     let active = true;
+    const controller = new AbortController();
     async function load() {
       setState({ kind: "loading" });
       try {
-        await openLocalSession();
-        const result = await queryDeclarations(query);
+        const result = await queryDeclarations(query, controller.signal);
         if (active) {
           setState({ kind: "ready", result });
           setLoads((value) => value + 1);
@@ -81,6 +80,7 @@ export function ReviewPage({ links }: { links?: ReviewLinks }) {
     void load();
     return () => {
       active = false;
+      controller.abort();
     };
   }, [query, refresh]);
 
@@ -139,7 +139,9 @@ export function ReviewPage({ links }: { links?: ReviewLinks }) {
                   ? "报关单 · 可自动审核通过"
                   : query.status === "customs_approved"
                     ? "报关单 · 海关审核通过"
-                    : "报关单"
+                    : query.status === "approved_this_month"
+                      ? "报关单 · 本月审核通过"
+                      : "报关单"
           }
           actions={
             <Segmented

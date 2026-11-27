@@ -1,4 +1,4 @@
-import type { NotifyBatchResult } from "../types/board";
+import type { NotifyGroupBatchResult } from "../types/board";
 import type { ClosureRequest } from "../types/task";
 import { http } from "../../../shared/api/http";
 import type {
@@ -11,7 +11,22 @@ import type {
 const root = "/tasks";
 const task = (id: string) => `${root}/${encodeURIComponent(id)}`;
 
-export const getTask = (id: string) => http<TaskDetail>(task(id));
+export const getTask = (id: string, signal?: AbortSignal) =>
+  http<TaskDetail>(task(id), "GET", undefined, signal);
+const supplierTask = (id: string) => `/task/supplier-tasks/${encodeURIComponent(id)}`;
+export const getSupplierTask = (id: string, completed = false, signal?: AbortSignal) =>
+  http<TaskDetail>(`${supplierTask(id)}${completed ? "?completed=true" : ""}`, "GET", undefined, signal);
+export const saveSupplierTaskNotification = (id: string, draft: NotificationDraft, scopeRevision: string) =>
+  http<TaskDetail>(`${supplierTask(id)}/notification/draft`, "POST", {
+    ...draft,
+    scopeRevision,
+    requestId: crypto.randomUUID(),
+  });
+export const recordSupplierTaskNotification = (
+  id: string,
+  record: NotificationRecord,
+  scopeRevision: string,
+) => http<TaskDetail>(`${supplierTask(id)}/notification/record`, "POST", { ...record, scopeRevision });
 
 export const prepareTaskDocument = (id: string, orderId: string) =>
   http<TaskDetail>(`${task(id)}/documents/${encodeURIComponent(orderId)}/prepare`, "POST", {});
@@ -27,8 +42,18 @@ export const recordTaskNotification = (id: string, record: NotificationRecord) =
   http<TaskDetail>(`${task(id)}/notification/record`, "POST", record);
 
 // 通知日期按北京时间由后端校验保存；写操作不自动重试。
-export const recordNotificationBatch = (taskIds: string[], note: string, notifiedOn: string) =>
-  http<NotifyBatchResult>(`${root}/notification/record-batch`, "POST", { taskIds, note, notifiedOn });
+export const recordNotificationGroups = (
+  groupBy: "supplier" | "declaration",
+  groups: { id: string; scopeRevision: string }[],
+  note: string,
+  notifiedOn: string,
+) =>
+  http<NotifyGroupBatchResult>(`${root}/notification/record-groups`, "POST", {
+    groupBy,
+    groups,
+    note,
+    notifiedOn,
+  });
 
 export const closeTaskLine = (id: string, lineId: string, body: ClosureRequest) =>
   http<TaskDetail>(

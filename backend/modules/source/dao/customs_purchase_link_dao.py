@@ -6,9 +6,15 @@ from ..entity import customs_purchase_links as links
 
 
 def active(connection, declaration_id):
+    return active_by_declarations(connection, [declaration_id])
+
+
+def active_by_declarations(connection, declaration_ids):
+    if not declaration_ids:
+        return []
     query = (
         select(links)
-        .where(links.c.customs_declaration_id == declaration_id, links.c.status == "active")
+        .where(links.c.customs_declaration_id.in_(declaration_ids), links.c.status == "active")
         .order_by(links.c.id)
     )
     return [dict(row) for row in connection.execute(query).mappings()]

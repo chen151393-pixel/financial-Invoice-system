@@ -142,11 +142,12 @@ export function ApprovalProgressDetail({
     progress.customs.reason && `海关审核：${progress.customs.reason}`,
   ].filter(Boolean);
   const taskLink = links?.task;
-  const related = showRelatedLink && progress.linked
-    ? page === "finance"
-      ? links?.customs?.(declarationNo)
-      : links?.finance?.(declarationNo)
-    : undefined;
+  const related =
+    showRelatedLink && progress.linked
+      ? page === "finance"
+        ? links?.customs?.(declarationNo)
+        : links?.finance?.(declarationNo)
+      : undefined;
   if (!messages.length && !related && (!taskLink || !progress.taskIds.length)) return null;
   return (
     <div className="fr-progress-detail">

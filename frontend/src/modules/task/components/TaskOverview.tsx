@@ -32,7 +32,10 @@ export function TaskOverview({
       <header className="itd-heading">
         <div className="itd-heading__main">
           <p className="itd-eyebrow">
-            {task.recordNumber || "报关单号缺失"} · 审核版本 {task.reviewRevision}
+            {task.recordNumber || "报关单号缺失"} ·{" "}
+            {detail.grouped
+              ? `${detail.memberTasks?.length || 0} 个原任务合并办理`
+              : `审核版本 ${task.reviewRevision}`}
           </p>
           <div className="itd-title">
             <h2>{task.supplier}</h2>
@@ -40,7 +43,7 @@ export function TaskOverview({
             {task.waitingLabel && <span className="itd-waiting">{task.waitingLabel}</span>}
           </div>
           <p className="itd-subtitle">
-            {task.company} · {task.currency} · 子采购单 {task.orderNumbers.join("、")}
+            {task.company} · {task.currency} · {task.orderNumbers.length} 份子采购合同
           </p>
         </div>
         <div className="itd-receipt">

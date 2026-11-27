@@ -16,6 +16,7 @@ from ..mapper.delivery_mapper import view
 from ..policy.delivery_policy import ACTIVE, submit_reason
 from ..vo.capability import Capability
 from ..vo.delivery_vo import DeliveryPreview
+from . import notification_scope
 from .basis_guard import reason as basis_reason
 from .basis_guard import require_current
 from .delivery_snapshot import digest, evidence_warning, load, read_files, snapshot
@@ -27,6 +28,7 @@ class DeliverySubmitService:
         self.engine, self.settings, self.channel, self.tasks = engine, settings, channel, tasks
 
     def _validate(self, connection, data, body, exclude=None):
+        notification_scope.validate_current_members(connection, data)
         active = [
             row for row in dao.overlapping(connection, data["task"]["id"], ACTIVE) if row["id"] != exclude
         ]
@@ -40,6 +42,17 @@ class DeliverySubmitService:
         )
         if reason:
             raise ApiError(409, reason)
+        for member in data.get("scopeTasks", []):
+            reason = submit_reason(
+                member,
+                data["scopeNotices"][member["id"]],
+                data["binding"],
+                self.settings,
+                False,
+                basis_reason(connection, member["id"]),
+            )
+            if reason:
+                raise ApiError(409, reason)
         if data["latest"]["version"] != body.revision or data["binding"]["version"] != body.groupRevision:
             raise ApiError(409, "通知或群绑定已变化，请重新预览")
         if len(data["latest"]["content"].encode("utf-8")) > 4000:
@@ -64,13 +77,17 @@ class DeliverySubmitService:
         require_writer(actor)
         frozen, _, _ = self._prepare(task_id, body)
         detail = self.tasks.detail(task_id)
+        with self.engine.connect() as connection:
+            data = load(connection, task_id)
+        order_ids = sorted({line["purchase_order_id"] for line in data["lines"]})
+        numbers = self.tasks.directory.describe(order_ids=order_ids)["orders"]
         return DeliveryPreview(
             revision=body.revision,
             groupRevision=body.groupRevision,
             snapshotSha256=digest(frozen),
             supplier=detail.task.supplier,
             company=detail.task.company,
-            orderNumbers=detail.task.orderNumbers,
+            orderNumbers=sorted(numbers.values()),
             corpId=frozen["corpId"],
             chatId=frozen["chatId"],
             groupName=frozen["groupName"],
@@ -114,6 +131,7 @@ class DeliverySubmitService:
             if prior:
                 return prior, False
             task = task_dao.get(connection, task_id, lock=True)
+            notification_scope.members(connection, task_id, frozen["notificationId"], lock=True)
             require_current(connection, task_id)
             data = load(connection, task_id, lock_binding=True)
             self._validate(connection, data, body)
@@ -169,6 +187,7 @@ class DeliverySubmitService:
     def _before_create(self, task_id, body, row, media_ids, group, actor):
         with transaction(self.engine, "task") as connection:
             task = task_dao.get(connection, task_id, lock=True)
+            notification_scope.members(connection, task_id, row["notification_id"], lock=True)
             require_current(connection, task_id)
             current = dao.get(connection, row["id"], lock=True)
             if (

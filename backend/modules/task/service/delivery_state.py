@@ -7,6 +7,7 @@ from backend.core.errors import ApiError
 from ..dao import event_dao
 from ..dao import notification_delivery_dao as dao
 from ..dao import notification_group_guard_dao as guards
+from ..dao.notification_scope_dao import find_scope
 from ..policy.delivery_policy import LABELS, TRANSITIONS, writable
 
 
@@ -21,7 +22,8 @@ def require_writer(actor):
 
 def owned(connection, task_id, delivery_id, lock=False):
     row = dao.get(connection, int(delivery_id), lock=lock)
-    if row is None or row["task_id"] != task_id:
+    scope = find_scope(connection, task_id, row["notification_id"]) if row else None
+    if row is None or (row["task_id"] != task_id and not scope):
         raise ApiError(404, "本任务中不存在该发送记录")
     return row
 

@@ -31,6 +31,43 @@ class DirectDocumentSource:
             return DocumentGroupSource(self.candidates).load(connection, group["id"])
         return self.context(row)
 
+    def for_rows(self, connection, rows, groups):
+        """列表批量组装直接收汇资料依据；组内未出现在筛选结果中的成员仍完整参与。"""
+        from .document_group_source import DocumentGroupSource
+
+        resolved = {}
+        for group in groups.values():
+            identity = group["id"]
+            if identity not in resolved:
+                resolved[identity] = (
+                    document_group_dao.resolve(connection, identity) if group["merged_into_id"] else group
+                )
+        members = document_group_dao.numbers_by_groups(
+            connection, sorted({group["id"] for group in resolved.values() if group})
+        )
+        numbers = [number for group in members.values() for number in group]
+        found = (
+            {
+                row["declaration_no"]: row
+                for row in self.candidates.load(connection, numbers=numbers, limit=None)
+            }
+            if numbers
+            else {}
+        )
+        contexts = {}
+        for row in rows:
+            group = groups.get(row["declaration_no"])
+            if group:
+                current = resolved[group["id"]]
+                if current is None:
+                    raise ApiError(404, "直接收汇资料组不存在")
+                contexts[row["declaration_no"]] = DocumentGroupSource.context(
+                    current, members[current["id"]], found
+                )
+            else:
+                contexts[row["declaration_no"]] = self.context(row)
+        return contexts
+
     @staticmethod
     def context(row):
         number = row["declaration_no"]

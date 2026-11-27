@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from "react";
 import { Button } from "../../../shared/components/Button";
-import { openLocalSession } from "../../identity/api";
 import { confirmFile, getImportConfiguration, previewFile, readImportFile } from "../api/invoice";
 import { ImportResultView } from "../components/ImportResultView";
 import type { ImportConfiguration, ImportFile, ImportResult } from "../types/invoice";
@@ -39,10 +38,10 @@ export function InvoiceImportPage() {
   }
   useEffect(() => {
     let active = true;
+    const controller = new AbortController();
     async function load() {
       try {
-        await openLocalSession();
-        const data = await getImportConfiguration();
+        const data = await getImportConfiguration(controller.signal);
         if (active) setConfiguration(data);
       } catch (error) {
         if (active) setError(error instanceof Error ? error.message : "读取导入配置失败");
@@ -51,6 +50,7 @@ export function InvoiceImportPage() {
     void load();
     return () => {
       active = false;
+      controller.abort();
       request.current += 1;
     };
   }, [attempt]);

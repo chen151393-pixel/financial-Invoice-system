@@ -18,6 +18,8 @@ def declaration_documents(rows, task, unavailable):
         block = "任务已被新审核版本替代" if superseded else unavailable
         result.append(
             DeclarationDocument(
+                taskId=str(task["id"]),
+                recordNumber=task["record_no"] or "",
                 type=doc_type,
                 label=label,
                 status=status,

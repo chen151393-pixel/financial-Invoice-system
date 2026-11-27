@@ -1,5 +1,9 @@
 # 身份模块（identity）
 
+## 导航身份读取优化（2026-11-26）
+
+`current_owner` 在当前 HTTP 请求内复用已校验的人员、角色与页面授权，`GET /api/session` 直接返回这一份身份说明。每个新请求仍重新读取在职、启用、同步范围与授权；不设置跨请求身份缓存。停用返回 401、页面撤权返回 403 的规则保持不变。专项验证见 `tests/identity/test_page_access.py` 的单次读取与下一请求撤权用例。
+
 飞书登录、飞书部门与人员同步、角色与权限管理，以及应急管理员账号密码登录。方案与分期见 [飞书登录、部门同步与权限方案](../../../docs/feishu-identity-plan.md)；本文涵盖第 1 期身份能力与 2026-11-12 新增的页面授权，具体业务操作权限的细分仍待后续。
 
 测试生命周期（2026-10-30）：`test_feishu_login.py` 与 `test_directory_selection.py` 共用 `application_clients`，每个应用只进入一次 lifespan；管理员和飞书登录浏览器只隔离 Cookie，统一登记关闭，不各自启动后台消费者。退出时先关闭浏览器，再退出应用生命周期，并断言实际后台线程全部结束。回归 `test_login_browsers_do_not_restart_background_workers` 禁止新增浏览器重启消费者；保留 `test_write_scope.py` 的精确锁记录断言，不过滤其他数据库调用来掩盖线程残留。
@@ -35,7 +39,7 @@
 
 ### 对外只读门面 `public.py`（2026-11-10）
 
-`actor_names(connection, actors)`：把操作者标识转为显示名称。`user:fs:<user_id>` 取本地飞书人员副本姓名（含已停用人员，历史记录仍可显示），`system` 显示“系统”，其他或查不到的原样返回。调用方在自己的事务连接中只读调用，目前由 writeback 处理记录与方案确认人使用。
+`actor_names(connection, actors)`：把操作者标识转为显示名称。`user:fs:<user_id>` 取本地飞书人员副本姓名（含已停用人员，历史记录仍可显示），`system` 显示“系统”，历史标识 `user:local-demo-seed` 显示“本地演示账号”，其他或查不到的原样返回。历史原始操作者标识不变，只转换显示名称。调用方在自己的事务连接中只读调用，目前由 writeback 处理记录与方案确认人使用。
 
 ## 关键规则
 

@@ -8,6 +8,7 @@ import { NotificationCopyButton } from "./NotificationCopyButton";
 import { NotificationRecipients } from "./NotificationRecipients";
 import { NotificationHistory } from "./NotificationHistory";
 import { NotificationRecordForm, type RecordInput } from "./NotificationRecordForm";
+import { PurchaseContracts } from "./PurchaseContracts";
 import "./task-notification.css";
 
 type Feedback = { error: boolean; text: string } | null;
@@ -85,6 +86,7 @@ export function TaskNotification({
         </div>
         <Button onClick={() => setDialog("preview")}>预览通知</Button>
       </header>
+      {notification.scopeReason && <p className="it-help">{notification.scopeReason}</p>}
       {!dialog && feedbackNode}
       <div className="itn-columns">
         <NotificationRecipients
@@ -126,15 +128,19 @@ export function TaskNotification({
                 ? "当前内容已保存。"
                 : "当前为默认内容，尚未保存。"}
           </p>
-          <div className="itn-files">
-            <h3>发送时附上合同</h3>
-            {detail.documents.map((doc) => (
-              <div key={doc.orderId}>
-                <strong>{doc.filename || doc.orderNumber}</strong>
-                <p className="it-help">{doc.archivePath || doc.prepare.reason}</p>
-              </div>
-            ))}
-          </div>
+          <details className="itn-files">
+            <summary>
+              <strong>本次通知对应合同</strong>
+              <span className="itn-files__expand">展开</span>
+              <span className="itn-files__collapse">收起</span>
+            </summary>
+            <div className="itn-files__content">
+              <PurchaseContracts
+                documents={detail.notificationDocuments ?? detail.documents}
+                label="本次通知合同清单"
+              />
+            </div>
+          </details>
           <p className="it-help">企微群发由系统上传合同；人工发送时请从共享盘添加。正文不包含内部路径。</p>
         </section>
       </div>

@@ -3,13 +3,27 @@
 from sqlalchemy import insert, select, update
 
 from ..entity.bill import settlement_bills as bills
-from .document_scope import condition
+from .document_scope import belongs, condition, conditions
 
 
 def active(connection, batch_id):
     """批次未移除的提单，按上传顺序。"""
     query = select(bills).where(condition(bills, batch_id), bills.c.removed_at.is_(None)).order_by(bills.c.id)
     return [dict(row) for row in connection.execute(query).mappings()]
+
+
+def by_scopes(connection, references):
+    result = {reference: [] for reference in references}
+    if references:
+        query = (
+            select(bills)
+            .where(conditions(bills, references), bills.c.removed_at.is_(None))
+            .order_by(bills.c.id)
+        )
+        rows = [dict(row) for row in connection.execute(query).mappings()]
+        for reference in references:
+            result[reference] = [row for row in rows if belongs(row, reference)]
+    return result
 
 
 def direct_owners(connection, numbers):

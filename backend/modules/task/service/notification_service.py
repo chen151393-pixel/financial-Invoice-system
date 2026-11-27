@@ -8,10 +8,12 @@ from backend.core.errors import ApiError
 from backend.core.write_lock import transaction
 
 from ..dao import notification_dao, notification_delivery_dao, supplier_group_dao, task_dao
+from ..dao.notification_scope_dao import find_scope
 from ..policy.delivery_policy import ACTIVE, BLOCK_REASON
 from ..policy.notification_policy import edit_block, record_block
 from .basis_guard import require_current
 from .notification_batch_service import record_batch
+from .notification_group_service import record_groups
 from .task_status_service import change_status
 
 
@@ -34,7 +36,13 @@ class NotificationService:
                     raise ApiError(404, "开票任务不存在")
                 if notification_delivery_dao.overlapping(connection, task_id, ACTIVE):
                     raise ApiError(409, BLOCK_REASON)
-                action(connection, task, notification_dao.latest(connection, task_id), _now())
+                latest = notification_dao.latest(connection, task_id)
+                scope = find_scope(connection, task_id, latest["id"]) if latest else None
+                if scope and len(scope["members"]) > 1:
+                    raise ApiError(
+                        409, "该通知已按供应商合并，请从供应商合并任务保存或登记，避免只修改部分成员"
+                    )
+                action(connection, task, latest, _now())
         except SQLAlchemyError:
             raise ApiError(409, "通知未能保存，请刷新核实最新版本后操作") from None
         return self.tasks.detail(task_id)
@@ -78,6 +86,9 @@ class NotificationService:
     def record_batch(self, body, actor):
         """列表勾选批量登记线下已通知；逐个任务独立事务，规则见 notification_batch_service。"""
         return record_batch(self.engine, body, actor)
+
+    def record_groups(self, body, actor):
+        return record_groups(self.engine, body, actor)
 
     def record(self, task_id, body, actor):
         sent_at = body.sentAt.astimezone(UTC).replace(tzinfo=None) if body.sentAt.tzinfo else None

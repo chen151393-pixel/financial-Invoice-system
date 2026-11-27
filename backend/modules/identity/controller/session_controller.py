@@ -26,8 +26,8 @@ def create_router(service, settings, feishu):
     router = APIRouter(prefix="/api/session", tags=["身份"])
 
     @router.get("", response_model=SessionInfo)
-    def session(owner: Owner):
-        return SessionInfo(authenticated=True, user=service.describe(owner))
+    def session(request: Request, owner: Owner):
+        return SessionInfo(authenticated=True, user=request.state.session_user)
 
     @router.get("/options", response_model=LoginOptions)
     def options():

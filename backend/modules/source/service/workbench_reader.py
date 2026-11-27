@@ -1,6 +1,10 @@
 """供工作台读取轻量报关来源，复用调用方的只读快照。"""
 
-from ..dao import workbench_purchase_dao, workbench_source_dao
+from ..dao import purchase_order_dao, workbench_purchase_dao, workbench_source_dao
+
+
+def workbench_line_labels(connection, line_ids):
+    return purchase_order_dao.line_labels(connection, sorted(set(line_ids)))
 
 
 def workbench_declarations(connection):

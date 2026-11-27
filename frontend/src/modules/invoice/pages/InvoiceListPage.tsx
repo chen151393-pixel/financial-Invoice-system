@@ -11,7 +11,6 @@ import {
   Segmented,
   Skeleton,
 } from "../../../shared/components/ui";
-import { openLocalSession } from "../../identity/api";
 import {
   getInvoiceTotals,
   queryInvoiceMatchList,
@@ -136,9 +135,10 @@ export function InvoiceListPage() {
 
   useEffect(() => {
     let active = true;
+    const controller = new AbortController();
     async function loadTotals() {
       try {
-        const response = await getInvoiceTotals(query);
+        const response = await getInvoiceTotals(query, controller.signal);
         if (active) setTotals(response);
       } catch (reason) {
         if (active) setTotalsError(reason instanceof Error ? reason.message : "金额统计读取失败");
@@ -149,25 +149,21 @@ export function InvoiceListPage() {
     // 分布图与列表同一筛选条件（不含分页）
     async function loadStats(filters: URLSearchParams) {
       try {
-        const response = await getInvoiceStats(filters);
+        const response = await getInvoiceStats(filters, controller.signal);
         if (active) setStats(response);
       } catch (reason) {
         if (active) setStatsError(reason instanceof Error ? reason.message : "发票分布读取失败");
       }
     }
     async function load() {
-      let totalsStarted = false;
       try {
-        await openLocalSession();
-        if (!active) return;
-        totalsStarted = true;
         void loadTotals();
         const filters = new URLSearchParams();
         for (const key of Object.keys(emptyFilters) as (keyof typeof emptyFilters)[])
           if (query[key]) filters.set(key, query[key]);
         void loadStats(filters);
         // 列表、匹配状态张数与本页比对状态由比对模块一次返回（按匹配状态筛选需在比对模块组织）
-        const response = await queryInvoiceMatchList<InvoiceListResult>(query);
+        const response = await queryInvoiceMatchList<InvoiceListResult>(query, controller.signal);
         if (!active) return;
         setData(response.list);
         setMatching(Object.fromEntries(response.summaries.map((row) => [row.invoiceId, row])));
@@ -177,10 +173,6 @@ export function InvoiceListPage() {
         if (active) {
           const message = reason instanceof Error ? reason.message : "读取发票失败";
           setError(message);
-          if (!totalsStarted) {
-            setTotalsError(message);
-            setTotalsLoading(false);
-          }
         }
       } finally {
         if (active) setLoading(false);
@@ -189,6 +181,7 @@ export function InvoiceListPage() {
     void load();
     return () => {
       active = false;
+      controller.abort();
     };
   }, [query]);
 

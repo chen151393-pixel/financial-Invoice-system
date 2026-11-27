@@ -1,19 +1,61 @@
-import { SettlementHkReceiptPage } from "../modules/settlement/pages/SettlementHkReceiptPage";
-import { useCallback, useState } from "react";
-import { DirectDocumentGroupWorkspace } from "../modules/settlement/components/DirectDocumentGroupWorkspace";
-import { DirectDocumentMergeWorkspace } from "../modules/settlement/components/DirectDocumentMergeWorkspace";
-import { DeclarationDetailHost } from "../modules/settlement/components/DeclarationDetailDrawer";
+import { lazy, Suspense, useCallback, useState } from "react";
+import { Skeleton } from "../shared/components/ui";
 import { Link, useLocation, useParams } from "react-router";
-import { SettlementBankReceiptsPage } from "../modules/settlement/pages/SettlementBankReceiptsPage";
-import { SettlementHkTransitPage } from "../modules/settlement/pages/SettlementHkTransitPage";
-import { SettlementDeclarationsPage } from "../modules/settlement/pages/SettlementDeclarationsPage";
-import { SettlementLedgerPage } from "../modules/settlement/pages/SettlementLedgerPage";
-import { SettlementOverviewPage } from "../modules/settlement/pages/SettlementOverviewPage";
-import { SettlementPartiesPage } from "../modules/settlement/pages/SettlementPartiesPage";
 import { AppFrame } from "./WorkspaceFrame";
 import { navigation } from "./navigation";
 import { paths, settlementDirectDocumentsPath, type SubView } from "./paths";
 import { useViewNavigate } from "./useViewNavigate";
+
+const DeclarationDetailHost = lazy(() =>
+  import("../modules/settlement/components/DeclarationDetailDrawer").then((m) => ({
+    default: m.DeclarationDetailHost,
+  })),
+);
+const DirectDocumentGroupWorkspace = lazy(() =>
+  import("../modules/settlement/components/DirectDocumentGroupWorkspace").then((m) => ({
+    default: m.DirectDocumentGroupWorkspace,
+  })),
+);
+const DirectDocumentMergeWorkspace = lazy(() =>
+  import("../modules/settlement/components/DirectDocumentMergeWorkspace").then((m) => ({
+    default: m.DirectDocumentMergeWorkspace,
+  })),
+);
+const SettlementHkReceiptPage = lazy(() =>
+  import("../modules/settlement/pages/SettlementHkReceiptPage").then((m) => ({
+    default: m.SettlementHkReceiptPage,
+  })),
+);
+const SettlementBankReceiptsPage = lazy(() =>
+  import("../modules/settlement/pages/SettlementBankReceiptsPage").then((m) => ({
+    default: m.SettlementBankReceiptsPage,
+  })),
+);
+const SettlementHkTransitPage = lazy(() =>
+  import("../modules/settlement/pages/SettlementHkTransitPage").then((m) => ({
+    default: m.SettlementHkTransitPage,
+  })),
+);
+const SettlementDeclarationsPage = lazy(() =>
+  import("../modules/settlement/pages/SettlementDeclarationsPage").then((m) => ({
+    default: m.SettlementDeclarationsPage,
+  })),
+);
+const SettlementLedgerPage = lazy(() =>
+  import("../modules/settlement/pages/SettlementLedgerPage").then((m) => ({
+    default: m.SettlementLedgerPage,
+  })),
+);
+const SettlementOverviewPage = lazy(() =>
+  import("../modules/settlement/pages/SettlementOverviewPage").then((m) => ({
+    default: m.SettlementOverviewPage,
+  })),
+);
+const SettlementPartiesPage = lazy(() =>
+  import("../modules/settlement/pages/SettlementPartiesPage").then((m) => ({
+    default: m.SettlementPartiesPage,
+  })),
+);
 
 const PAGES = {
   overview: {
@@ -125,23 +167,27 @@ export default function SettlementWorkspacePage() {
       description={current.description}
       meta={[{ label: "数据来源", value: current.source }]}
     >
-      <DeclarationDetailHost />
-      {key === "overview" && <SettlementOverviewPage />}
-      {key === "declarations" && <SettlementDeclarationsPage />}
-      {key === "bank" && <SettlementBankReceiptsPage />}
-      {key === "hk" && <SettlementHkTransitPage />}
-      {key === "hk-register" && <SettlementHkReceiptPage />}
-      {key === "direct" && <SettlementLedgerPage key={new URLSearchParams(search).get("consignee") || ""} />}
-      {key === "direct-group" && (
-        <DirectDocumentGroupWorkspace key={groupId} id={Number(groupId)} onLoaded={loadedGroup} />
-      )}
-      {key === "direct-merge" && (
-        <DirectDocumentMergeWorkspace
-          key={new URLSearchParams(search).get("declarationNo") || ""}
-          source={new URLSearchParams(search).get("declarationNo") || ""}
-        />
-      )}
-      {key === "parties" && <SettlementPartiesPage />}
+      <Suspense fallback={<Skeleton rows={5} label="正在加载页面…" />}>
+        <DeclarationDetailHost />
+        {key === "overview" && <SettlementOverviewPage />}
+        {key === "declarations" && <SettlementDeclarationsPage />}
+        {key === "bank" && <SettlementBankReceiptsPage />}
+        {key === "hk" && <SettlementHkTransitPage />}
+        {key === "hk-register" && <SettlementHkReceiptPage />}
+        {key === "direct" && (
+          <SettlementLedgerPage key={new URLSearchParams(search).get("consignee") || ""} />
+        )}
+        {key === "direct-group" && (
+          <DirectDocumentGroupWorkspace key={groupId} id={Number(groupId)} onLoaded={loadedGroup} />
+        )}
+        {key === "direct-merge" && (
+          <DirectDocumentMergeWorkspace
+            key={new URLSearchParams(search).get("declarationNo") || ""}
+            source={new URLSearchParams(search).get("declarationNo") || ""}
+          />
+        )}
+        {key === "parties" && <SettlementPartiesPage />}
+      </Suspense>
     </AppFrame>
   );
 }

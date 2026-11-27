@@ -3,7 +3,7 @@
 from .dao import user_dao
 from .policy.login_policy import feishu_user_id
 
-SYSTEM_ACTORS = {"system": "系统"}
+SYSTEM_ACTORS = {"system": "系统", "user:local-demo-seed": "本地演示账号"}
 
 
 def assignment_members(connection):
@@ -18,7 +18,7 @@ def actor_names(connection, actors):
     """{操作者标识: 显示名称}。
 
     飞书账号（user:fs:<user_id>）取本地飞书人员副本的姓名；人员停用后副本保留，历史记录仍可显示姓名。
-    system 显示“系统”；找不到人员或其他标识（如应急管理员、服务身份）原样返回，不臆造姓名。
+    system 显示“系统”，历史演示种子账号显示“本地演示账号”；其他未知标识原样返回，不臆造人员姓名。
     """
     actors = {actor for actor in actors if actor}
     ids = {actor: feishu_user_id(actor) for actor in actors}

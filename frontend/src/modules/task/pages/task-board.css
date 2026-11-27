@@ -25,6 +25,8 @@
 /* 顶部批量操作沿用卡片按钮；列表中仅保留全选与已选数量。 */
 .tb-panel > .ui-card__header .ui-card__actions {
   flex-wrap: wrap;
+  min-width: 0;
+  max-width: 100%;
 }
 .tb-select {
   display: flex;
@@ -35,6 +37,9 @@
   border: 1px solid var(--color-border);
   border-radius: var(--radius-control);
   background: var(--color-primary-soft);
+}
+.tb-view-mode {
+  padding: 16px 20px 0;
 }
 .tb-select__all {
   display: inline-flex;
@@ -90,7 +95,7 @@
   gap: var(--space-small);
 }
 
-/* 任务卡片：摘要常驻，流程按需展开。 */
+/* 任务卡片：摘要与六节点流程常驻。 */
 .tb-item {
   display: grid;
   gap: 14px;
@@ -101,9 +106,18 @@
 }
 .tb-item__head {
   display: grid;
-  grid-template-columns: 40px minmax(0, 1fr) 210px auto;
+  grid-template-columns: auto minmax(0, 1fr) 210px auto;
   align-items: center;
   gap: 12px 20px;
+}
+.tb-item__leading {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-small);
+}
+.tb-item__leading--selecting {
+  min-width: calc(40px + 16px + var(--space-small));
 }
 .tb-item__glyph {
   display: inline-grid;
@@ -218,7 +232,7 @@
 
 @media (max-width: 1100px) {
   .tb-item__head {
-    grid-template-columns: 40px minmax(0, 1fr) auto;
+    grid-template-columns: auto minmax(0, 1fr) auto;
   }
   .tb-item__aside {
     grid-column: 2 / -1;
@@ -237,7 +251,7 @@
     padding: 12px;
   }
   .tb-item__head {
-    grid-template-columns: 40px minmax(0, 1fr);
+    grid-template-columns: auto minmax(0, 1fr);
   }
   .tb-item__money {
     grid-column: 2;

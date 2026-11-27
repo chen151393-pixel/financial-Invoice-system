@@ -4,6 +4,7 @@
 """
 
 import hashlib
+from collections import defaultdict
 from contextlib import contextmanager
 
 from sqlalchemy.exc import SQLAlchemyError
@@ -32,27 +33,57 @@ def sync_lock_name(engine, account):
 
 def snapshot(connection, declaration_id):
     """返回报关单完整内容；不存在时返回 None。"""
-    head = customs_declaration_dao.head(connection, declaration_id)
-    if head is None:
-        return None
-    links = customs_purchase_link_dao.active(connection, declaration_id)
-    order_ids = sorted({link["purchase_order_id"] for link in links})
-    evidence = raw_record_dao.latest(connection, head["ns_account"], EVIDENCE_TYPE, head["ns_internal_id"])
+    return snapshots(connection, [declaration_id]).get(declaration_id)
+
+
+def snapshots(connection, declaration_ids):
+    """同一连接批量读取完整来源，不跨请求缓存，也不省略失效头关联的有效行。"""
+    heads = customs_declaration_dao.heads(connection, declaration_ids)
+    if not heads:
+        return {}
+    links, customs = defaultdict(list), defaultdict(list)
+    for link in customs_purchase_link_dao.active_by_declarations(connection, list(heads)):
+        links[link["customs_declaration_id"]].append(link)
+    for line in customs_declaration_dao.lines_by_declarations(connection, list(heads)):
+        customs[line["customs_declaration_id"]].append(line)
+    order_ids = sorted({link["purchase_order_id"] for group in links.values() for link in group})
     orders = purchase_order_dao.orders(connection, order_ids)
+    purchase_lines = purchase_order_dao.lines(connection, order_ids)
+    sales = sales_order_dao.by_ids(
+        connection, [order["sales_order_id"] for order in orders if order["sales_order_id"]]
+    )
+    evidence = raw_record_dao.latest_by_keys(
+        connection, EVIDENCE_TYPE, [(head["ns_account"], head["ns_internal_id"]) for head in heads.values()]
+    )
+    result = {}
+    for identity, head in heads.items():
+        linked_ids = {link["purchase_order_id"] for link in links[identity]}
+        linked_orders = [order for order in orders if order["id"] in linked_ids]
+        result[identity] = _snapshot(
+            head,
+            customs[identity],
+            links[identity],
+            linked_orders,
+            [line for line in purchase_lines if line["purchase_order_id"] in linked_ids],
+            {
+                order["sales_order_id"]: sales[order["sales_order_id"]]
+                for order in linked_orders
+                if order["sales_order_id"] in sales
+            },
+            evidence.get((head["ns_account"], head["ns_internal_id"])),
+        )
+    return result
+
+
+def _snapshot(head, customs, links, orders, purchase_lines, sales, evidence):
     return {
         "declaration": head,
-        "customs_lines": customs_display_lines(
-            head, customs_declaration_dao.lines(connection, declaration_id)
-        ),
+        "customs_lines": customs_display_lines(head, customs),
         "links": links,
         "orders": orders,
         # 销售单头（币种、汇率）只用于申报幅度，不参与内容摘要
-        "sales_orders": sales_order_dao.by_ids(
-            connection, [o["sales_order_id"] for o in orders if o["sales_order_id"]]
-        ),
-        "purchase_lines": parent_purchase_units(
-            orders, purchase_order_dao.lines(connection, order_ids), evidence
-        ),
+        "sales_orders": sales,
+        "purchase_lines": parent_purchase_units(orders, purchase_lines, evidence),
         "evidence": evidence,
     }
 
@@ -122,7 +153,8 @@ class DeclarationService:
         self._require_engine()
         try:
             with self.engine.connect() as connection:
-                return [snapshot(connection, declaration_id) for declaration_id in declaration_ids]
+                contents = snapshots(connection, declaration_ids)
+                return [contents.get(declaration_id) for declaration_id in declaration_ids]
         except SQLAlchemyError:
             raise ApiError(503, "报关单读取失败，请检查业务数据库及迁移状态") from None
 

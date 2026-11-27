@@ -34,13 +34,20 @@ def ensure(connection, declaration_id, account, record_no, actor, now):
         connection.execute(insert(declaration_documents), rows)
 
 
-def by_declarations(connection, declaration_ids):
+def by_declarations(connection, declaration_ids, *, statuses_only=False):
     """{报关单 ID: {资料类型: 记录}}。"""
     if not declaration_ids:
         return {}
-    query = select(declaration_documents).where(
-        declaration_documents.c.customs_declaration_id.in_(declaration_ids)
+    columns = (
+        (
+            declaration_documents.c.customs_declaration_id,
+            declaration_documents.c.doc_type,
+            declaration_documents.c.status,
+        )
+        if statuses_only
+        else (declaration_documents,)
     )
+    query = select(*columns).where(declaration_documents.c.customs_declaration_id.in_(declaration_ids))
     result = {}
     for row in connection.execute(query).mappings():
         result.setdefault(row["customs_declaration_id"], {})[row["doc_type"]] = dict(row)
