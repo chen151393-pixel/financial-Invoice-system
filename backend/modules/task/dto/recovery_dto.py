@@ -1,4 +1,4 @@
-"""应收看板查询：按通知月份、采购员、采购抬头、供应商与单号筛选，只读。"""
+"""应收看板查询：按财务审核通过的开票月份、采购员、采购抬头、供应商与单号筛选。"""
 
 from typing import Literal
 
@@ -9,7 +9,7 @@ from backend.core.search_terms import SearchText
 
 
 class RecoveryQuery(StrictModel):
-    # 空为默认月份（本月到期的上月通知）；all 为全部月份；否则为 YYYY-MM
+    # 空为默认月份（本月到期的上月审核）；all 为全部月份；否则为 YYYY-MM
     month: str = Field(default="", pattern=r"^(all|[0-9]{4}-(0[1-9]|1[0-2]))?$")
     # 清单内容随卡片切换：due 应收回、collected 已收回、outstanding 未收回、overdue 逾期未收回
     view: Literal["due", "collected", "outstanding", "overdue"] = "outstanding"

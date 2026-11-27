@@ -1,7 +1,7 @@
-"""应收看板：按通知月份审计开票任务的发票回收，只读，不改变任务与节点。
+"""应收看板：按财务审核通过月份审计开票任务的发票回收，只读，不改变任务与节点。
 
 任务金额、当前节点与供应商、子采购单号沿用工作台读取（workbench_tasks），与开票跟进任务台一致；
-通知月份取最早一次实际发送，采购员取供应商 × 采购抬头的当前负责人。口径见 recovery_policy。
+开票月份取任务对应财务审核版本的通过日期，采购员取当前负责人。口径见 recovery_policy。
 """
 
 import csv
@@ -12,9 +12,10 @@ from sqlalchemy.exc import SQLAlchemyError
 
 from backend.core.errors import ApiError
 from backend.core.search_terms import search_terms
+from backend.modules.review.public import review_approval_times
 from backend.modules.source.public import supplier_owner_directory
 
-from ..dao import notification_dao, supplier_owner_dao
+from ..dao import supplier_owner_dao
 from ..policy import recovery_policy as policy
 from ..vo.recovery_vo import RecoveryBoard, RecoveryExport
 from .supplier_owner_reader import china_today
@@ -34,7 +35,7 @@ def current_owners(records, today):
 
 EXPORT_LIMIT = 100000
 HEADER = (
-    "通知月份",
+    "开票月份",
     "供应商",
     "采购抬头",
     "采购员",
@@ -43,7 +44,7 @@ HEADER = (
     "应开金额",
     "已收金额",
     "未收回金额",
-    "通知日期",
+    "财务审核通过日期",
     "回收期限",
     "是否收回",
     "当前节点",
@@ -67,7 +68,7 @@ def export_csv(board):
                 [
                     text_cell(value)
                     for value in (
-                        task.notifiedOn[:7],
+                        task.approvedOn[:7],
                         group.supplierName,
                         group.companyName,
                         group.memberName,
@@ -76,7 +77,7 @@ def export_csv(board):
                         task.expected or "",
                         task.received or "",
                         task.outstanding or "",
-                        task.notifiedOn,
+                        task.approvedOn,
                         task.dueDate,
                         "是" if task.collected else "否",
                         task.nodeLabel,
@@ -101,17 +102,17 @@ class RecoveryService:
         self.engine = engine
 
     def rows(self, connection, now, today):
-        sent = notification_dao.first_sent_by_tasks(connection, None)
-        # 看板只纳入已实际通知的任务；先定位成员，再读取明细，不改变首次通知月份和金额口径。
-        tasks = workbench_tasks(connection, now, task_ids=list(sent))
+        tasks = workbench_tasks(connection, now)
+        approved = review_approval_times(connection, list({task["review_id"] for task in tasks}))
         owners = current_owners(supplier_owner_dao.records(connection), today)
         companies = {row["id"]: row["name"] for row in supplier_owner_directory(connection)["companies"]}
         result = []
         for task in tasks:
-            if task["id"] not in sent:
-                continue
-            notified = china_date(sent[task["id"]])
-            month = policy.month_of(notified)
+            approved_at = approved.get(task["review_id"])
+            if approved_at is None:
+                raise ApiError(503, "开票任务缺少财务审核通过记录，请核实审核数据")
+            approved_on = china_date(approved_at)
+            month = policy.month_of(approved_on)
             owner = owners.get((task["supplier_id"], task["company_id"]))
             result.append(
                 {
@@ -119,7 +120,7 @@ class RecoveryService:
                     "company": companies.get(task["company_id"], "抬头待确认"),
                     "member_key": str(owner["member_id"]) if owner else policy.UNASSIGNED,
                     "member_name": owner["member_name"] if owner else "",
-                    "notified_on": notified,
+                    "approved_on": approved_on,
                     "month": month,
                     "due": policy.due_date(month),
                     "collected": policy.collected(task["status"]),
@@ -165,7 +166,7 @@ class RecoveryService:
         return RecoveryBoard(
             today=today.isoformat(),
             month=month,
-            monthLabel="全部月份" if month == "all" else f"{policy.month_label(month)}通知",
+            monthLabel="全部月份" if month == "all" else f"{policy.month_label(month)}开票",
             dueDate=None if month == "all" else policy.due_date(month).isoformat(),
             defaultMonth=default,
             cards=policy.cards(cohort, overdue, month, today),

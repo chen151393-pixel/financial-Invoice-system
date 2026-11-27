@@ -5,6 +5,14 @@ from sqlalchemy import func, insert, select, update
 from ..entity import records
 
 
+def approval_times(connection, review_ids):
+    """按指定审核版本批量读取通过时间，不用当前版本覆盖任务原审核依据。"""
+    if not review_ids:
+        return {}
+    query = select(records.c.id, records.c.approved_at).where(records.c.id.in_(review_ids))
+    return {row["id"]: row["approved_at"] for row in connection.execute(query).mappings()}
+
+
 def active_by_declarations(connection, declaration_ids):
     if not declaration_ids:
         return {}

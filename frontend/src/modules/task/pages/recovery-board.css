@@ -41,6 +41,21 @@
   white-space: nowrap;
 }
 
+@media (max-width: 760px) {
+  .rv-page .ui-filter-bar .ui-field {
+    flex-basis: 100%;
+    max-width: none;
+  }
+
+  .rv-list .ui-card__header {
+    flex-wrap: wrap;
+  }
+
+  .rv-list .ui-card__heading {
+    flex-basis: 100%;
+  }
+}
+
 .rv-charts {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -343,6 +358,8 @@
 
 /* 清单 */
 .rv-list {
+  /* 宽表的绝对定位无障碍文案以卡片为边界，避免小屏展开时撑大整页。 */
+  position: relative;
   overflow: hidden;
 }
 .rv-list__title {

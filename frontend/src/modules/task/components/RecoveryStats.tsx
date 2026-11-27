@@ -17,7 +17,7 @@ export function RecoveryStats({
   const { due, collected, outstanding, overdue } = board.cards;
   const prefix = board.month === "all" ? "全部" : board.monthLabel;
   const left = daysText(outstanding.daysLeft);
-  const months = overdue.months.length ? ` · ${overdue.months.join("、")}通知` : "";
+  const months = overdue.months.length ? ` · ${overdue.months.join("、")}开票` : "";
   return (
     <StatGrid label="按回收情况切换下方清单" min={240}>
       <StatCard

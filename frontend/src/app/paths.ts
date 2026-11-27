@@ -21,7 +21,7 @@ export const paths = {
   tasks: "/tasks",
   supplierTasks: "/tasks/supplier",
   taskWorkflowDemo: "/tasks/workflow-demo",
-  // 应收看板：按通知月份审计发票回收，只读
+  // 应收看板：按财务审核通过的开票月份审计发票回收，只读
   invoiceRecovery: "/invoice-recovery",
   supplierGroups: "/suppliers",
   supplierOwners: "/suppliers/owners",

@@ -6,6 +6,11 @@ from ..dao import purchase_basis_dao, review_record_dao
 from ..policy.review_policy import CHANGED_WARNING, status
 
 
+def review_approval_times(connection, review_ids):
+    """只读门面：返回指定财务审核记录的 UTC 通过时间，包括历史版本。"""
+    return review_record_dao.approval_times(connection, review_ids)
+
+
 def workbench_reviews(connection, declarations):
     """待财务核对的报关单；已审核通过和未出库的不进入待办。"""
     active = review_record_dao.active_by_declarations(connection, [row["id"] for row in declarations])

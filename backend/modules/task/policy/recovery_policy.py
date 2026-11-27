@@ -1,7 +1,7 @@
 """应收看板口径，纯函数，只读。
 
-- 通知月份：任务最早一次实际发送通知的中国日期所在月份；之后重发不改变归属。未通知的任务不进入看板。
-- 回收期限：通知月份的次月最后一天（中国日期）；当天仍算未逾期。
+- 开票月份：任务所关联财务审核记录的通过日期（北京时间）所在月份，不要求通知已发送。
+- 回收期限：开票月份的次月最后一天（中国日期）；当天仍算未逾期。
 - 已收回：发票全部收齐，即任务进入 资料待补齐 或 已完成；部分收票仍算未收回，金额取未收部分。
 - 采购员：供应商 × 采购抬头 的当前负责人（今天已生效的最新版本）；没有负责人为“未指定”。
 - 金额：应开金额缺失的任务按件数统计，金额不计入合计，并在 unknown 中给出件数，不以 0 冒充。
@@ -40,7 +40,7 @@ def due_date(month):
 
 
 def default_month(today):
-    """本月到期的批次：上个月通知的任务。"""
+    """本月到期的批次：上个月财务审核通过的任务。"""
     return shift(month_of(today), -1)
 
 
@@ -134,7 +134,7 @@ def months(rows, today):
                 "month": month,
                 "label": month_label(month),
                 "dueDate": due.isoformat(),
-                # closed 已过期限；due 本月到期；open 本月通知、尚在回收期
+                # closed 已过期限；due 本月到期；open 本月审核通过、尚在回收期
                 "state": "closed" if due < today else "open" if month == current else "due",
                 "tasks": len(own),
                 "collected": done,
@@ -223,7 +223,7 @@ def groups(rows, view, today):
         grouped[(row["supplier_id"], row["company_id"])].append(row)
     result = []
     for (supplier_id, company_id), own in grouped.items():
-        own.sort(key=lambda row: (-(amount_of(row) or ZERO), row["notified_on"], row["id"]))
+        own.sort(key=lambda row: (-(amount_of(row) or ZERO), row["approved_on"], row["id"]))
         amount, unknown = total([amount_of(row) for row in own])
         due = min(row["due"] for row in own)
         result.append(
@@ -238,7 +238,9 @@ def groups(rows, view, today):
                 "tasks": len(own),
                 "amount": money(amount),
                 "unknown": unknown,
-                "notifiedOn": min(row["notified_on"] for row in own).isoformat(),
+                "approvedOn": min(row["approved_on"] for row in own).isoformat(),
+                # 旧看板客户端兼容一版本；升级到 approvedOn 后删除此日期别名。
+                "notifiedOn": min(row["approved_on"] for row in own).isoformat(),
                 "dueDate": due.isoformat(),
                 # 未收回才有剩余天数；负数为已逾期天数
                 "daysLeft": (due - today).days if any(not row["collected"] for row in own) else None,
@@ -250,7 +252,8 @@ def groups(rows, view, today):
                         "expected": money(row["expected"]),
                         "received": money(row["received"]),
                         "outstanding": money(open_amount(row)),
-                        "notifiedOn": row["notified_on"].isoformat(),
+                        "approvedOn": row["approved_on"].isoformat(),
+                        "notifiedOn": row["approved_on"].isoformat(),
                         "dueDate": row["due"].isoformat(),
                         "collected": row["collected"],
                         "node": row["node"],

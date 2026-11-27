@@ -135,7 +135,7 @@ export function RecoveryBoardPage() {
         ) : (
           <EmptyState
             title={`没有${VIEW_TITLES[list.view]}的任务`}
-            description="可切换通知月份或上方卡片，或清除筛选条件后再看"
+            description="可切换开票月份或上方卡片，或清除筛选条件后再看"
           />
         )}
         {list.total > 0 && (

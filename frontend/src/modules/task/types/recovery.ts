@@ -1,4 +1,4 @@
-// 应收看板：通知月份、回收期限、已收回口径均由后端计算，前端只展示。
+// 应收看板：开票月份按财务审核通过日期归属，回收期限和金额由后端计算，前端只展示。
 export type RecoveryView = "due" | "collected" | "outstanding" | "overdue";
 
 export interface RecoveryQuery {
@@ -77,7 +77,7 @@ export interface RecoveryTask {
   expected: string | null;
   received: string | null;
   outstanding: string | null;
-  notifiedOn: string;
+  approvedOn: string;
   dueDate: string;
   collected: boolean;
   node: string;
@@ -95,7 +95,7 @@ export interface RecoveryGroup {
   tasks: number;
   amount: string;
   unknown: number;
-  notifiedOn: string;
+  approvedOn: string;
   dueDate: string;
   // 未收回才有剩余天数；负数为已逾期天数
   daysLeft: number | null;

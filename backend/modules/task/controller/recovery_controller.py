@@ -1,4 +1,4 @@
-"""应收看板接口：按通知月份审计发票回收，只读；页面授权为 invoice-recovery。"""
+"""应收看板接口：按财务审核通过月份审计发票回收，只读；页面授权为 invoice-recovery。"""
 
 from fastapi import APIRouter
 

@@ -46,7 +46,7 @@ const Key = ({ color, children }: { color: string; children: ReactNode }) => (
 function MonthBars({ months }: { months: RecoveryMonth[] }) {
   const highest = Math.max(1, ...months.map((item) => Number(item.expected)));
   const summary = months
-    .map((item) => `${item.label}通知 ${item.tasks} 个，回收率 ${percent(item.rate)}`)
+    .map((item) => `${item.label}开票 ${item.tasks} 个，回收率 ${percent(item.rate)}`)
     .join("；");
   return (
     <>
@@ -96,7 +96,7 @@ export function RecoveryCharts({
   return (
     <div className="rv-charts">
       <ChartCard
-        title="按通知月份回收"
+        title="按开票月份回收"
         description="柱高为应开金额，顶部为按任务数的回收率"
         footer={
           <>

@@ -37,7 +37,7 @@ function TaskRows({ group, view }: { group: RecoveryGroup; view: RecoveryView })
           },
         ]
       : []),
-    { key: "notified", header: "通知日期", render: (task) => task.notifiedOn },
+    { key: "approved", header: "财务审核通过日期", render: (task) => task.approvedOn },
     {
       key: "node",
       header: "当前节点",
@@ -126,10 +126,10 @@ export function RecoveryTable({
     },
     {
       key: "due",
-      header: "通知 → 到期",
+      header: "审核 → 到期",
       render: (group) => (
         <span className="rv-due">
-          {shortDate(group.notifiedOn)} → {shortDate(group.dueDate)} <DaysBadge days={group.daysLeft} />
+          {shortDate(group.approvedOn)} → {shortDate(group.dueDate)} <DaysBadge days={group.daysLeft} />
         </span>
       ),
     },

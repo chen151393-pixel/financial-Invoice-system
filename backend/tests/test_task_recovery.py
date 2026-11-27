@@ -1,4 +1,4 @@
-"""应收看板：通知月份与回收期限、已收回口径、未知金额、采购员与筛选、清单分组、真实链路、HTTP 与页面授权。"""
+"""应收看板：财务审核月份、回收期限、金额、采购员、真实审核链路及页面授权。"""
 
 from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
@@ -6,12 +6,15 @@ from decimal import Decimal
 import pytest
 from backend.app import create_app
 from backend.core.config import load_settings
+from backend.core.errors import ApiError
 from backend.modules.identity.policy.api_page_policy import required_pages
+from backend.modules.review.public import review_approval_times
 from backend.modules.task.dto.notification_dto import NotificationBatchRecord
 from backend.modules.task.dto.recovery_dto import RecoveryQuery
 from backend.modules.task.policy import recovery_policy as policy
 from backend.modules.task.service.recovery_service import RecoveryService, current_owners
-from backend.tests.test_task import USER, prepare_all
+from backend.tests.test_source_storage import bundle, customs, purchase, save
+from backend.tests.test_task import USER, approve, prepare_all, task_rows
 from backend.tests.test_task import app_services as app_services
 from backend.tests.test_task import approved as approved
 from backend.tests.test_task import engine as engine
@@ -24,7 +27,7 @@ TODAY = date(2026, 11, 9)
 
 
 def row(task_id, month="2026-10", *, supplier=1, company=3, member="5", status="awaiting_invoice", **values):
-    notified = date(int(month[:4]), int(month[5:]), 19)
+    approved_day = date(int(month[:4]), int(month[5:]), 19)
     expected = values.pop("expected", Decimal("100"))
     received = values.pop("received", Decimal("0"))
     return {
@@ -45,7 +48,7 @@ def row(task_id, month="2026-10", *, supplier=1, company=3, member="5", status="
         "status": status,
         "node": "invoices",
         "node_label": "待供应商开票",
-        "notified_on": notified,
+        "approved_on": approved_day,
         "month": month,
         "due": policy.due_date(month),
         "collected": policy.collected(status),
@@ -121,7 +124,7 @@ def test_buyers_concentration_and_groups():
         ("供应商1", 2, "120.00", "纪琴"),
     ]
     assert [item["taskId"] for item in groups[1]["items"]] == ["2", "1"]
-    assert groups[0]["daysLeft"] == 21 and groups[0]["notifiedOn"] == "2026-10-19"
+    assert groups[0]["daysLeft"] == 21 and groups[0]["approvedOn"] == "2026-10-19"
 
 
 def test_board_filters_views_and_pagination():
@@ -132,7 +135,7 @@ def test_board_filters_views_and_pagination():
         row(4, supplier=4, name="诸暨华毅", status="completed", company=4),
     ]
     board = RecoveryService.board(rows, RecoveryQuery(), TODAY)
-    assert board.month == "2026-10" and board.dueDate == "2026-11-30" and board.monthLabel == "10月通知"
+    assert board.month == "2026-10" and board.dueDate == "2026-11-30" and board.monthLabel == "10月开票"
     assert board.cards.due.tasks == 3 and board.cards.outstanding.tasks == 2
     assert board.cards.overdue.tasks == 1 and board.list.summary.tasks == 2
     assert [o.id for o in board.options.buyers] == ["5", "none"]
@@ -185,18 +188,19 @@ def notify(services, task_id, day):
     assert services["notifications"].record_batch(body, USER).recorded
 
 
-def test_real_task_enters_cohort_by_first_sent_notification(engine, app_services, approved):
+def test_real_task_enters_cohort_on_finance_approval_without_notification(engine, app_services, approved):
     task_id = approved["id"]
     service = RecoveryService(engine)
-    now = datetime.now(UTC)
-    today = (now + timedelta(hours=8)).date()
-    # 未通知的任务不进入看板
-    assert service.browse(RecoveryQuery(month="all", view="due"), now).cards.due.tasks == 0
-    prepare_all(app_services, task_id)
+    now = datetime(2026, 11, 27, 4, tzinfo=UTC)
+    today = date(2026, 11, 27)
     with engine.begin() as connection:
         connection.execute(
             text("UPDATE task_tasks SET created_at=:created WHERE id=:id"),
-            {"created": datetime.combine(today - timedelta(days=3), datetime.min.time()), "id": task_id},
+            {"created": datetime(2026, 10, 20), "id": task_id},
+        )
+        connection.execute(
+            text("UPDATE review_records SET approved_at=:approved WHERE id=:id"),
+            {"approved": datetime(2026, 10, 19, 2), "id": approved["review_id"]},
         )
         connection.execute(
             text(
@@ -210,12 +214,24 @@ def test_real_task_enters_cohort_by_first_sent_notification(engine, app_services
                 "n": now.replace(tzinfo=None),
             },
         )
+    month = "2026-10"
+    # 合同尚未归档、没有通知记录，也按财务审核日期进入开票月份；读取不改变流程事实。
+    pending = service.browse(RecoveryQuery(month=month, view="due"), now)
+    assert pending.cards.due.tasks == 1 and pending.cards.outstanding.tasks == 1
+    assert pending.list.items[0].items[0].node == "documents"
+    with engine.connect() as connection:
+        assert connection.execute(text("SELECT COUNT(*) FROM task_notifications")).scalar() == 0
+        assert connection.execute(text("SELECT status FROM task_tasks")).scalar() == "documents_pending"
+    prepare_all(app_services, task_id)
     notify(app_services, task_id, today - timedelta(days=1))
-    month = policy.month_of(today - timedelta(days=1))
+    # 11月才通知不挪动10月财务审核的月份，也不重复计数。
+    assert service.browse(RecoveryQuery(month="2026-11"), now).cards.due.tasks == 0
     board = service.browse(RecoveryQuery(month=month, view="due"), now)
     assert board.cards.due.tasks == 1 and board.cards.due.amount == "120.50"
     assert board.cards.outstanding.amount == "120.50" and board.cards.overdue.tasks == 0
     group = board.list.items[0]
+    assert group.approvedOn == group.items[0].approvedOn == "2026-10-19"
+    assert group.notifiedOn == group.approvedOn  # 旧客户端的一版本日期别名。
     assert group.memberName == "纪琴" and group.items[0].recordNo == "CD870"
     assert group.items[0].nodeLabel == "待供应商开票" and group.dueDate == policy.due_date(month).isoformat()
     assert [b.name for b in board.buyers] == ["纪琴"] and board.options.buyers[0].id == "9"
@@ -229,8 +245,63 @@ def test_real_task_enters_cohort_by_first_sent_notification(engine, app_services
     assert done.cards.overdue.tasks == 0 and done.list.total == 1
     exported = service.export(RecoveryQuery(month=month, view="collected", pageSize=1), later)
     lines = exported.content.lstrip("\ufeff").splitlines()
-    assert exported.count == 1 and lines[0].startswith("通知月份,供应商") and "CD870" in lines[1]
+    assert exported.count == 1 and lines[0].startswith("开票月份,供应商") and "CD870" in lines[1]
+    assert "财务审核通过日期" in lines[0] and "2026-10-19" in lines[1]
     assert exported.filename == f"invoice-recovery-{month}-collected.csv"
+
+
+@pytest.mark.parametrize(
+    ("approved_at", "month", "day"),
+    [
+        (datetime(2026, 10, 31, 15, 59, 59), "2026-10", "2026-10-31"),
+        (datetime(2026, 10, 31, 16), "2026-11", "2026-11-01"),
+    ],
+)
+def test_approval_month_uses_china_date_not_task_generation_date(engine, approved, approved_at, month, day):
+    with engine.begin() as connection:
+        connection.execute(
+            text("UPDATE review_records SET approved_at=:time WHERE id=:id"),
+            {"time": approved_at, "id": approved["review_id"]},
+        )
+        # 双审核后放行可能晚于财务审核，不能按任务创建时间误归到12月。
+        connection.execute(text("UPDATE task_tasks SET created_at=:time"), {"time": datetime(2026, 12, 2)})
+    board = RecoveryService(engine).browse(
+        RecoveryQuery(month=month, view="due"), datetime(2026, 12, 15, tzinfo=UTC)
+    )
+    assert board.cards.due.tasks == 1
+    assert board.list.items[0].items[0].approvedOn == day
+
+
+def test_reapproval_counts_only_successor_in_its_finance_approval_month(ns, engine, app_services, approved):
+    with engine.begin() as connection:
+        connection.execute(
+            text("UPDATE review_records SET approved_at=:time WHERE id=:id"),
+            {"time": datetime(2026, 10, 19), "id": approved["review_id"]},
+        )
+    save(ns, engine, bundle([purchase(amounts=("99.00", "20.00"))], [customs("870")]))
+    approve(app_services, "CD870", "金额更正")
+    old, new = task_rows(engine)
+    assert old["status"] == "superseded"
+    with engine.begin() as connection:
+        connection.execute(
+            text("UPDATE review_records SET approved_at=:time WHERE id=:id"),
+            {"time": datetime(2026, 11, 2), "id": new["review_id"]},
+        )
+        times = review_approval_times(connection, [old["review_id"], new["review_id"]])
+        assert times[old["review_id"]] == datetime(2026, 10, 19)
+        assert times[new["review_id"]] == datetime(2026, 11, 2)
+    service = RecoveryService(engine)
+    now = datetime(2026, 11, 27, tzinfo=UTC)
+    assert service.browse(RecoveryQuery(month="2026-10"), now).cards.due.tasks == 0
+    current = service.browse(RecoveryQuery(month="all", view="due"), now)
+    assert current.cards.due.tasks == 1 and current.cards.due.amount == "119.00"
+    assert current.list.items[0].items[0].approvedOn == "2026-11-02"
+
+
+def test_missing_approval_date_cannot_fall_back_to_task_creation(engine, approved, monkeypatch):
+    monkeypatch.setattr("backend.modules.task.service.recovery_service.review_approval_times", lambda *_: {})
+    with pytest.raises(ApiError, match="缺少财务审核通过记录"):
+        RecoveryService(engine).browse(RecoveryQuery(month="all"))
 
 
 def test_http_route_and_page_permission(engine, env):

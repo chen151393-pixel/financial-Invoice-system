@@ -77,6 +77,8 @@ class RecoveryTask(StrictModel):
     expected: str | None = None
     received: str | None = None
     outstanding: str | None = None
+    approvedOn: str
+    # 旧看板客户端的日期字段别名；一版本后移除，不表示供应商实际通知时间。
     notifiedOn: str
     dueDate: str
     collected: bool
@@ -95,6 +97,7 @@ class RecoveryGroup(StrictModel):
     tasks: int
     amount: str
     unknown: int
+    approvedOn: str
     notifiedOn: str
     dueDate: str
     daysLeft: int | None = None

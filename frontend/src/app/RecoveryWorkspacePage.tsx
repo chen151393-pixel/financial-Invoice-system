@@ -11,9 +11,9 @@ export default function RecoveryWorkspacePage() {
       activeId="invoice-recovery"
       onNavigate={navigateView}
       title="应收看板"
-      description="按通知月份统计开票任务的发票回收；本页只读，处理任务请到开票跟进"
+      description="按财务审核通过日期（北京时间）归入开票月份，生成任务后即纳入；本页只读"
       meta={[
-        { label: "回收期限", value: "通知后次月底前" },
+        { label: "回收期限", value: "开票月份的次月底前" },
         { label: "已收回", value: "发票全部收齐" },
         { label: "采购员", value: "供应商当前负责人" },
       ]}

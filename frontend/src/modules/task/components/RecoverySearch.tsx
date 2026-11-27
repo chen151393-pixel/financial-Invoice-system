@@ -13,7 +13,7 @@ const pick = (query: RecoveryQuery): Draft => ({
 const same = (left: Draft, right: Draft) =>
   (Object.keys(EMPTY) as (keyof Draft)[]).every((key) => left[key] === right[key]);
 
-/** 一行查询栏：通知月份点选即生效，其余条件点「查询」后生效。 */
+/** 一行查询栏：开票月份点选即生效，其余条件点「查询」后生效。 */
 export function RecoverySearch({
   board,
   query,
@@ -73,9 +73,9 @@ export function RecoverySearch({
       }
     >
       <div className="ui-field rv-month">
-        <span>通知月份</span>
+        <span>开票月份</span>
         <Segmented
-          label="通知月份"
+          label="开票月份"
           value={month}
           options={months}
           disabled={busy}

@@ -76,23 +76,6 @@ def latest_sent_by_tasks(connection, task_ids):
     return {row["task_id"]: dict(row) for row in rows}
 
 
-def first_sent_by_tasks(connection, task_ids):
-    """{任务 ID: 最早一次实际发送时间（UTC）}；应收看板按它确定通知月份，之后重发不改变归属月份。"""
-    if task_ids is not None and not task_ids:
-        return {}
-    query = (
-        select(notifications.c.task_id, func.min(notifications.c.sent_at).label("sent_at"))
-        .where(
-            notifications.c.status == "sent",
-            notifications.c.sent_at.is_not(None),
-        )
-        .group_by(notifications.c.task_id)
-    )
-    if task_ids is not None:
-        query = query.where(notifications.c.task_id.in_(task_ids))
-    return {row["task_id"]: row["sent_at"] for row in connection.execute(query).mappings()}
-
-
 def insert_version(connection, values, now):
     connection.execute(
         insert(notifications).values(

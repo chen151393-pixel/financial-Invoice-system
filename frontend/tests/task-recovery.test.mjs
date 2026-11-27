@@ -34,7 +34,7 @@ const task = (id, values = {}) => ({
   expected: "100.00",
   received: "0.00",
   outstanding: "100.00",
-  notifiedOn: "2026-10-19",
+  approvedOn: "2026-10-19",
   dueDate: "2026-11-30",
   collected: false,
   node: "invoices",
@@ -44,7 +44,7 @@ const task = (id, values = {}) => ({
 const board = {
   today: "2026-11-09",
   month: "2026-10",
-  monthLabel: "10月通知",
+  monthLabel: "10月开票",
   dueDate: "2026-11-30",
   defaultMonth: "2026-10",
   cards: {
@@ -142,16 +142,18 @@ test("概况卡展示后端数字并以选中状态表示当前清单", () => {
   const markup = render(
     createElement(RecoveryStats, { board, view: "outstanding", disabled: false, onSelect() {} }),
   );
-  assert.match(markup, /10月通知应收回/);
+  assert.match(markup, /10月开票应收回/);
   assert.match(markup, /333 个/);
   assert.match(markup, /¥2,534,636.70 · 24 家 · 剩 21 天 · 2 个金额待确认/);
-  assert.match(markup, /逾期未收回 · 8月、9月通知/);
+  assert.match(markup, /逾期未收回 · 8月、9月开票/);
   assert.match(markup, /超 30 天 1 个/);
   assert.equal(markup.match(/aria-pressed="true"/g).length, 1);
 });
 
 test("三张图卡：月份未到期标注、低回收率警示、集中度图例", () => {
   const markup = render(createElement(RecoveryCharts, { board, activeMember: "6", onBuyer() {} }));
+  assert.match(markup, /按开票月份回收/);
+  assert.doesNotMatch(markup, /通知月份|8月通知/);
   assert.match(markup, /93.5%/);
   assert.match(markup, /回收中/);
   assert.match(markup, /已到期月份平均 87.2%/);
@@ -174,7 +176,7 @@ test("清单按组展开，任务链接回开票跟进，超出部分折叠", ()
     tasks: 5,
     amount: "500.00",
     unknown: 0,
-    notifiedOn: "2026-10-19",
+    approvedOn: "2026-10-19",
     dueDate: "2026-11-30",
     daysLeft: -3,
     items: ["1", "2", "3", "4", "5"].map((id) => task(id)),
@@ -194,6 +196,9 @@ test("清单按组展开，任务链接回开票跟进，超出部分折叠", ()
     createElement(RecoveryTable, { groups: [group], view: "due", expanded: new Set(["1-3"]), onToggle() {} }),
   );
   assert.match(open, /应开金额/);
+  assert.match(open, /财务审核通过日期/);
+  assert.match(open, /2026-10-19/);
+  assert.doesNotMatch(open, /通知日期/);
   assert.equal(open.match(/在开票跟进中查看/g).length, 4);
   assert.match(open, /href="\/tasks\/1"/);
   assert.match(open, /显示其余 1 个任务/);
@@ -210,7 +215,13 @@ test("查询栏一行：月份分段含全部，采购员含未指定", () => {
     }),
   );
   assert.match(markup, />全部</);
-  assert.match(markup, /aria-pressed="true"[^>]*>10月|2026-10/);
+  assert.match(markup, /开票月份/);
+  assert.doesNotMatch(markup, /通知月份/);
+  const selectedMonths = [...markup.matchAll(/<button\b[^>]*aria-pressed="true"[^>]*>(.*?)<\/button>/g)];
+  assert.deepEqual(
+    selectedMonths.map((match) => match[1]),
+    ["2026-10"],
+  );
   assert.match(markup, /未指定采购员/);
   assert.match(markup, /CD 号 \/ 子采购单号/);
 });
